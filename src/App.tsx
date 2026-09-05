@@ -31,8 +31,32 @@ export default function App() {
   const setEditFloorId = (id: string | null) => setUi({ editFloorId: id });
   const [side, setSide] = useState<Side>("floorplans");
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
+  const canUndo = useStore((s) => s.past.length > 0);
+  const canRedo = useStore((s) => s.future.length > 0);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
+
+  // Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo. Text fields keep their own undo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   const model = variants[activeVariant];
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
@@ -51,6 +75,14 @@ export default function App() {
     <div className="app">
       <header>
         <h1>House Modeler</h1>
+        <div className="seg">
+          <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+            ↶
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
+            ↷
+          </button>
+        </div>
         <div className="seg">
           {(["current", "proposed"] as VariantKey[]).map((k) => (
             <button key={k} className={activeVariant === k ? "active" : ""} disabled={!variants[k]} onClick={() => setUi({ activeVariant: k, selectedRoomId: null })}>

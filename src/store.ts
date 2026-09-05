@@ -12,10 +12,21 @@ export interface Settings {
   model: string;
 }
 
+interface Snapshot {
+  variants: Partial<Record<VariantKey, HouseModel>>;
+  photos: Photo[];
+}
+
 interface State {
   variants: Partial<Record<VariantKey, HouseModel>>;
   photos: Photo[];
   settings: Settings;
+
+  /** Undo history (not persisted). */
+  past: Snapshot[];
+  future: Snapshot[];
+  undo: () => void;
+  redo: () => void;
 
   // UI (not persisted)
   activeVariant: VariantKey;
@@ -75,12 +86,59 @@ const idbStorage = createJSONStorage(() => ({
   },
 }));
 
+const HISTORY_LIMIT = 60;
+/** Edits closer together than this (drags, typing) collapse into one undo step. */
+const COALESCE_MS = 700;
+let lastPush = 0;
+
 export const useStore = create<State>()(
   persist(
-    (setState) => ({
+    (rawSet, get) => {
+      /** Apply a model/photo mutation, recording an undo step first. */
+      const setState: typeof rawSet = (partial) => {
+        const st = get();
+        const patch = typeof partial === "function" ? partial(st) : partial;
+        const touches = "variants" in patch || "photos" in patch;
+        if (touches) {
+          const now = Date.now();
+          const snap: Snapshot = { variants: st.variants, photos: st.photos };
+          const past = now - lastPush < COALESCE_MS && st.past.length ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
+          lastPush = now;
+          rawSet({ ...patch, past, future: [] });
+        } else rawSet(patch);
+      };
+      return {
       variants: {},
       photos: [],
       settings: { apiKey: "", model: "claude-opus-5" },
+      past: [],
+      future: [],
+      undo: () => {
+        const st = get();
+        const prev = st.past[st.past.length - 1];
+        if (!prev) return;
+        lastPush = 0;
+        rawSet({
+          variants: prev.variants,
+          photos: prev.photos,
+          past: st.past.slice(0, -1),
+          future: [{ variants: st.variants, photos: st.photos }, ...st.future].slice(0, HISTORY_LIMIT),
+          selectedRoomId: null,
+        });
+      },
+      redo: () => {
+        const st = get();
+        const next = st.future[0];
+        if (!next) return;
+        lastPush = 0;
+        rawSet({
+          variants: next.variants,
+          photos: next.photos,
+          past: [...st.past, { variants: st.variants, photos: st.photos }].slice(-HISTORY_LIMIT),
+          future: st.future.slice(1),
+          selectedRoomId: null,
+        });
+      },
 
       activeVariant: "current",
       tab: "3d",
@@ -95,7 +153,7 @@ export const useStore = create<State>()(
       maxLevel: null,
       showExterior: true,
 
-      setSettings: (s) => setState((st) => ({ settings: { ...st.settings, ...s } })),
+      setSettings: (s) => rawSet((st) => ({ settings: { ...st.settings, ...s } })),
       setVariant: (k, m) =>
         setState((st) => {
           const variants = { ...st.variants };
@@ -154,9 +212,10 @@ export const useStore = create<State>()(
       updatePhoto: (id, patch) =>
         setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
       removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
-      setUi: (p) => setState(p),
+      setUi: (p) => rawSet(p),
       reset: () => setState({ variants: {}, photos: [], selectedRoomId: null, selectedPhotoId: null }),
-    }),
+      };
+    },
     {
       name: "house-modeler",
       storage: idbStorage,
