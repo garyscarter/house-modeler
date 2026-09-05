@@ -3,6 +3,7 @@ import type { Floor, Opening, Pt, Room, VariantKey } from "../types";
 import { uid } from "../types";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM, pointInPolygon } from "../lib/geometry";
+import { STAIRS_DIR_LABEL, type StairsDir } from "../types";
 import { roomColor } from "../three/House";
 
 type Tool = "select" | "rect" | "room" | "door" | "window" | "calibrate";
@@ -24,7 +25,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   // Fit the view to the rooms (useful on multi-floor images) or the whole image (tracing).
   const [fit, setFit] = useState<"rooms" | "image">(floor.rooms.length ? "rooms" : "image");
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ roomId: string; idx: number } | { openingId: string } | null>(null);
+  const drag = useRef<{ roomId: string; idx: number } | { openingId: string } | { stairs: true } | null>(null);
 
   const view = useMemo(() => {
     const all = floor.rooms.flatMap((r) => r.polygon);
@@ -98,6 +99,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         ...f,
         rooms: f.rooms.map((r) => (r.id === roomId ? { ...r, polygon: r.polygon.map((v, i) => (i === idx ? p : v)) } : r)),
       }));
+    } else if ("stairs" in drag.current) {
+      updateFloor(variant, floor.id, { stairs: raw });
     } else {
       const { openingId } = drag.current;
       updateFloor(variant, floor.id, (f) => ({
@@ -165,6 +168,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const selected = floor.rooms.find((r) => r.id === selectedRoomId);
   const selectedOpening = floor.openings.find((o) => o.id === selectedOpeningId);
+  // Draw the selected room last so its outline and drag handles sit above its neighbours.
+  const orderedRooms = [...floor.rooms.filter((r) => r.id !== selectedRoomId), ...(selected ? [selected] : [])];
   const pick = (t: Tool) => {
     setTool(t);
     setCalib([]);
@@ -222,7 +227,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               No rooms yet. Pick "Rectangle room" and click two opposite corners of each room.
             </text>
           )}
-          {floor.rooms.map((r) => (
+          {orderedRooms.map((r) => (
             <g key={r.id}>
               <polygon
                 points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -241,9 +246,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               >
                 {r.name}
               </text>
-              {tool === "select" &&
-                r.polygon.map((p, i) => {
+            </g>
+          ))}
+          {tool === "select" &&
+            orderedRooms.map((r) => (
+              <g key={"h" + r.id}>
+                {r.polygon.map((p, i) => {
                   const q = r.polygon[(i + 1) % r.polygon.length];
+                  const sel = r.id === selectedRoomId;
                   return (
                     <g key={i}>
                       <circle
@@ -251,7 +261,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         cy={(p.y + q.y) / 2}
                         r={handleR * 0.55}
                         fill="#fff"
-                        stroke="#9ca3af"
+                        stroke={sel ? "#d97706" : "#9ca3af"}
                         strokeWidth={stroke}
                         style={{ cursor: "copy" }}
                         onClick={(e) => {
@@ -270,13 +280,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                       <circle
                         cx={p.x}
                         cy={p.y}
-                        r={handleR}
-                        fill="#fff"
-                        stroke="#2563eb"
-                        strokeWidth={stroke * 1.5}
+                        r={handleR * (sel ? 1.25 : 1)}
+                        fill={sel ? "#fff7ed" : "#fff"}
+                        stroke={sel ? "#d97706" : "#2563eb"}
+                        strokeWidth={stroke * (sel ? 2.2 : 1.5)}
                         style={{ cursor: "move" }}
                         onPointerDown={(e) => {
                           e.stopPropagation();
+                          setUi({ selectedRoomId: r.id });
                           drag.current = { roomId: r.id, idx: i };
                         }}
                         onClick={(e) => e.stopPropagation()}
@@ -292,8 +303,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     </g>
                   );
                 })}
-            </g>
-          ))}
+              </g>
+            ))}
           {floor.openings.map((o) => {
             const len = o.widthM * floor.pxPerM;
             const thick = stroke * 8;
@@ -305,7 +316,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 y={o.y - (o.orientation === "v" ? len / 2 : thick / 2)}
                 width={o.orientation === "h" ? len : thick}
                 height={o.orientation === "v" ? len : thick}
-                fill={o.kind === "door" ? "#f59e0b" : o.kind === "bay" ? "#0ea5e9" : "#3b82f6"}
+                fill={o.kind === "door" ? "#f59e0b" : o.kind === "garage" ? "#b45309" : o.kind === "bay" ? "#0ea5e9" : "#3b82f6"}
                 stroke={sel ? "#111" : "#fff"}
                 strokeWidth={stroke * (sel ? 2 : 1)}
                 style={{ cursor: "move" }}
@@ -326,9 +337,35 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             );
           })}
           {floor.stairs && (
-            <text x={floor.stairs.x} y={floor.stairs.y} fontSize={view.w / 50} textAnchor="middle" fill="#7c3aed" style={{ pointerEvents: "none" }}>
-              stairs
-            </text>
+            <g
+              style={{ cursor: "move" }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (tool === "select") drag.current = { stairs: true };
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {(() => {
+                const len = (floor.stairsLen ?? 2.6) * floor.pxPerM;
+                const w = (floor.stairsWidth ?? 0.9) * floor.pxPerM;
+                const d = floor.stairsDir ?? "up";
+                const horiz = d === "left" || d === "right";
+                const rw = horiz ? len : w;
+                const rh = horiz ? w : len;
+                const ax = d === "left" ? -1 : d === "right" ? 1 : 0;
+                const ay = d === "up" ? -1 : d === "down" ? 1 : 0;
+                const tip = { x: floor.stairs!.x + (ax * len) / 2, y: floor.stairs!.y + (ay * len) / 2 };
+                const tail = { x: floor.stairs!.x - (ax * len) / 2, y: floor.stairs!.y - (ay * len) / 2 };
+                return (
+                  <>
+                    <rect x={floor.stairs!.x - rw / 2} y={floor.stairs!.y - rh / 2} width={rw} height={rh} fill="#7c3aed" fillOpacity={0.25} stroke="#7c3aed" strokeWidth={stroke} />
+                    <line x1={tail.x} y1={tail.y} x2={tip.x} y2={tip.y} stroke="#7c3aed" strokeWidth={stroke * 2} />
+                    <circle cx={tip.x} cy={tip.y} r={handleR * 0.7} fill="#7c3aed" />
+                    <title>Stairs (rise towards the dot). Drag to move; set direction and size in the floor panel.</title>
+                  </>
+                );
+              })()}
+            </g>
           )}
           {calib.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={handleR} fill="#ef4444" />
@@ -415,20 +452,12 @@ function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; o
           <option value="door">Door</option>
           <option value="window">Window</option>
           <option value="bay">Bay window</option>
+          <option value="garage">Garage door</option>
         </select>
       </label>
-      {opening.kind === "door" && (
-        <label>
-          Style
-          <select value={opening.style ?? "leaf"} onChange={(e) => onChange({ style: e.target.value as Opening["style"] })}>
-            <option value="leaf">Swing door</option>
-            <option value="garage">Garage / solid panel</option>
-          </select>
-        </label>
-      )}
       <label>
         Colour
-        <input type="color" value={opening.color ?? (opening.style === "garage" ? "#b3202e" : "#c9a26b")} onChange={(e) => onChange({ color: e.target.value })} />
+        <input type="color" value={opening.color ?? (opening.kind === "garage" ? "#b3202e" : "#c9a26b")} onChange={(e) => onChange({ color: e.target.value })} />
       </label>
       <label>
         Width (m)
@@ -562,6 +591,40 @@ function FloorInspector({ variant, floor }: { variant: VariantKey; floor: Floor 
           <input type="number" step="0.1" value={floor.offset.y} onChange={(e) => updateFloor(variant, floor.id, { offset: { ...floor.offset, y: parseFloat(e.target.value) || 0 } })} />
         </span>
       </label>
+      <h4>Stairs</h4>
+      {floor.stairs ? (
+        <>
+          <label>
+            Direction
+            <select value={floor.stairsDir ?? "up"} onChange={(e) => updateFloor(variant, floor.id, { stairsDir: e.target.value as StairsDir })}>
+              {(Object.keys(STAIRS_DIR_LABEL) as StairsDir[]).map((d) => (
+                <option key={d} value={d}>
+                  {STAIRS_DIR_LABEL[d]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Length × width (m)
+            <span className="row">
+              <input type="number" step="0.1" min="1" value={floor.stairsLen ?? 2.6} onChange={(e) => updateFloor(variant, floor.id, { stairsLen: parseFloat(e.target.value) || 2.6 })} />
+              <input type="number" step="0.1" min="0.6" value={floor.stairsWidth ?? 0.9} onChange={(e) => updateFloor(variant, floor.id, { stairsWidth: parseFloat(e.target.value) || 0.9 })} />
+            </span>
+          </label>
+          <p className="muted small">The flight is drawn only on floors that have a floor above; on the top floor the marker is where it arrives.</p>
+          <button onClick={() => updateFloor(variant, floor.id, { stairs: undefined })}>Remove stairs</button>
+        </>
+      ) : (
+        <button
+          onClick={() => {
+            const b = bbox(floor.rooms.flatMap((r) => r.polygon));
+            updateFloor(variant, floor.id, { stairs: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } });
+          }}
+        >
+          Add stairs (drag to place)
+        </button>
+      )}
+      <h4>Floor</h4>
       <div className="row">
         <button
           disabled={floor.rooms.length === 0}

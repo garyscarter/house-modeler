@@ -269,8 +269,8 @@ export function cutWall(
     if (t0 < cursor) t0 = cursor;
     if (t1 - t0 < 0.2) continue;
     if (t0 > cursor) pieces.push({ a: at(cursor), b: at(t0), y0: 0, y1: ceiling });
-    if (opening.kind === "door") {
-      pieces.push({ a: at(t0), b: at(t1), y0: doorH, y1: ceiling });
+    if (opening.kind === "door" || opening.kind === "garage") {
+      pieces.push({ a: at(t0), b: at(t1), y0: opening.kind === "garage" ? 2.15 : doorH, y1: ceiling });
     } else {
       // window or bay
       pieces.push({ a: at(t0), b: at(t1), y0: 0, y1: sillH });

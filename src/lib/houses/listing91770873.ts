@@ -49,6 +49,9 @@ const op = (
   ...extra,
 });
 
+export const LISTING_PRESET = { id: "listing-91770873", version: 4 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 4 };
+
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
     id: uid(),
@@ -114,7 +117,7 @@ export function listing91770873(image: string): HouseModel {
       op("window", 860, 620, "h", 1.6),
       op("window", 990, 620, "h", 1.0),
       op("window", 1045, 570, "v", 0.8),
-      op("door", 630, 515, "h", 2.4, { style: "garage", color: "#b3202e" }), // garage door
+      op("garage", 630, 515, "h", 2.4, { color: "#b3202e" }), // garage door
     ],
     { x: 865, y: 430 },
     // Covered porch in front of the garage door and front door.
@@ -127,6 +130,10 @@ export function listing91770873(image: string): HouseModel {
       ],
     ],
   );
+  // Ground-floor flight rises towards the top of the plan, arriving at the landing.
+  ground.stairsDir = "up";
+  ground.stairsLen = 2.3;
+  ground.stairsWidth = 0.9;
 
   const first = base(
     "Floor 1",
@@ -176,6 +183,7 @@ export function listing91770873(image: string): HouseModel {
     // From the photos: cream render, brown frames, tiled roof with the ridge
     // parallel to the street (left-right on the plan).
     exterior: { ...DEFAULT_EXTERIOR, ridgeAxis: "x", pitchDeg: 35, roofColor: "#6e4a3c", wallColor: RENDER, trimColor: "#4a2e1e" },
+    preset: LISTING_PRESET,
   };
 }
 
@@ -212,3 +220,9 @@ export function listing91770873Proposed(image: string): HouseModel {
   );
   return house;
 }
+
+/** Registry of built-in models, so the app can offer an update when a tracing improves. */
+export const PRESETS: Record<string, { version: number; build: (image: string) => HouseModel }> = {
+  [LISTING_PRESET.id]: { version: LISTING_PRESET.version, build: listing91770873 },
+  [LISTING_PROPOSED_PRESET.id]: { version: LISTING_PROPOSED_PRESET.version, build: listing91770873Proposed },
+};

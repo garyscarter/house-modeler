@@ -143,6 +143,7 @@ function FloorGroup({
 }) {
   const y0 = floorBaseY(model, floor);
   const H = model.ceilingHeight;
+  const hasAbove = model.floors.some((f) => f.level === floor.level + 1);
   const allWalls = useMemo(() => buildWalls(floor), [floor]);
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
@@ -207,7 +208,7 @@ function FloorGroup({
           </WallBox>
         ))}
 
-      {!ghost && floor.stairs && <Stairs floor={floor} height={H} />}
+      {!ghost && floor.stairs && hasAbove && <Stairs floor={floor} height={H + model.slabThickness} />}
 
       {!ghost && showLabels && floor.rooms.map((room) => <RoomLabel key={room.id} floor={floor} room={room} />)}
 
@@ -384,12 +385,36 @@ function OpeningMesh({
       </group>
     );
   }
-  if (opening.style === "garage") {
+  if (opening.kind === "garage") {
+    // Panelled up-and-over door: frame, leaf, a grid of raised panels and a handle.
+    const col = opening.color ?? "#b3202e";
+    const cols = width > 2.8 ? 3 : 2;
+    const rows = 3;
+    const pw = (width - 0.1) / cols;
+    const ph = 2.05 / rows;
     return (
       <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        <mesh position={[0, 1.02, 0]}>
-          <boxGeometry args={[width, 2.04, 0.06]} />
-          <meshStandardMaterial color={opening.color ?? "#b3202e"} roughness={0.6} />
+        <mesh position={[0, 1.1, 0]}>
+          <boxGeometry args={[width + 0.12, 2.2, WALL_T + 0.02]} />
+          <meshStandardMaterial color={trimColor} />
+        </mesh>
+        <mesh position={[0, 1.05, 0]}>
+          <boxGeometry args={[width, 2.05, WALL_T + 0.04]} />
+          <meshStandardMaterial color={col} roughness={0.6} />
+        </mesh>
+        {Array.from({ length: cols * rows }, (_, i) => {
+          const c = i % cols;
+          const r = Math.floor(i / cols);
+          return (
+            <mesh key={i} position={[-width / 2 + 0.05 + (c + 0.5) * pw, 0.05 + (r + 0.5) * ph, 0]}>
+              <boxGeometry args={[pw - 0.12, ph - 0.12, WALL_T + 0.08]} />
+              <meshStandardMaterial color={col} roughness={0.5} />
+            </mesh>
+          );
+        })}
+        <mesh position={[0, 1.0, 0]}>
+          <boxGeometry args={[0.16, 0.05, WALL_T + 0.12]} />
+          <meshStandardMaterial color="#222" metalness={0.6} roughness={0.4} />
         </mesh>
       </group>
     );
@@ -414,15 +439,19 @@ function OpeningMesh({
   );
 }
 
+/** A straight flight from this floor to the one above, rising in `stairsDir`. */
 function Stairs({ floor, height }: { floor: Floor; height: number }) {
   const c = toWorld(floor, floor.stairs!);
-  const steps = 10;
-  const run = 2.6;
+  const run = floor.stairsLen ?? 2.6;
+  const w = floor.stairsWidth ?? 0.9;
+  const steps = Math.max(6, Math.round(run / 0.25));
+  // Local flight rises towards +z; rotate so +z points in the chosen plan direction.
+  const rot = { down: 0, up: Math.PI, right: Math.PI / 2, left: -Math.PI / 2 }[floor.stairsDir ?? "up"];
   return (
-    <group position={[c.x, 0, c.y]}>
+    <group position={[c.x, 0, c.y]} rotation={[0, rot, 0]}>
       {Array.from({ length: steps }, (_, i) => (
-        <mesh key={i} position={[0, ((i + 0.5) * height) / steps, -run / 2 + ((i + 0.5) * run) / steps]}>
-          <boxGeometry args={[0.9, height / steps, run / steps]} />
+        <mesh key={i} position={[0, ((i + 0.5) * height) / steps, -run / 2 + ((i + 0.5) * run) / steps]} castShadow>
+          <boxGeometry args={[w, height / steps, run / steps]} />
           <meshStandardMaterial color="#a89a86" />
         </mesh>
       ))}

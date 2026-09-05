@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { del, get, set } from "idb-keyval";
-import type { Floor, HouseModel, Photo, Room, VariantKey } from "./types";
+import type { Floor, HouseModel, Opening, Photo, Room, VariantKey } from "./types";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
 export type CameraMode = "orbit" | "walk";
@@ -161,6 +161,20 @@ export const useStore = create<State>()(
       name: "house-modeler",
       storage: idbStorage,
       partialize: (s) => ({ variants: s.variants, photos: s.photos, settings: s.settings }),
+      version: 2,
+      migrate: (persisted) => {
+        // v1 stored garage doors as door.style === "garage".
+        const st = persisted as { variants?: Record<string, HouseModel> };
+        for (const m of Object.values(st.variants ?? {})) {
+          for (const f of m.floors) {
+            for (const o of f.openings as (Opening & { style?: string })[]) {
+              if (o.style === "garage") o.kind = "garage";
+              delete o.style;
+            }
+          }
+        }
+        return persisted;
+      },
     },
   ),
 );

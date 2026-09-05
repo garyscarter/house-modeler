@@ -6,7 +6,7 @@ import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
-import { listing91770873, listing91770873Proposed, placeholderImage } from "../lib/houses/listing91770873";
+import { listing91770873, listing91770873Proposed, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const settings = useStore((s) => s.settings);
@@ -95,6 +95,22 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
       {notes && (
         <p className="note">
           <b>Model notes:</b> {notes}
+        </p>
+      )}
+      {model?.preset && PRESETS[model.preset.id] && PRESETS[model.preset.id].version > model.preset.version && (
+        <p className="note">
+          A newer tracing of this built-in house is available.{" "}
+          <button
+            onClick={() => {
+              const fresh = PRESETS[model.preset!.id].build(model.floors[0]?.image ?? placeholderImage());
+              // Keep the user's floorplan image if they set one at the same pixel size.
+              const keepImage = model.floors[0] && model.floors[0].imageW === fresh.floors[0].imageW;
+              setVariant(variant, keepImage ? fresh : PRESETS[model.preset!.id].build(placeholderImage()));
+            }}
+          >
+            Update model
+          </button>{" "}
+          (replaces any edits you made to it)
         </p>
       )}
       {model && (

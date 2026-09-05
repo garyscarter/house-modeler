@@ -22,10 +22,8 @@ export interface Room {
 
 export interface Opening {
   id: string;
-  /** "bay" is a window that projects outward as a bay. */
-  kind: "door" | "window" | "bay";
-  /** "garage" draws a solid panel instead of a swung leaf. */
-  style?: "leaf" | "garage";
+  /** "bay" is a window that projects outward; "garage" is a panelled up-and-over door. */
+  kind: "door" | "window" | "bay" | "garage";
   color?: string;
   /** Centre of the opening, image pixel coordinates. */
   x: number;
@@ -54,9 +52,23 @@ export interface Floor {
   rooms: Room[];
   openings: Opening[];
   stairs?: Pt;
+  /** Direction the flight rises in, in plan terms. Default "up" (towards the top of the plan). */
+  stairsDir?: StairsDir;
+  /** Length of the flight along its run, metres. Default 2.6. */
+  stairsLen?: number;
+  /** Width of the flight, metres. Default 0.9. */
+  stairsWidth?: number;
   /** Covered outdoor areas (porch, carport): polygons in image px, roofed at this floor's ceiling. */
   canopies?: Pt[][];
 }
+
+export type StairsDir = "up" | "down" | "left" | "right";
+export const STAIRS_DIR_LABEL: Record<StairsDir, string> = {
+  up: "Rises towards the top of the plan",
+  down: "Rises towards the bottom of the plan",
+  left: "Rises towards the left",
+  right: "Rises towards the right",
+};
 
 export interface Exterior {
   showRoof: boolean;
@@ -89,6 +101,8 @@ export interface HouseModel {
   /** Structural slab thickness between floors, metres. */
   slabThickness: number;
   exterior?: Exterior;
+  /** Set on built-in models so the app can offer an update when the tracing improves. */
+  preset?: { id: string; version: number };
 }
 
 export interface Photo {
