@@ -23,7 +23,7 @@ export interface Room {
 export interface Opening {
   id: string;
   /** "bay" projects outward; "garage" is a panelled up-and-over door; "gap" is a full-height opening with no lintel. */
-  kind: "door" | "window" | "bay" | "garage" | "gap" | "patio";
+  kind: "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front";
   color?: string;
   /** Centre of the opening, image pixel coordinates. */
   x: number;

@@ -308,8 +308,8 @@ export function cutWall(
     if (t0 > cursor) pieces.push({ a: at(cursor), b: at(t0), y0: 0, y1: ceiling });
     if (opening.kind === "gap") {
       // Full-height opening: nothing left of the wall here.
-    } else if (opening.kind === "door" || opening.kind === "garage" || opening.kind === "patio") {
-      pieces.push({ a: at(t0), b: at(t1), y0: opening.kind === "door" ? doorH : 2.15, y1: ceiling });
+    } else if (opening.kind === "door" || opening.kind === "front" || opening.kind === "garage" || opening.kind === "patio") {
+      pieces.push({ a: at(t0), b: at(t1), y0: opening.kind === "door" || opening.kind === "front" ? doorH : 2.15, y1: ceiling });
     } else {
       // window or bay
       pieces.push({ a: at(t0), b: at(t1), y0: 0, y1: sillH });

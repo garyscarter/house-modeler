@@ -400,6 +400,60 @@ function OpeningMesh({
       </group>
     );
   }
+  if (opening.kind === "front") {
+    // Closed front door: frame, leaf with four raised panels below a glazed top light, letterbox and handle.
+    const col = opening.color ?? "#b3202e";
+    const panelCol = shade(col, 1.15);
+    const H = 2.05;
+    const lw = width - 0.1; // leaf width inside the frame
+    const glassTop = H - 0.12;
+    const glassBot = H - 0.55;
+    const bar = (x: number, y: number, w: number, h: number, key: string) => (
+      <mesh key={key} position={[x, y, 0]}>
+        <boxGeometry args={[w, h, WALL_T + 0.04]} />
+        <meshStandardMaterial color={trimColor} />
+      </mesh>
+    );
+    const panelRows = [
+      [0.2, 0.7],
+      [0.85, 1.4],
+    ];
+    return (
+      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
+        {bar(-width / 2 + 0.03, H / 2, 0.06, H, "l")}
+        {bar(width / 2 - 0.03, H / 2, 0.06, H, "r")}
+        {bar(0, H - 0.03, width, 0.06, "t")}
+        <mesh position={[0, H / 2, 0]}>
+          <boxGeometry args={[lw, H - 0.06, 0.05]} />
+          <meshStandardMaterial color={col} roughness={0.55} />
+        </mesh>
+        {panelRows.flatMap(([y0, y1], r) =>
+          [0, 1].map((c) => (
+            <mesh key={`p${r}${c}`} position={[-lw / 4 + (c * lw) / 2, (y0 + y1) / 2, 0]}>
+              <boxGeometry args={[lw / 2 - 0.1, y1 - y0, 0.09]} />
+              <meshStandardMaterial color={panelCol} roughness={0.5} />
+            </mesh>
+          )),
+        )}
+        <mesh position={[0, (glassTop + glassBot) / 2, 0]}>
+          <boxGeometry args={[lw - 0.16, glassTop - glassBot, 0.09]} />
+          <meshPhysicalMaterial color="#c9dde8" transparent opacity={0.6} roughness={0.15} />
+        </mesh>
+        <mesh position={[0, 1.05, 0]}>
+          <boxGeometry args={[0.28, 0.05, 0.12]} />
+          <meshStandardMaterial color="#c8a24a" metalness={0.7} roughness={0.35} />
+        </mesh>
+        <mesh position={[lw / 2 - 0.12, 1.0, 0]}>
+          <boxGeometry args={[0.04, 0.16, 0.14]} />
+          <meshStandardMaterial color="#c8a24a" metalness={0.7} roughness={0.35} />
+        </mesh>
+        <mesh position={[0, 0.02, 0]}>
+          <boxGeometry args={[width, 0.04, WALL_T + 0.2]} />
+          <meshStandardMaterial color="#8a8a8a" />
+        </mesh>
+      </group>
+    );
+  }
   if (opening.kind === "patio") {
     // Sliding patio doors: two full-height glazed panels in a frame.
     const panels = width > 3.2 ? 3 : 2;

@@ -399,39 +399,6 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           {tool === "wall" && draft.length === 1 && hover && (
             <line x1={draft[0].x} y1={draft[0].y} x2={hover.x} y2={hover.y} stroke="#16a34a" strokeWidth={stroke * 3} strokeLinecap="round" style={{ pointerEvents: "none" }} />
           )}
-          {floor.openings.map((o) => {
-            const len = o.widthM * floor.pxPerM;
-            const thick = stroke * 8;
-            const sel = o.id === selectedOpeningId;
-            return (
-              <rect
-                key={o.id}
-                x={o.x - (o.orientation === "h" ? len / 2 : thick / 2)}
-                y={o.y - (o.orientation === "v" ? len / 2 : thick / 2)}
-                width={o.orientation === "h" ? len : thick}
-                height={o.orientation === "v" ? len : thick}
-                fill={o.kind === "door" ? "#f59e0b" : o.kind === "garage" ? "#b45309" : o.kind === "bay" ? "#0ea5e9" : o.kind === "patio" ? "#0d9488" : o.kind === "gap" ? "#ffffff" : "#3b82f6"}
-                fillOpacity={o.kind === "gap" ? 0.9 : 1}
-                strokeDasharray={o.kind === "gap" ? `${stroke * 3} ${stroke * 2}` : undefined}
-                stroke={sel ? "#111" : o.kind === "gap" ? "#6b7280" : "#fff"}
-                strokeWidth={stroke * (sel ? 2 : 1)}
-                style={{ cursor: "move" }}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  if (tool === "select") drag.current = { openingId: o.id };
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedOpeningId(o.id);
-                  setUi({ selectedRoomId: null });
-                }}
-              >
-                <title>
-                  {o.kind} ({o.widthM} m). Drag to move, click to edit.
-                </title>
-              </rect>
-            );
-          })}
           {floor.stairs && (
             <g
               style={{ cursor: "move" }}
@@ -463,6 +430,39 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               })()}
             </g>
           )}
+          {floor.openings.map((o) => {
+            const len = o.widthM * floor.pxPerM;
+            const thick = stroke * 8;
+            const sel = o.id === selectedOpeningId;
+            return (
+              <rect
+                key={o.id}
+                x={o.x - (o.orientation === "h" ? len / 2 : thick / 2)}
+                y={o.y - (o.orientation === "v" ? len / 2 : thick / 2)}
+                width={o.orientation === "h" ? len : thick}
+                height={o.orientation === "v" ? len : thick}
+                fill={o.kind === "door" ? "#f59e0b" : o.kind === "front" ? "#dc2626" : o.kind === "garage" ? "#b45309" : o.kind === "bay" ? "#0ea5e9" : o.kind === "patio" ? "#0d9488" : o.kind === "gap" ? "#ffffff" : "#3b82f6"}
+                fillOpacity={o.kind === "gap" ? 0.9 : 1}
+                strokeDasharray={o.kind === "gap" ? `${stroke * 3} ${stroke * 2}` : undefined}
+                stroke={sel ? "#111" : o.kind === "gap" ? "#6b7280" : "#fff"}
+                strokeWidth={stroke * (sel ? 2 : 1)}
+                style={{ cursor: "move" }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  if (tool === "select") drag.current = { openingId: o.id };
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedOpeningId(o.id);
+                  setUi({ selectedRoomId: null });
+                }}
+              >
+                <title>
+                  {o.kind} ({o.widthM} m). Drag to move, click to edit.
+                </title>
+              </rect>
+            );
+          })}
           {calib.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={handleR} fill="#ef4444" />
           ))}
@@ -583,7 +583,8 @@ function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; o
       <label>
         Type
         <select value={opening.kind} onChange={(e) => onChange({ kind: e.target.value as Opening["kind"] })}>
-          <option value="door">Door</option>
+          <option value="door">Door (swing, open)</option>
+          <option value="front">Front door (closed, panelled)</option>
           <option value="window">Window</option>
           <option value="bay">Bay window</option>
           <option value="garage">Garage door</option>
@@ -593,7 +594,7 @@ function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; o
       </label>
       <label>
         Colour
-        <input type="color" value={opening.color ?? (opening.kind === "garage" ? "#b3202e" : "#c9a26b")} onChange={(e) => onChange({ color: e.target.value })} />
+        <input type="color" value={opening.color ?? (opening.kind === "garage" || opening.kind === "front" ? "#b3202e" : "#c9a26b")} onChange={(e) => onChange({ color: e.target.value })} />
       </label>
       <label>
         Width (m)
