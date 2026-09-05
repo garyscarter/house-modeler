@@ -2,7 +2,7 @@ import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { makeClient } from "./client";
 import { resizeDataUrl, splitDataUrl } from "../lib/image";
-import type { HouseModel, Photo } from "../types";
+import type { Elevation, HouseModel, Photo } from "../types";
 
 const AssignmentSchema = z.object({
   assignments: z.array(
@@ -10,6 +10,10 @@ const AssignmentSchema = z.object({
       photo_index: z.number().int(),
       floor_name: z.string().nullable().describe("Exactly one of the floor names given, or null if the photo is exterior or unplaceable."),
       room_name: z.string().nullable().describe("Exactly one of the room names on that floor, or null."),
+      elevation: z
+        .enum(["front", "rear", "left", "right"])
+        .nullable()
+        .describe("For exterior photos only: which side of the house is shown. 'front' is the side with the front door (bottom of the plan), 'rear' the garden side. Null for interior photos."),
       confidence: z.number().min(0).max(1),
       description: z.string().describe("One short sentence: what the photo shows and the finishes visible (floor, walls, kitchen units)."),
     }),
@@ -22,13 +26,13 @@ export async function assignPhotos(
   house: HouseModel,
   photos: Photo[],
   onProgress: (m: string) => void = () => {},
-): Promise<Map<string, { floorName?: string; roomName?: string; confidence: number; description: string }>> {
+): Promise<Map<string, { floorName?: string; roomName?: string; elevation?: Elevation; confidence: number; description: string }>> {
   const client = makeClient(apiKey);
   const roomList = house.floors
     .map((f) => `${f.name}: ${f.rooms.map((r) => r.name).join(", ")}`)
     .join("\n");
 
-  const results = new Map<string, { floorName?: string; roomName?: string; confidence: number; description: string }>();
+  const results = new Map<string, { floorName?: string; roomName?: string; elevation?: Elevation; confidence: number; description: string }>();
   const BATCH = 8;
   for (let i = 0; i < photos.length; i += BATCH) {
     const batch = photos.slice(i, i + BATCH);
@@ -45,7 +49,7 @@ export async function assignPhotos(
     }
     content.push({
       type: "text",
-      text: `These are estate-agent listing photos of one house. The floorplan has these floors and rooms:\n${roomList}\n\nFor each photo (indexes ${i} to ${i + batch.length - 1}), say which room it shows. Use the floor and room names exactly as given. Photos of the outside, garden or street get null for both. If two bedrooms look alike, use size, window count and features to choose, and lower the confidence.`,
+      text: `These are estate-agent listing photos of one house. The floorplan has these floors and rooms:\n${roomList}\n\nFor each photo (indexes ${i} to ${i + batch.length - 1}), say which room it shows. Use the floor and room names exactly as given. Photos of the outside, garden or street get null for both and an elevation instead. If two bedrooms look alike, use size, window count and features to choose, and lower the confidence.`,
     });
 
     const response = await client.beta.messages.parse({
@@ -67,6 +71,7 @@ export async function assignPhotos(
       results.set(p.id, {
         floorName: floor?.name,
         roomName: room?.name,
+        elevation: room ? undefined : (a.elevation ?? undefined),
         confidence: a.confidence,
         description: a.description,
       });

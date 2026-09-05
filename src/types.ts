@@ -14,11 +14,19 @@ export interface Room {
   /** Photo used as the floor texture, if any. */
   floorPhotoId?: string;
   color?: string;
+  /** Colour of this room's external walls (e.g. brick vs render). */
+  exteriorColor?: string;
+  /** Rooms sharing a roofGroup get their own gable when the extension roof is "separate". */
+  roofGroup?: string;
 }
 
 export interface Opening {
   id: string;
-  kind: "door" | "window";
+  /** "bay" is a window that projects outward as a bay. */
+  kind: "door" | "window" | "bay";
+  /** "garage" draws a solid panel instead of a swung leaf. */
+  style?: "leaf" | "garage";
+  color?: string;
   /** Centre of the opening, image pixel coordinates. */
   x: number;
   y: number;
@@ -46,7 +54,33 @@ export interface Floor {
   rooms: Room[];
   openings: Opening[];
   stairs?: Pt;
+  /** Covered outdoor areas (porch, carport): polygons in image px, roofed at this floor's ceiling. */
+  canopies?: Pt[][];
 }
+
+export interface Exterior {
+  showRoof: boolean;
+  /** Ridge direction for gable roofs; "auto" follows the longer side. x = left-right on the plan. */
+  ridgeAxis: "auto" | "x" | "z";
+  pitchDeg: number;
+  overhang: number;
+  /** Whether rooms tagged with a roofGroup share the main gable or get a separate lower one. */
+  extensionRoof: "continue" | "separate";
+  roofColor: string;
+  wallColor: string;
+  trimColor: string;
+}
+
+export const DEFAULT_EXTERIOR: Exterior = {
+  showRoof: true,
+  ridgeAxis: "auto",
+  pitchDeg: 35,
+  overhang: 0.35,
+  extensionRoof: "continue",
+  roofColor: "#7a4a3a",
+  wallColor: "#efe9d8",
+  trimColor: "#4a2e1e",
+};
 
 export interface HouseModel {
   floors: Floor[];
@@ -54,6 +88,7 @@ export interface HouseModel {
   ceilingHeight: number;
   /** Structural slab thickness between floors, metres. */
   slabThickness: number;
+  exterior?: Exterior;
 }
 
 export interface Photo {
@@ -63,9 +98,19 @@ export interface Photo {
   /** Assigned location, by floor name + room name so it survives re-extraction. */
   floorName?: string;
   roomName?: string;
+  /** For exterior photos: which side of the house they show. front = bottom of the plan. */
+  elevation?: Elevation;
   description?: string;
   confidence?: number;
 }
+
+export type Elevation = "front" | "rear" | "left" | "right";
+export const ELEVATION_LABEL: Record<Elevation, string> = {
+  front: "Front (bottom of plan)",
+  rear: "Rear (top of plan)",
+  left: "Left side",
+  right: "Right side",
+};
 
 export type VariantKey = "current" | "proposed";
 

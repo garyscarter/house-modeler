@@ -30,6 +30,8 @@ interface State {
   showCeilings: boolean;
   /** Hide floors above this level in the 3D view (null = show all). */
   maxLevel: number | null;
+  /** Draw roofs, canopies and exterior photo pins. */
+  showExterior: boolean;
 
   setSettings: (s: Partial<Settings>) => void;
   setVariant: (k: VariantKey, m: HouseModel | undefined) => void;
@@ -56,6 +58,7 @@ interface State {
         | "showLabels"
         | "showCeilings"
         | "maxLevel"
+        | "showExterior"
       >
     >,
   ) => void;
@@ -90,6 +93,7 @@ export const useStore = create<State>()(
       showLabels: true,
       showCeilings: false,
       maxLevel: null,
+      showExterior: true,
 
       setSettings: (s) => setState((st) => ({ settings: { ...st.settings, ...s } })),
       setVariant: (k, m) =>

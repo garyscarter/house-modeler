@@ -94,3 +94,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .lightbox .nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 40px; background: none; border: 0; color: #fff; padding: 20px; }
 .lightbox .prev { left: 10px; }
 .lightbox .next { right: 10px; }
+
+.view-buttons { position: absolute; top: 8px; right: 10px; z-index: 2; display: flex; gap: 4px; }
+.view-buttons button { padding: 3px 8px; font-size: 12px; background: rgba(255,255,255,0.9); text-transform: capitalize; }

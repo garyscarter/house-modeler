@@ -305,7 +305,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 y={o.y - (o.orientation === "v" ? len / 2 : thick / 2)}
                 width={o.orientation === "h" ? len : thick}
                 height={o.orientation === "v" ? len : thick}
-                fill={o.kind === "door" ? "#f59e0b" : "#3b82f6"}
+                fill={o.kind === "door" ? "#f59e0b" : o.kind === "bay" ? "#0ea5e9" : "#3b82f6"}
                 stroke={sel ? "#111" : "#fff"}
                 strokeWidth={stroke * (sel ? 2 : 1)}
                 style={{ cursor: "move" }}
@@ -414,7 +414,21 @@ function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; o
         <select value={opening.kind} onChange={(e) => onChange({ kind: e.target.value as Opening["kind"] })}>
           <option value="door">Door</option>
           <option value="window">Window</option>
+          <option value="bay">Bay window</option>
         </select>
+      </label>
+      {opening.kind === "door" && (
+        <label>
+          Style
+          <select value={opening.style ?? "leaf"} onChange={(e) => onChange({ style: e.target.value as Opening["style"] })}>
+            <option value="leaf">Swing door</option>
+            <option value="garage">Garage / solid panel</option>
+          </select>
+        </label>
+      )}
+      <label>
+        Colour
+        <input type="color" value={opening.color ?? (opening.style === "garage" ? "#b3202e" : "#c9a26b")} onChange={(e) => onChange({ color: e.target.value })} />
       </label>
       <label>
         Width (m)
@@ -476,9 +490,19 @@ function RoomInspector({ variant, floor, room, onChange }: { variant: VariantKey
           ))}
         </select>
       </label>
-      <label>
-        Colour
-        <input type="color" value={room.color ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
+      <div className="row">
+        <label>
+          Floor colour
+          <input type="color" value={room.color ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
+        </label>
+        <label title="Colour of this room's external walls; blank uses the model's wall colour">
+          Outside wall
+          <input type="color" value={room.exteriorColor ?? "#efe9d8"} onChange={(e) => onChange({ exteriorColor: e.target.value })} />
+        </label>
+      </div>
+      <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
+        <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} />{" "}
+        Part of an extension (separate roof)
       </label>
       {roomPhotos.length > 0 && (
         <div className="thumbs">

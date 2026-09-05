@@ -15,6 +15,10 @@ Then open the URL Vite prints. The app works without any key if you trace the fl
 
 `npm run build` produces a static site in `dist/` that can be served from anywhere, including GitHub Pages.
 
+## Without an API key
+
+**Load listing 91770873** (and its proposed two-storey extension) are built in, traced by hand from the listing's floorplan and photos. For any other plan, **Trace by hand** opens the image in the plan editor where you draw rooms, add doors and windows, and set the scale yourself.
+
 ## Workflow
 
 1. **Floorplans → As listed**: either **Extract with AI** (needs the API key; 30 to 90 seconds, multi-floor images handled) or **Trace by hand (no AI)**. Tracing opens the plan editor on the image: pick **Rectangle room** and click two opposite corners for each room (corners snap to existing ones so walls line up), use **Polygon room** for L-shapes, add doors and windows, then either enter the printed sizes on a couple of rooms and press **Scale from printed sizes**, or use **Calibrate scale**. Add more floors with **Add a floor to trace by hand**.
@@ -32,8 +36,12 @@ Then open the URL Vite prints. The app works without any key if you trace the fl
 - `src/editor/PlanEditor.tsx` is the SVG check-and-fix view.
 - State lives in a zustand store persisted to IndexedDB, so a refresh keeps your work.
 
+## Exterior
+
+Roofs are planned automatically from the floors: the top floor gets a pitched gable (ridge direction, pitch and overhang under **Exterior**), and any lower-floor area with nothing above it, plus porch canopies, gets a flat roof. Top-floor rooms tagged "part of an extension" in Check plan can either share the main ridge or get their own set-down gable. Each room can have its own outside wall colour (brick vs render); openings can be bay windows or solid garage doors. The camera buttons in the 3D view (front, rear, left, right, top) give street-level elevations. Exterior photos are assigned a side of the house in the Photos panel and float beside that elevation.
+
 ## Limits
 
 - Coordinates from a vision model are approximate. Expect to nudge a few corners in **Check plan** on a busy plan.
-- There is no roof, garden or exterior detailing. Floors stack by the centre of their footprint; use the per-floor stacking offset if the upper floor sits wrong.
+- No garden, neighbouring houses or chimneys. Floors stack by the centre of their footprint; use the per-floor stacking offset if the upper floor sits wrong.
 - The photos are used as reference and texture only; there is no photogrammetry.

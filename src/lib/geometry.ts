@@ -11,6 +11,10 @@ export interface WallSeg {
   b: V2;
   /** Openings that sit on this segment, with their position along it. */
   openings: { opening: Opening; t: number }[];
+  /** True when only one room touches this wall (an external wall). */
+  exterior?: boolean;
+  /** A room that contributed this wall (used for exterior colour). */
+  roomId?: string;
 }
 
 export function polygonArea(poly: V2[]): number {
@@ -128,10 +132,18 @@ export function buildWalls(floor: Floor): WallSeg[] {
     c: number; // signed distance of line from origin along the normal
     t0: number;
     t1: number;
+    roomId: string;
+    /** No room on one side of this edge. */
+    exterior: boolean;
+    /** Exterior colour key so brick and render walls stay separate segments. */
+    colorKey: string;
   }
   const edges: Edge[] = [];
-  for (const room of floor.rooms) {
-    const poly = roomWorldPolygon(floor, room);
+  const polys = floor.rooms.map((r) => roomWorldPolygon(floor, r));
+  const inAnyRoom = (p: V2) => polys.some((poly) => pointInPolygon(p, poly));
+  for (let ri = 0; ri < floor.rooms.length; ri++) {
+    const room = floor.rooms[ri];
+    const poly = polys[ri];
     for (let i = 0; i < poly.length; i++) {
       const a = poly[i];
       const b = poly[(i + 1) % poly.length];
@@ -139,6 +151,11 @@ export function buildWalls(floor: Floor): WallSeg[] {
       const dy = b.y - a.y;
       const len = Math.hypot(dx, dy);
       if (len < 0.05) continue;
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const nx = -dy / len;
+      const ny = dx / len;
+      const exterior = !(inAnyRoom({ x: mid.x + nx * 0.3, y: mid.y + ny * 0.3 }) && inAnyRoom({ x: mid.x - nx * 0.3, y: mid.y - ny * 0.3 }));
+      const colorKey = exterior ? room.exteriorColor ?? "" : "";
       let dir = { x: dx / len, y: dy / len };
       // Canonical direction so opposite edges group together.
       if (dir.x < -1e-9 || (Math.abs(dir.x) < 1e-9 && dir.y < 0)) dir = { x: -dir.x, y: -dir.y };
@@ -146,7 +163,7 @@ export function buildWalls(floor: Floor): WallSeg[] {
       const c = a.x * n.x + a.y * n.y;
       const ta = a.x * dir.x + a.y * dir.y;
       const tb = b.x * dir.x + b.y * dir.y;
-      edges.push({ dir, c, t0: Math.min(ta, tb), t1: Math.max(ta, tb) });
+      edges.push({ dir, c, t0: Math.min(ta, tb), t1: Math.max(ta, tb), roomId: room.id, exterior, colorKey });
     }
   }
 
@@ -157,7 +174,7 @@ export function buildWalls(floor: Floor): WallSeg[] {
     const g = groups.find((grp) => {
       const r = grp[0];
       const dot = r.dir.x * e.dir.x + r.dir.y * e.dir.y;
-      return dot > ANG && Math.abs(r.c - e.c) < OFF;
+      return dot > ANG && Math.abs(r.c - e.c) < OFF && r.exterior === e.exterior && r.colorKey === e.colorKey;
     });
     if (g) g.push(e);
     else groups.push([e]);
@@ -168,18 +185,22 @@ export function buildWalls(floor: Floor): WallSeg[] {
     const dir = g[0].dir;
     const n = { x: -dir.y, y: dir.x };
     const c = g.reduce((s, e) => s + e.c, 0) / g.length;
-    const intervals = g.map((e) => [e.t0, e.t1] as [number, number]).sort((a, b) => a[0] - b[0]);
-    const merged: [number, number][] = [];
-    for (const iv of intervals) {
+    const intervals = g.map((e) => [e.t0, e.t1, e.roomId] as [number, number, string]).sort((a, b) => a[0] - b[0]);
+    const merged: { t0: number; t1: number; rooms: Set<string> }[] = [];
+    for (const [t0, t1, roomId] of intervals) {
       const last = merged[merged.length - 1];
-      if (last && iv[0] <= last[1] + 0.05) last[1] = Math.max(last[1], iv[1]);
-      else merged.push([iv[0], iv[1]]);
+      if (last && t0 <= last.t1 + 0.05) {
+        last.t1 = Math.max(last.t1, t1);
+        last.rooms.add(roomId);
+      } else merged.push({ t0, t1, rooms: new Set([roomId]) });
     }
-    for (const [t0, t1] of merged) {
+    for (const { t0, t1, rooms } of merged) {
       walls.push({
         a: { x: dir.x * t0 + n.x * c, y: dir.y * t0 + n.y * c },
         b: { x: dir.x * t1 + n.x * c, y: dir.y * t1 + n.y * c },
         openings: [],
+        exterior: g[0].exterior,
+        roomId: [...rooms][0],
       });
     }
   }
@@ -251,6 +272,7 @@ export function cutWall(
     if (opening.kind === "door") {
       pieces.push({ a: at(t0), b: at(t1), y0: doorH, y1: ceiling });
     } else {
+      // window or bay
       pieces.push({ a: at(t0), b: at(t1), y0: 0, y1: sillH });
       pieces.push({ a: at(t0), b: at(t1), y0: windowTop, y1: ceiling });
     }

@@ -2,11 +2,16 @@ import { Suspense, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { useLoader } from "@react-three/fiber";
-import type { Floor, HouseModel, Photo, Room } from "../types";
+import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
+import { exteriorOf } from "../lib/roof";
+import { Roof } from "./Roof";
 import {
+  type WallSeg,
   buildWalls,
   cutWall,
   diffWalls,
+  modelBounds,
+  pointInPolygon,
   polygonCentroid,
   roomWorldPolygon,
   toWorld,
@@ -68,6 +73,8 @@ interface HouseProps {
    * from it are highlighted green (what the renovation adds).
    */
   diffAgainst?: HouseModel;
+  /** Draw roofs, canopies and exterior photo pins. */
+  showExterior?: boolean;
 }
 
 export function House({
@@ -80,9 +87,13 @@ export function House({
   onSelectRoom,
   visibleLevels,
   diffAgainst,
+  showExterior,
 }: HouseProps) {
+  const ext = exteriorOf(model);
   return (
     <group>
+      {showExterior && !ghost && ext.showRoof && <Roof model={model} />}
+      {showExterior && !ghost && <ExteriorPins model={model} photos={photos} />}
       {model.floors
         .filter((f) => !visibleLevels || visibleLevels.includes(f.level))
         .map((floor) => (
@@ -97,6 +108,8 @@ export function House({
             selectedRoomId={selectedRoomId}
             onSelectRoom={onSelectRoom}
             otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
+            wallColor={ext.wallColor}
+            trimColor={ext.trimColor}
           />
         ))}
     </group>
@@ -113,6 +126,8 @@ function FloorGroup({
   selectedRoomId,
   onSelectRoom,
   otherFloor,
+  wallColor,
+  trimColor,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -123,6 +138,8 @@ function FloorGroup({
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   otherFloor?: Floor | null;
+  wallColor: string;
+  trimColor: string;
 }) {
   const y0 = floorBaseY(model, floor);
   const H = model.ceilingHeight;
@@ -133,14 +150,12 @@ function FloorGroup({
   // Ghost mode with a comparison draws only the removed walls.
   const walls = ghost && otherWalls ? changed : allWalls;
   const cut = useMemo(() => walls.map((w) => cutWall(w, H)), [walls, H]);
-  const pieces = cut.flatMap((c) => c.pieces);
-  const placements = cut.flatMap((c) => c.placements);
-
-  const wallMat = ghost ? (
-    <meshStandardMaterial color="#e0332f" transparent opacity={0.28} depthWrite={false} />
-  ) : (
-    <meshStandardMaterial color="#f4f1ea" roughness={0.9} />
-  );
+  const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
+  const colourOf = (w: WallSeg) =>
+    w.exterior ? (w.roomId && roomsById.get(w.roomId)?.exteriorColor) || wallColor : "#f4f1ea";
+  const pieces = cut.flatMap((c, i) => c.pieces.map((p) => ({ piece: p, color: colourOf(walls[i]) })));
+  const placements = cut.flatMap((c, i) => c.placements.map((pl) => ({ placement: pl, wall: walls[i] })));
+  const worldRooms = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
 
   return (
     <group position={[0, y0, 0]}>
@@ -163,13 +178,26 @@ function FloorGroup({
         </>
       )}
 
-      {pieces.map((p, i) => (
-        <WallBox key={i} piece={p} ghost={ghost}>
-          {wallMat}
+      {pieces.map(({ piece, color }, i) => (
+        <WallBox key={i} piece={piece} ghost={ghost}>
+          {ghost ? (
+            <meshStandardMaterial color="#e0332f" transparent opacity={0.28} depthWrite={false} />
+          ) : (
+            <meshStandardMaterial color={color} roughness={0.9} />
+          )}
         </WallBox>
       ))}
 
-      {!ghost && placements.map((pl, i) => <OpeningMesh key={i} placement={pl} />)}
+      {!ghost &&
+        placements.map(({ placement, wall }, i) => (
+          <OpeningMesh
+            key={i}
+            placement={placement}
+            trimColor={trimColor}
+            wallColor={(wall.roomId && roomsById.get(wall.roomId)?.exteriorColor) || wallColor}
+            outward={outwardNormal(placement, worldRooms)}
+          />
+        ))}
 
       {!ghost &&
         otherWalls &&
@@ -293,23 +321,75 @@ function WallBox({
   );
 }
 
-function OpeningMesh({ placement }: { placement: OpeningPlacement }) {
+/** Unit normal pointing out of the building at an opening (or null when unknown). */
+function outwardNormal(pl: OpeningPlacement, rooms: V2[][]): V2 | null {
+  const n = { x: -pl.dir.y, y: pl.dir.x };
+  const probe = (sign: number) => ({ x: pl.centre.x + n.x * 0.4 * sign, y: pl.centre.y + n.y * 0.4 * sign });
+  const inPlus = rooms.some((r) => pointInPolygon(probe(1), r));
+  const inMinus = rooms.some((r) => pointInPolygon(probe(-1), r));
+  if (inPlus && !inMinus) return { x: -n.x, y: -n.y };
+  if (inMinus && !inPlus) return n;
+  return null;
+}
+
+function OpeningMesh({
+  placement,
+  trimColor,
+  wallColor,
+  outward,
+}: {
+  placement: OpeningPlacement;
+  trimColor: string;
+  wallColor: string;
+  outward: V2 | null;
+}) {
   const { opening, centre, dir, width } = placement;
   const rotY = -Math.atan2(dir.y, dir.x);
-  if (opening.kind === "window") {
+  if (opening.kind === "window" || opening.kind === "bay") {
+    // Bays project outward; the local +z axis is the wall normal, so pick its sign from `outward`.
+    const nz = { x: -dir.y, y: dir.x };
+    const sign = outward ? Math.sign(outward.x * nz.x + outward.y * nz.y) || 1 : 1;
+    const depth = opening.kind === "bay" ? 0.6 : 0;
+    const off = depth ? (sign * depth) / 2 + (sign * WALL_T) / 2 : 0;
     return (
       <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        <mesh position={[0, 1.5, 0]}>
-          <boxGeometry args={[width, 1.2, 0.02]} />
+        {depth > 0 && (
+          <>
+            <mesh position={[0, 0.45, off]} castShadow>
+              <boxGeometry args={[width, 0.9, depth]} />
+              <meshStandardMaterial color={wallColor} />
+            </mesh>
+            <mesh position={[0, 2.25, off]} castShadow>
+              <boxGeometry args={[width, 0.3, depth]} />
+              <meshStandardMaterial color={wallColor} />
+            </mesh>
+            <mesh position={[0, 2.45, off]} castShadow>
+              <boxGeometry args={[width + 0.2, 0.1, depth + 0.15]} />
+              <meshStandardMaterial color="#4b4b4b" />
+            </mesh>
+          </>
+        )}
+        <mesh position={[0, 1.5, off]}>
+          <boxGeometry args={[width, 1.2, depth || 0.02]} />
           <meshPhysicalMaterial color="#9ecbe6" transparent opacity={0.45} roughness={0.1} />
         </mesh>
-        <mesh position={[0, 0.9, 0]}>
-          <boxGeometry args={[width, 0.05, WALL_T + 0.02]} />
-          <meshStandardMaterial color="#ffffff" />
+        <mesh position={[0, 0.9, off]}>
+          <boxGeometry args={[width + 0.06, 0.06, (depth || WALL_T) + 0.03]} />
+          <meshStandardMaterial color={trimColor} />
         </mesh>
-        <mesh position={[0, 2.1, 0]}>
-          <boxGeometry args={[width, 0.05, WALL_T + 0.02]} />
-          <meshStandardMaterial color="#ffffff" />
+        <mesh position={[0, 2.1, off]}>
+          <boxGeometry args={[width + 0.06, 0.06, (depth || WALL_T) + 0.03]} />
+          <meshStandardMaterial color={trimColor} />
+        </mesh>
+      </group>
+    );
+  }
+  if (opening.style === "garage") {
+    return (
+      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
+        <mesh position={[0, 1.02, 0]}>
+          <boxGeometry args={[width, 2.04, 0.06]} />
+          <meshStandardMaterial color={opening.color ?? "#b3202e"} roughness={0.6} />
         </mesh>
       </group>
     );
@@ -321,7 +401,7 @@ function OpeningMesh({ placement }: { placement: OpeningPlacement }) {
       <group position={[-width / 2, 0, 0]} rotation={[0, -Math.PI * 0.42, 0]}>
         <mesh position={[leaf / 2, 1.0, 0]}>
           <boxGeometry args={[leaf, 2.0, 0.04]} />
-          <meshStandardMaterial color="#c9a26b" />
+          <meshStandardMaterial color={opening.color ?? "#c9a26b"} />
         </mesh>
       </group>
       {width > 1.4 && (
@@ -391,6 +471,51 @@ function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: P
         </Html>
       )}
     </Billboard>
+  );
+}
+
+/** Exterior photos float beside the elevation they show. */
+function ExteriorPins({ model, photos }: { model: HouseModel; photos: Photo[] }) {
+  const b = useMemo(() => modelBounds(model.floors), [model]);
+  const setUi = useUiSetter();
+  const byElev = new Map<Elevation, Photo[]>();
+  for (const p of photos) if (p.elevation) byElev.set(p.elevation, [...(byElev.get(p.elevation) ?? []), p]);
+  const cx = (b.x0 + b.x1) / 2;
+  const cz = (b.y0 + b.y1) / 2;
+  const GAP = 2.6;
+  const place = (e: Elevation, i: number, n: number): [number, number, number] => {
+    const t = (i - (n - 1) / 2) * 2.4;
+    switch (e) {
+      case "front":
+        return [cx + t, 1.8, b.y1 + GAP];
+      case "rear":
+        return [cx - t, 1.8, b.y0 - GAP];
+      case "left":
+        return [b.x0 - GAP, 1.8, cz - t];
+      case "right":
+        return [b.x1 + GAP, 1.8, cz + t];
+    }
+  };
+  return (
+    <group>
+      {[...byElev.entries()].flatMap(([e, list]) =>
+        list.map((p, i) => (
+          <Billboard key={p.id} position={place(e, i, list.length)}>
+            <Suspense fallback={null}>
+              <DreiImage
+                url={p.dataUrl}
+                scale={[2.2, 1.5]}
+                transparent
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setUi({ selectedPhotoId: p.id });
+                }}
+              />
+            </Suspense>
+          </Billboard>
+        )),
+      )}
+    </group>
   );
 }
 

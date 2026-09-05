@@ -5,10 +5,11 @@ import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
 import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { VARIANT_LABEL, type VariantKey } from "./types";
 
-type Side = "floorplans" | "photos" | "settings";
+type Side = "floorplans" | "photos" | "exterior" | "settings";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -20,6 +21,7 @@ export default function App() {
   const showLabels = useStore((s) => s.showLabels);
   const showCeilings = useStore((s) => s.showCeilings);
   const maxLevel = useStore((s) => s.maxLevel);
+  const showExterior = useStore((s) => s.showExterior);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
   const updateModel = useStore((s) => s.updateModel);
@@ -113,6 +115,9 @@ export default function App() {
             <label className="check">
               <input type="checkbox" checked={showCeilings} onChange={(e) => setUi({ showCeilings: e.target.checked })} /> Ceilings
             </label>
+            <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
+              <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior
+            </label>
             {model && (
               <label className="check">
                 Ceiling height
@@ -150,6 +155,9 @@ export default function App() {
             <button className={side === "photos" ? "active" : ""} onClick={() => setSide("photos")}>
               Photos ({photos.length})
             </button>
+            <button className={side === "exterior" ? "active" : ""} onClick={() => setSide("exterior")} disabled={!model}>
+              Exterior
+            </button>
             <button className={side === "settings" ? "active" : ""} onClick={() => setSide("settings")}>
               Settings
             </button>
@@ -162,6 +170,7 @@ export default function App() {
               </>
             )}
             {side === "photos" && <PhotosPanel />}
+            {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
             {side === "settings" && <SettingsPanel />}
           </div>
         </aside>
@@ -185,6 +194,7 @@ export default function App() {
               onSelectRoom={onSelectRoom}
               title={VARIANT_LABEL[activeVariant]}
               maxLevel={maxLevel}
+              showExterior={showExterior}
             />
           )}
           {model && tab === "3d" && viewMode === "side-by-side" && both && (
@@ -205,6 +215,7 @@ export default function App() {
                   }}
                   title={VARIANT_LABEL[k]}
                   maxLevel={maxLevel}
+                  showExterior={showExterior}
                 />
               ))}
             </div>
@@ -222,6 +233,7 @@ export default function App() {
               onSelectRoom={onSelectRoom}
               title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
               maxLevel={maxLevel}
+              showExterior={showExterior}
             />
           )}
           {model && tab === "plan" && editFloor && <PlanEditor variant={activeVariant} floor={editFloor} />}

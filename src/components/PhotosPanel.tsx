@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import { assignPhotos } from "../ai/photos";
 import { describeError } from "../ai/client";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
-import { uid, type Photo } from "../types";
+import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 
 export function PhotosPanel() {
   const photos = useStore((s) => s.photos);
@@ -30,7 +30,7 @@ export function PhotosPanel() {
     if (!model) return;
     setError(null);
     try {
-      const unassigned = photos.filter((p) => !p.roomName);
+      const unassigned = photos.filter((p) => !p.roomName && !p.elevation);
       const res = await assignPhotos(settings.apiKey, settings.model, model, unassigned.length ? unassigned : photos, setBusy);
       for (const [id, a] of res) updatePhoto(id, a);
     } catch (e) {
@@ -73,18 +73,28 @@ export function PhotosPanel() {
           <div key={p.id} className="photo-card">
             <img src={p.dataUrl} alt={p.name} onClick={() => setUi({ selectedPhotoId: p.id })} />
             <select
-              value={p.roomName ? `${p.floorName}|${p.roomName}` : ""}
+              value={p.roomName ? `${p.floorName}|${p.roomName}` : p.elevation ? `ext|${p.elevation}` : ""}
               onChange={(e) => {
-                const [floorName, roomName] = e.target.value.split("|");
-                updatePhoto(p.id, { floorName: floorName || undefined, roomName: roomName || undefined });
+                const [a, b] = e.target.value.split("|");
+                if (a === "ext") updatePhoto(p.id, { floorName: undefined, roomName: undefined, elevation: b as Elevation });
+                else updatePhoto(p.id, { floorName: a || undefined, roomName: b || undefined, elevation: undefined });
               }}
             >
-              <option value="">Unassigned / exterior</option>
-              {rooms.map((r) => (
-                <option key={`${r.floorName}|${r.roomName}`} value={`${r.floorName}|${r.roomName}`}>
-                  {r.floorName}: {r.roomName}
-                </option>
-              ))}
+              <option value="">Unassigned</option>
+              <optgroup label="Exterior">
+                {(Object.keys(ELEVATION_LABEL) as Elevation[]).map((e) => (
+                  <option key={e} value={`ext|${e}`}>
+                    {ELEVATION_LABEL[e]}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Rooms">
+                {rooms.map((r) => (
+                  <option key={`${r.floorName}|${r.roomName}`} value={`${r.floorName}|${r.roomName}`}>
+                    {r.floorName}: {r.roomName}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             {p.description && (
               <div className="muted small" title={p.description}>
