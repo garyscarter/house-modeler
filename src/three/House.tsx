@@ -150,10 +150,15 @@ function FloorGroup({
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
   // Ghost mode with a comparison draws only the removed walls.
   const walls = ghost && otherWalls ? changed : allWalls;
-  const cut = useMemo(() => walls.map((w) => cutWall(w, H)), [walls, H]);
+  // Walls run up through the slab above so the outside face is continuous between storeys.
+  const wallTop = H + (hasAbove ? model.slabThickness : 0);
+  const cut = useMemo(
+    () => walls.map((w) => cutWall(w, w.height !== undefined ? Math.min(w.height, wallTop) : wallTop)),
+    [walls, wallTop],
+  );
   const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
   const colourOf = (w: WallSeg) =>
-    w.exterior ? (w.roomId && roomsById.get(w.roomId)?.exteriorColor) || wallColor : "#f4f1ea";
+    w.color ?? (w.exterior ? (w.roomId && roomsById.get(w.roomId)?.exteriorColor) || wallColor : "#f4f1ea");
   const pieces = cut.flatMap((c, i) => c.pieces.map((p) => ({ piece: p, color: colourOf(walls[i]) })));
   const placements = cut.flatMap((c, i) => c.placements.map((pl) => ({ placement: pl, wall: walls[i] })));
   const worldRooms = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
@@ -355,6 +360,7 @@ function OpeningMesh({
 }) {
   const { opening, centre, dir, width } = placement;
   const rotY = -Math.atan2(dir.y, dir.x);
+  if (opening.kind === "gap") return null;
   if (opening.kind === "window" || opening.kind === "bay") {
     // Bays project outward; the local +z axis is the wall normal, so pick its sign from `outward`.
     const nz = { x: -dir.y, y: dir.x };
@@ -391,6 +397,32 @@ function OpeningMesh({
           <boxGeometry args={[width + 0.06, 0.06, (depth || WALL_T) + 0.03]} />
           <meshStandardMaterial color={trimColor} />
         </mesh>
+      </group>
+    );
+  }
+  if (opening.kind === "patio") {
+    // Sliding patio doors: two full-height glazed panels in a frame.
+    const panels = width > 3.2 ? 3 : 2;
+    const pw = width / panels;
+    const bar = (x: number, y: number, w: number, h: number) => (
+      <mesh key={`${x},${y}`} position={[x, y, 0]}>
+        <boxGeometry args={[w, h, WALL_T + 0.04]} />
+        <meshStandardMaterial color={trimColor} />
+      </mesh>
+    );
+    return (
+      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
+        {bar(0, 2.12, width + 0.08, 0.06)}
+        {bar(0, 0.03, width + 0.08, 0.06)}
+        {bar(-width / 2 - 0.02, 1.075, 0.06, 2.15)}
+        {bar(width / 2 + 0.02, 1.075, 0.06, 2.15)}
+        {Array.from({ length: panels - 1 }, (_, i) => bar(-width / 2 + (i + 1) * pw, 1.075, 0.05, 2.15))}
+        {Array.from({ length: panels }, (_, i) => (
+          <mesh key={"g" + i} position={[-width / 2 + (i + 0.5) * pw, 1.075, 0]}>
+            <boxGeometry args={[pw - 0.06, 2.05, 0.02]} />
+            <meshPhysicalMaterial color="#9ecbe6" transparent opacity={0.45} roughness={0.1} />
+          </mesh>
+        ))}
       </group>
     );
   }

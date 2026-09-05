@@ -22,8 +22,8 @@ export interface Room {
 
 export interface Opening {
   id: string;
-  /** "bay" is a window that projects outward; "garage" is a panelled up-and-over door. */
-  kind: "door" | "window" | "bay" | "garage";
+  /** "bay" projects outward; "garage" is a panelled up-and-over door; "gap" is a full-height opening with no lintel. */
+  kind: "door" | "window" | "bay" | "garage" | "gap" | "patio";
   color?: string;
   /** Centre of the opening, image pixel coordinates. */
   x: number;
@@ -32,6 +32,16 @@ export interface Opening {
   orientation: "h" | "v";
   /** Width along the wall, in metres. */
   widthM: number;
+}
+
+/** A free-standing wall segment not derived from a room outline (nib, partition, garden wall). */
+export interface Wall {
+  id: string;
+  a: Pt;
+  b: Pt;
+  /** Height in metres; defaults to the ceiling height. */
+  height?: number;
+  color?: string;
 }
 
 export interface Floor {
@@ -51,6 +61,7 @@ export interface Floor {
   offset: { x: number; y: number };
   rooms: Room[];
   openings: Opening[];
+  walls?: Wall[];
   stairs?: Pt;
   /** Direction the flight rises in, in plan terms. Default "up" (towards the top of the plan). */
   stairsDir?: StairsDir;

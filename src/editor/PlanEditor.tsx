@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Floor, Opening, Pt, Room, VariantKey } from "../types";
+import type { Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
 import { uid } from "../types";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM, pointInPolygon } from "../lib/geometry";
 import { STAIRS_DIR_LABEL, type StairsDir } from "../types";
 import { roomColor } from "../three/House";
 
-type Tool = "select" | "rect" | "room" | "door" | "window" | "calibrate";
+type Tool = "select" | "rect" | "room" | "door" | "window" | "gap" | "wall" | "calibrate";
 
 /**
  * 2D check-and-fix view: the geometry drawn over the source image. Used both
@@ -22,10 +22,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [draft, setDraft] = useState<Pt[]>([]);
   const [hover, setHover] = useState<Pt | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
+  const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   // Fit the view to the rooms (useful on multi-floor images) or the whole image (tracing).
   const [fit, setFit] = useState<"rooms" | "image">(floor.rooms.length ? "rooms" : "image");
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ roomId: string; idx: number } | { openingId: string } | { stairs: true } | null>(null);
+  const drag = useRef<{ roomId: string; idx: number } | { openingId: string } | { stairs: true } | { wallId: string; end: "a" | "b" } | null>(null);
 
   const view = useMemo(() => {
     const all = floor.rooms.flatMap((r) => r.polygon);
@@ -54,9 +55,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     let bestD = snapTol;
     let sx: number | null = null;
     let sy: number | null = null;
-    for (const r of floor.rooms) {
-      r.polygon.forEach((v, i) => {
-        if (exclude && exclude.roomId === r.id && exclude.idx === i) return;
+    const walls = floor.walls ?? [];
+    const candidates = [
+      ...floor.rooms.flatMap((r) => r.polygon.map((v, i) => ({ v, id: r.id, i }))),
+      ...walls.flatMap((w) => [
+        { v: w.a, id: w.id, i: -1 },
+        { v: w.b, id: w.id, i: -2 },
+      ]),
+    ];
+    {
+      candidates.forEach(({ v, id, i }) => {
+        if (exclude && exclude.roomId === id && exclude.idx === i) return;
         const d = Math.hypot(v.x - p.x, v.y - p.y);
         if (d < bestD) {
           bestD = d;
@@ -76,20 +85,35 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         setDraft([]);
         setCalib([]);
         setSelectedOpeningId(null);
+        setSelectedWallId(null);
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedOpeningId && !(e.target instanceof HTMLInputElement)) {
-        updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.filter((o) => o.id !== selectedOpeningId) }));
-        setSelectedOpeningId(null);
+      if ((e.key === "Delete" || e.key === "Backspace") && !(e.target instanceof HTMLInputElement)) {
+        if (selectedOpeningId) {
+          updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.filter((o) => o.id !== selectedOpeningId) }));
+          setSelectedOpeningId(null);
+        } else if (selectedWallId) {
+          updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).filter((w) => w.id !== selectedWallId) }));
+          setSelectedWallId(null);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedOpeningId, updateFloor, variant, floor.id]);
+  }, [selectedOpeningId, selectedWallId, updateFloor, variant, floor.id]);
 
   const onPointerMove = (e: React.PointerEvent) => {
     const raw = toImage(e);
     if (!drag.current) {
-      setHover(tool === "rect" || tool === "room" ? snap(raw) : raw);
+      setHover(tool === "rect" || tool === "room" || tool === "wall" ? snap(raw) : raw);
+      return;
+    }
+    if ("wallId" in drag.current) {
+      const { wallId, end } = drag.current;
+      const p = snap(raw, { roomId: wallId, idx: end === "a" ? -1 : -2 });
+      updateFloor(variant, floor.id, (f) => ({
+        ...f,
+        walls: (f.walls ?? []).map((w) => (w.id === wallId ? { ...w, [end]: p } : w)),
+      }));
       return;
     }
     if ("roomId" in drag.current) {
@@ -120,11 +144,26 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const onClickCanvas = (e: React.MouseEvent) => {
     const raw = toImage(e);
-    if (tool === "door" || tool === "window") {
-      const orientation = nearestEdgeOrientation(floor.rooms, raw);
-      const op: Opening = { id: uid(), kind: tool, x: raw.x, y: raw.y, orientation, widthM: tool === "door" ? 0.85 : 1.2 };
+    if (tool === "door" || tool === "window" || tool === "gap") {
+      const orientation = nearestEdgeOrientation(floor, raw);
+      const op: Opening = { id: uid(), kind: tool, x: raw.x, y: raw.y, orientation, widthM: tool === "door" ? 0.85 : tool === "gap" ? 1.5 : 1.2 };
       updateFloor(variant, floor.id, (f) => ({ ...f, openings: [...f.openings, op] }));
       setSelectedOpeningId(op.id);
+      setSelectedWallId(null);
+      setUi({ selectedRoomId: null });
+    } else if (tool === "wall") {
+      const p = snap(raw);
+      if (draft.length === 0) setDraft([p]);
+      else {
+        const a = draft[0];
+        setDraft([]);
+        if (Math.hypot(a.x - p.x, a.y - p.y) < snapTol) return;
+        const wall: Wall = { id: uid(), a, b: p };
+        updateFloor(variant, floor.id, (f) => ({ ...f, walls: [...(f.walls ?? []), wall] }));
+        setSelectedWallId(wall.id);
+        setSelectedOpeningId(null);
+        setUi({ selectedRoomId: null });
+      }
     } else if (tool === "calibrate") {
       const next = [...calib, raw];
       if (next.length === 2) {
@@ -158,6 +197,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
       setUi({ selectedRoomId: hit?.id ?? null });
       setSelectedOpeningId(null);
+      setSelectedWallId(null);
     }
   };
 
@@ -168,6 +208,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const selected = floor.rooms.find((r) => r.id === selectedRoomId);
   const selectedOpening = floor.openings.find((o) => o.id === selectedOpeningId);
+  const selectedWall = (floor.walls ?? []).find((w) => w.id === selectedWallId);
   // Draw the selected room last so its outline and drag handles sit above its neighbours.
   const orderedRooms = [...floor.rooms.filter((r) => r.id !== selectedRoomId), ...(selected ? [selected] : [])];
   const pick = (t: Tool) => {
@@ -186,6 +227,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             ["room", "Polygon room"],
             ["door", "Add door"],
             ["window", "Add window"],
+            ["gap", "Add gap"],
+            ["wall", "Draw wall"],
             ["calibrate", "Calibrate scale"],
           ] as [Tool, string][]
         ).map(([t, label]) => (
@@ -200,6 +243,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           {tool === "room" && "Click each corner in order, then click the first corner again (or Finish room). Esc cancels."}
           {tool === "door" && "Click on a wall to place a door."}
           {tool === "window" && "Click on a wall to place a window."}
+          {tool === "gap" && "Click on a wall to knock a full-height opening through it."}
+          {tool === "wall" && (draft.length ? "Click the other end of the wall." : "Click where the wall starts, then where it ends. Ends snap to corners.")}
           {tool === "calibrate" && `Click two points a known distance apart (${calib.length}/2).`}
         </span>
         <span className="hint right">Scale: {floor.pxPerM.toFixed(1)} px/m</span>
@@ -305,6 +350,55 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 })}
               </g>
             ))}
+          {(floor.walls ?? []).map((w) => {
+            const sel = w.id === selectedWallId;
+            return (
+              <g key={w.id}>
+                <line
+                  x1={w.a.x}
+                  y1={w.a.y}
+                  x2={w.b.x}
+                  y2={w.b.y}
+                  stroke={sel ? "#d97706" : w.color ?? "#1f2937"}
+                  strokeWidth={stroke * (sel ? 5 : 3.5)}
+                  strokeLinecap="round"
+                  style={{ cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedWallId(w.id);
+                    setSelectedOpeningId(null);
+                    setUi({ selectedRoomId: null });
+                  }}
+                >
+                  <title>Wall{w.height !== undefined ? ` (${w.height} m high)` : ""}. Click to edit, drag the ends to move.</title>
+                </line>
+                {tool === "select" &&
+                  (["a", "b"] as const).map((end) => (
+                    <circle
+                      key={end}
+                      cx={w[end].x}
+                      cy={w[end].y}
+                      r={handleR}
+                      fill="#fff"
+                      stroke={sel ? "#d97706" : "#6b7280"}
+                      strokeWidth={stroke * 1.5}
+                      style={{ cursor: "move" }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setSelectedWallId(w.id);
+                        setSelectedOpeningId(null);
+                        setUi({ selectedRoomId: null });
+                        drag.current = { wallId: w.id, end };
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ))}
+              </g>
+            );
+          })}
+          {tool === "wall" && draft.length === 1 && hover && (
+            <line x1={draft[0].x} y1={draft[0].y} x2={hover.x} y2={hover.y} stroke="#16a34a" strokeWidth={stroke * 3} strokeLinecap="round" style={{ pointerEvents: "none" }} />
+          )}
           {floor.openings.map((o) => {
             const len = o.widthM * floor.pxPerM;
             const thick = stroke * 8;
@@ -316,8 +410,10 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 y={o.y - (o.orientation === "v" ? len / 2 : thick / 2)}
                 width={o.orientation === "h" ? len : thick}
                 height={o.orientation === "v" ? len : thick}
-                fill={o.kind === "door" ? "#f59e0b" : o.kind === "garage" ? "#b45309" : o.kind === "bay" ? "#0ea5e9" : "#3b82f6"}
-                stroke={sel ? "#111" : "#fff"}
+                fill={o.kind === "door" ? "#f59e0b" : o.kind === "garage" ? "#b45309" : o.kind === "bay" ? "#0ea5e9" : o.kind === "patio" ? "#0d9488" : o.kind === "gap" ? "#ffffff" : "#3b82f6"}
+                fillOpacity={o.kind === "gap" ? 0.9 : 1}
+                strokeDasharray={o.kind === "gap" ? `${stroke * 3} ${stroke * 2}` : undefined}
+                stroke={sel ? "#111" : o.kind === "gap" ? "#6b7280" : "#fff"}
                 strokeWidth={stroke * (sel ? 2 : 1)}
                 style={{ cursor: "move" }}
                 onPointerDown={(e) => {
@@ -392,7 +488,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               style={{ pointerEvents: "none" }}
             />
           )}
-          {(tool === "rect" || tool === "room") && hover && (
+          {(tool === "rect" || tool === "room" || tool === "wall") && hover && (
             <circle cx={hover.x} cy={hover.y} r={handleR * 0.8} fill="#16a34a" style={{ pointerEvents: "none" }} />
           )}
         </svg>
@@ -411,8 +507,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 setSelectedOpeningId(null);
               }}
             />
+          ) : selectedWall ? (
+            <WallInspector
+              wall={selectedWall}
+              onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWall.id ? { ...w, ...p } : w)) }))}
+              onDelete={() => {
+                updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).filter((w) => w.id !== selectedWall.id) }));
+                setSelectedWallId(null);
+              }}
+            />
           ) : (
-            <p className="muted">Select a room to rename it or set its printed size, or an opening to change its width.</p>
+            <p className="muted">Select a room to rename it or set its printed size, an opening to change its width, or a wall to set its height.</p>
           )}
           <hr />
           <FloorInspector variant={variant} floor={floor} />
@@ -422,13 +527,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   );
 }
 
-function nearestEdgeOrientation(rooms: Room[], p: Pt): "h" | "v" {
+function nearestEdgeOrientation(floor: Floor, p: Pt): "h" | "v" {
   let best = Infinity;
   let orient: "h" | "v" = "h";
-  for (const r of rooms) {
-    for (let i = 0; i < r.polygon.length; i++) {
-      const a = r.polygon[i];
-      const b = r.polygon[(i + 1) % r.polygon.length];
+  const edges: [Pt, Pt][] = [
+    ...floor.rooms.flatMap((r) => r.polygon.map((a, i) => [a, r.polygon[(i + 1) % r.polygon.length]] as [Pt, Pt])),
+    ...(floor.walls ?? []).map((w) => [w.a, w.b] as [Pt, Pt]),
+  ];
+  {
+    for (const [a, b] of edges) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const len2 = dx * dx + dy * dy || 1;
@@ -443,6 +550,33 @@ function nearestEdgeOrientation(rooms: Room[], p: Pt): "h" | "v" {
   return orient;
 }
 
+function WallInspector({ wall, onChange, onDelete }: { wall: Wall; onChange: (p: Partial<Wall>) => void; onDelete: () => void }) {
+  return (
+    <div className="inspector">
+      <h4>Wall</h4>
+      <label>
+        Height (m, blank = full height)
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          value={wall.height ?? ""}
+          placeholder="full"
+          onChange={(e) => onChange({ height: e.target.value === "" ? undefined : parseFloat(e.target.value) || undefined })}
+        />
+      </label>
+      <label>
+        Colour
+        <input type="color" value={wall.color ?? "#f4f1ea"} onChange={(e) => onChange({ color: e.target.value })} />
+      </label>
+      <p className="muted small">Doors, windows and gaps can be placed on it like any other wall.</p>
+      <button className="danger" onClick={onDelete}>
+        Delete wall
+      </button>
+    </div>
+  );
+}
+
 function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; onChange: (p: Partial<Opening>) => void; onDelete: () => void }) {
   return (
     <div className="inspector">
@@ -453,6 +587,8 @@ function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; o
           <option value="window">Window</option>
           <option value="bay">Bay window</option>
           <option value="garage">Garage door</option>
+          <option value="gap">Gap (open-plan)</option>
+          <option value="patio">Patio / sliding doors</option>
         </select>
       </label>
       <label>

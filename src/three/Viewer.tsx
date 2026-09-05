@@ -73,6 +73,8 @@ export function Viewer(props: ViewerProps) {
           intensity={1.3}
           castShadow
           shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.02}
           shadow-camera-left={-size}
           shadow-camera-right={size}
           shadow-camera-top={size}
