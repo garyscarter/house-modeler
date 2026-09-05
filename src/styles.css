@@ -59,6 +59,7 @@ button.danger { color: var(--danger); }
 button.link { border: 0; background: none; color: var(--muted); padding: 2px 0; text-decoration: underline; }
 label.file { display: inline-block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
 label.file input { display: none; }
+label.file.disabled { opacity: 0.5; cursor: not-allowed; }
 label { display: block; margin: 8px 0; }
 label input[type="text"], label input[type="password"], label input[type="number"], label select, .inspector input, .inspector select {
   display: block; width: 100%; margin-top: 3px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; font: inherit;

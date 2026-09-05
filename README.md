@@ -11,13 +11,13 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints, go to **Settings** and paste an Anthropic API key. The key is stored only in your browser (IndexedDB) and requests go straight from the page to the Anthropic API. Because of that, never deploy this with a key baked in or on a shared host.
+Then open the URL Vite prints. The app works without any key if you trace the floorplan by hand. For AI extraction and photo matching, go to **Settings** and paste an Anthropic API key from https://platform.claude.com. The key is stored only in your browser (IndexedDB) and requests go straight from the page to the Anthropic API. Because of that, never deploy this with a key baked in or on a shared host.
 
 `npm run build` produces a static site in `dist/` that can be served from anywhere, including GitHub Pages.
 
 ## Workflow
 
-1. **Floorplans → As listed**: choose the floorplan image. Extraction takes 30 to 90 seconds. Multi-floor images are handled; each floor becomes a level.
+1. **Floorplans → As listed**: either **Extract with AI** (needs the API key; 30 to 90 seconds, multi-floor images handled) or **Trace by hand (no AI)**. Tracing opens the plan editor on the image: pick **Rectangle room** and click two opposite corners for each room (corners snap to existing ones so walls line up), use **Polygon room** for L-shapes, add doors and windows, then either enter the printed sizes on a couple of rooms and press **Scale from printed sizes**, or use **Calibrate scale**. Add more floors with **Add a floor to trace by hand**.
 2. **Check plan**: the extracted geometry is drawn over the original image. Drag corners or openings that are off, add missing doors or windows, rename rooms, or click **Calibrate scale** and pick two points a known distance apart if the printed dimensions were not picked up.
 3. **Photos**: add the listing photos, then **Match photos to rooms**. Fix any wrong guesses with the dropdown under each photo. In a room's inspector you can choose a photo as its floor texture.
 4. **Floorplans → Proposed**: upload your redrawn plan. Then use **Side by side** or **Overlay** in the 3D view.

@@ -5,6 +5,7 @@ import type { Floor, HouseModel, Photo, Room, VariantKey } from "./types";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
 export type CameraMode = "orbit" | "walk";
+export type Tab = "3d" | "plan";
 
 export interface Settings {
   apiKey: string;
@@ -18,6 +19,8 @@ interface State {
 
   // UI (not persisted)
   activeVariant: VariantKey;
+  tab: Tab;
+  editFloorId: string | null;
   viewMode: ViewMode;
   cameraMode: CameraMode;
   walkFloorId: string | null;
@@ -41,6 +44,8 @@ interface State {
       Pick<
         State,
         | "activeVariant"
+        | "tab"
+        | "editFloorId"
         | "viewMode"
         | "cameraMode"
         | "walkFloorId"
@@ -73,6 +78,8 @@ export const useStore = create<State>()(
       settings: { apiKey: "", model: "claude-opus-5" },
 
       activeVariant: "current",
+      tab: "3d",
+      editFloorId: null,
       viewMode: "single",
       cameraMode: "orbit",
       walkFloorId: null,

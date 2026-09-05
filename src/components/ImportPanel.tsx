@@ -5,6 +5,7 @@ import { describeError } from "../ai/client";
 import { fileToDataUrl } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
+import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const settings = useStore((s) => s.settings);
@@ -14,6 +15,21 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
+
+  /** No-AI path: add the image as a blank floor and open the plan editor to trace it. */
+  const trace = async (file: File) => {
+    setError(null);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const base = model ?? emptyHouse();
+      const level = base.floors.length ? Math.max(...base.floors.map((f) => f.level)) + 1 : 0;
+      const floor = await blankFloorFromImage(dataUrl, FLOOR_NAMES[level] ?? `Level ${level}`, level);
+      setVariant(variant, { ...base, floors: [...base.floors, floor] });
+      setUi({ activeVariant: variant, tab: "plan", editFloorId: floor.id, selectedRoomId: null });
+    } catch (e) {
+      setError(describeError(e));
+    }
+  };
 
   const run = async (file: File) => {
     setError(null);
@@ -39,20 +55,40 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
           ? "Upload the floorplan image from the listing. Claude reads the rooms, doors, windows and printed dimensions, then the 3D model is built and scaled automatically."
           : "Upload your redrawn floorplan (a sketch, an edited copy of the original, or a new plan). It goes through the same extraction so you can compare it against the listing."}
       </p>
-      <label className="file">
-        {busy ? busy + "…" : model ? "Replace floorplan image" : "Choose floorplan image"}
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          disabled={!!busy}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void run(f);
-            e.target.value = "";
-          }}
-        />
-      </label>
-      {!settings.apiKey && <p className="warn">Add your Anthropic API key under Settings before extracting.</p>}
+      <div className="row">
+        <label className={"file" + (settings.apiKey ? "" : " disabled")}>
+          {busy ? busy + "…" : model ? "Replace with AI extraction" : "Extract with AI"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={!!busy || !settings.apiKey}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void run(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <label className="file">
+          {model ? "Add a floor to trace by hand" : "Trace by hand (no AI)"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={!!busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void trace(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {!settings.apiKey && (
+        <p className="muted small">
+          AI extraction needs an Anthropic API key (Settings). Without one, upload the image and trace the rooms in the plan editor:
+          draw each room, add doors and windows, then set the scale.
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
       {notes && (
         <p className="note">

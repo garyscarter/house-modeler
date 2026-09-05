@@ -8,7 +8,6 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { VARIANT_LABEL, type VariantKey } from "./types";
 
-type Tab = "3d" | "plan";
 type Side = "floorplans" | "photos" | "settings";
 
 export default function App() {
@@ -24,9 +23,11 @@ export default function App() {
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
   const updateModel = useStore((s) => s.updateModel);
-  const [tab, setTab] = useState<Tab>("3d");
+  const tab = useStore((s) => s.tab);
+  const editFloorId = useStore((s) => s.editFloorId);
+  const setTab = (t: "3d" | "plan") => setUi({ tab: t });
+  const setEditFloorId = (id: string | null) => setUi({ editFloorId: id });
   const [side, setSide] = useState<Side>("floorplans");
-  const [editFloorId, setEditFloorId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
