@@ -36,6 +36,8 @@ interface State {
   updateFloor: (k: VariantKey, floorId: string, patch: Partial<Floor> | ((f: Floor) => Floor)) => void;
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
   updateModel: (k: VariantKey, patch: Partial<HouseModel>) => void;
+  /** Swap the floorplan image behind every floor, scaling geometry to the new pixel size. */
+  replaceImage: (k: VariantKey, image: string, w: number, h: number) => void;
   addPhotos: (p: Photo[]) => void;
   updatePhoto: (id: string, patch: Partial<Photo>) => void;
   removePhoto: (id: string) => void;
@@ -102,6 +104,27 @@ export const useStore = create<State>()(
           const m = st.variants[k];
           if (!m) return {};
           return { variants: { ...st.variants, [k]: { ...m, ...patch } } };
+        }),
+      replaceImage: (k, image, w, h) =>
+        setState((st) => {
+          const m = st.variants[k];
+          if (!m) return {};
+          const floors = m.floors.map((f) => {
+            const s = w / f.imageW;
+            const sc = (p: { x: number; y: number }) => ({ x: p.x * s, y: p.y * s });
+            return {
+              ...f,
+              image,
+              imageW: w,
+              imageH: h,
+              pxPerM: f.pxPerM * s,
+              origin: sc(f.origin),
+              rooms: f.rooms.map((r) => ({ ...r, polygon: r.polygon.map(sc) })),
+              openings: f.openings.map((o) => ({ ...o, ...sc(o) })),
+              stairs: f.stairs ? sc(f.stairs) : undefined,
+            };
+          });
+          return { variants: { ...st.variants, [k]: { ...m, floors } } };
         }),
       updateFloor: (k, floorId, patch) =>
         setState((st) => {

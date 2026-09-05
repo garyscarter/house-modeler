@@ -2,16 +2,18 @@ import { useState } from "react";
 import { useStore } from "../store";
 import { extractFloorplan } from "../ai/extract";
 import { describeError } from "../ai/client";
-import { fileToDataUrl } from "../lib/image";
+import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
+import { listing91770873, placeholderImage } from "../lib/houses/listing91770873";
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const settings = useStore((s) => s.settings);
   const model = useStore((s) => s.variants[variant]);
   const setVariant = useStore((s) => s.setVariant);
   const setUi = useStore((s) => s.setUi);
+  const replaceImage = useStore((s) => s.replaceImage);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
@@ -116,8 +118,30 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
             Remove
           </button>
         )}
-        {!model && variant === "current" && (
-          <button onClick={() => setVariant(variant, sampleHouse())}>Load sample house</button>
+        {model && (
+          <label className="file" title="Show the real floorplan behind the traced geometry in Check plan">
+            Set floorplan image
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                const dataUrl = await fileToDataUrl(f);
+                const size = await imageSize(dataUrl);
+                replaceImage(variant, dataUrl, size.w, size.h);
+              }}
+            />
+          </label>
+        )}
+        {!model && (
+          <>
+            <button onClick={() => { setVariant(variant, listing91770873(placeholderImage())); setUi({ activeVariant: variant }); }}>
+              Load listing 91770873
+            </button>
+            {variant === "current" && <button onClick={() => setVariant(variant, sampleHouse())}>Load sample house</button>}
+          </>
         )}
       </div>
     </div>
