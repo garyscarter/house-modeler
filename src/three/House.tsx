@@ -322,6 +322,15 @@ function WallBox({
   );
 }
 
+/** Lighten (>1) or darken (<1) a hex colour. */
+function shade(hex: string, f: number): string {
+  const c = new THREE.Color(hex);
+  c.r = Math.min(1, c.r * f);
+  c.g = Math.min(1, c.g * f);
+  c.b = Math.min(1, c.b * f);
+  return "#" + c.getHexString();
+}
+
 /** Unit normal pointing out of the building at an opening (or null when unknown). */
 function outwardNormal(pl: OpeningPlacement, rooms: V2[][]): V2 | null {
   const n = { x: -pl.dir.y, y: pl.dir.x };
@@ -388,6 +397,7 @@ function OpeningMesh({
   if (opening.kind === "garage") {
     // Panelled up-and-over door: frame, leaf, a grid of raised panels and a handle.
     const col = opening.color ?? "#b3202e";
+    const panelCol = shade(col, 1.18);
     const cols = width > 2.8 ? 3 : 2;
     const rows = 3;
     const pw = (width - 0.1) / cols;
@@ -408,7 +418,7 @@ function OpeningMesh({
           return (
             <mesh key={i} position={[-width / 2 + 0.05 + (c + 0.5) * pw, 0.05 + (r + 0.5) * ph, 0]}>
               <boxGeometry args={[pw - 0.12, ph - 0.12, WALL_T + 0.08]} />
-              <meshStandardMaterial color={col} roughness={0.5} />
+              <meshStandardMaterial color={panelCol} roughness={0.5} />
             </mesh>
           );
         })}
