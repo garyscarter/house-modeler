@@ -157,3 +157,23 @@ export function placeholderImage(): string {
   ctx.fillText("Rightmove listing 91770873 — traced geometry. Use 'Set floorplan image' to show the real plan here.", 60, 720);
   return c.toDataURL("image/png");
 }
+
+/**
+ * Proposed layout: the single-storey side extension (galley kitchen + garage
+ * + lobby) gains a first floor, forming one "New Room" beside Bedroom 1, the
+ * landing and the stairs. Ground floor is unchanged.
+ */
+export function listing91770873Proposed(image: string): HouseModel {
+  const house = listing91770873(image);
+  const first = house.floors.find((f) => f.level === 1)!;
+  // Spans the extension footprint below: garage west wall to the stair
+  // enclosure wall, full depth of the existing first floor.
+  const newRoom = rect("New Room", 330, 795, 610, 1285, { w: 3.59, h: 6.77 });
+  first.rooms.push(newRoom);
+  first.openings.push(
+    op("door", 610, 1075, "v", 0.8), // from the landing (assumed)
+    op("window", 470, 795, "h", 1.8), // north (assumed)
+    op("window", 470, 1285, "h", 1.8), // south (assumed)
+  );
+  return house;
+}

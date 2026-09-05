@@ -6,7 +6,7 @@ import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
-import { listing91770873, placeholderImage } from "../lib/houses/listing91770873";
+import { listing91770873, listing91770873Proposed, placeholderImage } from "../lib/houses/listing91770873";
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const settings = useStore((s) => s.settings);
@@ -137,8 +137,14 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         )}
         {!model && (
           <>
-            <button onClick={() => { setVariant(variant, listing91770873(placeholderImage())); setUi({ activeVariant: variant }); }}>
-              Load listing 91770873
+            <button
+              onClick={() => {
+                const build = variant === "current" ? listing91770873 : listing91770873Proposed;
+                setVariant(variant, build(placeholderImage()));
+                setUi({ activeVariant: variant });
+              }}
+            >
+              {variant === "current" ? "Load listing 91770873" : "Load listing 91770873 with two-storey extension"}
             </button>
             {variant === "current" && <button onClick={() => setVariant(variant, sampleHouse())}>Load sample house</button>}
           </>
