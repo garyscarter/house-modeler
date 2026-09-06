@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
+import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
+import { CATALOGUE, CATEGORIES, byId, type CatalogueItem } from "../lib/catalogue";
+import { FixtureSymbol } from "./FixtureSymbol";
 import { uid } from "../types";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM, pointInPolygon } from "../lib/geometry";
 import { STAIRS_DIR_LABEL, type StairsDir } from "../types";
 import { roomColor } from "../three/House";
 
-type Tool = "select" | "rect" | "room" | "door" | "window" | "gap" | "wall" | "calibrate";
+type Tool = "select" | "rect" | "room" | "door" | "window" | "gap" | "wall" | "calibrate" | "place";
 
 /**
  * 2D check-and-fix view: the geometry drawn over the source image. Used both
@@ -23,10 +25,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [hover, setHover] = useState<Pt | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
+  const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: Fixture["rot"] } | null>(null);
+  const [category, setCategory] = useState(CATEGORIES[0]);
   // Fit the view to the rooms (useful on multi-floor images) or the whole image (tracing).
   const [fit, setFit] = useState<"rooms" | "image">(floor.rooms.length ? "rooms" : "image");
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ roomId: string; idx: number } | { openingId: string } | { stairs: true } | { wallId: string; end: "a" | "b" } | null>(null);
+  const drag = useRef<
+    { roomId: string; idx: number } | { openingId: string } | { stairs: true } | { wallId: string; end: "a" | "b" } | { fixtureId: string } | null
+  >(null);
 
   const view = useMemo(() => {
     const all = floor.rooms.flatMap((r) => r.polygon);
@@ -81,14 +88,27 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Escape") {
         setDraft([]);
         setCalib([]);
         setSelectedOpeningId(null);
         setSelectedWallId(null);
+        setSelectedFixtureId(null);
+        if (placing) {
+          setPlacing(null);
+          setTool("select");
+        }
+      }
+      if (e.key === "r" || e.key === "R") {
+        if (placing) setPlacing({ ...placing, rot: ((placing.rot + 90) % 360) as Fixture["rot"] });
+        else if (selectedFixtureId) rotateFixture(selectedFixtureId);
       }
       if ((e.key === "Delete" || e.key === "Backspace") && !(e.target instanceof HTMLInputElement)) {
-        if (selectedOpeningId) {
+        if (selectedFixtureId) {
+          updateFloor(variant, floor.id, (f) => ({ ...f, fixtures: (f.fixtures ?? []).filter((x) => x.id !== selectedFixtureId) }));
+          setSelectedFixtureId(null);
+        } else if (selectedOpeningId) {
           updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.filter((o) => o.id !== selectedOpeningId) }));
           setSelectedOpeningId(null);
         } else if (selectedWallId) {
@@ -99,12 +119,27 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedOpeningId, selectedWallId, updateFloor, variant, floor.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOpeningId, selectedWallId, selectedFixtureId, placing, updateFloor, variant, floor.id]);
+
+  const rotateFixture = (id: string) =>
+    updateFloor(variant, floor.id, (f) => ({
+      ...f,
+      fixtures: (f.fixtures ?? []).map((x) => (x.id === id ? { ...x, rot: ((x.rot + 90) % 360) as Fixture["rot"] } : x)),
+    }));
 
   const onPointerMove = (e: React.PointerEvent) => {
     const raw = toImage(e);
     if (!drag.current) {
       setHover(tool === "rect" || tool === "room" || tool === "wall" ? snap(raw) : raw);
+      return;
+    }
+    if ("fixtureId" in drag.current) {
+      const { fixtureId } = drag.current;
+      updateFloor(variant, floor.id, (f) => ({
+        ...f,
+        fixtures: (f.fixtures ?? []).map((x) => (x.id === fixtureId ? { ...x, x: raw.x, y: raw.y } : x)),
+      }));
       return;
     }
     if ("wallId" in drag.current) {
@@ -144,6 +179,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const onClickCanvas = (e: React.MouseEvent) => {
     const raw = toImage(e);
+    if (tool === "place" && placing) {
+      const fx: Fixture = { id: uid(), type: placing.item.id, x: raw.x, y: raw.y, rot: placing.rot };
+      updateFloor(variant, floor.id, (f) => ({ ...f, fixtures: [...(f.fixtures ?? []), fx] }));
+      return; // stay in place mode for the next one
+    }
     if (tool === "door" || tool === "window" || tool === "gap") {
       const orientation = nearestEdgeOrientation(floor, raw);
       const op: Opening = { id: uid(), kind: tool, x: raw.x, y: raw.y, orientation, widthM: tool === "door" ? 0.85 : tool === "gap" ? 1.5 : 1.2 };
@@ -198,6 +238,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       setUi({ selectedRoomId: hit?.id ?? null });
       setSelectedOpeningId(null);
       setSelectedWallId(null);
+      setSelectedFixtureId(null);
     }
   };
 
@@ -215,7 +256,16 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setTool(t);
     setCalib([]);
     setDraft([]);
+    if (t !== "place") setPlacing(null);
   };
+  const startPlacing = (item: CatalogueItem) => {
+    setPlacing({ item, rot: placing?.rot ?? 0 });
+    setTool("place");
+    setCalib([]);
+    setDraft([]);
+  };
+  const selectedFixture = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
+  const selectedFixtureItem = selectedFixture ? byId(selectedFixture.type) : undefined;
 
   return (
     <div className="plan-editor">
@@ -246,6 +296,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           {tool === "gap" && "Click on a wall to knock a full-height opening through it."}
           {tool === "wall" && (draft.length ? "Click the other end of the wall." : "Click where the wall starts, then where it ends. Ends snap to corners.")}
           {tool === "calibrate" && `Click two points a known distance apart (${calib.length}/2).`}
+          {tool === "place" && placing && `Click to place ${placing.item.name}. R rotates, Esc finishes.`}
         </span>
         <span className="hint right">Scale: {floor.pxPerM.toFixed(1)} px/m</span>
         <button onClick={() => setFit(fit === "rooms" ? "image" : "rooms")} title="Toggle between fitting the rooms and showing the whole image">
@@ -350,6 +401,44 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 })}
               </g>
             ))}
+          {(floor.fixtures ?? []).map((fx) => {
+            const item = byId(fx.type);
+            if (!item) return null;
+            const sel = fx.id === selectedFixtureId;
+            return (
+              <g
+                key={fx.id}
+                transform={`translate(${fx.x} ${fx.y}) rotate(${fx.rot})`}
+                style={{ cursor: "move" }}
+                onPointerDown={(e) => {
+                  if (tool !== "select") return;
+                  e.stopPropagation();
+                  setSelectedFixtureId(fx.id);
+                  setSelectedOpeningId(null);
+                  setSelectedWallId(null);
+                  setUi({ selectedRoomId: null });
+                  drag.current = { fixtureId: fx.id };
+                }}
+                onClick={(e) => {
+                  if (tool === "select") e.stopPropagation();
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  rotateFixture(fx.id);
+                }}
+              >
+                <FixtureSymbol item={item} w={item.w * floor.pxPerM} d={item.d * floor.pxPerM} stroke={stroke} selected={sel} />
+                <title>
+                  {item.name} ({item.w} × {item.d} m). Drag to move, double-click or R to rotate, Delete to remove.
+                </title>
+              </g>
+            );
+          })}
+          {tool === "place" && placing && hover && (
+            <g transform={`translate(${hover.x} ${hover.y}) rotate(${placing.rot})`} style={{ pointerEvents: "none" }}>
+              <FixtureSymbol item={placing.item} w={placing.item.w * floor.pxPerM} d={placing.item.d * floor.pxPerM} stroke={stroke} ghost />
+            </g>
+          )}
           {(floor.walls ?? []).map((w) => {
             const sel = w.id === selectedWallId;
             return (
@@ -494,7 +583,49 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         </svg>
 
         <div className="side">
-          {selected ? (
+          <div className="palette">
+            <div className="row">
+              <b>Furniture</b>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                {CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div className="palette-items">
+              {CATALOGUE.filter((c) => c.category === category).map((c) => (
+                <button key={c.id} className={placing?.item.id === c.id ? "active" : ""} title={c.note ?? ""} onClick={() => startPlacing(c)}>
+                  <span>{c.name}</span>
+                  <span className="muted">
+                    {c.w.toFixed(2)} × {c.d.toFixed(2)} m
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="muted small">Typical UK sizes. Pick one, then click on the plan to place it. R rotates.</p>
+          </div>
+          <hr />
+          {selectedFixture && selectedFixtureItem ? (
+            <div className="inspector">
+              <h4>{selectedFixtureItem.name}</h4>
+              <p className="muted small">
+                {selectedFixtureItem.w.toFixed(2)} × {selectedFixtureItem.d.toFixed(2)} m, {selectedFixtureItem.h.toFixed(2)} m high
+                {selectedFixtureItem.note ? `. ${selectedFixtureItem.note}` : ""}
+              </p>
+              <div className="row">
+                <button onClick={() => rotateFixture(selectedFixture.id)}>Rotate 90°</button>
+                <button
+                  className="danger"
+                  onClick={() => {
+                    updateFloor(variant, floor.id, (f) => ({ ...f, fixtures: (f.fixtures ?? []).filter((x) => x.id !== selectedFixture.id) }));
+                    setSelectedFixtureId(null);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : selected ? (
             <RoomInspector variant={variant} floor={floor} room={selected} onChange={(p) => updateRoom(variant, floor.id, selected.id, p)} />
           ) : selectedOpening ? (
             <OpeningInspector

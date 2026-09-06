@@ -44,6 +44,18 @@ export interface Wall {
   color?: string;
 }
 
+/** A piece of furniture or a fixture placed on the plan, by catalogue id. */
+export interface Fixture {
+  id: string;
+  /** Catalogue item id (see lib/catalogue.ts). */
+  type: string;
+  /** Centre in image px. */
+  x: number;
+  y: number;
+  /** Rotation in degrees, clockwise on the plan. */
+  rot: 0 | 90 | 180 | 270;
+}
+
 export interface Floor {
   id: string;
   name: string;
@@ -62,6 +74,7 @@ export interface Floor {
   rooms: Room[];
   openings: Opening[];
   walls?: Wall[];
+  fixtures?: Fixture[];
   stairs?: Pt;
   /** Direction the flight rises in, in plan terms. Default "up" (towards the top of the plan). */
   stairsDir?: StairsDir;

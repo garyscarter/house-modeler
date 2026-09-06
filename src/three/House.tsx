@@ -5,6 +5,7 @@ import { useLoader } from "@react-three/fiber";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
 import { Roof } from "./Roof";
+import { Fixtures } from "./Fixtures";
 import {
   type WallSeg,
   buildWalls,
@@ -214,6 +215,8 @@ function FloorGroup({
         ))}
 
       {!ghost && floor.stairs && hasAbove && <Stairs floor={floor} height={H + model.slabThickness} />}
+
+      {!ghost && <Fixtures floor={floor} />}
 
       {!ghost && showLabels && floor.rooms.map((room) => <RoomLabel key={room.id} floor={floor} room={room} />)}
 

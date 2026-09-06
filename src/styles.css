@@ -97,3 +97,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 
 .view-buttons { position: absolute; top: 8px; right: 10px; z-index: 2; display: flex; gap: 4px; }
 .view-buttons button { padding: 3px 8px; font-size: 12px; background: rgba(255,255,255,0.9); text-transform: capitalize; }
+
+.palette select { flex: 1; margin-left: 6px; padding: 3px; font: inherit; }
+.palette-items { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; max-height: 240px; overflow-y: auto; }
+.palette-items button { display: flex; justify-content: space-between; gap: 6px; padding: 4px 8px; text-align: left; font-size: 12px; }
+.palette-items button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.palette-items button.active .muted { color: #dbe4ff; }
