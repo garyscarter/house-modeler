@@ -11,6 +11,7 @@ import { Lighting } from "./Lighting";
 import { GROUND_Y, SiteScene } from "./Site";
 import { Walker } from "./Walker";
 import { CaptureBridge } from "./capture";
+import { Effects } from "./Effects";
 import { SunControls } from "../components/SunControls";
 
 interface ViewerProps {
@@ -90,6 +91,7 @@ export function Viewer(props: ViewerProps) {
         <SiteScene centre={centre} size={size} />
         {!walking && <ContactShadows position={[centre.x, GROUND_Y - 0.01, centre.z]} scale={size * 3} blur={2} opacity={0.35} far={20} />}
         <CaptureBridge id={captureId ?? "main"} />
+        <Effects />
         {walking ? (
           <Walker model={model} floor={walkFloor} centre={centre} onLock={setLocked} />
         ) : (

@@ -24,7 +24,18 @@ export interface Room {
   floorFinish?: FloorFinish;
   /** Interior paint colour of this room's walls. */
   wallPaint?: string;
+  /** Finish of this room's external walls; undefined = the house default (Exterior.wallFinish). */
+  exteriorFinish?: WallFinish;
 }
+
+export type WallFinish = "render" | "brick" | "pebbledash" | "stone" | "cladding";
+export const WALL_FINISH_LABEL: Record<WallFinish, string> = {
+  render: "Smooth render",
+  brick: "Brick",
+  pebbledash: "Pebbledash",
+  stone: "Stone",
+  cladding: "Timber cladding",
+};
 
 export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "stone" | "carpet" | "vinyl" | "concrete";
 export const FLOOR_FINISH_LABEL: Record<FloorFinish, string> = {
@@ -158,6 +169,8 @@ export interface Exterior {
   roofColor: string;
   wallColor: string;
   trimColor: string;
+  /** Default finish for external walls (rooms can override). */
+  wallFinish?: WallFinish;
 }
 
 export const DEFAULT_EXTERIOR: Exterior = {

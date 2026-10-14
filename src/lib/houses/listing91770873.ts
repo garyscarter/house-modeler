@@ -74,9 +74,9 @@ export function listing91770873(image: string): HouseModel {
     0,
     { x: 865, y: 430 },
     [
-      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, { exteriorColor: BRICK }),
+      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, { exteriorColor: BRICK, exteriorFinish: "brick" }),
       rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }),
-      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK }),
+      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK, exteriorFinish: "brick" }),
       rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }),
       rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }),
       poly("Hallway (stairs)", [
@@ -98,7 +98,7 @@ export function listing91770873(image: string): HouseModel {
           [730, 620],
         ],
         undefined,
-        { exteriorColor: BRICK },
+        { exteriorColor: BRICK, exteriorFinish: "brick" },
       ),
     ],
     [
@@ -191,6 +191,7 @@ export function listing91770873(image: string): HouseModel {
       pitchDeg: 35,
       roofColor: "#6e4a3c",
       wallColor: RENDER,
+      wallFinish: "render",
       trimColor: "#4a2e1e",
     },
     preset: LISTING_PRESET,
@@ -221,7 +222,7 @@ export function listing91770873Proposed(image: string): HouseModel {
   const first = house.floors.find((f) => f.level === 1)!;
   // Spans the extension footprint below: garage west wall to the stair
   // enclosure wall, full depth of the existing first floor.
-  const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { exteriorColor: BRICK, roofGroup: "extension" });
+  const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { exteriorColor: BRICK, exteriorFinish: "brick", roofGroup: "extension" });
   first.rooms.push(newRoom);
   first.openings.push(
     op("door", 610, 1075, "v", 0.8), // from the landing (assumed)
