@@ -1,0 +1,52 @@
+.site-editor { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.site-editor .toolbar .site-tool { display: inline-flex; gap: 4px; align-items: center; }
+.site-editor .toolbar select { font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.site-editor .toolbar .hint { font-size: 12px; flex: 1 1 260px; }
+
+.site-editor-body { display: flex; flex: 1; min-height: 0; }
+.site-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.site-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; background: #fbfbf9; user-select: none; touch-action: none; display: block; }
+.site-side { width: 270px; flex: none; border-left: 1px solid var(--line); background: var(--panel); padding: 10px 12px; overflow-y: auto; }
+.site-side h4 { margin: 4px 0 6px; font-size: 13px; }
+.site-side h4 + p { margin-top: 0; }
+
+.site-label { fill: #4b5563; font-weight: 600; pointer-events: none; }
+.site-edge { stroke-linecap: round; }
+.site-edge.edge-fence { stroke: #8a5a2b; }
+.site-edge.edge-wall { stroke: #a8553a; }
+.site-edge.edge-hedge { stroke: #3f7a2e; }
+.site-edge.edge-open { stroke: #9ca3af; }
+
+.site-dim line { stroke: #2563eb; }
+.site-dim circle { fill: #2563eb; }
+.site-dim rect { fill: rgba(255, 255, 255, 0.92); stroke: #93c5fd; stroke-width: 0.02; }
+.site-dim text { fill: #1d4ed8; font-weight: 600; }
+
+.site-handle circle + circle { fill: #fff; stroke: #2563eb; }
+.site-handle.active circle + circle { fill: #2563eb; }
+.site-mid circle + circle { fill: #eff6ff; stroke: #2563eb; opacity: 0.85; }
+.site-mid path { stroke: #2563eb; }
+.site-handle, .site-mid { cursor: pointer; }
+.site-draft { fill: rgba(37, 99, 235, 0.12); stroke: #2563eb; }
+
+.site-north {
+  position: absolute; top: 10px; right: 10px; width: 40px; height: 52px; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; font-weight: 700; color: var(--danger); font-size: 12px;
+  background: rgba(255, 255, 255, 0.85); border: 1px solid var(--line); border-radius: 20px; padding-top: 2px;
+}
+.site-scale {
+  position: absolute; left: 10px; bottom: 10px; pointer-events: none; font-size: 11px; color: var(--text);
+  background: rgba(255, 255, 255, 0.85); padding: 3px 6px 2px; border-radius: 4px;
+}
+.site-scale div { height: 6px; border: 1.5px solid var(--text); border-top: 0; }
+
+.site-clear { width: 100%; border-collapse: collapse; font-size: 13px; }
+.site-clear td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.site-clear td + td { text-align: right; font-weight: 600; }
+
+@media (max-width: 700px) {
+  .site-editor-body { flex-direction: column; }
+  .site-canvas { flex: 1 1 60%; }
+  .site-side { width: auto; max-height: 40%; border-left: 0; border-top: 1px solid var(--line); }
+  .site-editor .toolbar .hint { display: none; }
+}
