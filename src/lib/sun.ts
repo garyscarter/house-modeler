@@ -186,7 +186,7 @@ const smooth = (e0: number, e1: number, x: number) => {
 export interface Daylight {
   /** Strength of direct sunlight, 0-1: none below the horizon, full above about 25 degrees. */
   sun: number;
-  /** Strength of skylight, 0.08 in deep twilight up to 1 in daylight. */
+  /** Strength of skylight, 0.25 at night (a dim, readable twilight) up to 1 in daylight. */
   sky: number;
   /** How orange the sunlight is, 1 at the horizon to 0 above about 30 degrees. */
   warmth: number;
@@ -196,7 +196,7 @@ export interface Daylight {
 export function daylight(altitude: number): Daylight {
   return {
     sun: smooth(-1, 25, altitude),
-    sky: 0.08 + 0.92 * smooth(-10, 20, altitude),
+    sky: 0.25 + 0.75 * smooth(-10, 20, altitude),
     warmth: 1 - smooth(0, 30, altitude),
   };
 }

@@ -13,7 +13,7 @@ export function Effects() {
   if (quality !== "high") return null;
   return (
     <EffectComposer multisampling={4}>
-      <N8AO aoRadius={1.2} distanceFalloff={0.6} intensity={2.2} aoSamples={16} denoiseSamples={4} denoiseRadius={10} halfRes />
+      <N8AO aoRadius={1.2} distanceFalloff={0.6} intensity={3} aoSamples={16} denoiseSamples={4} denoiseRadius={10} halfRes />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );

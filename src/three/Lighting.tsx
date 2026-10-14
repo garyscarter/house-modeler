@@ -18,6 +18,13 @@ const LOW_SUN = new THREE.Color("#ff9a52");
 const DAY_SKY = new THREE.Color("#dfe9f7");
 const DUSK_SKY = new THREE.Color("#5d6f9c");
 const GROUND_BOUNCE = new THREE.Color("#8d8270");
+// Scratch objects for fitting the shadow camera, which runs every frame while the sun study plays.
+const _target = new THREE.Vector3();
+const _sphere = new THREE.Sphere();
+const _x = new THREE.Vector3();
+const _y = new THREE.Vector3();
+const _c = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * Scene lighting: soft sky light (hemisphere plus a gradient environment
@@ -43,7 +50,7 @@ export function Lighting({ centre, size, walking }: { centre: THREE.Vector3; siz
   const box = useMemo(() => {
     const b = new THREE.Box3(
       new THREE.Vector3(centre.x - size / 2 - 1, GROUND_Y, centre.z - size / 2 - 1),
-      new THREE.Vector3(centre.x + size / 2 + 1, 11, centre.z + size / 2 + 1),
+      new THREE.Vector3(centre.x + size / 2 + 1, 13, centre.z + size / 2 + 1),
     );
     if (site && showSite) {
       const p = new THREE.Vector3();
@@ -57,22 +64,20 @@ export function Lighting({ centre, size, walking }: { centre: THREE.Vector3; siz
   useLayoutEffect(() => {
     const l = light.current;
     if (!l) return;
-    const target = box.getCenter(new THREE.Vector3());
-    const dist = box.getBoundingSphere(new THREE.Sphere()).radius + 5;
+    const target = box.getCenter(_target);
+    const dist = box.getBoundingSphere(_sphere).radius + 5;
     l.position.copy(target).addScaledVector(dir, dist);
     l.target.position.copy(target);
     l.target.updateMatrixWorld();
     // Same basis as the shadow camera's lookAt: z towards the light, x = up × z.
-    const z = dir.clone();
-    const x = new THREE.Vector3(0, 1, 0).cross(z);
+    const x = _x.crossVectors(UP, dir);
     if (x.lengthSq() < 1e-8) x.set(1, 0, 0);
     x.normalize();
-    const y = new THREE.Vector3().crossVectors(z, x);
+    const y = _y.crossVectors(dir, x);
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    const c = new THREE.Vector3();
     for (let i = 0; i < 8; i++) {
-      c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(target);
-      const px = c.dot(x), py = c.dot(y), pz = c.dot(z);
+      const c = _c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(target);
+      const px = c.dot(x), py = c.dot(y), pz = c.dot(dir);
       x0 = Math.min(x0, px); x1 = Math.max(x1, px);
       y0 = Math.min(y0, py); y1 = Math.max(y1, py);
       z0 = Math.min(z0, pz); z1 = Math.max(z1, pz);
@@ -90,7 +95,7 @@ export function Lighting({ centre, size, walking }: { centre: THREE.Vector3; siz
     if (l.shadow.mapSize.x !== mapSize) {
       l.shadow.mapSize.set(mapSize, mapSize);
       l.shadow.map?.dispose();
-      (l.shadow as { map: THREE.WebGLRenderTarget | null }).map = null;
+      l.shadow.map = null;
     }
     l.shadow.radius = SHADOW_RADIUS[quality];
     // A texel's footprint sets how much bias is needed to avoid acne.
@@ -178,40 +183,52 @@ function skyGradientMaterial(top: THREE.Color, horizon: THREE.Color, bottom: THR
   });
 }
 
-const BACKDROP_TOP = new THREE.Color("#a9c6ea");
-const BACKDROP_HORIZON = new THREE.Color("#eef1f4");
-const BACKDROP_BOTTOM = new THREE.Color("#d9ddd6");
+/** Backdrop gradients (zenith, horizon, ground): a soft day sky, and a deep blue for after dusk. */
+const DAY_BACKDROP = ["#a9c6ea", "#eef1f4", "#d9ddd6"].map((c) => new THREE.Color(c));
+const NIGHT_BACKDROP = ["#0c1529", "#2d3c60", "#1b2232"].map((c) => new THREE.Color(c));
+const SUN_HAZE = new THREE.Color("#dbe3ea");
+const LOW_HAZE = new THREE.Color("#f0c8a0");
+/** Fog starts well beyond the plot so only the far ground fades; the colour is set as a prop. */
+const FOG_ARGS: [string, number, number] = ["#eef1f4", 140, 420];
 
 /**
  * The sky behind the scene: a physical sky lit by the sun during a sun
- * study, otherwise a soft blue gradient. Fog fades the far ground into it.
+ * study (a deep blue gradient once the sun is well down, where the
+ * physical sky turns black), otherwise a soft blue gradient. Fog fades the
+ * far ground into the horizon.
  */
 export function SkyBackdrop() {
   const sun = useSunInfo();
   const camera = useThree((s) => s.camera);
   const dome = useRef<THREE.Mesh>(null);
-  const backdrop = useMemo(() => skyGradientMaterial(BACKDROP_TOP, BACKDROP_HORIZON, BACKDROP_BOTTOM, true), []);
+  const backdrop = useMemo(() => skyGradientMaterial(DAY_BACKDROP[0].clone(), DAY_BACKDROP[1].clone(), DAY_BACKDROP[2].clone(), true), []);
   useEffect(() => () => backdrop.dispose(), [backdrop]);
   // Keep the dome centred on the camera so its horizon stays level wherever it goes.
   useFrame(() => dome.current?.position.copy(camera.position));
 
-  if (sun?.active) {
-    const alt = sun.position.altitude;
+  const alt = sun?.active ? sun.position.altitude : null;
+  const physical = alt !== null && alt > -4;
+  const night = alt !== null && !physical;
+  useEffect(() => {
+    const cols = night ? NIGHT_BACKDROP : DAY_BACKDROP;
+    (["top", "horizon", "bottom"] as const).forEach((k, i) => (backdrop.uniforms[k].value as THREE.Color).copy(cols[i]));
+  }, [backdrop, night]);
+  const fog = useMemo(() => {
+    if (alt === null || night) return (night ? NIGHT_BACKDROP : DAY_BACKDROP)[1].clone();
     const day = daylight(alt);
-    const fog = new THREE.Color("#2b3550").lerp(new THREE.Color("#dbe3ea"), day.sky).lerp(new THREE.Color("#f0c8a0"), day.warmth * day.sun * 0.6);
-    return (
-      <>
-        <Sky distance={400} sunPosition={sun.vector} turbidity={5} rayleigh={alt > 0 ? 1.4 : 2.5} mieCoefficient={0.004} mieDirectionalG={0.85} />
-        <fog attach="fog" args={[fog, 140, 420]} />
-      </>
-    );
-  }
+    return NIGHT_BACKDROP[1].clone().lerp(SUN_HAZE, (day.sky - 0.25) / 0.75).lerp(LOW_HAZE, day.warmth * day.sun * 0.6);
+  }, [alt, night]);
+
   return (
     <>
-      <mesh ref={dome} material={backdrop} renderOrder={-1000} frustumCulled={false}>
-        <sphereGeometry args={[300, 32, 16]} />
-      </mesh>
-      <fog attach="fog" args={[BACKDROP_HORIZON, 140, 420]} />
+      {physical ? (
+        <Sky distance={400} sunPosition={sun!.vector} turbidity={5} rayleigh={alt! > 0 ? 1.4 : 2.5} mieCoefficient={0.004} mieDirectionalG={0.85} />
+      ) : (
+        <mesh ref={dome} material={backdrop} renderOrder={-1000} frustumCulled={false}>
+          <sphereGeometry args={[300, 32, 16]} />
+        </mesh>
+      )}
+      <fog attach="fog" args={FOG_ARGS} color={fog} />
     </>
   );
 }

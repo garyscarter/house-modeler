@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
@@ -30,10 +31,10 @@ export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size
       </mesh>
     );
   }
-  return <SiteContent site={site} house={model ?? active} />;
+  return <SiteContent site={site} house={model ?? active} centre={centre} />;
 }
 
-function SiteContent({ site, house }: { site: Site; house?: HouseModel }) {
+function SiteContent({ site, house, centre: houseCentre }: { site: Site; house?: HouseModel; centre: THREE.Vector3 }) {
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const sunHours = useSiteView((s) => s.sunHours);
   const sunOn = useStore((s) => s.sun.enabled);
@@ -57,7 +58,7 @@ function SiteContent({ site, house }: { site: Site; house?: HouseModel }) {
       ))}
       <Boundary site={site} buildings={buildings} />
       {site.neighbours.map((n) => (
-        <NeighbourMass key={n.id} n={n} ghost={ghost} />
+        <NeighbourMass key={n.id} n={n} ghost={ghost} house={houseCentre} />
       ))}
       {sunHours && sunOn && house && <SunHoursOverlay site={site} model={house} y={GROUND_Y + 0.07} />}
     </group>
@@ -102,22 +103,21 @@ function flatShape(poly: V2[]): THREE.Shape {
   return s;
 }
 
-/** Dispose geometries when they are replaced or the component goes. */
+/** Dispose geometries made together (one memo) when they are replaced or the component goes. */
 function useDisposeAll(list: (THREE.BufferGeometry | null | undefined)[]) {
   useEffect(() => () => list.forEach((g) => g?.dispose()), [list]);
 }
+const useDispose = (g: THREE.BufferGeometry | null) => useEffect(() => () => g?.dispose(), [g]);
 
 function Surface({ surface }: { surface: SiteSurface }) {
   const layer = LAYER[surface.kind];
-  const geoms = useMemo(() => {
-    const g = new THREE.ShapeGeometry(flatShape(surface.polygon));
-    return [g, surface.kind === "road" ? centreLine(surface.polygon) : null];
-  }, [surface.polygon, surface.kind]);
-  useDisposeAll(geoms);
-  const [geom, line] = geoms;
+  const geom = useMemo(() => new THREE.ShapeGeometry(flatShape(surface.polygon)), [surface.polygon]);
+  const line = useMemo(() => (surface.kind === "road" ? centreLine(surface.polygon) : null), [surface.polygon, surface.kind]);
+  useDispose(geom);
+  useDispose(line);
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
-      <mesh geometry={geom!} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
+      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
       {line && <mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );
@@ -284,8 +284,8 @@ function neighbourGeometry(n: Neighbour) {
   const walls = new THREE.ExtrudeGeometry(flatShape(n.polygon), { depth: Math.max(0.5, n.eaves), bevelEnabled: false });
   walls.rotateX(-Math.PI / 2);
   walls.translate(0, GROUND_Y, 0);
-  if (n.roof === "flat" || n.polygon.length < 3) return { walls, slopes: null, gables: null };
   const b = bbox(n.polygon);
+  if (n.roof === "flat" || n.polygon.length < 3) return { walls, slopes: null, gables: null, top: GROUND_Y + n.eaves };
   const axis = !n.ridgeAxis || n.ridgeAxis === "auto" ? (b.w >= b.h ? "x" : "z") : n.ridgeAxis;
   const style: RoofEnd = n.roof;
   // A party wall at the left or right only meets a roof end when the ridge runs left-right.
@@ -304,24 +304,59 @@ function neighbourGeometry(n: Neighbour) {
     end: flushEnd ? "flush" : style,
     wallT: 0,
   });
-  return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables) };
+  return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables), top: m.ridgeY };
 }
 
-function NeighbourMass({ n, ghost }: { n: Neighbour; ghost: boolean }) {
+/** Opacity of see-through neighbours, chosen or automatic. */
+const GHOST_OPACITY = 0.3;
+
+/**
+ * A neighbour's walls and roof. It turns see-through on its own while it
+ * stands between the camera and the house, so the side and rear views
+ * aren't just a wall; its shadow stays.
+ */
+function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; house: THREE.Vector3 }) {
   const geo = useMemo(() => neighbourGeometry(n), [n]);
   useDisposeAll(useMemo(() => [geo.walls, geo.slopes, geo.gables], [geo]));
   const mats = useMemo(() => {
     const make = (color: string, side: THREE.Side = THREE.FrontSide) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.92, side, transparent: ghost, opacity: ghost ? 0.3 : 1, depthWrite: !ghost });
+      new THREE.MeshStandardMaterial({ color, roughness: 0.92, side, transparent: ghost, opacity: ghost ? GHOST_OPACITY : 1, depthWrite: !ghost });
     // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
-    return { body: [make(FLAT_ROOF), make(n.color ?? NEIGHBOUR_WALL)], roof: make(n.roofColor ?? NEIGHBOUR_ROOF, THREE.DoubleSide), gable: make(n.color ?? NEIGHBOUR_WALL, THREE.DoubleSide) };
+    return [make(FLAT_ROOF), make(n.color ?? NEIGHBOUR_WALL), make(n.roofColor ?? NEIGHBOUR_ROOF, THREE.DoubleSide), make(n.color ?? NEIGHBOUR_WALL, THREE.DoubleSide)];
   }, [n.color, n.roofColor, ghost]);
-  useEffect(() => () => [...mats.body, mats.roof, mats.gable].forEach((m) => m.dispose()), [mats]);
+  useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
+
+  const box = useMemo(() => {
+    const b = bbox(n.polygon);
+    return new THREE.Box3(new THREE.Vector3(b.x0 - 0.3, GROUND_Y, b.y0 - 0.3), new THREE.Vector3(b.x1 + 0.3, geo.top, b.y1 + 0.3));
+  }, [n.polygon, geo.top]);
+  const probe = useMemo(() => ({ ray: new THREE.Ray(), hit: new THREE.Vector3(), faded: false }), []);
+  useEffect(() => {
+    probe.faded = false;
+  }, [mats, probe]);
+  useFrame(({ camera }) => {
+    if (ghost) return;
+    const { ray, hit } = probe;
+    ray.origin.copy(camera.position);
+    ray.direction.copy(house).sub(camera.position);
+    const dist = ray.direction.length();
+    ray.direction.divideScalar(dist || 1);
+    const blocks = !box.containsPoint(house) && ray.intersectBox(box, hit) !== null && hit.distanceTo(camera.position) < dist;
+    if (blocks === probe.faded) return;
+    probe.faded = blocks;
+    for (const m of mats) {
+      m.transparent = blocks;
+      m.opacity = blocks ? GHOST_OPACITY : 1;
+      m.depthWrite = !blocks;
+      m.needsUpdate = true;
+    }
+  });
+
   return (
     <group>
-      <mesh geometry={geo.walls} material={mats.body} castShadow receiveShadow />
-      {geo.slopes && <mesh geometry={geo.slopes} material={mats.roof} castShadow receiveShadow />}
-      {geo.gables && <mesh geometry={geo.gables} material={mats.gable} castShadow receiveShadow />}
+      <mesh geometry={geo.walls} material={[mats[0], mats[1]]} castShadow receiveShadow />
+      {geo.slopes && <mesh geometry={geo.slopes} material={mats[2]} castShadow receiveShadow />}
+      {geo.gables && <mesh geometry={geo.gables} material={mats[3]} castShadow receiveShadow />}
     </group>
   );
 }

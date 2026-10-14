@@ -152,21 +152,19 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
   const polyOf = (s: NonNullable<Sel>): WPt[] =>
     s.type === "boundary" ? site.boundary : s.type === "surface" ? site.surfaces.find((x) => x.id === s.id)?.polygon ?? [] : site.neighbours.find((x) => x.id === s.id)?.polygon ?? [];
-  const setPoly = (s: NonNullable<Sel>, poly: WPt[]) =>
+  /** Change one polygon, working on the store's current copy so quick successive edits never use a stale one. */
+  const editPoly = (s: NonNullable<Sel>, f: (poly: WPt[]) => WPt[]) =>
     updateSite((st) =>
       s.type === "boundary"
-        ? { ...st, boundary: poly }
+        ? { ...st, boundary: f(st.boundary) }
         : s.type === "surface"
-          ? { ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, polygon: poly } : x)) }
-          : { ...st, neighbours: st.neighbours.map((x) => (x.id === s.id ? { ...x, polygon: poly } : x)) },
+          ? { ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, polygon: f(x.polygon) } : x)) }
+          : { ...st, neighbours: st.neighbours.map((x) => (x.id === s.id ? { ...x, polygon: f(x.polygon) } : x)) },
     );
 
   const deleteVertex = (s: NonNullable<Sel>, i: number) => {
     if (s.type === "boundary") updateSite((st) => removeBoundaryVertex(st, i));
-    else {
-      const poly = polyOf(s);
-      if (poly.length > 3) setPoly(s, poly.filter((_, j) => j !== i));
-    }
+    else editPoly(s, (poly) => (poly.length > 3 ? poly.filter((_, j) => j !== i) : poly));
     setSel({ ...s, vertex: null } as Sel);
   };
   const deleteItem = (s: NonNullable<Sel>) => {
@@ -243,7 +241,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     const b = poly[(index + 1) % poly.length];
     const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     if (s.type === "boundary") updateSite((st) => insertBoundaryVertex(st, index, m));
-    else setPoly(s, [...poly.slice(0, index + 1), m, ...poly.slice(index + 1)]);
+    else editPoly(s, (pl) => [...pl.slice(0, index + 1), m, ...pl.slice(index + 1)]);
     setSel({ ...s, vertex: index + 1 } as Sel);
     drag.current = { kind: "vertex", sel: s, index: index + 1 };
   };
@@ -272,11 +270,11 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     if (d.kind === "rect") setDraft({ a: d.start, b: snap(p) });
     else if (d.kind === "vertex") {
       const q = snap(p, { sel: d.sel, index: d.index });
-      setPoly(d.sel, polyOf(d.sel).map((o, i) => (i === d.index ? q : o)));
+      editPoly(d.sel, (poly) => poly.map((o, i) => (i === d.index ? q : o)));
     } else if (d.kind === "move") {
       const dx = p.x - d.start.x;
       const dy = p.y - d.start.y;
-      setPoly(d.sel, d.orig.map((o) => ({ x: o.x + dx, y: o.y + dy })));
+      editPoly(d.sel, () => d.orig.map((o) => ({ x: o.x + dx, y: o.y + dy })));
     }
   };
 

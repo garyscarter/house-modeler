@@ -139,7 +139,7 @@ describe("daylight", () => {
     expect(daylight(5).sun).toBeLessThan(0.5);
     expect(daylight(2).warmth).toBeGreaterThan(0.9);
     expect(daylight(45).warmth).toBe(0);
-    expect(daylight(-20).sky).toBeCloseTo(0.08);
+    expect(daylight(-20).sky).toBeCloseTo(0.25);
     expect(daylight(30).sky).toBe(1);
   });
 });
