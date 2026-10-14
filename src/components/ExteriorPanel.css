@@ -1,0 +1,14 @@
+.exterior-panel section { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 2px; }
+.exterior-panel .ext-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; }
+.exterior-panel .ext-grid label { margin: 6px 0; font-size: 13px; }
+.exterior-panel .ext-grid .wide { grid-column: 1 / -1; }
+.exterior-panel label.check { display: flex; min-height: 32px; margin: 4px 0; color: var(--text); }
+.exterior-panel input[type="checkbox"] { width: 18px; height: 18px; }
+.exterior-panel input[type="color"] {
+  display: block; width: 100%; height: 34px; margin-top: 3px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel); cursor: pointer;
+}
+.exterior-panel select, .exterior-panel input[type="number"] { min-height: 34px; }
+.exterior-panel button { min-height: 34px; }
+.chimney-card { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px 8px; margin: 8px 0; background: var(--bg); }
+.chimney-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
