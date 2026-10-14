@@ -1,0 +1,196 @@
+import { describe, expect, it } from "vitest";
+import {
+  areaOf,
+  clipSegmentOutside,
+  defaultDepths,
+  gardenArea,
+  houseOutlines,
+  insertBoundaryVertex,
+  pointPolygonDistance,
+  prismBlocks,
+  rectPoly,
+  removeBoundaryVertex,
+  segmentPolygonDistance,
+  segmentSegmentClosest,
+  sideClearances,
+  simpleSite,
+  sunHoursGrid,
+} from "./site";
+import { floor, rect } from "./testing";
+import type { HouseModel, Site } from "../types";
+import { listing91770873, listingSite } from "./houses/listing91770873";
+
+const square = rectPoly(0, 0, 4, 4);
+
+describe("polygon helpers", () => {
+  it("measures area whatever the winding", () => {
+    expect(areaOf(square)).toBeCloseTo(16);
+    expect(areaOf([...square].reverse())).toBeCloseTo(16);
+    expect(areaOf([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }])).toBeCloseTo(6);
+  });
+
+  it("finds the closest points between segments", () => {
+    const c = segmentSegmentClosest({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 1 }, { x: 3, y: 5 });
+    expect(c.d).toBeCloseTo(Math.SQRT2);
+    expect(c.a).toEqual({ x: 2, y: 0 });
+    expect(c.b).toEqual({ x: 3, y: 1 });
+    expect(segmentSegmentClosest({ x: 0, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }, { x: 2, y: 0 }).d).toBe(0);
+    // Parallel segments.
+    expect(segmentSegmentClosest({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 1, y: 2 }, { x: 3, y: 2 }).d).toBeCloseTo(2);
+  });
+
+  it("measures segment-to-polygon and point-to-polygon distances", () => {
+    expect(segmentPolygonDistance({ x: 6, y: -1 }, { x: 6, y: 5 }, square).d).toBeCloseTo(2);
+    expect(segmentPolygonDistance({ x: -1, y: 2 }, { x: 5, y: 2 }, square).d).toBe(0);
+    expect(segmentPolygonDistance({ x: 1, y: 1 }, { x: 2, y: 2 }, square).d).toBe(0);
+    expect(pointPolygonDistance({ x: 2, y: 2 }, square)).toBe(0);
+    expect(pointPolygonDistance({ x: 7, y: 8 }, square)).toBeCloseTo(5);
+  });
+});
+
+describe("clipSegmentOutside", () => {
+  it("cuts the part of a fence that runs through a building", () => {
+    const parts = clipSegmentOutside({ x: -2, y: 2 }, { x: 8, y: 2 }, [square]);
+    expect(parts).toHaveLength(2);
+    expect(parts[0][0]).toBe(0);
+    expect(parts[0][1]).toBeCloseTo(0.2, 3);
+    expect(parts[1][0]).toBeCloseTo(0.6, 3);
+    expect(parts[1][1]).toBe(1);
+  });
+
+  it("treats a fence along a wall as inside it within the margin", () => {
+    expect(clipSegmentOutside({ x: 4.05, y: 1 }, { x: 4.05, y: 3 }, [square], 0.1)).toEqual([]);
+    expect(clipSegmentOutside({ x: 4.05, y: -2 }, { x: 4.05, y: 3 }, [square], 0.1)[0][1]).toBeCloseTo(0.38, 2);
+  });
+
+  it("keeps a segment that misses everything", () => {
+    expect(clipSegmentOutside({ x: -2, y: 9 }, { x: 8, y: 9 }, [square])).toEqual([[0, 1]]);
+  });
+});
+
+describe("sideClearances", () => {
+  const plot = rectPoly(-2, -10, 7, 6);
+  it("measures each side of a box house to a rectangular plot", () => {
+    const res = sideClearances([{ level: 0, polys: [square] }], plot);
+    const d = Object.fromEntries(res.map((r) => [r.side, r.distance]));
+    expect(d.left).toBeCloseTo(2);
+    expect(d.right).toBeCloseTo(3);
+    expect(d.rear).toBeCloseTo(10);
+    expect(d.front).toBeCloseTo(2);
+  });
+
+  it("uses the upper floor where it overhangs", () => {
+    const upper = rectPoly(-1, 0, 4, 4);
+    const res = sideClearances(
+      [
+        { level: 0, polys: [square] },
+        { level: 1, polys: [upper] },
+      ],
+      plot,
+    );
+    const left = res.find((r) => r.side === "left")!;
+    expect(left.distance).toBeCloseTo(1);
+    expect(left.level).toBe(1);
+  });
+
+  it("ignores internal walls and finds the narrowest point of a slanted boundary", () => {
+    const rooms = [rectPoly(0, 0, 2, 4), rectPoly(2, 0, 4, 4)];
+    const slanted = [
+      { x: -1, y: -10 },
+      { x: 7, y: -10 },
+      { x: 7, y: 6 },
+      { x: -3, y: 6 },
+    ];
+    const left = sideClearances([{ level: 0, polys: rooms }], slanted).find((r) => r.side === "left")!;
+    expect(left.from.x).toBeCloseTo(0);
+    expect(left.from.y).toBeCloseTo(0);
+    // Perpendicular distance from (0, 0) to the line 16x + 2y + 36 = 0 through (-1, -10) and (-3, 6).
+    expect(left.distance).toBeCloseTo(36 / Math.hypot(16, 2), 3);
+  });
+
+  it("finds the listing's garage and party wall on the boundary", () => {
+    const res = sideClearances(houseOutlines(listing91770873("")), listingSite().boundary);
+    const d = Object.fromEntries(res.map((r) => [r.side, r.distance]));
+    expect(d.right).toBeLessThan(0.1);
+    expect(d.left).toBeLessThan(0.1);
+    expect(d.front).toBeCloseTo(2.9, 1);
+    expect(d.rear).toBeCloseTo(5.65, 1);
+  });
+});
+
+describe("plot helpers", () => {
+  it("counts garden area as the plot less the buildings on it", () => {
+    expect(gardenArea(rectPoly(0, 0, 10, 10), [rectPoly(2, 2, 6, 6)])).toBeCloseTo(84, 0);
+    expect(gardenArea(rectPoly(0, 0, 10, 10), [rectPoly(20, 20, 26, 26)])).toBeCloseTo(100, 0);
+  });
+
+  const site: Site = { frontBearing: 180, latitude: 51, longitude: 0, boundary: rectPoly(0, 0, 4, 4), neighbours: [], surfaces: [], boundaryEdges: [
+    { kind: "fence", height: 1.8 },
+    { kind: "wall", height: 2 },
+    { kind: "hedge", height: 1.2 },
+    { kind: "open", height: 0 },
+  ] };
+
+  it("splits an edge in two when a vertex is added, keeping its treatment", () => {
+    const s = insertBoundaryVertex(site, 1, { x: 5, y: 2 });
+    expect(s.boundary).toHaveLength(5);
+    expect(s.boundary[2]).toEqual({ x: 5, y: 2 });
+    expect(s.boundaryEdges!.map((e) => e.kind)).toEqual(["fence", "wall", "wall", "hedge", "open"]);
+  });
+
+  it("merges edges when a vertex is removed, but keeps at least a triangle", () => {
+    const s = removeBoundaryVertex(site, 2);
+    expect(s.boundary).toHaveLength(3);
+    expect(s.boundaryEdges!.map((e) => e.kind)).toEqual(["fence", "wall", "open"]);
+    expect(removeBoundaryVertex(s, 0)).toBe(s);
+  });
+
+  it("builds a simple plot around a house, with the attached neighbour for a semi", () => {
+    const model: HouseModel = {
+      floors: [floor([rect("A", 0, 0, 800, 600)])],
+      ceilingHeight: 2.4,
+      slabThickness: 0.25,
+      exterior: { ...listing91770873("").exterior!, partyWall: "right" },
+    };
+    const depths = defaultDepths(model);
+    expect(depths.right).toBe(0);
+    const s = simpleSite(model, depths);
+    expect(s.boundary[0]).toEqual({ x: -1.5, y: -12 });
+    expect(s.boundary[2]).toEqual({ x: 8, y: 12 });
+    expect(s.boundaryEdges).toHaveLength(4);
+    expect(s.neighbours).toHaveLength(1);
+    expect(s.neighbours[0].partySide).toBe("left");
+    expect(s.neighbours[0].polygon[0].x).toBe(8);
+    expect(s.surfaces.map((x) => x.kind)).toEqual(["lawn", "lawn", "pavement", "road"]);
+  });
+});
+
+describe("sun hours", () => {
+  it("blocks a low sun behind a tall prism but not a high one", () => {
+    const wall = { poly: rectPoly(2, -1, 3, 1), height: 3 };
+    // Sun to the +x side, wall 2 m away and 3 m tall: blocked below about 56 degrees.
+    expect(prismBlocks({ x: 0, y: 0 }, 1, 0, Math.tan((40 * Math.PI) / 180), wall)).toBe(true);
+    expect(prismBlocks({ x: 0, y: 0 }, 1, 0, Math.tan((60 * Math.PI) / 180), wall)).toBe(false);
+    expect(prismBlocks({ x: 0, y: 0 }, -1, 0, 0.1, wall)).toBe(false);
+  });
+
+  it("counts fewer hours in the shade of a building", () => {
+    const grid = sunHoursGrid(
+      rectPoly(0, 0, 10, 2),
+      [{ poly: rectPoly(10, -5, 12, 7), height: 2 }],
+      // Sun always due +x at 20 degrees for 8 hours.
+      () => ({ x: 1, y: 0, altitude: 20 }),
+      8,
+      16,
+      1,
+      0.5,
+    );
+    // The shadow reaches 2 / tan(20) = 5.5 m from the building.
+    expect(grid.nx).toBe(10);
+    expect(grid.ny).toBe(2);
+    expect(grid.hours[0]).toBe(8);
+    expect(grid.hours[9]).toBe(0);
+    expect(grid.hours[10 + 3]).toBe(8);
+    expect(grid.hours[10 + 6]).toBe(0);
+  });
+});
