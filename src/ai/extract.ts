@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { makeClient } from "./client";
+import { makeClient, REFUSAL_FALLBACK } from "./client";
 import { imageSize, makeGriddedImage, splitDataUrl } from "../lib/image";
 import { estimatePxPerM, snapRooms, bbox } from "../lib/geometry";
 import type { Floor, HouseModel, Opening, Room } from "../types";
@@ -75,8 +75,7 @@ export async function extractFloorplan(
     model,
     max_tokens: 16000,
     system: SYSTEM,
-    betas: ["server-side-fallback-2026-06-01"],
-    fallbacks: [{ model: "claude-opus-4-8" }],
+    ...REFUSAL_FALLBACK,
     messages: [
       {
         role: "user",

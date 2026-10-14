@@ -1,5 +1,10 @@
 import type { Floor, Opening, Pt, Room } from "../types";
 
+/** Wall thickness used for rendering, metres. Walls are centred on the traced lines. */
+export const WALL_T = 0.12;
+/** External wall thickness (roofs sit on the outer edge of these). */
+export const EXT_WALL_T = WALL_T;
+
 export interface V2 {
   x: number;
   y: number;
@@ -417,6 +422,41 @@ export function diffWalls(a: WallSeg[], b: WallSeg[]): WallSeg[] {
       cursor = Math.max(cursor, c1);
     }
     emit(cursor, len);
+  }
+  return out;
+}
+
+/**
+ * Intervals [t0, t1] (metres along the wall from `a`) where the wall runs
+ * under any of `polys`, judged by probing a little to each side of it. Used
+ * to carry walls up through the slab only where there is a floor above.
+ */
+export function coveredIntervals(wall: { a: V2; b: V2 }, polys: V2[][], step = 0.05, probe = 0.15): [number, number][] {
+  const dx = wall.b.x - wall.a.x;
+  const dy = wall.b.y - wall.a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6 || !polys.length) return [];
+  const ux = dx / len;
+  const uy = dy / len;
+  const covered = (t: number) => {
+    const cx = wall.a.x + ux * t;
+    const cy = wall.a.y + uy * t;
+    return polys.some(
+      (poly) => pointInPolygon({ x: cx - uy * probe, y: cy + ux * probe }, poly) || pointInPolygon({ x: cx + uy * probe, y: cy - ux * probe }, poly),
+    );
+  };
+  const out: [number, number][] = [];
+  const n = Math.max(1, Math.ceil(len / step));
+  let start: number | null = null;
+  for (let i = 0; i <= n; i++) {
+    const t = Math.min(len, i * step);
+    // Sample at the middle of each step so endpoints shared with other walls don't count.
+    const on = i < n && covered(Math.min(len, t + step / 2));
+    if (on && start === null) start = t;
+    if (!on && start !== null) {
+      out.push([start, t]);
+      start = null;
+    }
   }
   return out;
 }

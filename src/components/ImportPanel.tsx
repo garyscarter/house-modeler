@@ -6,7 +6,10 @@ import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
-import { listing91770873, listing91770873Proposed, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
+import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
+
+const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "gap"]);
+const WINDOW_KINDS = new Set(["window", "bay"]);
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const settings = useStore((s) => s.settings);
@@ -14,6 +17,10 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
   const setVariant = useStore((s) => s.setVariant);
   const setUi = useStore((s) => s.setUi);
   const replaceImage = useStore((s) => s.replaceImage);
+  const copyVariant = useStore((s) => s.copyVariant);
+  const hasCurrent = useStore((s) => !!s.variants.current);
+  const site = useStore((s) => s.site);
+  const setSite = useStore((s) => s.setSite);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
@@ -117,13 +124,23 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         <ul className="summary">
           {model.floors.map((f) => (
             <li key={f.id}>
-              <b>{f.name}</b>: {f.rooms.length} rooms, {f.openings.filter((o) => o.kind === "door").length} doors,{" "}
-              {f.openings.filter((o) => o.kind === "window").length} windows, {f.pxPerM.toFixed(0)} px/m
+              <b>{f.name}</b>: {f.rooms.length} rooms, {f.openings.filter((o) => DOOR_KINDS.has(o.kind)).length} doors and openings,{" "}
+              {f.openings.filter((o) => WINDOW_KINDS.has(o.kind)).length} windows, {f.pxPerM.toFixed(0)} px/m
             </li>
           ))}
         </ul>
       )}
       <div className="row">
+        {model && variant === "proposed" && hasCurrent && (
+          <button
+            title="Replace the proposed design with a fresh copy of As listed"
+            onClick={() => {
+              if (window.confirm("Replace the Proposed model with a copy of As listed?")) copyVariant("current", "proposed");
+            }}
+          >
+            Reset to a copy of As listed
+          </button>
+        )}
         {model && (
           <button
             className="danger"
@@ -157,12 +174,24 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
               onClick={() => {
                 const build = variant === "current" ? listing91770873 : listing91770873Proposed;
                 setVariant(variant, build(placeholderImage()));
+                if (!site) setSite(listingSite());
                 setUi({ activeVariant: variant });
               }}
             >
               {variant === "current" ? "Load listing 91770873" : "Load listing 91770873 with two-storey extension"}
             </button>
             {variant === "current" && <button onClick={() => setVariant(variant, sampleHouse())}>Load sample house</button>}
+            {variant === "proposed" && hasCurrent && (
+              <button
+                title="Start the proposed design from a copy of the As listed model, then edit it in Check plan"
+                onClick={() => {
+                  copyVariant("current", "proposed");
+                  setUi({ activeVariant: "proposed", tab: "plan", selectedRoomId: null });
+                }}
+              >
+                Copy As listed to start
+              </button>
+            )}
           </>
         )}
       </div>

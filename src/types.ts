@@ -18,12 +18,30 @@ export interface Room {
   exteriorColor?: string;
   /** Rooms sharing a roofGroup get their own gable when the extension roof is "separate". */
   roofGroup?: string;
+  /** Free-text notes (snags, ideas, quotes) shown in the inspector and the report. */
+  notes?: string;
+  /** Floor finish drawn in 3D. Undefined = plain colour. */
+  floorFinish?: FloorFinish;
+  /** Interior paint colour of this room's walls. */
+  wallPaint?: string;
 }
+
+export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "stone" | "carpet" | "vinyl" | "concrete";
+export const FLOOR_FINISH_LABEL: Record<FloorFinish, string> = {
+  plain: "Plain colour",
+  oak: "Oak boards",
+  laminate: "Laminate",
+  tile: "Ceramic tiles",
+  stone: "Stone flags",
+  carpet: "Carpet",
+  vinyl: "Vinyl",
+  concrete: "Concrete",
+};
 
 export interface Opening {
   id: string;
   /** "bay" projects outward; "garage" is a panelled up-and-over door; "gap" is a full-height opening with no lintel. */
-  kind: "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front";
+  kind: OpeningKind;
   color?: string;
   /** Centre of the opening, image pixel coordinates. */
   x: number;
@@ -32,7 +50,28 @@ export interface Opening {
   orientation: "h" | "v";
   /** Width along the wall, in metres. */
   widthM: number;
+  /** Doors: hinge at the other jamb. */
+  flipHinge?: boolean;
+  /** Doors: swing to the other side of the wall. */
+  flipSwing?: boolean;
+  /** Windows: sill height above the floor, metres (default 0.9). */
+  sill?: number;
+  /** Head (top) height above the floor, metres (default 2.1 windows, 2.05 doors). */
+  head?: number;
 }
+
+export type OpeningKind = "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front" | "french" | "bifold";
+export const OPENING_KIND_LABEL: Record<OpeningKind, string> = {
+  door: "Door (swing, open)",
+  front: "Front door (closed, panelled)",
+  window: "Window",
+  bay: "Bay window",
+  garage: "Garage door",
+  gap: "Gap (open-plan)",
+  patio: "Patio / sliding doors",
+  french: "French doors",
+  bifold: "Bi-fold doors",
+};
 
 /** A free-standing wall segment not derived from a room outline (nib, partition, garden wall). */
 export interface Wall {
@@ -52,8 +91,15 @@ export interface Fixture {
   /** Centre in image px. */
   x: number;
   y: number;
-  /** Rotation in degrees, clockwise on the plan. */
-  rot: 0 | 90 | 180 | 270;
+  /** Rotation in degrees, clockwise on the plan. Any value; the editor snaps to 15 degree steps. */
+  rot: number;
+  /** Size overrides in metres (default from the catalogue). */
+  w?: number;
+  d?: number;
+  h?: number;
+  color?: string;
+  /** Optional label shown on the plan. */
+  label?: string;
 }
 
 export interface Floor {
@@ -96,6 +142,13 @@ export const STAIRS_DIR_LABEL: Record<StairsDir, string> = {
 
 export interface Exterior {
   showRoof: boolean;
+  /** "hip" slopes the roof down at its ends; "gable" has vertical gable walls. */
+  roofStyle: "gable" | "hip";
+  /**
+   * Side of the plan where the house joins its neighbour (semi-detached or
+   * terraced). The roof stops flush with no overhang at that end.
+   */
+  partyWall: "none" | "left" | "right" | "both";
   /** Ridge direction for gable roofs; "auto" follows the longer side. x = left-right on the plan. */
   ridgeAxis: "auto" | "x" | "z";
   pitchDeg: number;
@@ -109,6 +162,8 @@ export interface Exterior {
 
 export const DEFAULT_EXTERIOR: Exterior = {
   showRoof: true,
+  roofStyle: "gable",
+  partyWall: "none",
   ridgeAxis: "auto",
   pitchDeg: 35,
   overhang: 0.35,
@@ -127,6 +182,66 @@ export interface HouseModel {
   exterior?: Exterior;
   /** Set on built-in models so the app can offer an update when the tracing improves. */
   preset?: { id: string; version: number };
+}
+
+/** A point in world metres on the plan: x to the right, y towards the front (bottom of the plan). */
+export interface WPt {
+  x: number;
+  y: number;
+}
+
+/** Plot, neighbours and orientation. Shared by both variants. World frame = the model's world metres. */
+export interface Site {
+  /** Compass bearing in degrees that the front of the house (the bottom of the plan) faces. 180 = due south. */
+  frontBearing: number;
+  latitude: number;
+  longitude: number;
+  /** Plot boundary polygon, world metres. */
+  boundary: WPt[];
+  /** Treatment of each boundary edge; edge i runs from boundary[i] to boundary[i + 1]. */
+  boundaryEdges?: BoundaryEdge[];
+  neighbours: Neighbour[];
+  surfaces: SiteSurface[];
+}
+
+export interface BoundaryEdge {
+  kind: "fence" | "wall" | "hedge" | "open";
+  /** Height in metres. */
+  height: number;
+}
+
+/** A neighbouring building block (or outbuilding), drawn as simple massing. */
+export interface Neighbour {
+  id: string;
+  name: string;
+  /** Footprint polygon, world metres. Rectangles give the best roofs. */
+  polygon: WPt[];
+  /** Height of the eaves (wall top) above the ground, metres. */
+  eaves: number;
+  roof: "hip" | "gable" | "flat";
+  pitchDeg?: number;
+  ridgeAxis?: "auto" | "x" | "z";
+  /** Side of the footprint that is a party wall (roof stops flush there). */
+  partySide?: "none" | "left" | "right";
+  color?: string;
+  roofColor?: string;
+}
+
+export type SurfaceKind = "lawn" | "patio" | "drive" | "path" | "bed" | "pavement" | "road";
+export const SURFACE_LABEL: Record<SurfaceKind, string> = {
+  lawn: "Lawn",
+  patio: "Patio",
+  drive: "Driveway",
+  path: "Path",
+  bed: "Planting bed",
+  pavement: "Pavement",
+  road: "Road",
+};
+
+export interface SiteSurface {
+  id: string;
+  kind: SurfaceKind;
+  polygon: WPt[];
 }
 
 export interface Photo {

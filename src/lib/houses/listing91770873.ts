@@ -1,4 +1,4 @@
-import type { Floor, HouseModel, Opening, Pt, Room } from "../../types";
+import type { Floor, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, WPt } from "../../types";
 import { DEFAULT_EXTERIOR, uid } from "../../types";
 
 /**
@@ -182,7 +182,17 @@ export function listing91770873(image: string): HouseModel {
     slabThickness: 0.25,
     // From the photos: cream render, brown frames, tiled roof with the ridge
     // parallel to the street (left-right on the plan).
-    exterior: { ...DEFAULT_EXTERIOR, ridgeAxis: "x", pitchDeg: 35, roofColor: "#6e4a3c", wallColor: RENDER, trimColor: "#4a2e1e" },
+    // Hipped at the garage end; the right-hand side is the party wall with No. 26.
+    exterior: {
+      ...DEFAULT_EXTERIOR,
+      roofStyle: "hip",
+      partyWall: "right",
+      ridgeAxis: "x",
+      pitchDeg: 35,
+      roofColor: "#6e4a3c",
+      wallColor: RENDER,
+      trimColor: "#4a2e1e",
+    },
     preset: LISTING_PRESET,
   };
 }
@@ -226,3 +236,102 @@ export const PRESETS: Record<string, { version: number; build: (image: string) =
   [LISTING_PRESET.id]: { version: LISTING_PRESET.version, build: listing91770873 },
   [LISTING_PROPOSED_PRESET.id]: { version: LISTING_PROPOSED_PRESET.version, build: listing91770873Proposed },
 };
+
+const w = (pts: [number, number][]): WPt[] => pts.map(([x, y]) => ({ x, y }));
+const block = (name: string, x0: number, y0: number, x1: number, y1: number, extra: Partial<Neighbour>): Neighbour => ({
+  id: uid(),
+  name,
+  polygon: w([
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ]),
+  eaves: 2.6,
+  roof: "flat",
+  ...extra,
+});
+const surface = (kind: SiteSurface["kind"], pts: [number, number][]): SiteSurface => ({ id: uid(), kind, polygon: w(pts) });
+
+/**
+ * Plot, neighbours and orientation for the listing, measured from the
+ * OS-based drainage search map and scaled so the house outline matches the
+ * traced model (it agrees to within 0.15 m). World metres in the model frame:
+ * x to the right, y towards the street. Map accuracy is roughly +/-0.3 m.
+ * Heights of the neighbours' extensions are assumed (single storey).
+ */
+export function listingSite(): Site {
+  // Two-storey eaves: two 2.4 m storeys, a 0.25 m slab, and the ground floor
+  // sitting 0.26 m above the garden.
+  const twoStorey = 5.3;
+  return {
+    frontBearing: 162,
+    latitude: 51.44,
+    longitude: -2.62,
+    boundary: w([
+      [-4.44, -11.24],
+      [5.84, -12.05],
+      [5.67, 5.5],
+      [-4.88, 5.5],
+    ]),
+    boundaryEdges: [
+      { kind: "fence", height: 1.8 },
+      { kind: "fence", height: 1.8 },
+      { kind: "open", height: 0 },
+      { kind: "fence", height: 1.8 },
+    ],
+    neighbours: [
+      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left" }),
+      block("No. 26 rear extension", 5.82, -9.41, 8.64, -5.59, { eaves: 2.6, roof: "flat" }),
+      block("No. 26 side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),
+      block("West neighbour", -12.8, -6.15, -6.36, 0.78, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left" }),
+      block("Outbuilding behind the garden", -7.7, -15.1, 1.4, -11.5, { eaves: 2.4, roof: "flat" }),
+    ],
+    surfaces: [
+      surface("patio", [
+        [-4.59, -5.59],
+        [5.78, -5.59],
+        [5.8, -8.0],
+        [-4.53, -8.0],
+      ]),
+      surface("lawn", [
+        [-4.53, -8.0],
+        [5.8, -8.0],
+        [5.84, -12.05],
+        [-4.44, -11.24],
+      ]),
+      surface("drive", [
+        [-4.59, 1.16],
+        [-1.85, 1.16],
+        [-1.85, 5.5],
+        [-4.88, 5.5],
+      ]),
+      surface("lawn", [
+        [-1.85, 2.6],
+        [1.03, 2.6],
+        [1.03, 1.16],
+        [5.78, 1.16],
+        [5.67, 5.5],
+        [-1.85, 5.5],
+      ]),
+      surface("pavement", [
+        [-16, 5.5],
+        [18, 5.5],
+        [18, 7.5],
+        [-16, 7.5],
+      ]),
+      surface("road", [
+        [-16, 7.5],
+        [18, 7.5],
+        [18, 14.0],
+        [-16, 14.0],
+      ]),
+      surface("pavement", [
+        [-16, 14.0],
+        [18, 14.0],
+        [18, 16.0],
+        [-16, 16.0],
+      ]),
+    ],
+  };
+}

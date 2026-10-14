@@ -1,10 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicBeta } from "@anthropic-ai/sdk/resources/beta/beta";
 
 export const MODELS = [
-  { id: "claude-opus-5", label: "Claude Opus 5 (default)" },
-  { id: "claude-sonnet-5", label: "Claude Sonnet 5 (faster, cheaper)" },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5 (default)" },
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (faster, cheaper)" },
   { id: "claude-fable-5-1", label: "Claude Fable 5.1 (most capable)" },
 ];
+export const DEFAULT_MODEL = MODELS[0].id;
+
+/**
+ * If the safety system declines a request, the API retries it on a fallback
+ * model it picks by refusal category. Every model in MODELS supports this.
+ */
+export const REFUSAL_FALLBACK: { betas: AnthropicBeta[]; fallbacks: "default" } = {
+  betas: ["server-side-fallback-2026-07-01"],
+  fallbacks: "default",
+};
 
 /**
  * The app is a throwaway single-user tool with no backend, so the key lives in

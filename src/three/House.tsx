@@ -8,7 +8,9 @@ import { Roof } from "./Roof";
 import { Fixtures } from "./Fixtures";
 import {
   type WallSeg,
+  WALL_T,
   buildWalls,
+  coveredIntervals,
   cutWall,
   diffWalls,
   modelBounds,
@@ -21,7 +23,7 @@ import {
   type WallPiece,
 } from "../lib/geometry";
 
-export const WALL_T = 0.12;
+export { WALL_T };
 
 export function floorBaseY(model: HouseModel, floor: Floor) {
   return floor.level * (model.ceilingHeight + model.slabThickness);
@@ -151,16 +153,28 @@ function FloorGroup({
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
   // Ghost mode with a comparison draws only the removed walls.
   const walls = ghost && otherWalls ? changed : allWalls;
-  // Walls run up through the slab above so the outside face is continuous between storeys.
-  const wallTop = H + (hasAbove ? model.slabThickness : 0);
-  const cut = useMemo(
-    () => walls.map((w) => cutWall(w, w.height !== undefined ? Math.min(w.height, wallTop) : wallTop)),
-    [walls, wallTop],
+  const cut = useMemo(() => walls.map((w) => cutWall(w, w.height !== undefined ? Math.min(w.height, H) : H)), [walls, H]);
+  // Carry walls up through the slab where there is a floor above, so the
+  // outside face is continuous between storeys. Elsewhere (single-storey
+  // parts under a flat roof) they stop at the ceiling.
+  const upperPolys = useMemo(
+    () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
+    [model.floors, floor.level],
+  );
+  const bands = useMemo(
+    () =>
+      walls.map((w) => {
+        if (w.height !== undefined || !upperPolys.length) return [];
+        const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+        const at = (t: number) => ({ x: w.a.x + ((w.b.x - w.a.x) * t) / len, y: w.a.y + ((w.b.y - w.a.y) * t) / len });
+        return coveredIntervals(w, upperPolys).map(([t0, t1]): WallPiece => ({ a: at(t0), b: at(t1), y0: H, y1: H + model.slabThickness }));
+      }),
+    [walls, upperPolys, H, model.slabThickness],
   );
   const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
   const colourOf = (w: WallSeg) =>
     w.color ?? (w.exterior ? (w.roomId && roomsById.get(w.roomId)?.exteriorColor) || wallColor : "#f4f1ea");
-  const pieces = cut.flatMap((c, i) => c.pieces.map((p) => ({ piece: p, color: colourOf(walls[i]) })));
+  const pieces = cut.flatMap((c, i) => [...c.pieces, ...bands[i]].map((p) => ({ piece: p, color: colourOf(walls[i]) })));
   const placements = cut.flatMap((c, i) => c.placements.map((pl) => ({ placement: pl, wall: walls[i] })));
   const worldRooms = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
 

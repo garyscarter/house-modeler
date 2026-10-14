@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { makeClient } from "./client";
+import { makeClient, REFUSAL_FALLBACK } from "./client";
 import { resizeDataUrl, splitDataUrl } from "../lib/image";
 import type { Elevation, HouseModel, Photo } from "../types";
 
@@ -55,8 +55,7 @@ export async function assignPhotos(
     const response = await client.beta.messages.parse({
       model,
       max_tokens: 8000,
-      betas: ["server-side-fallback-2026-06-01"],
-      fallbacks: [{ model: "claude-opus-4-8" }],
+      ...REFUSAL_FALLBACK,
       messages: [{ role: "user", content }],
       output_config: { format: betaZodOutputFormat(AssignmentSchema), effort: "medium" },
     });

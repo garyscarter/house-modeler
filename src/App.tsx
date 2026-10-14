@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useStore } from "./store";
+import { SITE_EDIT_ID, useStore } from "./store";
 import { Viewer } from "./three/Viewer";
 import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
@@ -7,9 +7,12 @@ import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
+import { SitePanel } from "./components/SitePanel";
+import { ReportPanel } from "./components/ReportPanel";
+import { SiteEditor } from "./editor/SiteEditor";
 import { VARIANT_LABEL, type VariantKey } from "./types";
 
-type Side = "floorplans" | "photos" | "exterior" | "settings";
+type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "settings";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -22,6 +25,8 @@ export default function App() {
   const showCeilings = useStore((s) => s.showCeilings);
   const maxLevel = useStore((s) => s.maxLevel);
   const showExterior = useStore((s) => s.showExterior);
+  const showSite = useStore((s) => s.showSite);
+  const site = useStore((s) => s.site);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
   const updateModel = useStore((s) => s.updateModel);
@@ -62,6 +67,7 @@ export default function App() {
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
   const otherModel = variants[other];
   const both = !!variants.current && !!variants.proposed;
+  const editingSite = editFloorId === SITE_EDIT_ID;
   const editFloor = model?.floors.find((f) => f.id === editFloorId) ?? model?.floors[0];
 
   const onSelectRoom = (floor: { id: string }, room: { id: string }) => {
@@ -150,6 +156,9 @@ export default function App() {
             <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
               <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior
             </label>
+            <label className="check" title="Plot, garden and neighbouring buildings (set up under Site)">
+              <input type="checkbox" checked={showSite} disabled={!site} onChange={(e) => setUi({ showSite: e.target.checked })} /> Site
+            </label>
             {model && (
               <label className="check">
                 Ceiling height
@@ -170,10 +179,13 @@ export default function App() {
         {tab === "plan" && model && (
           <div className="seg">
             {model.floors.map((f) => (
-              <button key={f.id} className={editFloor?.id === f.id ? "active" : ""} onClick={() => setEditFloorId(f.id)}>
+              <button key={f.id} className={!editingSite && editFloor?.id === f.id ? "active" : ""} onClick={() => setEditFloorId(f.id)}>
                 {f.name}
               </button>
             ))}
+            <button className={editingSite ? "active" : ""} onClick={() => setEditFloorId(SITE_EDIT_ID)} title="Plot boundary, garden and neighbours">
+              Site
+            </button>
           </div>
         )}
       </header>
@@ -190,6 +202,12 @@ export default function App() {
             <button className={side === "exterior" ? "active" : ""} onClick={() => setSide("exterior")} disabled={!model}>
               Exterior
             </button>
+            <button className={side === "site" ? "active" : ""} onClick={() => setSide("site")}>
+              Site
+            </button>
+            <button className={side === "report" ? "active" : ""} onClick={() => setSide("report")} disabled={!model}>
+              Report
+            </button>
             <button className={side === "settings" ? "active" : ""} onClick={() => setSide("settings")}>
               Settings
             </button>
@@ -203,6 +221,8 @@ export default function App() {
             )}
             {side === "photos" && <PhotosPanel />}
             {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
+            {side === "site" && <SitePanel />}
+            {side === "report" && model && <ReportPanel />}
             {side === "settings" && <SettingsPanel />}
           </div>
         </aside>
@@ -234,6 +254,7 @@ export default function App() {
               {(["current", "proposed"] as VariantKey[]).map((k) => (
                 <Viewer
                   key={k}
+                  captureId={k}
                   model={variants[k]!}
                   photos={photos}
                   cameraMode="orbit"
@@ -268,7 +289,8 @@ export default function App() {
               showExterior={showExterior}
             />
           )}
-          {model && tab === "plan" && editFloor && <PlanEditor variant={activeVariant} floor={editFloor} />}
+          {model && tab === "plan" && editingSite && <SiteEditor />}
+          {model && tab === "plan" && !editingSite && editFloor && <PlanEditor variant={activeVariant} floor={editFloor} />}
         </main>
       </div>
       <PhotoLightbox />

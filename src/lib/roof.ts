@@ -1,16 +1,120 @@
 import type { Exterior, Floor, HouseModel, Pt, Room } from "../types";
 import { DEFAULT_EXTERIOR } from "../types";
-import { bbox, pointInPolygon, roomWorldPolygon, toWorld, type V2 } from "./geometry";
+import { EXT_WALL_T, bbox, modelBounds, pointInPolygon, roomWorldPolygon, toWorld, type V2 } from "./geometry";
 
-export interface GableSpec {
+/** How a roof ends along its ridge: hipped, a gable wall with a verge overhang, or flush against a party wall. */
+export type RoofEnd = "hip" | "gable" | "flush";
+
+/** A pitched roof over a rectangle of walls. */
+export interface RoofBlock {
+  /** Wall centre lines, world metres (z = plan y). */
   x0: number;
   z0: number;
   x1: number;
   z1: number;
-  /** Height of the top of the walls the roof sits on. */
+  /** Height of the wall tops the roof sits on. */
   y: number;
+  /** Ridge direction. */
   axis: "x" | "z";
+  pitchDeg: number;
+  overhang: number;
+  /** End treatment at the low and high ends of the ridge axis. */
+  start: RoofEnd;
+  end: RoofEnd;
+  /** Wall thickness; the roof surface passes through the outer top edge of the walls. Default EXT_WALL_T. */
+  wallT?: number;
 }
+
+export interface RoofMesh {
+  /** Roof slope triangles as flat xyz triplets, wound to face upwards. */
+  slopes: number[];
+  /** Vertical gable-end triangles (drawn in the wall colour), wound to face outwards. */
+  gables: number[];
+  ridgeY: number;
+  eavesY: number;
+  /** Ridge end points [x, y, z]; equal when the roof is a pyramid. */
+  ridge: [[number, number, number], [number, number, number]];
+  /** Eaves outline in world x/z, for fascias and gutters. */
+  eaves: [number, number][];
+}
+
+type P3 = [number, number, number];
+
+function pushTri(out: number[], a: P3, b: P3, c: P3, outward: P3) {
+  const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  const len = Math.hypot(n[0], n[1], n[2]);
+  if (len < 1e-9) return; // degenerate (pyramid ridge)
+  const flip = n[0] * outward[0] + n[1] * outward[1] + n[2] * outward[2] < 0;
+  out.push(...a, ...(flip ? c : b), ...(flip ? b : c));
+}
+
+/**
+ * Triangles for a hipped or gabled roof. Built in a local frame (u along the
+ * ridge, v across) and mapped to world space. The slopes pass through the
+ * outer top edge of the walls, so no wall pokes through, and overhang the
+ * walls by `overhang` (none at a flush end).
+ */
+export function roofGeometry(b: RoofBlock): RoofMesh {
+  const half = (b.wallT ?? EXT_WALL_T) / 2;
+  const t = Math.tan((b.pitchDeg * Math.PI) / 180);
+  const o = b.overhang;
+  const [u0, u1, v0, v1] = b.axis === "x" ? [b.x0, b.x1, b.z0, b.z1] : [b.z0, b.z1, b.x0, b.x1];
+  const U0 = b.start === "flush" ? u0 : u0 - half;
+  const U1 = b.end === "flush" ? u1 : u1 + half;
+  const V0 = v0 - half;
+  const V1 = v1 + half;
+  const hs = (V1 - V0) / 2;
+  const vm = (V0 + V1) / 2;
+  const ridgeY = b.y + hs * t;
+  const eavesY = b.y - o * t;
+  const EU0 = b.start === "flush" ? U0 : U0 - o;
+  const EU1 = b.end === "flush" ? U1 : U1 + o;
+  const EV0 = V0 - o;
+  const EV1 = V1 + o;
+  let RU0 = b.start === "hip" ? U0 + hs : EU0;
+  let RU1 = b.end === "hip" ? U1 - hs : EU1;
+  if (RU0 > RU1) RU0 = RU1 = (RU0 + RU1) / 2;
+
+  // Local (u, h, v) -> world (x, y, z).
+  const W = (u: number, h: number, v: number): P3 => (b.axis === "x" ? [u, h, v] : [v, h, u]);
+  const up: P3 = [0, 1, 0];
+  const slopes: number[] = [];
+  const gables: number[] = [];
+
+  const quad = (a: P3, bb: P3, c: P3, d: P3, out: number[], outward: P3) => {
+    pushTri(out, a, bb, c, outward);
+    pushTri(out, a, c, d, outward);
+  };
+  const r0 = W(RU0, ridgeY, vm);
+  const r1 = W(RU1, ridgeY, vm);
+  // Long slopes.
+  quad(W(EU0, eavesY, EV0), W(EU1, eavesY, EV0), r1, r0, slopes, up);
+  quad(W(EU1, eavesY, EV1), W(EU0, eavesY, EV1), r0, r1, slopes, up);
+  // Ends.
+  const endFace = (kind: RoofEnd, U: number, EU: number, R: P3, sign: number) => {
+    if (kind === "hip") {
+      pushTri(slopes, W(EU, eavesY, EV0), W(EU, eavesY, EV1), R, up);
+    } else {
+      pushTri(gables, W(U, b.y, V0), W(U, b.y, V1), W(U, ridgeY, vm), W(sign, 0, 0));
+    }
+  };
+  endFace(b.start, U0, EU0, r0, -1);
+  endFace(b.end, U1, EU1, r1, 1);
+
+  const eaves: [number, number][] = [
+    [EU0, EV0],
+    [EU1, EV0],
+    [EU1, EV1],
+    [EU0, EV1],
+  ].map(([u, v]) => {
+    const p = W(u, 0, v);
+    return [p[0], p[2]];
+  });
+  return { slopes, gables, ridgeY, eavesY, ridge: [r0, r1], eaves };
+}
+
 export interface FlatSpec {
   x0: number;
   z0: number;
@@ -38,9 +142,13 @@ export function exteriorOf(model: HouseModel): Exterior {
  * per roof group if the extension roof is "separate"); any lower-floor area
  * with nothing above it, plus canopies, gets a flat roof.
  */
-export function planRoofs(model: HouseModel): { gables: GableSpec[]; flats: FlatSpec[]; pillars: Pillar[] } {
+export function planRoofs(model: HouseModel): { blocks: RoofBlock[]; flats: FlatSpec[]; pillars: Pillar[] } {
   const ext = exteriorOf(model);
-  const gables: GableSpec[] = [];
+  const blocks: RoofBlock[] = [];
+  const all = modelBounds(model.floors);
+  const style: RoofEnd = ext.roofStyle === "hip" ? "hip" : "gable";
+  const partyLeft = ext.partyWall === "left" || ext.partyWall === "both";
+  const partyRight = ext.partyWall === "right" || ext.partyWall === "both";
   const flats: FlatSpec[] = [];
   const pillars: Pillar[] = [];
   const floors = [...model.floors].sort((a, b) => a.level - b.level);
@@ -59,10 +167,28 @@ export function planRoofs(model: HouseModel): { gables: GableSpec[]; flats: Flat
         const g = ext.extensionRoof === "separate" ? r.roofGroup ?? "main" : "main";
         groups.set(g, [...(groups.get(g) ?? []), r]);
       }
-      for (const rooms of groups.values()) {
-        const b = bbox(rooms.flatMap((r) => roomWorldPolygon(floor, r)));
+      const rects = [...groups.values()].map((rooms) => bbox(rooms.flatMap((r) => roomWorldPolygon(floor, r))));
+      const TOL = 0.3;
+      for (const b of rects) {
         const axis = ext.ridgeAxis === "auto" ? (b.w >= b.h ? "x" : "z") : ext.ridgeAxis;
-        gables.push({ x0: b.x0, z0: b.y0, x1: b.x1, z1: b.y1, y: yTop, axis });
+        const [lo, hi] = axis === "x" ? [b.x0, b.x1] : [b.y0, b.y1];
+        // An end that meets another roof block, or the party wall, stops flush.
+        const touches = (v: number) =>
+          rects.some((o) => o !== b && (axis === "x" ? Math.abs(o.x0 - v) < TOL || Math.abs(o.x1 - v) < TOL : Math.abs(o.y0 - v) < TOL || Math.abs(o.y1 - v) < TOL));
+        const party = (v: number, side: "lo" | "hi") =>
+          axis === "x" && (side === "lo" ? partyLeft && Math.abs(v - all.x0) < TOL : partyRight && Math.abs(v - all.x1) < TOL);
+        blocks.push({
+          x0: b.x0,
+          z0: b.y0,
+          x1: b.x1,
+          z1: b.y1,
+          y: yTop,
+          axis,
+          pitchDeg: ext.pitchDeg,
+          overhang: ext.overhang,
+          start: party(lo, "lo") || touches(lo) ? "flush" : style,
+          end: party(hi, "hi") || touches(hi) ? "flush" : style,
+        });
       }
       // Canopies on the top floor still get a flat roof.
       if (canopyPolys.length) flats.push(...rasterFlat(canopyPolys, [], yTop));
@@ -78,7 +204,7 @@ export function planRoofs(model: HouseModel): { gables: GableSpec[]; flats: Flat
       }
     }
   }
-  return { gables, flats, pillars };
+  return { blocks, flats, pillars };
 }
 
 function distToPolygonEdge(p: V2, poly: V2[]): number {
