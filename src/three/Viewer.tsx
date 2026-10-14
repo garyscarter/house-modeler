@@ -6,8 +6,8 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room } from "../types";
 import { House } from "./House";
 import { modelBounds } from "../lib/geometry";
-import type { CameraMode } from "../store";
-import { Lighting } from "./Lighting";
+import { useStore, type CameraMode } from "../store";
+import { Lighting, SkyBackdrop } from "./Lighting";
 import { GROUND_Y, SiteScene } from "./Site";
 import { Walker } from "./Walker";
 import { CaptureBridge } from "./capture";
@@ -44,6 +44,7 @@ export function Viewer(props: ViewerProps) {
   const walking = cameraMode === "walk" && !!walkFloor;
   const [locked, setLocked] = useState(false);
   const [view, setView] = useState<{ id: number; side: ViewSide } | null>(null);
+  const quality = useStore((s) => s.settings.quality);
 
   // When walking, hide floors above so the ceiling doesn't block the view;
   // otherwise honour the "show floors up to" control.
@@ -70,11 +71,12 @@ export function Viewer(props: ViewerProps) {
         </div>
       )}
       <Canvas
-        shadows
+        shadows="percentage"
+        dpr={DPR[quality]}
         camera={{ position: [centre.x + size * 0.9, size * 0.9, centre.z + size * 0.9], fov: 45, near: 0.05, far: 500 }}
         onPointerMissed={() => {}}
       >
-        <color attach="background" args={["#eef0f3"]} />
+        <SkyBackdrop />
         <Lighting centre={centre} size={size} walking={walking} />
         <House
           model={model}
@@ -88,7 +90,7 @@ export function Viewer(props: ViewerProps) {
           showExterior={!!showExterior && cap === null}
         />
         {ghost && <House model={ghost} photos={[]} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
-        <SiteScene centre={centre} size={size} />
+        <SiteScene centre={centre} size={size} model={model} />
         {!walking && <ContactShadows position={[centre.x, GROUND_Y - 0.01, centre.z]} scale={size * 3} blur={2} opacity={0.35} far={20} />}
         <CaptureBridge id={captureId ?? "main"} />
         <Effects />
@@ -101,6 +103,9 @@ export function Viewer(props: ViewerProps) {
     </div>
   );
 }
+
+/** Device pixel ratio range per render quality; phones on "low" render at 1x. */
+const DPR: Record<"high" | "balanced" | "low", [number, number]> = { high: [1, 2], balanced: [1, 1.5], low: [1, 1] };
 
 export type ViewSide = "front" | "rear" | "left" | "right" | "top";
 

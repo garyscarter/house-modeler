@@ -1,14 +1,327 @@
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
+import { useStore } from "../store";
+import { roofGeometry, type RoofEnd } from "../lib/roof";
+import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
+import { clipSegmentOutside, edgesOf } from "../lib/site";
+import { triangles } from "./Roof";
+import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
+import { useSiteView } from "./siteView";
+import { SunHoursOverlay } from "./SunHours";
 
 /** Ground level relative to the ground floor's finished floor (floor 0 sits on a 0.25 m slab). */
 export const GROUND_Y = -0.26;
 
-/** Ground, plot, garden surfaces and neighbouring buildings. */
-export function SiteScene({ centre, size }: { centre: THREE.Vector3; size: number }) {
+/**
+ * Ground, plot, garden surfaces, boundary treatments and neighbouring
+ * buildings. `model` is the house this viewer shows; fences stop at its walls.
+ */
+export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model?: HouseModel }) {
+  const site = useStore((s) => s.site);
+  const showSite = useStore((s) => s.showSite);
+  const active = useStore((s) => s.variants[s.activeVariant]);
+  if (!site || !showSite) {
+    return (
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.z]} receiveShadow>
+        <planeGeometry args={[size * 4, size * 4]} />
+        <meshStandardMaterial color="#cfd6cc" />
+      </mesh>
+    );
+  }
+  return <SiteContent site={site} house={model ?? active} />;
+}
+
+function SiteContent({ site, house }: { site: Site; house?: HouseModel }) {
+  const ghost = useSiteView((s) => s.ghostNeighbours);
+  const sunHours = useSiteView((s) => s.sunHours);
+  const sunOn = useStore((s) => s.sun.enabled);
+  // Fences stop where a building stands on the line: the house's ground floor or a neighbour.
+  const buildings = useMemo(() => {
+    const lowest = house?.floors.length ? Math.min(...house.floors.map((f) => f.level)) : 0;
+    const own = (house?.floors ?? []).filter((f) => f.level === lowest).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r)));
+    return [...own, ...site.neighbours.map((n) => n.polygon)];
+  }, [house, site.neighbours]);
+  const centre = useMemo(() => (site.boundary.length ? polygonCentroid(site.boundary) : { x: 0, y: 0 }), [site.boundary]);
+  // Paint lower layers first and lift each layer a little to avoid z-fighting.
+  const surfaces = useMemo(() => [...site.surfaces].sort((a, b) => LAYER[a.kind] - LAYER[b.kind]), [site.surfaces]);
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.z]} receiveShadow>
-      <planeGeometry args={[size * 4, size * 4]} />
-      <meshStandardMaterial color="#cfd6cc" />
-    </mesh>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} material={surfaceMaterial("ground")} receiveShadow>
+        <planeGeometry args={[300, 300]} />
+      </mesh>
+      {surfaces.map((s) => (
+        <Surface key={s.id} surface={s} />
+      ))}
+      <Boundary site={site} buildings={buildings} />
+      {site.neighbours.map((n) => (
+        <NeighbourMass key={n.id} n={n} ghost={ghost} />
+      ))}
+      {sunHours && sunOn && house && <SunHoursOverlay site={site} model={house} y={GROUND_Y + 0.07} />}
+    </group>
+  );
+}
+
+const LAYER: Record<SurfaceKind, number> = { road: 1, lawn: 1, pavement: 2, drive: 2, bed: 3, patio: 3, path: 4 };
+
+const materials = new Map<string, THREE.Material>();
+/** One cached material per surface or boundary kind, shared by every viewer. */
+function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
+  const key = `${kind}:${layer}`;
+  let m = materials.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      map: siteTexture(kind).map,
+      roughness: kind === "road" || kind === "pavement" ? 0.95 : 1,
+      polygonOffset: layer > 0,
+      polygonOffsetFactor: -layer,
+      polygonOffsetUnits: -layer * 4,
+    });
+    materials.set(key, m);
+  }
+  return m;
+}
+
+function plainMaterial(color: string, layer = 0): THREE.Material {
+  const key = `${color}:${layer}`;
+  let m = materials.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.9, polygonOffset: layer > 0, polygonOffsetFactor: -layer, polygonOffsetUnits: -layer * 4 });
+    materials.set(key, m);
+  }
+  return m;
+}
+
+/** A flat shape in world x/z from a plan polygon; UVs come out in metres. */
+function flatShape(poly: V2[]): THREE.Shape {
+  const s = new THREE.Shape();
+  poly.forEach((p, i) => (i === 0 ? s.moveTo(p.x, -p.y) : s.lineTo(p.x, -p.y)));
+  s.closePath();
+  return s;
+}
+
+/** Dispose geometries when they are replaced or the component goes. */
+function useDisposeAll(list: (THREE.BufferGeometry | null | undefined)[]) {
+  useEffect(() => () => list.forEach((g) => g?.dispose()), [list]);
+}
+
+function Surface({ surface }: { surface: SiteSurface }) {
+  const layer = LAYER[surface.kind];
+  const geoms = useMemo(() => {
+    const g = new THREE.ShapeGeometry(flatShape(surface.polygon));
+    return [g, surface.kind === "road" ? centreLine(surface.polygon) : null];
+  }, [surface.polygon, surface.kind]);
+  useDisposeAll(geoms);
+  const [geom, line] = geoms;
+  return (
+    <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
+      <mesh geometry={geom!} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
+      {line && <mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
+    </group>
+  );
+}
+
+/**
+ * White dashed centre line along a road's length (its longest side), 4 m
+ * dashes with 5 m gaps, as flat quads in world x/z.
+ */
+function centreLine(poly: V2[]): THREE.BufferGeometry | null {
+  if (poly.length < 3) return null;
+  let dir = { x: 1, y: 0 };
+  let best = 0;
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > best) {
+      best = len;
+      dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    }
+  });
+  const c = polygonCentroid(poly);
+  // Where the centre line enters and leaves the road.
+  const ts: number[] = [];
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const den = dir.x * ey - dir.y * ex;
+    if (Math.abs(den) < 1e-9) return;
+    const t = ((a.x - c.x) * ey - (a.y - c.y) * ex) / den;
+    const u = ((a.x - c.x) * dir.y - (a.y - c.y) * dir.x) / den;
+    if (u >= 0 && u <= 1) ts.push(t);
+  });
+  if (ts.length < 2) return null;
+  const t0 = Math.min(...ts) + 1;
+  const t1 = Math.max(...ts) - 1;
+  const half = 0.05;
+  const n = { x: -dir.y * half, y: dir.x * half };
+  const pos: number[] = [];
+  for (let t = t0; t < t1; t += 9) {
+    const e = Math.min(t + 4, t1);
+    const a = { x: c.x + dir.x * t, y: c.y + dir.y * t };
+    const b = { x: c.x + dir.x * e, y: c.y + dir.y * e };
+    const q = [
+      [a.x - n.x, a.y - n.y],
+      [b.x - n.x, b.y - n.y],
+      [b.x + n.x, b.y + n.y],
+      [a.x + n.x, a.y + n.y],
+    ];
+    // Wound anticlockwise seen from above, so the quads face up.
+    for (const k of [0, 2, 1, 0, 3, 2]) pos.push(q[k][0], 0, q[k][1]);
+  }
+  return pos.length ? triangles(pos) : null;
+}
+
+/** A box of length `len` along a ground segment, centred between p and q at height y. */
+function along(g: THREE.BufferGeometry, p: V2, q: V2, y: number): THREE.BufferGeometry {
+  g.rotateY(-Math.atan2(q.y - p.y, q.x - p.x));
+  g.translate((p.x + q.x) / 2, y, (p.y + q.y) / 2);
+  return g;
+}
+
+type Part = "timber" | "concrete" | "brick" | "coping" | "hedge";
+
+/** Close-board fence: posts every 1.83 m (a 6 ft panel), boards on a concrete gravel board. */
+function fence(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
+  const len = Math.hypot(q.x - p.x, q.y - p.y);
+  const spans = Math.max(1, Math.ceil(len / 1.83));
+  const step = len / spans;
+  const at = (d: number) => ({ x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len });
+  for (let k = 0; k <= spans; k++) {
+    const c = at(k * step);
+    out.timber.push(along(metricBox(0.1, h + 0.05, 0.1), c, at(k * step + 1e-3), GROUND_Y + (h + 0.05) / 2));
+  }
+  out.concrete.push(along(metricBox(len, 0.15, 0.05), p, q, GROUND_Y + 0.075));
+  const ph = Math.max(0.2, h - 0.17);
+  for (let k = 0; k < spans; k++) {
+    out.timber.push(along(metricBox(step - 0.1, ph, 0.025), at(k * step), at((k + 1) * step), GROUND_Y + 0.17 + ph / 2));
+  }
+}
+
+/** One-brick garden wall with piers about every 3 m and a coping. */
+function brickWall(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
+  const len = Math.hypot(q.x - p.x, q.y - p.y);
+  const body = Math.max(0.1, h - 0.06);
+  out.brick.push(along(metricBox(len, body, 0.215), p, q, GROUND_Y + body / 2));
+  out.coping.push(along(metricBox(len + 0.04, 0.06, 0.29), p, q, GROUND_Y + h - 0.03));
+  if (h > 0.6) {
+    const piers = Math.max(1, Math.round(len / 3));
+    for (let k = 0; k <= piers; k++) {
+      const d = (k * len) / piers;
+      const c = { x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len };
+      const c2 = { x: c.x + (q.x - p.x) / len / 1000, y: c.y + (q.y - p.y) / len / 1000 };
+      out.brick.push(along(metricBox(0.33, body, 0.33), c, c2, GROUND_Y + body / 2));
+      out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + h - 0.02));
+    }
+  }
+}
+
+/** Hedge as overlapping clipped blocks of slightly varying size, so the top isn't ruler-straight. */
+function hedge(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
+  const len = Math.hypot(q.x - p.x, q.y - p.y);
+  const n = Math.max(1, Math.round(len / 1.1));
+  const at = (d: number) => ({ x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len });
+  for (let k = 0; k < n; k++) {
+    // Deterministic wobble so the hedge doesn't change shape between renders.
+    const w = Math.sin(k * 12.9898 + p.x * 78.233) * 0.5 + 0.5;
+    const hh = h * (0.95 + 0.08 * w);
+    const a = at(Math.max(0, (k * len) / n - 0.08));
+    const b = at(Math.min(len, ((k + 1) * len) / n + 0.08));
+    out.hedge.push(along(metricBox(Math.hypot(b.x - a.x, b.y - a.y), hh, 0.6 + 0.12 * w), a, b, GROUND_Y + hh / 2));
+  }
+}
+
+const PART_MATERIAL: Record<Part, () => THREE.Material> = {
+  timber: () => surfaceMaterial("fence"),
+  concrete: () => plainMaterial("#a19e96"),
+  brick: () => surfaceMaterial("brick"),
+  coping: () => plainMaterial("#bdb9b0"),
+  hedge: () => surfaceMaterial("hedge"),
+};
+
+/** Fences, walls and hedges along the plot boundary, stopping at buildings. Merged into one mesh per material. */
+function Boundary({ site: { boundary, boundaryEdges }, buildings }: { site: Site; buildings: V2[][] }) {
+  const parts = useMemo(() => {
+    const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], hedge: [] };
+    const edges = edgesOf({ boundary, boundaryEdges });
+    boundary.forEach((a, i) => {
+      const e = edges[i];
+      const b = boundary[(i + 1) % boundary.length];
+      if (!e || e.kind === "open" || e.height <= 0.05) return;
+      for (const [t0, t1] of clipSegmentOutside(a, b, buildings, 0.12)) {
+        const p = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
+        const q = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
+        if (e.kind === "fence") fence(out, p, q, e.height);
+        else if (e.kind === "wall") brickWall(out, p, q, e.height);
+        else hedge(out, p, q, e.height);
+      }
+    });
+    return (Object.keys(out) as Part[]).flatMap((k) => {
+      if (!out[k].length) return [];
+      const merged = mergeGeometries(out[k]);
+      out[k].forEach((g) => g.dispose());
+      return merged ? [{ part: k, geom: merged }] : [];
+    });
+  }, [boundary, boundaryEdges, buildings]);
+  useDisposeAll(useMemo(() => parts.map((p) => p.geom), [parts]));
+  return (
+    <group>
+      {parts.map(({ part, geom }) => (
+        <mesh key={part} geometry={geom} material={PART_MATERIAL[part]()} castShadow receiveShadow />
+      ))}
+    </group>
+  );
+}
+
+/** Light neutral massing for neighbours, so our house stands out. */
+const NEIGHBOUR_WALL = "#f7f7f5";
+const NEIGHBOUR_ROOF = "#aca7a2";
+const FLAT_ROOF = "#9a9894";
+
+function neighbourGeometry(n: Neighbour) {
+  const walls = new THREE.ExtrudeGeometry(flatShape(n.polygon), { depth: Math.max(0.5, n.eaves), bevelEnabled: false });
+  walls.rotateX(-Math.PI / 2);
+  walls.translate(0, GROUND_Y, 0);
+  if (n.roof === "flat" || n.polygon.length < 3) return { walls, slopes: null, gables: null };
+  const b = bbox(n.polygon);
+  const axis = !n.ridgeAxis || n.ridgeAxis === "auto" ? (b.w >= b.h ? "x" : "z") : n.ridgeAxis;
+  const style: RoofEnd = n.roof;
+  // A party wall at the left or right only meets a roof end when the ridge runs left-right.
+  const flushStart = axis === "x" && n.partySide === "left";
+  const flushEnd = axis === "x" && n.partySide === "right";
+  const m = roofGeometry({
+    x0: b.x0,
+    z0: b.y0,
+    x1: b.x1,
+    z1: b.y1,
+    y: GROUND_Y + n.eaves,
+    axis,
+    pitchDeg: n.pitchDeg ?? 35,
+    overhang: 0.25,
+    start: flushStart ? "flush" : style,
+    end: flushEnd ? "flush" : style,
+    wallT: 0,
+  });
+  return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables) };
+}
+
+function NeighbourMass({ n, ghost }: { n: Neighbour; ghost: boolean }) {
+  const geo = useMemo(() => neighbourGeometry(n), [n]);
+  useDisposeAll(useMemo(() => [geo.walls, geo.slopes, geo.gables], [geo]));
+  const mats = useMemo(() => {
+    const make = (color: string, side: THREE.Side = THREE.FrontSide) =>
+      new THREE.MeshStandardMaterial({ color, roughness: 0.92, side, transparent: ghost, opacity: ghost ? 0.3 : 1, depthWrite: !ghost });
+    // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
+    return { body: [make(FLAT_ROOF), make(n.color ?? NEIGHBOUR_WALL)], roof: make(n.roofColor ?? NEIGHBOUR_ROOF, THREE.DoubleSide), gable: make(n.color ?? NEIGHBOUR_WALL, THREE.DoubleSide) };
+  }, [n.color, n.roofColor, ghost]);
+  useEffect(() => () => [...mats.body, mats.roof, mats.gable].forEach((m) => m.dispose()), [mats]);
+  return (
+    <group>
+      <mesh geometry={geo.walls} material={mats.body} castShadow receiveShadow />
+      {geo.slopes && <mesh geometry={geo.slopes} material={mats.roof} castShadow receiveShadow />}
+      {geo.gables && <mesh geometry={geo.gables} material={mats.gable} castShadow receiveShadow />}
+    </group>
   );
 }
