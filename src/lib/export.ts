@@ -3,6 +3,7 @@ import { bbox, buildWalls, cutWall, modelBounds, pointInPolygon, polygonCentroid
 import { outwardSign, wallEnds, wallThickness } from "./walls";
 import { bayOutline } from "./openings";
 import { axisRect, DOUBLE_DOOR_M, doorSwing } from "./planMath";
+import { floorFlight, stairTreads } from "./stairs";
 import {
   changeCost,
   CONTINGENCY,
@@ -249,14 +250,20 @@ function stairsFrame(floor: Floor) {
 function stairsSvg(model: HouseModel, floor: Floor, X: (p: V2) => string, Y: (p: V2) => string): string {
   const { run, w, ax, ay, at, corners } = stairsFrame(floor);
   const up = model.floors.some((f) => f.level === floor.level + 1);
-  const steps = Math.max(6, Math.round(run / 0.25));
   const lines: string[] = [];
   lines.push(`<polygon points="${corners.map((p) => `${X(p)},${Y(p)}`).join(" ")}" fill="#fff"/>`);
-  for (let i = 1; i < steps; i++) {
-    const s = -run / 2 + (i * run) / steps;
-    const p = at(s, -w / 2);
-    const q = at(s, w / 2);
-    lines.push(`<line x1="${X(p)}" y1="${Y(p)}" x2="${X(q)}" y2="${Y(q)}"/>`);
+  const flight = up ? floorFlight(model, floor) : null;
+  if (flight?.turn) {
+    // Winders at the foot: draw every tread's outline.
+    for (const t of stairTreads(flight)) lines.push(`<polygon points="${t.pts.map((p) => `${X(p)},${Y(p)}`).join(" ")}"/>`);
+  } else {
+    const steps = Math.max(6, Math.round(run / 0.25));
+    for (let i = 1; i < steps; i++) {
+      const s = -run / 2 + (i * run) / steps;
+      const p = at(s, -w / 2);
+      const q = at(s, w / 2);
+      lines.push(`<line x1="${X(p)}" y1="${Y(p)}" x2="${X(q)}" y2="${Y(q)}"/>`);
+    }
   }
   // Arrow along the centre line: up the flight on the floor it starts from, down it on the floor above.
   const from = at(up ? -run / 2 + 0.15 : run / 2 - 0.15, 0);

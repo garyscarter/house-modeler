@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { askText } from "../components/Dialogs";
+import { STAIRS_VECTOR, stairTreads, WINDERS } from "../lib/stairs";
 import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
 import { CATALOGUE, CATEGORIES, byId, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
@@ -1045,9 +1046,19 @@ function StairsMarker({
   const ay = d === "up" ? -1 : d === "down" ? 1 : 0;
   const tip = { x: s.x + (ax * len) / 2, y: s.y + (ay * len) / 2 };
   const tail = { x: s.x - (ax * len) / 2, y: s.y - (ay * len) / 2 };
+  // Winder lines at a turned foot, in image px.
+  const turn = floor.stairsTurn === "left" ? -1 : floor.stairsTurn === "right" ? 1 : 0;
+  const winders = turn
+    ? stairTreads({ centre: s, dir: STAIRS_VECTOR[d], run: len, width: w, rise: 1, turn })
+        .slice(0, WINDERS)
+        .map((t) => t.pts)
+    : [];
   return (
     <g className={interactive ? "plan-handle" : undefined} style={interactive ? undefined : { pointerEvents: "none" }} onPointerDown={onPointerDown} onClick={(e) => e.stopPropagation()}>
       <rect x={s.x - rw / 2} y={s.y - rh / 2} width={rw} height={rh} fill="#7c3aed" fillOpacity={0.2} stroke="#7c3aed" strokeWidth={stroke} />
+      {winders.map((pts, i) => (
+        <polyline key={i} points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#7c3aed" strokeWidth={stroke * 0.7} />
+      ))}
       <line x1={tail.x} y1={tail.y} x2={tip.x} y2={tip.y} stroke="#7c3aed" strokeWidth={stroke * 2} />
       <circle cx={tip.x} cy={tip.y} r={handleR * 0.7} fill="#7c3aed" />
       <title>Stairs (rise towards the dot). Drag to move; set direction and size in the floor panel.</title>

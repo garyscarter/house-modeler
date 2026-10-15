@@ -7,6 +7,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 - **Delegate to subagents.** Split work into independent pieces and hand each to a subagent, as many as the job needs. Run independent ones in parallel, each in its own git worktree, and merge, check and push the results yourself.
 - **Name every subagent after a famous pop star** (Madonna, Beyoncé, Adele, Prince, Kylie, Dua Lipa, ...), and use the name in the agent's description and in its prompt.
 - **Pick the model and effort to fit the job.** Use Opus with high effort for judgement-heavy or visual work (matching photos, rendering, geometry, reviews). Use Sonnet with medium to high effort for well-specified changes (removals, refactors, wiring, data edits). Use Haiku with low effort for quick lookups and mechanical edits.
+- Tell the user which subagents you launched, what each is doing, and the model and effort each was given (a short table), and repeat that summary when reporting their results.
 - Give each subagent a self-contained prompt: the goal, the files it owns, the files other agents are touching (to stay out of), how to verify, and the commit trailer to use.
 
 ## Working on it

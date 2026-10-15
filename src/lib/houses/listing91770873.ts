@@ -133,9 +133,11 @@ export function listing91770873(image: string): HouseModel {
     ],
   );
   // Ground-floor flight rises towards the top of the plan, arriving at the landing.
+  // Its bottom steps wind a quarter turn so you step on from the hall side (photos).
   ground.stairsDir = "up";
   ground.stairsLen = 2.3;
   ground.stairsWidth = 0.9;
+  ground.stairsTurn = "right";
 
   const first = base(
     "Floor 1",
