@@ -12,6 +12,7 @@ import {
   setDown,
   type RoofBlock,
 } from "./roof";
+import { EXT_WALL_T } from "./geometry";
 import { footAt, roofParts } from "./roofParts";
 import type { HouseModel } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
@@ -233,7 +234,7 @@ describe("flat roofs", () => {
     ];
     const fr = planFlat([L], [], [], 2.4, 2.7)!;
     expect(fr.edges).toHaveLength(6);
-    const W = 0.06 + FLAT_OVERHANG;
+    const W = EXT_WALL_T / 2 + FLAT_OVERHANG;
     // The edge along z = 2 from x = 2 to 4 has an inside corner at x = 2 and an outside one at x = 4.
     const inner = fr.edges.find((e) => e.axis === "x" && Math.abs(e.at - 2) < 1e-9)!;
     expect(inner.fascia[0]).toBeCloseTo(-W);

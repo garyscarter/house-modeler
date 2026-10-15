@@ -1,9 +1,13 @@
 import type { Floor, Opening, Pt, Room } from "../types";
 
-/** Wall thickness used for rendering, metres. Walls are centred on the traced lines. */
-export const WALL_T = 0.12;
-/** External wall thickness (roofs sit on the outer edge of these). */
-export const EXT_WALL_T = WALL_T;
+/** Internal (partition) wall thickness, metres. Walls are centred on the traced lines. */
+export const WALL_T = 0.1;
+/**
+ * External wall thickness: a 1920s-30s cavity wall is about 0.25 m, which
+ * gives windows a proper reveal. Roofs sit on the outer edge of these, so
+ * this is the single source of truth for both.
+ */
+export const EXT_WALL_T = 0.25;
 
 export interface V2 {
   x: number;
@@ -286,15 +290,43 @@ export interface OpeningPlacement {
   centre: V2;
   dir: V2;
   width: number;
+  /** Bottom and top of the hole cut in the wall, metres above the floor. */
+  y0: number;
+  y1: number;
 }
 
-export function cutWall(
-  wall: WallSeg,
-  ceiling: number,
-  doorH = 2.05,
-  sillH = 0.9,
-  windowTop = 2.1,
-): { pieces: WallPiece[]; placements: OpeningPlacement[] } {
+/** Default head heights: internal doors take a 1981 mm leaf plus frame; glazed doorsets and garage doors run a little higher. */
+const DEFAULT_HEAD: Record<Opening["kind"], number> = {
+  door: 2.05,
+  front: 2.05,
+  french: 2.1,
+  bifold: 2.1,
+  patio: 2.1,
+  garage: 2.15,
+  window: 2.1,
+  bay: 2.1,
+  gap: Infinity,
+};
+export const DEFAULT_SILL = 0.9;
+
+/** Sill (bottom of the glazing) of a window or bay, metres above the floor. */
+export function windowSill(op: Opening): number {
+  return op.sill ?? DEFAULT_SILL;
+}
+
+/**
+ * The hole an opening cuts in its wall, metres above the floor. Windows run
+ * from their sill to their head; doors and bays run from the floor (a bay's
+ * floor is part of the room); gaps are full height. Clamped to the ceiling.
+ */
+export function openingHeights(op: Opening, ceiling: number): { y0: number; y1: number } {
+  const y1 = Math.min(ceiling, op.kind === "gap" ? ceiling : op.head ?? DEFAULT_HEAD[op.kind]);
+  const y0 = op.kind === "window" ? Math.max(0, Math.min(windowSill(op), y1 - 0.1)) : 0;
+  return { y0, y1 };
+}
+
+/** Cut a wall's openings out at their own sill and head heights. */
+export function cutWall(wall: WallSeg, ceiling: number): { pieces: WallPiece[]; placements: OpeningPlacement[] } {
   const dx = wall.b.x - wall.a.x;
   const dy = wall.b.y - wall.a.y;
   const len = Math.hypot(dx, dy);
@@ -307,20 +339,15 @@ export function cutWall(
   for (const { opening, t } of ops) {
     const w = Math.min(opening.widthM, len);
     let t0 = Math.max(0, t - w / 2);
-    let t1 = Math.min(len, t + w / 2);
+    const t1 = Math.min(len, t + w / 2);
     if (t0 < cursor) t0 = cursor;
     if (t1 - t0 < 0.2) continue;
     if (t0 > cursor) pieces.push({ a: at(cursor), b: at(t0), y0: 0, y1: ceiling });
-    if (opening.kind === "gap") {
-      // Full-height opening: nothing left of the wall here.
-    } else if (opening.kind === "door" || opening.kind === "front" || opening.kind === "garage" || opening.kind === "patio") {
-      pieces.push({ a: at(t0), b: at(t1), y0: opening.kind === "door" || opening.kind === "front" ? doorH : 2.15, y1: ceiling });
-    } else {
-      // window or bay
-      pieces.push({ a: at(t0), b: at(t1), y0: 0, y1: sillH });
-      pieces.push({ a: at(t0), b: at(t1), y0: windowTop, y1: ceiling });
-    }
-    placements.push({ opening, centre: at((t0 + t1) / 2), dir, width: t1 - t0 });
+    const { y0, y1 } = openingHeights(opening, ceiling);
+    // What is left of the wall below the hole (a window's sill) and above it (the lintel).
+    if (y0 > 0.01) pieces.push({ a: at(t0), b: at(t1), y0: 0, y1: y0 });
+    if (y1 < ceiling - 0.01) pieces.push({ a: at(t0), b: at(t1), y0: y1, y1: ceiling });
+    placements.push({ opening, centre: at((t0 + t1) / 2), dir, width: t1 - t0, y0, y1 });
     cursor = t1;
   }
   if (cursor < len - 0.01) pieces.push({ a: at(cursor), b: at(len), y0: 0, y1: ceiling });
@@ -414,6 +441,8 @@ export function diffWalls(a: WallSeg[], b: WallSeg[]): WallSeg[] {
         a: { x: w.a.x + dir.x * t0, y: w.a.y + dir.y * t0 },
         b: { x: w.a.x + dir.x * t1, y: w.a.y + dir.y * t1 },
         openings: [],
+        // Kept so the highlight can match the wall's thickness.
+        exterior: w.exterior,
       });
     };
     for (const [c0, c1] of covered) {

@@ -1,24 +1,26 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { useLoader } from "@react-three/fiber";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
+import { wallThickness } from "../lib/walls";
 import { Roof } from "./Roof";
 import { Fixtures } from "./Fixtures";
+import { RoomLabels } from "./RoomLabels";
+import { GROUND_Y } from "./Site";
+import { buildShell } from "./shell";
+import { FLOOR_COLOUR, getMaterial, type MatSpec } from "./textures";
 import {
   type WallSeg,
   WALL_T,
   buildWalls,
-  coveredIntervals,
-  cutWall,
   diffWalls,
   modelBounds,
-  pointInPolygon,
   polygonCentroid,
   roomWorldPolygon,
   toWorld,
-  type OpeningPlacement,
   type V2,
   type WallPiece,
 } from "../lib/geometry";
@@ -93,28 +95,28 @@ export function House({
   showExterior,
 }: HouseProps) {
   const ext = exteriorOf(model);
+  const floors = model.floors.filter((f) => !visibleLevels || visibleLevels.includes(f.level));
+  // Labels go on the topmost visible floor only: lower floors' labels would
+  // be read through the floors and walls above them (see RoomLabels).
+  const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
   return (
     <group>
       {showExterior && !ghost && ext.showRoof && <Roof model={model} />}
       {showExterior && !ghost && <ExteriorPins model={model} photos={photos} />}
-      {model.floors
-        .filter((f) => !visibleLevels || visibleLevels.includes(f.level))
-        .map((floor) => (
-          <FloorGroup
-            key={floor.id}
-            model={model}
-            floor={floor}
-            photos={photos}
-            ghost={!!ghost}
-            showLabels={showLabels}
-            showCeilings={showCeilings}
-            selectedRoomId={selectedRoomId}
-            onSelectRoom={onSelectRoom}
-            otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
-            wallColor={ext.wallColor}
-            trimColor={ext.trimColor}
-          />
-        ))}
+      {floors.map((floor) => (
+        <FloorGroup
+          key={floor.id}
+          model={model}
+          floor={floor}
+          photos={photos}
+          ghost={!!ghost}
+          showLabels={showLabels && floor.level === labelLevel}
+          showCeilings={showCeilings}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={onSelectRoom}
+          otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
+        />
+      ))}
     </group>
   );
 }
@@ -129,8 +131,6 @@ function FloorGroup({
   selectedRoomId,
   onSelectRoom,
   otherFloor,
-  wallColor,
-  trimColor,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -141,8 +141,6 @@ function FloorGroup({
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   otherFloor?: Floor | null;
-  wallColor: string;
-  trimColor: string;
 }) {
   const y0 = floorBaseY(model, floor);
   const H = model.ceilingHeight;
@@ -151,93 +149,138 @@ function FloorGroup({
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
+
   // Ghost mode with a comparison draws only the removed walls.
-  const walls = ghost && otherWalls ? changed : allWalls;
-  const cut = useMemo(() => walls.map((w) => cutWall(w, w.height !== undefined ? Math.min(w.height, H) : H)), [walls, H]);
-  // Carry walls up through the slab where there is a floor above, so the
-  // outside face is continuous between storeys. Elsewhere (single-storey
-  // parts under a flat roof) they stop at the ceiling.
-  const upperPolys = useMemo(
-    () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
-    [model.floors, floor.level],
-  );
-  const bands = useMemo(
-    () =>
-      walls.map((w) => {
-        if (w.height !== undefined || !upperPolys.length) return [];
-        const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
-        const at = (t: number) => ({ x: w.a.x + ((w.b.x - w.a.x) * t) / len, y: w.a.y + ((w.b.y - w.a.y) * t) / len });
-        return coveredIntervals(w, upperPolys).map(([t0, t1]): WallPiece => ({ a: at(t0), b: at(t1), y0: H, y1: H + model.slabThickness }));
-      }),
-    [walls, upperPolys, H, model.slabThickness],
-  );
-  const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
-  const colourOf = (w: WallSeg) =>
-    w.color ?? (w.exterior ? (w.roomId && roomsById.get(w.roomId)?.exteriorColor) || wallColor : "#f4f1ea");
-  const pieces = cut.flatMap((c, i) => [...c.pieces, ...bands[i]].map((p) => ({ piece: p, color: colourOf(walls[i]) })));
-  const placements = cut.flatMap((c, i) => c.placements.map((pl) => ({ placement: pl, wall: walls[i] })));
-  const worldRooms = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
+  if (ghost)
+    return (
+      <group position={[0, y0, 0]}>
+        {(otherWalls ? changed : allWalls).map((w, i) => (
+          <WallBox key={i} piece={{ a: w.a, b: w.b, y0: 0, y1: w.height ?? H }} thickness={wallThickness(w)}>
+            <meshStandardMaterial color="#e0332f" transparent opacity={0.28} depthWrite={false} />
+          </WallBox>
+        ))}
+      </group>
+    );
 
   return (
     <group position={[0, y0, 0]}>
-      {!ghost && (
-        <>
-          {/* Structural slab under the whole floor so nothing floats. */}
-          {floor.rooms.map((room) => (
-            <RoomFloor
-              key={room.id}
-              floor={floor}
-              room={room}
-              photos={photos}
-              selected={room.id === selectedRoomId}
-              onSelect={() => onSelectRoom?.(floor, room)}
-              slab={model.slabThickness}
-            />
-          ))}
-          {showCeilings &&
-            floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} />)}
-        </>
-      )}
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} />
+      {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} />)}
 
-      {pieces.map(({ piece, color }, i) => (
-        <WallBox key={i} piece={piece} ghost={ghost}>
-          {ghost ? (
-            <meshStandardMaterial color="#e0332f" transparent opacity={0.28} depthWrite={false} />
-          ) : (
-            <meshStandardMaterial color={color} roughness={0.9} />
-          )}
-        </WallBox>
-      ))}
-
-      {!ghost &&
-        placements.map(({ placement, wall }, i) => (
-          <OpeningMesh
-            key={i}
-            placement={placement}
-            trimColor={trimColor}
-            wallColor={(wall.roomId && roomsById.get(wall.roomId)?.exteriorColor) || wallColor}
-            outward={outwardNormal(placement, worldRooms)}
-          />
-        ))}
-
-      {!ghost &&
-        otherWalls &&
+      {otherWalls &&
         changed.map((w, i) => (
-          <WallBox key={"new" + i} piece={{ a: w.a, b: w.b, y0: 0, y1: H }} ghost thickness={WALL_T + 0.04}>
+          <WallBox key={"new" + i} piece={{ a: w.a, b: w.b, y0: 0, y1: H }} thickness={wallThickness(w) + 0.04}>
             <meshStandardMaterial color="#16a34a" transparent opacity={0.55} depthWrite={false} />
           </WallBox>
         ))}
 
-      {!ghost && floor.stairs && hasAbove && <Stairs floor={floor} height={H + model.slabThickness} />}
+      {floor.stairs && hasAbove && <Stairs floor={floor} height={H + model.slabThickness} />}
 
-      {!ghost && <Fixtures floor={floor} />}
+      <Fixtures floor={floor} />
 
-      {!ghost && showLabels && floor.rooms.map((room) => <RoomLabel key={room.id} floor={floor} room={room} />)}
+      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} />}
 
-      {!ghost && floor.rooms.map((room) => <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />)}
+      {floor.rooms.map((room) => (
+        <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />
+      ))}
     </group>
   );
 }
+
+/**
+ * Walls, joinery and floors of one floor. Walls and openings are merged into
+ * one mesh per material (see shell.ts); floors stay one mesh per room so a
+ * click can select the room.
+ */
+function FloorShell({
+  model,
+  floor,
+  walls,
+  photos,
+  selectedRoomId,
+  onSelectRoom,
+}: {
+  model: HouseModel;
+  floor: Floor;
+  walls: WallSeg[];
+  photos: Photo[];
+  selectedRoomId?: string | null;
+  onSelectRoom?: (floor: Floor, room: Room) => void;
+}) {
+  const ext = exteriorOf(model);
+  const H = model.ceilingHeight;
+  const slab = model.slabThickness;
+  const lowest = Math.min(...model.floors.map((f) => f.level));
+  const baseY = floorBaseY(model, floor);
+  const upperPolys = useMemo(
+    () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
+    [model.floors, floor.level],
+  );
+  const finish = ext.wallFinish ?? "render";
+  const shell = useMemo(
+    () =>
+      buildShell({
+        floor,
+        walls,
+        ceiling: H,
+        slab,
+        upperPolys,
+        // The lowest floor's external walls run down to the garden.
+        plinthY: floor.level === lowest ? GROUND_Y - baseY - 0.02 : null,
+        baseY,
+        wallFinish: finish,
+        wallColor: ext.wallColor,
+        trimColor: ext.trimColor,
+      }),
+    [floor, walls, H, slab, upperPolys, lowest, baseY, finish, ext.wallColor, ext.trimColor],
+  );
+  useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
+
+  // One slab under all the rooms so nothing floats.
+  const slabGeom = useMemo(() => {
+    const parts = floor.rooms.map((r) => new THREE.ExtrudeGeometry(shapeFrom(roomWorldPolygon(floor, r)), { depth: slab, bevelEnabled: false }));
+    const merged = parts.length ? mergeGeometries(parts) : null;
+    parts.forEach((g) => g.dispose());
+    return merged;
+  }, [floor, slab]);
+  useEffect(() => () => slabGeom?.dispose(), [slabGeom]);
+
+  const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
+  const polys = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
+  return (
+    <group>
+      {slabGeom && <mesh geometry={slabGeom} rotation={[-Math.PI / 2, 0, 0]} position={[0, -slab, 0]} material={getMaterial(SLAB)} receiveShadow />}
+      {floor.rooms.map((room, i) => (
+        <RoomFloor
+          key={room.id}
+          room={room}
+          poly={polys[i]}
+          photos={photos}
+          selected={room.id === selectedRoomId}
+          onSelect={() => onSelectRoom?.(floor, room)}
+        />
+      ))}
+      {shell.bayFloors.map((b, i) => {
+        const room = b.roomId ? roomsById.get(b.roomId) : undefined;
+        return room ? (
+          <RoomFloor
+            key={"bay" + i}
+            room={room}
+            poly={b.poly}
+            photos={photos}
+            selected={room.id === selectedRoomId}
+            onSelect={() => onSelectRoom?.(floor, room)}
+          />
+        ) : null;
+      })}
+      {shell.meshes.map((m) => (
+        <mesh key={m.key} geometry={m.geometry} material={getMaterial(m.spec)} castShadow={m.castShadow} receiveShadow />
+      ))}
+    </group>
+  );
+}
+
+const SLAB: MatSpec = { kind: "plain", color: "#b8b3a8", roughness: 0.9 };
 
 function shapeFrom(poly: V2[]): THREE.Shape {
   const s = new THREE.Shape();
@@ -246,54 +289,37 @@ function shapeFrom(poly: V2[]): THREE.Shape {
   return s;
 }
 
-function RoomFloor({
-  floor,
-  room,
-  photos,
-  selected,
-  onSelect,
-  slab,
-}: {
-  floor: Floor;
-  room: Room;
-  photos: Photo[];
-  selected: boolean;
-  onSelect: () => void;
-  slab: number;
-}) {
-  const poly = useMemo(() => roomWorldPolygon(floor, room), [floor, room]);
-  const geom = useMemo(() => new THREE.ShapeGeometry(shapeFrom(poly)), [poly]);
-  const slabGeom = useMemo(() => {
-    const g = new THREE.ExtrudeGeometry(shapeFrom(poly), { depth: slab, bevelEnabled: false });
-    return g;
-  }, [poly, slab]);
-  const photo = room.floorPhotoId ? photos.find((p) => p.id === room.floorPhotoId) : undefined;
-  const color = selected ? "#ffd166" : roomColor(room);
+/** The floor finish of a room: a textured finish in the room's colour, or the plain room colour. */
+function floorSpec(room: Room, selected: boolean): MatSpec {
+  const finish = room.floorFinish ?? "plain";
+  if (finish === "plain") return { kind: "floor", finish, color: roomColor(room), selected };
+  return { kind: "floor", finish, color: room.color ?? FLOOR_COLOUR[finish], selected };
+}
 
+function RoomFloor({ room, poly, photos, selected, onSelect }: { room: Room; poly: V2[]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
+  // Shape coordinates are metres, so the UVs keep boards and tiles at their real size.
+  const geom = useMemo(() => new THREE.ShapeGeometry(shapeFrom(poly)), [poly]);
+  useEffect(() => () => geom.dispose(), [geom]);
+  const photo = room.floorPhotoId ? photos.find((p) => p.id === room.floorPhotoId) : undefined;
+  const material = getMaterial(floorSpec(room, selected));
   return (
-    <group>
-      <mesh geometry={slabGeom} rotation={[-Math.PI / 2, 0, 0]} position={[0, -slab, 0]} receiveShadow>
-        <meshStandardMaterial color="#b8b3a8" />
-      </mesh>
-      <mesh
-        geometry={geom}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.012, 0]}
-        receiveShadow
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect();
-        }}
-      >
-        {photo ? (
-          <Suspense fallback={<meshStandardMaterial color={color} />}>
-            <PhotoFloorMaterial url={photo.dataUrl} tint={selected ? "#ffd166" : "#ffffff"} />
-          </Suspense>
-        ) : (
-          <meshStandardMaterial color={color} roughness={0.85} />
-        )}
-      </mesh>
-    </group>
+    <mesh
+      geometry={geom}
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.012, 0]}
+      receiveShadow
+      material={photo ? undefined : material}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+    >
+      {photo && (
+        <Suspense fallback={<primitive object={material} attach="material" />}>
+          <PhotoFloorMaterial url={photo.dataUrl} tint={selected ? "#ffd166" : "#ffffff"} />
+        </Suspense>
+      )}
+    </mesh>
   );
 }
 
@@ -308,6 +334,7 @@ function PhotoFloorMaterial({ url, tint }: { url: string; tint: string }) {
 function RoomCeiling({ floor, room, height }: { floor: Floor; room: Room; height: number }) {
   const poly = useMemo(() => roomWorldPolygon(floor, room), [floor, room]);
   const geom = useMemo(() => new THREE.ShapeGeometry(shapeFrom(poly)), [poly]);
+  useEffect(() => () => geom.dispose(), [geom]);
   return (
     <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
       <meshStandardMaterial color="#f3f3f0" emissive="#ffffff" emissiveIntensity={0.35} side={THREE.DoubleSide} />
@@ -315,240 +342,18 @@ function RoomCeiling({ floor, room, height }: { floor: Floor; room: Room; height
   );
 }
 
-function WallBox({
-  piece,
-  ghost,
-  children,
-  thickness = WALL_T,
-}: {
-  piece: WallPiece;
-  ghost: boolean;
-  children: React.ReactNode;
-  thickness?: number;
-}) {
+/** A plain box along a wall line, used for the compare overlays. */
+function WallBox({ piece, children, thickness }: { piece: WallPiece; children: React.ReactNode; thickness: number }) {
   const dx = piece.b.x - piece.a.x;
   const dz = piece.b.y - piece.a.y;
   const len = Math.hypot(dx, dz);
   const h = piece.y1 - piece.y0;
   if (len < 0.01 || h < 0.01) return null;
   return (
-    <mesh
-      position={[(piece.a.x + piece.b.x) / 2, piece.y0 + h / 2, (piece.a.y + piece.b.y) / 2]}
-      rotation={[0, -Math.atan2(dz, dx), 0]}
-      castShadow={!ghost}
-      receiveShadow={!ghost}
-    >
+    <mesh position={[(piece.a.x + piece.b.x) / 2, piece.y0 + h / 2, (piece.a.y + piece.b.y) / 2]} rotation={[0, -Math.atan2(dz, dx), 0]}>
       <boxGeometry args={[len, h, thickness]} />
       {children}
     </mesh>
-  );
-}
-
-/** Lighten (>1) or darken (<1) a hex colour. */
-function shade(hex: string, f: number): string {
-  const c = new THREE.Color(hex);
-  c.r = Math.min(1, c.r * f);
-  c.g = Math.min(1, c.g * f);
-  c.b = Math.min(1, c.b * f);
-  return "#" + c.getHexString();
-}
-
-/** Unit normal pointing out of the building at an opening (or null when unknown). */
-function outwardNormal(pl: OpeningPlacement, rooms: V2[][]): V2 | null {
-  const n = { x: -pl.dir.y, y: pl.dir.x };
-  const probe = (sign: number) => ({ x: pl.centre.x + n.x * 0.4 * sign, y: pl.centre.y + n.y * 0.4 * sign });
-  const inPlus = rooms.some((r) => pointInPolygon(probe(1), r));
-  const inMinus = rooms.some((r) => pointInPolygon(probe(-1), r));
-  if (inPlus && !inMinus) return { x: -n.x, y: -n.y };
-  if (inMinus && !inPlus) return n;
-  return null;
-}
-
-function OpeningMesh({
-  placement,
-  trimColor,
-  wallColor,
-  outward,
-}: {
-  placement: OpeningPlacement;
-  trimColor: string;
-  wallColor: string;
-  outward: V2 | null;
-}) {
-  const { opening, centre, dir, width } = placement;
-  const rotY = -Math.atan2(dir.y, dir.x);
-  if (opening.kind === "gap") return null;
-  if (opening.kind === "window" || opening.kind === "bay") {
-    // Bays project outward; the local +z axis is the wall normal, so pick its sign from `outward`.
-    const nz = { x: -dir.y, y: dir.x };
-    const sign = outward ? Math.sign(outward.x * nz.x + outward.y * nz.y) || 1 : 1;
-    const depth = opening.kind === "bay" ? 0.6 : 0;
-    const off = depth ? (sign * depth) / 2 + (sign * WALL_T) / 2 : 0;
-    return (
-      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        {depth > 0 && (
-          <>
-            <mesh position={[0, 0.45, off]} castShadow>
-              <boxGeometry args={[width, 0.9, depth]} />
-              <meshStandardMaterial color={wallColor} />
-            </mesh>
-            <mesh position={[0, 2.25, off]} castShadow>
-              <boxGeometry args={[width, 0.3, depth]} />
-              <meshStandardMaterial color={wallColor} />
-            </mesh>
-            <mesh position={[0, 2.45, off]} castShadow>
-              <boxGeometry args={[width + 0.2, 0.1, depth + 0.15]} />
-              <meshStandardMaterial color="#4b4b4b" />
-            </mesh>
-          </>
-        )}
-        <mesh position={[0, 1.5, off]}>
-          <boxGeometry args={[width, 1.2, depth || 0.02]} />
-          <meshPhysicalMaterial color="#9ecbe6" transparent opacity={0.45} roughness={0.1} />
-        </mesh>
-        <mesh position={[0, 0.9, off]}>
-          <boxGeometry args={[width + 0.06, 0.06, (depth || WALL_T) + 0.03]} />
-          <meshStandardMaterial color={trimColor} />
-        </mesh>
-        <mesh position={[0, 2.1, off]}>
-          <boxGeometry args={[width + 0.06, 0.06, (depth || WALL_T) + 0.03]} />
-          <meshStandardMaterial color={trimColor} />
-        </mesh>
-      </group>
-    );
-  }
-  if (opening.kind === "front") {
-    // Closed front door: frame, leaf with four raised panels below a glazed top light, letterbox and handle.
-    const col = opening.color ?? "#b3202e";
-    const panelCol = shade(col, 1.15);
-    const H = 2.05;
-    const lw = width - 0.1; // leaf width inside the frame
-    const glassTop = H - 0.12;
-    const glassBot = H - 0.55;
-    const bar = (x: number, y: number, w: number, h: number, key: string) => (
-      <mesh key={key} position={[x, y, 0]}>
-        <boxGeometry args={[w, h, WALL_T + 0.04]} />
-        <meshStandardMaterial color={trimColor} />
-      </mesh>
-    );
-    const panelRows = [
-      [0.2, 0.7],
-      [0.85, 1.4],
-    ];
-    return (
-      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        {bar(-width / 2 + 0.03, H / 2, 0.06, H, "l")}
-        {bar(width / 2 - 0.03, H / 2, 0.06, H, "r")}
-        {bar(0, H - 0.03, width, 0.06, "t")}
-        <mesh position={[0, H / 2, 0]}>
-          <boxGeometry args={[lw, H - 0.06, 0.05]} />
-          <meshStandardMaterial color={col} roughness={0.55} />
-        </mesh>
-        {panelRows.flatMap(([y0, y1], r) =>
-          [0, 1].map((c) => (
-            <mesh key={`p${r}${c}`} position={[-lw / 4 + (c * lw) / 2, (y0 + y1) / 2, 0]}>
-              <boxGeometry args={[lw / 2 - 0.1, y1 - y0, 0.09]} />
-              <meshStandardMaterial color={panelCol} roughness={0.5} />
-            </mesh>
-          )),
-        )}
-        <mesh position={[0, (glassTop + glassBot) / 2, 0]}>
-          <boxGeometry args={[lw - 0.16, glassTop - glassBot, 0.09]} />
-          <meshPhysicalMaterial color="#c9dde8" transparent opacity={0.6} roughness={0.15} />
-        </mesh>
-        <mesh position={[0, 1.05, 0]}>
-          <boxGeometry args={[0.28, 0.05, 0.12]} />
-          <meshStandardMaterial color="#c8a24a" metalness={0.7} roughness={0.35} />
-        </mesh>
-        <mesh position={[lw / 2 - 0.12, 1.0, 0]}>
-          <boxGeometry args={[0.04, 0.16, 0.14]} />
-          <meshStandardMaterial color="#c8a24a" metalness={0.7} roughness={0.35} />
-        </mesh>
-        <mesh position={[0, 0.02, 0]}>
-          <boxGeometry args={[width, 0.04, WALL_T + 0.2]} />
-          <meshStandardMaterial color="#8a8a8a" />
-        </mesh>
-      </group>
-    );
-  }
-  if (opening.kind === "patio") {
-    // Sliding patio doors: two full-height glazed panels in a frame.
-    const panels = width > 3.2 ? 3 : 2;
-    const pw = width / panels;
-    const bar = (x: number, y: number, w: number, h: number) => (
-      <mesh key={`${x},${y}`} position={[x, y, 0]}>
-        <boxGeometry args={[w, h, WALL_T + 0.04]} />
-        <meshStandardMaterial color={trimColor} />
-      </mesh>
-    );
-    return (
-      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        {bar(0, 2.12, width + 0.08, 0.06)}
-        {bar(0, 0.03, width + 0.08, 0.06)}
-        {bar(-width / 2 - 0.02, 1.075, 0.06, 2.15)}
-        {bar(width / 2 + 0.02, 1.075, 0.06, 2.15)}
-        {Array.from({ length: panels - 1 }, (_, i) => bar(-width / 2 + (i + 1) * pw, 1.075, 0.05, 2.15))}
-        {Array.from({ length: panels }, (_, i) => (
-          <mesh key={"g" + i} position={[-width / 2 + (i + 0.5) * pw, 1.075, 0]}>
-            <boxGeometry args={[pw - 0.06, 2.05, 0.02]} />
-            <meshPhysicalMaterial color="#9ecbe6" transparent opacity={0.45} roughness={0.1} />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
-  if (opening.kind === "garage") {
-    // Panelled up-and-over door: frame, leaf, a grid of raised panels and a handle.
-    const col = opening.color ?? "#b3202e";
-    const panelCol = shade(col, 1.18);
-    const cols = width > 2.8 ? 3 : 2;
-    const rows = 3;
-    const pw = (width - 0.1) / cols;
-    const ph = 2.05 / rows;
-    return (
-      <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-        <mesh position={[0, 1.1, 0]}>
-          <boxGeometry args={[width + 0.12, 2.2, WALL_T + 0.02]} />
-          <meshStandardMaterial color={trimColor} />
-        </mesh>
-        <mesh position={[0, 1.05, 0]}>
-          <boxGeometry args={[width, 2.05, WALL_T + 0.04]} />
-          <meshStandardMaterial color={col} roughness={0.6} />
-        </mesh>
-        {Array.from({ length: cols * rows }, (_, i) => {
-          const c = i % cols;
-          const r = Math.floor(i / cols);
-          return (
-            <mesh key={i} position={[-width / 2 + 0.05 + (c + 0.5) * pw, 0.05 + (r + 0.5) * ph, 0]}>
-              <boxGeometry args={[pw - 0.12, ph - 0.12, WALL_T + 0.08]} />
-              <meshStandardMaterial color={panelCol} roughness={0.5} />
-            </mesh>
-          );
-        })}
-        <mesh position={[0, 1.0, 0]}>
-          <boxGeometry args={[0.16, 0.05, WALL_T + 0.12]} />
-          <meshStandardMaterial color="#222" metalness={0.6} roughness={0.4} />
-        </mesh>
-      </group>
-    );
-  }
-  // Door leaf, hinged at one jamb and swung open ~75 degrees.
-  const leaf = Math.min(width, 1.0);
-  return (
-    <group position={[centre.x, 0, centre.y]} rotation={[0, rotY, 0]}>
-      <group position={[-width / 2, 0, 0]} rotation={[0, -Math.PI * 0.42, 0]}>
-        <mesh position={[leaf / 2, 1.0, 0]}>
-          <boxGeometry args={[leaf, 2.0, 0.04]} />
-          <meshStandardMaterial color={opening.color ?? "#c9a26b"} />
-        </mesh>
-      </group>
-      {width > 1.4 && (
-        <mesh position={[0, 1.05, 0]}>
-          <boxGeometry args={[width, 2.0, 0.02]} />
-          <meshPhysicalMaterial color="#9ecbe6" transparent opacity={0.35} roughness={0.1} />
-        </mesh>
-      )}
-    </group>
   );
 }
 
@@ -563,30 +368,15 @@ function Stairs({ floor, height }: { floor: Floor; height: number }) {
   return (
     <group position={[c.x, 0, c.y]} rotation={[0, rot, 0]}>
       {Array.from({ length: steps }, (_, i) => (
-        <mesh key={i} position={[0, ((i + 0.5) * height) / steps, -run / 2 + ((i + 0.5) * run) / steps]} castShadow>
+        <mesh key={i} position={[0, ((i + 0.5) * height) / steps, -run / 2 + ((i + 0.5) * run) / steps]} castShadow material={getMaterial(STAIR)}>
           <boxGeometry args={[w, height / steps, run / steps]} />
-          <meshStandardMaterial color="#a89a86" />
         </mesh>
       ))}
     </group>
   );
 }
 
-function RoomLabel({ floor, room }: { floor: Floor; room: Room }) {
-  const c = useMemo(() => polygonCentroid(roomWorldPolygon(floor, room)), [floor, room]);
-  return (
-    <Html position={[c.x, 0.05, c.y]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-      <div className="room-label">
-        {room.name}
-        {room.dims && (
-          <span>
-            {room.dims.w.toFixed(2)} × {room.dims.h.toFixed(2)} m
-          </span>
-        )}
-      </div>
-    </Html>
-  );
-}
+const STAIR: MatSpec = { kind: "plain", color: "#a89a86", roughness: 0.8 };
 
 function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: Photo[] }) {
   const mine = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);

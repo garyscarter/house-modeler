@@ -1,0 +1,604 @@
+import type { Opening } from "../types";
+import type { OpeningPlacement, V2 } from "./geometry";
+import type { FaceQuad, FaceSlot, V3 } from "./walls";
+
+/**
+ * Doors and windows as simple parts (boxes and a few quads) in each
+ * opening's local frame, so the 3D view can merge a whole floor's joinery
+ * into a handful of meshes. Pure maths: no three.js here.
+ *
+ * Local frame: x runs along the wall (the placement's dir), y is up from the
+ * floor, z is the wall's +n side (n = dir turned anticlockwise on the plan).
+ * `out` says which way along z is outside (1 or -1), or 0 for an internal wall.
+ */
+
+/**
+ * Material of a part. "frame" is the house's window and door frame colour,
+ * "joinery" painted internal woodwork, "leaf"/"panel" the opening's own
+ * colour (and a lighter shade of it for raised panels).
+ */
+export type PartMat = "frame" | "joinery" | "glass" | "sill" | "leaf" | "panel" | "metal" | "lead" | "threshold";
+
+export interface Box {
+  mat: PartMat;
+  /** Centre, local frame. */
+  p: V3;
+  /** Size along the box's own x, y, z. */
+  s: V3;
+  /** Rotation about y (three.js convention: +x turns towards -z). */
+  ry?: number;
+}
+
+export interface OpeningParts {
+  boxes: Box[];
+  /** Extra faces (bay walls, bay roof and ceiling), local frame. */
+  quads: FaceQuad[];
+  /** Floor that extends into a bay, local frame (x, z) polygon. */
+  bayFloor?: { x: number; z: number }[];
+}
+
+/** Frame section: width of the outer frame bars and depth of the frame, metres. */
+const FW = 0.06;
+const FD = 0.07;
+/** Sash bars of opening casements. */
+const SW = 0.045;
+/** How far window and external door frames sit back from the outer face. */
+const SET_BACK = 0.04;
+/** Open angle of swing doors, radians. */
+const OPEN = (75 * Math.PI) / 180;
+
+export const DEFAULT_BAY_DEPTH = 0.6;
+
+/** Number of casements for a window of this width (UK: about 0.5-0.75 m each). */
+export function casements(width: number): number {
+  if (width < 0.75) return 1;
+  if (width < 1.5) return 2;
+  if (width < 2.4) return 3;
+  return 4;
+}
+
+/** Centre of a frame set into an external wall near its outer face, or the wall's centre line inside. */
+function frameZ(wallT: number, out: number): number {
+  return out ? out * (wallT / 2 - SET_BACK - FD / 2) : 0;
+}
+
+/** Rotation that turns local +x to the plan direction (dx, dz). */
+const rotTo = (dx: number, dz: number) => Math.atan2(-dz, dx);
+
+/** Move boxes built in a sub-frame (origin o, x axis at angle ry) into the parent frame. */
+function place(boxes: Box[], o: V3, ry: number): Box[] {
+  const c = Math.cos(ry);
+  const s = Math.sin(ry);
+  return boxes.map((b) => ({
+    ...b,
+    p: [o[0] + b.p[0] * c + b.p[2] * s, o[1] + b.p[1], o[2] - b.p[0] * s + b.p[2] * c],
+    ry: (b.ry ?? 0) + ry,
+  }));
+}
+
+/**
+ * A glazed frame from x0 to x1 and y0 to y1, centred at depth z: outer
+ * frame, mullions between `n` casements and, on tall frames, a transom with
+ * fixed top lights. Casements below the transom get a sash border on the
+ * side `face` (the outside), like uPVC or timber casement windows.
+ */
+function glazedFrame(x0: number, x1: number, y0: number, y1: number, z: number, n: number, face: number, transom = y1 - y0 > 1.05): Box[] {
+  const out: Box[] = [];
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const cx = (x0 + x1) / 2;
+  const bar = (x: number, y: number, bw: number, bh: number, d = FD, dz = 0, mat: PartMat = "frame") =>
+    out.push({ mat, p: [x, y, z + dz], s: [bw, bh, d] });
+  bar(x0 + FW / 2, y0 + h / 2, FW, h);
+  bar(x1 - FW / 2, y0 + h / 2, FW, h);
+  bar(cx, y1 - FW / 2, w, FW);
+  bar(cx, y0 + FW / 2, w, FW);
+  const cw = w / n;
+  for (let i = 1; i < n; i++) bar(x0 + i * cw, y0 + h / 2, FW, h);
+  const yt = transom ? y1 - Math.min(0.42, h * 0.3) : y1;
+  if (transom) bar(cx, yt, w, FW);
+  const sz = face * (FD / 2 + 0.006);
+  for (let i = 0; i < n; i++) {
+    const a = x0 + i * cw + (i ? FW / 2 : FW);
+    const b = x0 + (i + 1) * cw - (i < n - 1 ? FW / 2 : FW);
+    const lo = y0 + FW;
+    const hi = yt - (transom ? FW / 2 : FW);
+    // Glass in each cell, and in the top light above the transom.
+    out.push({ mat: "glass", p: [(a + b) / 2, (lo + hi) / 2, z], s: [b - a, hi - lo, 0.012] });
+    if (transom) {
+      const tlo = yt + FW / 2;
+      const thi = y1 - FW;
+      if (thi - tlo > 0.02) out.push({ mat: "glass", p: [(a + b) / 2, (tlo + thi) / 2, z], s: [b - a, thi - tlo, 0.012] });
+    }
+    // Sash border standing just proud of the frame on the outside.
+    if (b - a > 0.15 && hi - lo > 0.15) {
+      bar(a + SW / 2, (lo + hi) / 2, SW, hi - lo, 0.012, sz);
+      bar(b - SW / 2, (lo + hi) / 2, SW, hi - lo, 0.012, sz);
+      bar((a + b) / 2, hi - SW / 2, b - a, SW, 0.012, sz);
+      bar((a + b) / 2, lo + SW / 2, b - a, SW, 0.012, sz);
+    }
+  }
+  return out;
+}
+
+/** External sill under a window and the window board inside. */
+function sills(x0: number, x1: number, y: number, wallT: number, out: number): Box[] {
+  if (!out) return [];
+  const half = wallT / 2;
+  const fOut = Math.abs(frameZ(wallT, out)) + FD / 2;
+  const fIn = Math.abs(frameZ(wallT, out)) - FD / 2;
+  const dOut = half - fOut + 0.05;
+  const dIn = half + fIn + 0.025;
+  const w = x1 - x0;
+  return [
+    { mat: "sill", p: [(x0 + x1) / 2, y - 0.02, out * (fOut + dOut / 2)], s: [w + 0.12, 0.05, dOut] },
+    { mat: "joinery", p: [(x0 + x1) / 2, y - 0.008, out * (fIn - dIn / 2)], s: [w + 0.06, 0.025, dIn] },
+  ];
+}
+
+/**
+ * A door leaf hinged at local (hx, hz), `len` long, opened by `ang` towards
+ * the side `swing` (+1 or -1 along z), with its far end pointing along
+ * `toward` (+1 or -1 along x) when closed. `body` builds the leaf's parts in
+ * its own frame: x from the hinge along the leaf, z through its thickness.
+ */
+function leaf(hx: number, hz: number, len: number, toward: number, swing: number, ang: number, body: (len: number) => Box[]): Box[] {
+  const dx = toward * Math.cos(ang);
+  const dz = swing * Math.sin(ang);
+  return place(body(len), [hx, 0, hz], rotTo(dx, dz));
+}
+
+/** A flush or panelled leaf with lever handles on both faces near its far edge. */
+function plainLeaf(height: number, t = 0.04, handle = true) {
+  return (len: number): Box[] => {
+    const b: Box[] = [{ mat: "leaf", p: [len / 2, 0.012 + height / 2, 0], s: [len, height, t] }];
+    // Two shallow panels on each face give it a cottage-door look.
+    for (const side of [1, -1])
+      for (const [y0, y1] of [
+        [0.15, 0.85],
+        [1.05, height - 0.15],
+      ])
+        if (len > 0.45) b.push({ mat: "panel", p: [len / 2, (y0 + y1) / 2, (side * t) / 2], s: [len - 0.24, y1 - y0, 0.008] });
+    if (handle)
+      for (const side of [1, -1]) {
+        b.push({ mat: "metal", p: [len - 0.07, 1.0, side * (t / 2 + 0.03)], s: [0.025, 0.025, 0.06] });
+        b.push({ mat: "metal", p: [len - 0.12, 1.0, side * (t / 2 + 0.06)], s: [0.12, 0.022, 0.022] });
+      }
+    return b;
+  };
+}
+
+/** A glazed leaf or panel: stiles, rails, a kick rail and glass. */
+function glazedLeaf(height: number, t = 0.06, handle = true) {
+  return (len: number): Box[] => {
+    const st = Math.min(0.08, len / 5);
+    const kick = 0.16;
+    const b: Box[] = [
+      { mat: "frame", p: [st / 2, height / 2, 0], s: [st, height, t] },
+      { mat: "frame", p: [len - st / 2, height / 2, 0], s: [st, height, t] },
+      { mat: "frame", p: [len / 2, height - st / 2, 0], s: [len, st, t] },
+      { mat: "frame", p: [len / 2, kick / 2, 0], s: [len, kick, t] },
+      { mat: "glass", p: [len / 2, (kick + height - st) / 2, 0], s: [len - 2 * st, height - st - kick, 0.012] },
+    ];
+    if (handle)
+      for (const side of [1, -1]) b.push({ mat: "metal", p: [len - st / 2, 1.0, side * (t / 2 + 0.02)], s: [0.025, 0.14, 0.03] });
+    return b;
+  };
+}
+
+/** Outer frame (jambs and head) of an external door, and a threshold. */
+function doorFrame(w: number, h: number, z: number): Box[] {
+  return [
+    { mat: "frame", p: [-w / 2 + FW / 2, h / 2, z], s: [FW, h, FD] },
+    { mat: "frame", p: [w / 2 - FW / 2, h / 2, z], s: [FW, h, FD] },
+    { mat: "frame", p: [0, h - FW / 2, z], s: [w, FW, FD] },
+    { mat: "threshold", p: [0, 0.015, z], s: [w, 0.03, FD + 0.04] },
+  ];
+}
+
+/**
+ * Lining and architraves of an internal door: the lining covers the reveal
+ * through the wall and the architrave trims both faces.
+ */
+function doorLining(w: number, h: number, wallT: number): Box[] {
+  const lt = 0.025;
+  const aw = 0.065;
+  const b: Box[] = [
+    { mat: "joinery", p: [-w / 2 + lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
+    { mat: "joinery", p: [w / 2 - lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
+    { mat: "joinery", p: [0, h - lt / 2, 0], s: [w, lt, wallT + 0.004] },
+  ];
+  for (const side of [1, -1]) {
+    const z = side * (wallT / 2 + 0.008);
+    b.push(
+      { mat: "joinery", p: [-w / 2 - aw / 2 + lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
+      { mat: "joinery", p: [w / 2 + aw / 2 - lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
+      { mat: "joinery", p: [0, h + aw / 2, z], s: [w + 2 * aw - 2 * lt, aw, 0.016] },
+    );
+  }
+  return b;
+}
+
+/** Which side a door swings to: inwards on an external wall, +z inside, reversed by flipSwing. */
+function swingSide(op: Opening, out: number, outwards = false): number {
+  const base = out ? (outwards ? out : -out) : 1;
+  return op.flipSwing ? -base : base;
+}
+
+/** Parts for any opening except bays (see bayParts). */
+export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 0): OpeningParts {
+  const op = pl.opening;
+  const w = pl.width;
+  const { y0, y1 } = pl;
+  const hinge = op.flipHinge ? 1 : -1; // jamb the hinges are on, along x
+  const zf = frameZ(wallT, out);
+  const boxes: Box[] = [];
+  switch (op.kind) {
+    case "gap":
+    case "bay":
+      break;
+    case "window": {
+      boxes.push(...glazedFrame(-w / 2, w / 2, y0, y1, zf, casements(w), out || 1));
+      boxes.push(...sills(-w / 2, w / 2, y0, wallT, out));
+      break;
+    }
+    case "door": {
+      const s = swingSide(op, out);
+      if (out) {
+        // External door (back door): frame near the outside, leaf opening inwards.
+        boxes.push(...doorFrame(w, y1, zf));
+        const lw = w - 2 * FW;
+        boxes.push(...leaf(hinge * (lw / 2), zf + s * (FD / 2), lw, -hinge, s, OPEN, glazedLeaf(y1 - FW - 0.02, 0.05)));
+      } else {
+        boxes.push(...doorLining(w, y1, wallT));
+        const lh = y1 - 0.03;
+        const inner = w - 0.05;
+        const hz = s * (wallT / 2 - 0.02);
+        if (w > 1.25) {
+          // Wide openings get a pair of leaves.
+          boxes.push(...leaf(-inner / 2, hz, inner / 2, 1, s, OPEN, plainLeaf(lh)));
+          boxes.push(...leaf(inner / 2, hz, inner / 2, -1, s, OPEN, plainLeaf(lh)));
+        } else {
+          boxes.push(...leaf(hinge * (inner / 2), hz, inner, -hinge, s, OPEN, plainLeaf(lh)));
+        }
+      }
+      break;
+    }
+    case "front": {
+      // Closed panelled front door with a glazed top, letterbox and knob.
+      boxes.push(...doorFrame(w, y1, zf));
+      const lw = w - 2 * FW;
+      const lh = y1 - FW - 0.02;
+      const f = out || 1;
+      boxes.push({ mat: "leaf", p: [0, 0.012 + lh / 2, zf], s: [lw, lh, 0.05] });
+      const rows: [number, number][] = [
+        [0.2, 0.7],
+        [0.85, lh - 0.62],
+      ];
+      for (const [a, b] of rows)
+        for (const c of [-1, 1])
+          boxes.push({ mat: "panel", p: [(c * lw) / 4, (a + b) / 2, zf + f * 0.028], s: [lw / 2 - 0.1, b - a, 0.012] });
+      boxes.push({ mat: "glass", p: [0, lh - 0.33, zf], s: [lw - 0.16, 0.42, 0.06] });
+      boxes.push({ mat: "metal", p: [0, 0.78, zf + f * 0.032], s: [0.28, 0.05, 0.012] });
+      boxes.push({ mat: "metal", p: [-hinge * (lw / 2 - 0.1), 1.0, zf + f * 0.045], s: [0.05, 0.05, 0.05] });
+      boxes.push({ mat: "metal", p: [-hinge * (lw / 2 - 0.1), 1.0, zf - f * 0.045], s: [0.03, 0.03, 0.05] });
+      break;
+    }
+    case "garage": {
+      // Panelled up-and-over door in a frame near the outside.
+      boxes.push(...doorFrame(w, y1, zf));
+      const f = out || 1;
+      const lw = w - 2 * FW;
+      const lh = y1 - FW;
+      boxes.push({ mat: "leaf", p: [0, lh / 2, zf], s: [lw, lh, 0.04] });
+      const cols = w > 2.8 ? 3 : 2;
+      const rows = 3;
+      const pw = lw / cols;
+      const ph = (lh - 0.05) / rows;
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          boxes.push({ mat: "panel", p: [-lw / 2 + (c + 0.5) * pw, 0.05 + (r + 0.5) * ph, zf + f * 0.024], s: [pw - 0.1, ph - 0.1, 0.012] });
+      boxes.push({ mat: "metal", p: [0, 1.0, zf + f * 0.035], s: [0.16, 0.04, 0.03] });
+      break;
+    }
+    case "patio": {
+      // Sliding doors: two or three glazed panels on staggered tracks.
+      boxes.push(...doorFrame(w, y1, zf));
+      const n = w > 3.2 ? 3 : 2;
+      const lw = w - 2 * FW;
+      const pw = lw / n + 0.04;
+      for (let i = 0; i < n; i++) {
+        const x = -lw / 2 + ((i + 0.5) * lw) / n;
+        const dz = (i % 2 ? 1 : -1) * 0.018;
+        boxes.push(...place(glazedLeaf(y1 - FW - 0.03, 0.03, i === 0 || i === n - 1)(pw), [x - pw / 2, 0.03, zf + dz], 0));
+      }
+      break;
+    }
+    case "french": {
+      // A pair of glazed leaves, open; French doors open outwards by default.
+      boxes.push(...doorFrame(w, y1, zf));
+      const s = swingSide(op, out, true);
+      const lw = (w - 2 * FW) / 2;
+      const hz = zf + s * (FD / 2);
+      const lh = y1 - FW - 0.02;
+      boxes.push(...leaf(-lw, hz, lw, 1, s, (80 * Math.PI) / 180, glazedLeaf(lh, 0.055)));
+      boxes.push(...leaf(lw, hz, lw, -1, s, (80 * Math.PI) / 180, glazedLeaf(lh, 0.055)));
+      break;
+    }
+    case "bifold": {
+      boxes.push(...doorFrame(w, y1, zf));
+      boxes.push(...bifoldStack(w - 2 * FW, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true)));
+      break;
+    }
+  }
+  return { boxes, quads: [] };
+}
+
+/** Panels of a bi-fold door of this width (about 0.6-0.9 m each). */
+export function bifoldPanels(width: number): number {
+  return Math.max(2, Math.round(width / 0.8));
+}
+
+/**
+ * Bi-fold panels folded into a concertina stack against one jamb: each
+ * panel stands nearly square to the wall, alternately folding out and back.
+ */
+function bifoldStack(w: number, h: number, zf: number, side: number, swing: number): Box[] {
+  const n = bifoldPanels(w);
+  const pw = w / n;
+  const fold = (78 * Math.PI) / 180;
+  const boxes: Box[] = [];
+  let x = side * (w / 2);
+  let z = zf + swing * (FD / 2);
+  for (let i = 0; i < n; i++) {
+    const dx = -side * Math.cos(fold);
+    const dz = (i % 2 ? -1 : 1) * swing * Math.sin(fold);
+    boxes.push(...place(glazedLeaf(h, 0.05, i === n - 1)(pw), [x, 0.015, z], rotTo(dx, dz)));
+    x += dx * pw;
+    z += dz * pw;
+  }
+  return boxes;
+}
+
+/**
+ * Plan outline of a canted bay in the opening's local frame (x along the
+ * wall, z outward from the wall's centre line): a front face parallel to the
+ * wall and two sides at 45 degrees. Starts and ends on the wall's outer face.
+ */
+export function bayOutline(width: number, wallT: number, depth = DEFAULT_BAY_DEPTH): { x: number; z: number }[] {
+  const d = Math.max(0.1, Math.min(depth, (width - 0.4) / 2));
+  const z0 = wallT / 2;
+  return [
+    { x: -width / 2, z: z0 },
+    { x: -width / 2 + d, z: z0 + d },
+    { x: width / 2 - d, z: z0 + d },
+    { x: width / 2, z: z0 },
+  ];
+}
+
+type P2 = { x: number; z: number };
+
+/** Offset an open polyline by `d` to its left (x, z plan, z "up"), mitring the corners. */
+function offsetPolyline(pts: P2[], d: number): P2[] {
+  const normals = pts.slice(1).map((p, i) => {
+    const dx = p.x - pts[i].x;
+    const dz = p.z - pts[i].z;
+    const l = Math.hypot(dx, dz);
+    return { x: -dz / l, z: dx / l };
+  });
+  return pts.map((p, i) => {
+    const a = normals[Math.max(0, i - 1)];
+    const b = normals[Math.min(normals.length - 1, i)];
+    const m = { x: a.x + b.x, z: a.z + b.z };
+    const k = d / (1 + a.x * b.x + a.z * b.z);
+    return { x: p.x + m.x * k, z: p.z + m.z * k };
+  });
+}
+
+/**
+ * A canted bay: a solid base up to the sill, glazed on all three faces up
+ * to the head, a fascia and a small lead-covered roof hipped at the cants,
+ * a ceiling inside, and the room's floor carried out into it. `out` must be
+ * non-zero (bays only make sense on an external wall).
+ */
+export function bayParts(
+  pl: OpeningPlacement,
+  wallT: number,
+  out: 1 | -1,
+  roomId: string | null,
+  opts: { sill: number; plinth: number; depth?: number },
+): OpeningParts {
+  const w = pl.width;
+  const head = pl.y1;
+  const sill = Math.min(opts.sill, head - 0.3);
+  const outline = bayOutline(w, wallT, opts.depth);
+  // Work with z pointing outwards and flip at the end.
+  const BT = 0.2; // base wall thickness
+  const z0 = outline[0].z;
+  const inner = toWallFace(offsetPolyline(outline, -BT), z0);
+  const quads: FaceQuad[] = [];
+  const boxes: Box[] = [];
+  const inside: FaceSlot = roomId ? { kind: "inside", roomId } : { kind: "outside", roomId: null };
+  const outside: FaceSlot = { kind: "outside", roomId };
+  const V = (p: P2, y: number): V3 => [p.x, y, p.z * out];
+  /** Vertical face from p to q between y0 and y1, normal to its right (outward for the outline). */
+  const wall = (p: P2, q: P2, y0: number, y1: number, slot: FaceSlot, flip = false) => {
+    const dx = q.x - p.x;
+    const dz = q.z - p.z;
+    const l = Math.hypot(dx, dz);
+    const f = flip ? -1 : 1;
+    const n: V3 = [(-dz / l) * f, 0, (dx / l) * f * out];
+    quads.push(orient({ v: [V(p, y0), V(q, y0), V(q, y1), V(p, y1)], n, uv: uvs(p, q, y0, y1), slot }));
+  };
+  for (let i = 0; i < 3; i++) {
+    wall(outline[i], outline[i + 1], opts.plinth, sill, outside);
+    wall(inner[i], inner[i + 1], 0, sill, inside, true);
+    // Fascia band above the glazing.
+    wall(outline[i], outline[i + 1], head, head + 0.16, { kind: "part", mat: "frame" });
+    // Top of the base: a board right across, inside and out.
+    quads.push(orient({ v: [V(outline[i], sill), V(outline[i + 1], sill), V(inner[i + 1], sill), V(inner[i], sill)], n: [0, 1, 0], uv: flatUv(), slot: { kind: "part", mat: "sill" } }));
+  }
+  // Short returns where the base meets the main wall's hole.
+  for (const i of [0, 3]) {
+    const a = outline[i];
+    const b = inner[i];
+    quads.push(orient({ v: [V(a, 0), V(b, 0), V(b, sill), V(a, sill)], n: [0, 0, -out], uv: flatUv(), slot: inside }));
+  }
+  // Glazing on each face, set into the base wall.
+  for (let i = 0; i < 3; i++) {
+    const p = outline[i];
+    const q = outline[i + 1];
+    const dx = q.x - p.x;
+    const dz = q.z - p.z;
+    const l = Math.hypot(dx, dz);
+    const ux = dx / l;
+    const uz = dz / l;
+    // Inward normal (towards the room).
+    const nx = uz;
+    const nz = -ux;
+    const inset = 0.07;
+    const cx = (p.x + q.x) / 2 + nx * inset;
+    const cz = (p.z + q.z) / 2 + nz * inset;
+    const ry = rotTo(ux, uz * out);
+    // In this face's own frame +z points out of the bay when out = 1.
+    const frame = glazedFrame(-l / 2, l / 2, sill, head, 0, casements(l), out, head - sill > 1.05);
+    boxes.push(...place(frame, [cx, 0, cz * out], ry));
+  }
+  // Corner posts where the faces meet.
+  for (const i of [1, 2]) boxes.push({ mat: "frame", p: [outline[i].x, (sill + head) / 2, (outline[i].z - 0.05) * out], s: [0.09, head - sill, 0.09], ry: Math.PI / 4 });
+  // Ceiling inside the bay at the head.
+  const ceil = [outline[0], outline[1], outline[2], outline[3]];
+  quads.push(orient({ v: [V(ceil[0], head), V(ceil[1], head), V(ceil[2], head), V(ceil[3], head)], n: [0, -1, 0], uv: flatUv(), slot: inside }));
+  // Lead roof: eaves just outside the fascia, rising to the wall at 20 degrees, hipped at the cants.
+  const OV = 0.06;
+  const eaves = toWallFace(offsetPolyline(outline, OV), z0);
+  const ey = head + 0.16;
+  const D = eaves[1].z - outline[0].z;
+  const rise = D * Math.tan((20 * Math.PI) / 180);
+  // Hip tops: on the wall face, on the bisector of each cant corner.
+  const hipX = (c: P2, s: number) => c.x + s * D * Math.tan(Math.PI / 8);
+  const t1: P2 = { x: hipX(eaves[1], 1), z: outline[0].z };
+  const t2: P2 = { x: hipX(eaves[2], -1), z: outline[0].z };
+  const lead: FaceSlot = { kind: "part", mat: "lead" };
+  const up = (a: V3, b: V3, c: V3): V3 => {
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n: V3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    if (n[1] < 0) n = [-n[0], -n[1], -n[2]];
+    const l = Math.hypot(...n);
+    return [n[0] / l, n[1] / l, n[2] / l];
+  };
+  const roofFace = (v: [V3, V3, V3, V3]) => {
+    const n = up(v[0], v[1], v[2]);
+    quads.push(orient({ v, n, uv: flatUv(), slot: lead }));
+    // Underside, seen from below the eaves.
+    quads.push(orient({ v: [v[0], v[3], v[2], v[1]], n: [-n[0], -n[1], -n[2]], uv: flatUv(), slot: lead }));
+  };
+  const E = (p: P2) => V(p, ey);
+  const T = (p: P2) => V(p, ey + rise);
+  roofFace([E(eaves[1]), E(eaves[2]), T(t2), T(t1)]);
+  roofFace([E(eaves[0]), E(eaves[1]), T(t1), T(t1)]);
+  roofFace([E(eaves[2]), E(eaves[3]), T(t2), T(t2)]);
+  // Floor carried from the wall's centre line, through the hole, out to the inside of the base.
+  const bayFloor = [{ x: -w / 2, z: 0 }, { x: -w / 2, z: z0 }, ...inner, { x: w / 2, z: z0 }, { x: w / 2, z: 0 }].map((p) => ({ x: p.x, z: p.z * out }));
+  return { boxes, quads, bayFloor };
+}
+
+/** Slide the end points of an offset bay outline along their end segments onto the wall's outer face z = z0. */
+function toWallFace(pts: P2[], z0: number): P2[] {
+  return pts.map((p, i) => {
+    if (i !== 0 && i !== pts.length - 1) return p;
+    const q = pts[i === 0 ? 1 : pts.length - 2];
+    const t = (z0 - q.z) / (p.z - q.z);
+    return { x: q.x + (p.x - q.x) * t, z: z0 };
+  });
+}
+
+/** Metre UVs for a vertical face from p to q, so finishes keep their scale. */
+function uvs(p: P2, q: P2, y0: number, y1: number): [number, number][] {
+  const l = Math.hypot(q.x - p.x, q.z - p.z);
+  return [
+    [0, y0],
+    [l, y0],
+    [l, y1],
+    [0, y1],
+  ];
+}
+
+function flatUv(): [number, number][] {
+  return [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+}
+
+/** Rewind a quad so it faces along its normal (Newell's method copes with a repeated corner). */
+function orient(q: FaceQuad): FaceQuad {
+  const cr = [0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const a = q.v[i];
+    const b = q.v[(i + 1) % 4];
+    cr[0] += (a[1] - b[1]) * (a[2] + b[2]);
+    cr[1] += (a[2] - b[2]) * (a[0] + b[0]);
+    cr[2] += (a[0] - b[0]) * (a[1] + b[1]);
+  }
+  if (cr[0] * q.n[0] + cr[1] * q.n[1] + cr[2] * q.n[2] >= 0) return q;
+  return { ...q, v: [q.v[0], q.v[3], q.v[2], q.v[1]], uv: [q.uv[0], q.uv[3], q.uv[2], q.uv[1]] };
+}
+
+/** The six faces of a box in its own frame, before placing. */
+const BOX_FACES: { n: V3; c: [V3, V3, V3, V3] }[] = [
+  { n: [1, 0, 0], c: [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]] },
+  { n: [-1, 0, 0], c: [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]] },
+  { n: [0, 1, 0], c: [[-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1]] },
+  { n: [0, -1, 0], c: [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]] },
+  { n: [0, 0, 1], c: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] },
+  { n: [0, 0, -1], c: [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]] },
+];
+
+/** A placed opening's local frame: centre on the plan and the wall direction. */
+export interface LocalFrame {
+  centre: V2;
+  dir: V2;
+}
+
+/** Map a local point (x along the wall, y up, z along +n) to world (x, y, z). */
+export function toWorld3(f: LocalFrame, p: V3, y0 = 0): V3 {
+  const nx = -f.dir.y;
+  const nz = f.dir.x;
+  return [f.centre.x + f.dir.x * p[0] + nx * p[2], y0 + p[1], f.centre.y + f.dir.y * p[0] + nz * p[2]];
+}
+
+/** Rotate a local direction into world. */
+function dirToWorld(f: LocalFrame, d: V3): V3 {
+  return [f.dir.x * d[0] - f.dir.y * d[2], d[1], f.dir.y * d[0] + f.dir.x * d[2]];
+}
+
+/** Boxes as world-space quads (six faces each, UVs in metres). */
+export function boxQuads(boxes: Box[], f: LocalFrame): FaceQuad[] {
+  const out: FaceQuad[] = [];
+  for (const b of boxes) {
+    const c = Math.cos(b.ry ?? 0);
+    const s = Math.sin(b.ry ?? 0);
+    const rot = (v: V3): V3 => [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+    const hs: V3 = [b.s[0] / 2, b.s[1] / 2, b.s[2] / 2];
+    for (const face of BOX_FACES) {
+      const v = face.c.map((k) => {
+        const r = rot([k[0] * hs[0], k[1] * hs[1], k[2] * hs[2]]);
+        return toWorld3(f, [b.p[0] + r[0], b.p[1] + r[1], b.p[2] + r[2]]);
+      }) as [V3, V3, V3, V3];
+      const n = dirToWorld(f, rot(face.n));
+      const du = face.n[0] ? b.s[2] : b.s[0];
+      const dv = face.n[1] ? b.s[2] : b.s[1];
+      out.push({ v, n, uv: [[0, 0], [du, 0], [du, dv], [0, dv]], slot: { kind: "part", mat: b.mat } });
+    }
+  }
+  return out;
+}
+
+/** Local quads (bay faces) moved to world. */
+export function quadsToWorld(quads: FaceQuad[], f: LocalFrame): FaceQuad[] {
+  return quads.map((q) => ({ ...q, v: q.v.map((p) => toWorld3(f, p)) as [V3, V3, V3, V3], n: dirToWorld(f, q.n) }));
+}
