@@ -7,6 +7,8 @@ import { useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
 import { DEFAULT_BAY_DEPTH } from "../lib/openings";
+import { WALL_COVERING_LABEL, type WallCovering } from "../types";
+import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
 import { roomColor } from "../three/House";
 import {
   COLOUR_KINDS,
@@ -222,9 +224,9 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
           <input type="color" value={room.color ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
         </label>
         <label>
-          Wall paint
+          {BASE_LABEL[room.wallCovering ?? "paint"]}
           <span className="colour-pick">
-            <input type="color" value={room.wallPaint ?? "#f4f1ea"} onChange={(e) => onChange({ wallPaint: e.target.value })} />
+            <input type="color" value={wallBase(room)} onChange={(e) => onChange({ wallPaint: e.target.value })} />
             {room.wallPaint && (
               <button className="link" onClick={() => onChange({ wallPaint: undefined })}>
                 Clear
@@ -233,6 +235,32 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
           </span>
         </label>
       </div>
+      <label>
+        Wall covering
+        <select
+          value={room.wallCovering ?? "paint"}
+          onChange={(e) => onChange({ wallCovering: e.target.value === "paint" ? undefined : (e.target.value as WallCovering) })}
+        >
+          {(Object.keys(WALL_COVERING_LABEL) as WallCovering[]).map((k) => (
+            <option key={k} value={k}>
+              {WALL_COVERING_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {room.wallCovering && room.wallCovering !== "paint" && (
+        <label>
+          {ACCENT_LABEL[room.wallCovering]}
+          <span className="colour-pick">
+            <input type="color" value={wallAccent(room) ?? wallBase(room)} onChange={(e) => onChange({ wallAccent: e.target.value })} />
+            {room.wallAccent && (
+              <button className="link" onClick={() => onChange({ wallAccent: undefined })}>
+                {room.wallCovering === "tiles" ? "None" : "Clear"}
+              </button>
+            )}
+          </span>
+        </label>
+      )}
       <label>
         Floor texture from photo
         <select value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>

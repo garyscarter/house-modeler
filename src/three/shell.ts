@@ -12,7 +12,8 @@ import {
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
 import { bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
-import { WARM_WHITE, type MatSpec, matKey } from "./textures";
+import { interiorFinish } from "../lib/wallCovering";
+import { type MatSpec, matKey } from "./textures";
 
 /**
  * Builds the static shell of one floor (walls, skirting, doors, windows and
@@ -142,8 +143,10 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   };
   const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null): MatSpec => {
     switch (slot.kind) {
-      case "inside":
-        return { kind: "paint", color: wall?.color ?? roomsById.get(slot.roomId)?.wallPaint ?? WARM_WHITE };
+      case "inside": {
+        const f = interiorFinish(roomsById.get(slot.roomId), wall?.color);
+        return f.covering === "paint" ? { kind: "paint", color: f.color } : { kind: "cover", ...f };
+      }
       case "outside":
         return outsideSpec(slot.roomId, wall?.color);
       case "top":
