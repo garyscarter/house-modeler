@@ -141,11 +141,14 @@ export function stairFlights(model: HouseModel, eye: number): Flight[] {
   return out;
 }
 
-/** Position on a flight: `s` metres up the run from its foot, `l` metres to the side of its centre line. */
-export function flightLocal(f: Flight, x: number, y: number): { s: number; l: number } {
-  const dx = x - f.centre.x;
-  const dy = y - f.centre.y;
-  return { s: dx * f.dir.x + dy * f.dir.y + f.run / 2, l: dx * -f.dir.y + dy * f.dir.x };
+/** Metres up a flight's run from its foot (scalars rather than an object: this runs several times a frame). */
+export function flightS(f: Flight, x: number, y: number): number {
+  return (x - f.centre.x) * f.dir.x + (y - f.centre.y) * f.dir.y + f.run / 2;
+}
+
+/** Metres to the side of a flight's centre line. */
+export function flightL(f: Flight, x: number, y: number): number {
+  return (y - f.centre.y) * f.dir.x - (x - f.centre.x) * f.dir.y;
 }
 
 /** Plan point at (s, l) on a flight. */
@@ -206,7 +209,7 @@ export interface WalkState {
 export function groundY(world: WalkWorld, st: WalkState): number {
   if (st.flight >= 0) {
     const f = world.flights[st.flight];
-    return f.baseY + flightHeight(f, flightLocal(f, st.x, st.y).s);
+    return f.baseY + flightHeight(f, flightS(f, st.x, st.y));
   }
   return world.floors.get(st.floorId)?.baseY ?? 0;
 }
@@ -215,7 +218,7 @@ export function groundY(world: WalkWorld, st: WalkState): number {
 export function displayFloorId(world: WalkWorld, st: WalkState): string {
   if (st.flight < 0) return st.floorId;
   const f = world.flights[st.flight];
-  return flightLocal(f, st.x, st.y).s > f.run / 2 ? f.upperId : f.lowerId;
+  return flightS(f, st.x, st.y) > f.run / 2 ? f.upperId : f.lowerId;
 }
 
 /** Push the circle at `p` out of every segment it overlaps; `prev` breaks ties when it sits on a centre line. */
@@ -260,14 +263,15 @@ function activeSegs(world: WalkWorld, st: WalkState): Seg[] {
   if (st.flight < 0) return world.floors.get(st.floorId)?.segs ?? [];
   const f = world.flights[st.flight];
   // Near the foot you are still among the lower floor's walls; higher up only the rails matter.
-  return flightLocal(f, st.x, st.y).s < f.railStart + WALKER_RADIUS ? world.foot[st.flight] : world.rails[st.flight];
+  return flightS(f, st.x, st.y) < f.railStart + WALKER_RADIUS ? world.foot[st.flight] : world.rails[st.flight];
 }
 
 /** Step on or off flights after a move. */
 function transition(world: WalkWorld, st: WalkState) {
   if (st.flight >= 0) {
     const f = world.flights[st.flight];
-    const { s, l } = flightLocal(f, st.x, st.y);
+    const s = flightS(f, st.x, st.y);
+    const l = flightL(f, st.x, st.y);
     if (s > f.run) {
       st.flight = -1;
       st.floorId = f.upperId;
@@ -279,7 +283,8 @@ function transition(world: WalkWorld, st: WalkState) {
   }
   for (let i = 0; i < world.flights.length; i++) {
     const f = world.flights[i];
-    const { s, l } = flightLocal(f, st.x, st.y);
+    const s = flightS(f, st.x, st.y);
+    const l = flightL(f, st.x, st.y);
     if (Math.abs(l) > f.width / 2 || s > f.run) continue;
     if ((f.lowerId === st.floorId && s >= 0) || (f.upperId === st.floorId && s >= f.wellStart)) {
       st.flight = i;

@@ -71,7 +71,16 @@ export function WalkControls({
           Exit walk
         </button>
         {floors.length > 1 && (
-          <select className="walk-floor" value={floorId} onChange={(e) => onFloor(e.target.value)} aria-label="Floor">
+          <select
+            className="walk-floor"
+            value={floorId}
+            onChange={(e) => {
+              onFloor(e.target.value);
+              // Hand the arrow keys back to walking.
+              e.target.blur();
+            }}
+            aria-label="Floor"
+          >
             {floors.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}

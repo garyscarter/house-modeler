@@ -26,6 +26,7 @@ header {
 }
 header h1 { font-size: 16px; margin: 0 6px 0 0; white-space: nowrap; }
 header > .seg { flex: none; }
+header button { white-space: nowrap; }
 .hdr-inline { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .hdr-break { display: none; }
 .drawer-toggle { flex: none; font-size: 18px; line-height: 1; padding: 6px 10px; }

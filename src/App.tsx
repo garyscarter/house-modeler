@@ -19,7 +19,7 @@ type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "settings
 /** Below this width the sidebar becomes a slide-over drawer (keep in step with styles.css). */
 const DRAWER_QUERY = "(max-width: 899px)";
 /** From this width the view controls fit inline in the header; narrower screens get the View popover. */
-const INLINE_QUERY = "(min-width: 1500px)";
+const INLINE_QUERY = "(min-width: 1680px)";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
