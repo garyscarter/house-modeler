@@ -1,0 +1,215 @@
+import { describe, expect, it } from "vitest";
+import type { HouseModel, Opening } from "../types";
+import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
+import {
+  areaReport,
+  changeCost,
+  CONTINGENCY,
+  diffModels,
+  estimateCosts,
+  fmtDelta,
+  M2_TO_FT2,
+  modelArea,
+  pairFloors,
+  pairRooms,
+  roomArea,
+  roomNotes,
+  significantArea,
+  STRUCTURAL_ADVICE,
+} from "./report";
+import { floor, rect } from "./testing";
+
+const model = (...floors: HouseModel["floors"]): HouseModel => ({ floors, ceilingHeight: 2.4, slabThickness: 0.25 });
+const op = (id: string, kind: Opening["kind"], x: number, y: number, orientation: "h" | "v", widthM: number): Opening => ({ id, kind, x, y, orientation, widthM });
+/** Two 3 m x 4 m rooms side by side, joined by an internal wall at x = 3 m. */
+const pair = (openings: Opening[] = []) => floor([rect("A", 0, 0, 300, 400), rect("B", 300, 0, 600, 400)], openings);
+
+describe("areas", () => {
+  it("measures rooms in square metres", () => {
+    const f = pair();
+    expect(roomArea(f, f.rooms[0])).toBeCloseTo(12);
+    expect(modelArea(model(f))).toBeCloseTo(24);
+  });
+
+  it("totals floors and variants and pairs rooms by id", () => {
+    const a = model(pair());
+    const b = model(floor([rect("A", 0, 0, 400, 400), rect("B", 400, 0, 600, 400)]));
+    const r = areaReport(a, b);
+    expect(r.floors).toHaveLength(1);
+    expect(r.floors[0].rows.map((x) => [x.name, x.current, x.proposed])).toEqual([
+      ["A", 12, 16],
+      ["B", 12, 8],
+    ]);
+    expect(r.current).toBeCloseTo(24);
+    expect(r.proposed).toBeCloseTo(24);
+  });
+
+  it("works with only one variant", () => {
+    const r = areaReport(model(pair()), undefined);
+    expect(r.floors[0].rows.every((x) => x.proposed === undefined)).toBe(true);
+    expect(r.proposed).toBeUndefined();
+    expect(r.current).toBeCloseTo(24);
+  });
+
+  it("falls back to floor level and name when ids differ, and spots a rename by position", () => {
+    const a = floor([rect("A", 0, 0, 300, 400, { id: "x1" }), rect("Study", 300, 0, 600, 400, { id: "x2" })]);
+    const b = floor([rect("A", 0, 0, 300, 400, { id: "y1" }), rect("Office", 300, 0, 600, 400, { id: "y2" })], [], { id: "other" });
+    expect(pairFloors(model(a), model(b))).toHaveLength(1);
+    expect(pairRooms(a, b).map((p) => [p.a?.name, p.b?.name])).toEqual([
+      ["A", "A"],
+      ["Study", "Office"],
+    ]);
+    expect(areaReport(model(a), model(b)).floors[0].rows[1].was).toBe("Study");
+    expect(diffModels(model(a), model(b)).map((c) => c.description)).toEqual(["Study renamed Office"]);
+  });
+
+  it("ignores area changes under 0.2 m² or 3%", () => {
+    expect(significantArea(12, 12.15)).toBe(false);
+    expect(significantArea(30, 30.5)).toBe(false); // 1.7%
+    expect(significantArea(12, 12.5)).toBe(true);
+  });
+
+  it("formats changes in either unit", () => {
+    expect(fmtDelta(2.5)).toBe("+2.5");
+    expect(fmtDelta(-1)).toBe("−1.0");
+    expect(fmtDelta(0.01)).toBe("");
+    expect(fmtDelta(1, "ft²")).toBe(`+${Math.round(M2_TO_FT2)}`);
+  });
+});
+
+describe("changes for listing 91770873", () => {
+  const a = listing91770873("");
+  const b = listing91770873Proposed("");
+  const changes = diffModels(a, b);
+
+  it("finds the new first-floor room and its extra area", () => {
+    const room = changes.find((c) => c.category === "Room");
+    expect(room?.description).toBe("New room: New Room");
+    expect(room?.floor).toBe("Floor 1");
+    const area = changes.find((c) => c.category === "Floor");
+    expect(area?.costLine).toBe("newFloorArea");
+    expect(area?.quantity).toBeCloseTo(room!.quantity, 1);
+    expect(area!.quantity).toBeGreaterThan(25);
+  });
+
+  it("lists the new door and two windows", () => {
+    const doors = changes.filter((c) => c.category === "Door");
+    const windows = changes.filter((c) => c.category === "Window");
+    expect(doors).toHaveLength(1);
+    expect(doors[0].description).toMatch(/between New Room and Landing/);
+    // Cut into what was the outside wall of the house.
+    expect(doors[0].structural).toMatch(/structural engineer/);
+    expect(windows).toHaveLength(2);
+    expect(windows.map((w) => w.description)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/rear wall of New Room/), expect.stringMatching(/front wall of New Room/)]),
+    );
+    expect(windows.every((w) => w.costLine === "newWindow" && w.unit === "each")).toBe(true);
+  });
+
+  it("adds the extension's outside walls without removing any", () => {
+    const walls = changes.filter((c) => c.category === "Wall");
+    expect(walls).toHaveLength(3);
+    expect(walls.every((w) => w.description.startsWith("New ") && /part of the extension/.test(w.description))).toBe(true);
+    expect(walls.reduce((s, w) => s + w.quantity, 0)).toBeCloseTo(4.04 * 2 + 6.71, 0);
+    expect(changes.some((c) => c.description.startsWith("Remove"))).toBe(false);
+  });
+
+  it("leaves the ground floor alone", () => {
+    expect(changes.every((c) => c.floor === "Floor 1")).toBe(true);
+  });
+
+  it("finds nothing between a model and its copy", () => {
+    expect(diffModels(a, structuredClone(a))).toEqual([]);
+  });
+});
+
+describe("changes", () => {
+  it("flags a removed long wall as structural and prices it per metre", () => {
+    const changes = diffModels(model(pair()), model(floor([rect("A", 0, 0, 600, 400)])));
+    const wall = changes.find((c) => c.category === "Wall")!;
+    expect(wall.description).toBe("Remove the wall between A and B (4.00 m)");
+    expect(wall.quantity).toBe(4);
+    expect(wall.costLine).toBe("removeWall");
+    expect(wall.structural).toBe(STRUCTURAL_ADVICE);
+    expect(changes.filter((c) => c.category === "Room").map((c) => c.description)).toEqual(["A enlarged from 12.0 to 24.0 m²", "B removed"]);
+  });
+
+  it("adds a partition without a structural flag", () => {
+    const changes = diffModels(model(floor([rect("A", 0, 0, 600, 400)])), model(floor([rect("A", 0, 0, 600, 200), rect("C", 0, 200, 600, 400)])));
+    const wall = changes.find((c) => c.category === "Wall")!;
+    expect(wall.costLine).toBe("newPartition");
+    expect(wall.quantity).toBe(6);
+    expect(wall.structural).toBeUndefined();
+    expect(changes.some((c) => c.description.startsWith("A reduced from 24.0 to 12.0"))).toBe(true);
+  });
+
+  it("matches openings by id, then by kind and position, and reports widening and type changes", () => {
+    const a = model(pair([op("d1", "door", 300, 200, "v", 0.8), op("w1", "window", 150, 400, "h", 1.0), op("w2", "window", 450, 400, "h", 1.0)]));
+    const b = model(pair([op("d1", "door", 300, 200, "v", 1.6), op("zz", "window", 160, 400, "h", 1.0), op("w2", "french", 450, 400, "h", 1.0)]));
+    const changes = diffModels(a, b);
+    expect(changes.map((c) => c.description)).toEqual([
+      "Door between A and B widened from 0.80 to 1.60 m",
+      "Window in the front wall of B replaced by French doors",
+    ]);
+    expect(changes.map((c) => c.costLine)).toEqual(["alterOpening", "newDoor"]);
+  });
+
+  it("reports added, removed and moved openings", () => {
+    const a = model(pair([op("w1", "window", 150, 0, "h", 1), op("d1", "door", 300, 100, "v", 0.8)]));
+    const b = model(pair([op("w9", "window", 450, 0, "h", 1.2), op("d1", "door", 300, 300, "v", 0.8)]));
+    const changes = diffModels(a, b);
+    expect(changes.map((c) => c.description)).toEqual([
+      "Window in the rear wall of A removed, opening blocked up",
+      "Door between A and B moved 2.0 m",
+      "New window in the rear wall of B, 1.20 m wide",
+    ]);
+    expect(changes.map((c) => c.costLine)).toEqual(["blockOpening", "alterOpening", "newWindow"]);
+    // A new window in an existing outside wall needs a lintel.
+    expect(changes[2].structural).toMatch(/lintel/);
+  });
+
+  it("reports added and removed floors", () => {
+    const g = pair();
+    const up = { ...pair(), id: "f1", name: "First", level: 1 };
+    const added = diffModels(model(g), model(g, up));
+    expect(added[0]).toEqual(expect.objectContaining({ description: "New floor: First", quantity: 24, costLine: "newFloorArea" }));
+    expect(diffModels(model(g, up), model(g))).toEqual([expect.objectContaining({ description: "First removed", unit: "m²", quantity: 24 })]);
+  });
+});
+
+describe("costs", () => {
+  const changes = diffModels(model(pair()), model(floor([rect("A", 0, 0, 600, 400)], [op("n", "window", 300, 0, "h", 1)])));
+
+  it("prices nothing until the user enters rates", () => {
+    const est = estimateCosts(changes, {});
+    expect(est.total).toBe(0);
+    expect(est.lines.every((l) => l.rate === undefined && l.total === undefined)).toBe(true);
+    expect(est.missing).toEqual(["removeWall", "newWindow"]);
+  });
+
+  it("totals lines from the user's rates and adds contingency", () => {
+    const rates = { removeWall: 500, newWindow: 800, [CONTINGENCY]: 10 };
+    const est = estimateCosts(changes, rates);
+    expect(est.lines.map((l) => [l.def.id, l.quantity, l.total])).toEqual([
+      ["removeWall", 4, 2000],
+      ["newWindow", 1, 800],
+    ]);
+    expect(est.subtotal).toBe(2800);
+    expect(est.contingency).toBe(280);
+    expect(est.total).toBe(3080);
+    expect(est.missing).toEqual([]);
+    expect(changeCost(changes.find((c) => c.costLine === "removeWall")!, rates)).toBe(2000);
+    expect(changeCost(changes.find((c) => c.category === "Room")!, rates)).toBeUndefined();
+  });
+});
+
+describe("notes", () => {
+  it("collects room notes floor by floor", () => {
+    const g = floor([rect("Kitchen", 0, 0, 300, 300, { notes: "  Replace units  " }), rect("Hall", 300, 0, 400, 300)]);
+    const up = floor([rect("Bed", 0, 0, 300, 300, { notes: "Damp patch" })], [], { id: "f1", name: "First", level: 1 });
+    expect(roomNotes(model(up, g))).toEqual([
+      { floor: "Floor", room: "Kitchen", notes: "Replace units" },
+      { floor: "First", room: "Bed", notes: "Damp patch" },
+    ]);
+  });
+});
