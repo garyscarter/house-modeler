@@ -47,12 +47,14 @@ export function rehydrate(json: string, urlOf: (id: string) => string | undefine
   return JSON.parse(json, (_k, v) => (typeof v === "string" && v.startsWith(IMG_REF) ? urlOf(v.slice(IMG_REF.length)) ?? MISSING_IMAGE : v));
 }
 
-export function imageAwareStorage<S>(delayMs = 400): PersistStorage<S> {
+export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistStorage<S> {
   const urlToId = new Map<string, string>();
   /** Ids known to be written to IndexedDB. */
   const written = new Set<string>();
   let pending: { name: string; value: StorageValue<S> } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  /** When the oldest unsaved change was made, so a stream of updates (the sun animation) can't hold off saving for ever. */
+  let since: number | null = null;
   let chain: Promise<void> = Promise.resolve();
 
   const idOf = (url: string) => {
@@ -71,6 +73,7 @@ export function imageAwareStorage<S>(delayMs = 400): PersistStorage<S> {
     }
     const job = pending;
     pending = null;
+    since = null;
     if (!job) return chain;
     chain = chain
       .then(async () => {
@@ -125,7 +128,8 @@ export function imageAwareStorage<S>(delayMs = 400): PersistStorage<S> {
     setItem: (name, value) => {
       pending = { name, value };
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void flush(), delayMs);
+      since ??= Date.now();
+      timer = setTimeout(() => void flush(), Math.max(0, Math.min(delayMs, since + maxWaitMs - Date.now())));
     },
     removeItem: async (name) => {
       pending = null;

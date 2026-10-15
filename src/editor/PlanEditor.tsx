@@ -415,7 +415,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       if (next.length === 2) {
         const d = dist(next[0], next[1]);
         const m = parseFloat(window.prompt("Real-world distance between those two points, in metres:", "3.0") ?? "");
-        if (m > 0) updateFloor(variant, floor.id, { pxPerM: d / m });
+        if (m > 0 && d > 0) updateFloor(variant, floor.id, { pxPerM: d / m });
         setCalib([]);
       } else setCalib(next);
     } else if (tool === "rect") {

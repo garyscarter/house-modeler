@@ -50,9 +50,7 @@ function SiteContent({ site, house, centre: houseCentre }: { site: Site; house?:
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} material={surfaceMaterial("ground")} receiveShadow>
-        <planeGeometry args={[300, 300]} />
-      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} geometry={farGround()} material={surfaceMaterial("ground")} receiveShadow />
       {surfaces.map((s) => (
         <Surface key={s.id} surface={s} />
       ))}
@@ -305,6 +303,17 @@ function neighbourGeometry(n: Neighbour) {
     wallT: 0,
   });
   return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables), top: m.ridgeY };
+}
+
+/** The ground beyond the plot, 300 m across, with UVs in metres like the other site surfaces' textures expect. Shared, never disposed. */
+let farGroundGeo: THREE.PlaneGeometry | undefined;
+function farGround(): THREE.PlaneGeometry {
+  if (!farGroundGeo) {
+    farGroundGeo = new THREE.PlaneGeometry(300, 300);
+    const uv = farGroundGeo.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 300, uv.getY(i) * 300);
+  }
+  return farGroundGeo;
 }
 
 /** Opacity of see-through neighbours when chosen in the Site panel. */

@@ -101,8 +101,8 @@ export function Viewer(props: ViewerProps) {
           photos={photos}
           showLabels={showLabels && !walking}
           showCeilings={showCeilings || walking}
-          selectedRoomId={selectedRoomId}
-          onSelectRoom={onSelectRoom}
+          selectedRoomId={walking ? null : selectedRoomId}
+          onSelectRoom={walking ? undefined : onSelectRoom}
           visibleLevels={visibleLevels}
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}

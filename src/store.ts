@@ -203,6 +203,8 @@ export const useStore = create<State>()(
             // Same ids on both sides let the report pair rooms up across variants.
             const copy: HouseModel = structuredClone(m);
             delete copy.preset;
+            // The listing's printed area describes As listed, not a layout made from it.
+            if (to !== "current") delete copy.listedArea;
             return { variants: { ...st.variants, [to]: copy } };
           }),
         updateModel: (k, patch) =>
@@ -226,7 +228,9 @@ export const useStore = create<State>()(
             const floors = m.floors.map((f) => (f.id === floorId ? (typeof patch === "function" ? patch(f) : { ...f, ...patch }) : f));
             const renamed = floors.find((f) => f.id === floorId);
             let photos = st.photos;
-            if (old && renamed && old.name !== renamed.name && photoSource(st.variants) === k) {
+            // Photos follow a renamed floor, unless another floor shares either name (that would mix two floors' photos).
+            const shared = (name: string) => m.floors.some((f) => f.id !== floorId && f.name === name);
+            if (old && renamed && old.name !== renamed.name && photoSource(st.variants) === k && !shared(old.name) && !shared(renamed.name)) {
               photos = renamePhotos(photos, old.name, { floor: old.name }, { floor: renamed.name });
             }
             return { variants: { ...st.variants, [k]: { ...m, floors } }, ...(photos !== st.photos ? { photos } : {}) };
@@ -247,8 +251,8 @@ export const useStore = create<State>()(
               patch.name !== undefined &&
               patch.name !== old.name &&
               photoSource(st.variants) === k &&
-              // Only move photos when no other room on the floor still has the old name.
-              !floor.rooms.some((r) => r.id !== roomId && r.name === old.name)
+              // Only move photos when no other room on the floor has the old or the new name (that would mix two rooms' photos).
+              !floor.rooms.some((r) => r.id !== roomId && (r.name === old.name || r.name === patch.name))
             ) {
               photos = renamePhotos(photos, floor.name, { room: old.name }, { room: patch.name });
             }

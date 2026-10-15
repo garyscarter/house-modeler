@@ -230,7 +230,7 @@ export default function App() {
             />
           )}
           {model && tab === "plan" && editingSite && <SiteEditor />}
-          {model && tab === "plan" && !editingSite && editFloor && <PlanEditor variant={activeVariant} floor={editFloor} />}
+          {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={editFloor.id} variant={activeVariant} floor={editFloor} />}
         </main>
       </div>
       <PhotoLightbox />

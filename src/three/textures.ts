@@ -468,6 +468,7 @@ let plaster: THREE.CanvasTexture | null = null;
 /** Materials by key, oldest first. Colour pickers can mint many, so the cache is capped. */
 const materials = new Map<string, THREE.Material>();
 const MAX_MATERIALS = 64;
+const MAX_EXT_MATERIALS = 12;
 
 function wallBump(finish: WallFinish, painted: Painted) {
   let t = heightMaps.get(finish);
@@ -543,12 +544,16 @@ export function getMaterial(s: MatSpec): THREE.Material {
   }
   m = create(s);
   materials.set(key, m);
-  if (materials.size > MAX_MATERIALS) {
-    const [oldKey, old] = materials.entries().next().value!;
+  const evict = (oldKey: string) => {
+    const old = materials.get(oldKey)!;
     materials.delete(oldKey);
     // Brick and other outside finishes own their colour map; shared maps stay.
     if (oldKey.startsWith("ext|")) (old as THREE.MeshStandardMaterial).map?.dispose();
     old.dispose();
-  }
+  };
+  if (materials.size > MAX_MATERIALS) evict(materials.keys().next().value!);
+  // Each outside finish owns a large canvas texture, and dragging a colour picker makes one per step: keep only a few.
+  const ext = [...materials.keys()].filter((k) => k.startsWith("ext|"));
+  if (ext.length > MAX_EXT_MATERIALS) evict(ext[0]);
   return m;
 }

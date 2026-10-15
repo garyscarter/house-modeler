@@ -66,7 +66,10 @@ export async function captureImage(id: string | undefined, scale: number): Promi
   const ratio = gl.getPixelRatio();
   const s = Math.min(scale, MAX_SIDE / Math.max(size.x, size.y, 1));
   const out = document.createElement("canvas");
+  // With post-processing on, the composer switches the renderer's tone mapping off and applies it itself; a direct render needs it back.
+  const toneMapping = gl.toneMapping;
   try {
+    if (toneMapping === THREE.NoToneMapping) gl.toneMapping = THREE.ACESFilmicToneMapping;
     gl.setPixelRatio(s);
     gl.setSize(size.x, size.y, false);
     gl.render(scene, camera);
@@ -74,6 +77,7 @@ export async function captureImage(id: string | undefined, scale: number): Promi
     out.height = gl.domElement.height;
     out.getContext("2d")!.drawImage(gl.domElement, 0, 0);
   } finally {
+    gl.toneMapping = toneMapping;
     gl.setPixelRatio(ratio);
     gl.setSize(size.x, size.y, false);
   }

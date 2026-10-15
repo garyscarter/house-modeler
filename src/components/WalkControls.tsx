@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Floor } from "../types";
 import type { WalkInput } from "../three/Walker";
 import "./WalkControls.css";
@@ -153,6 +153,14 @@ function Joystick({ input, onUse }: { input: WalkInput; onUse: () => void }) {
     input.joy.x = 0;
     input.joy.y = 0;
   };
+  // Leaving walk mode mid-drag must not leave the walker moving next time.
+  useEffect(
+    () => () => {
+      input.joy.x = 0;
+      input.joy.y = 0;
+    },
+    [input],
+  );
 
   return (
     <div

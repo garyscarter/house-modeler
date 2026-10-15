@@ -24,6 +24,42 @@ import {
 const fmt2 = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
 
 /**
+ * A name input that commits when you leave it or press Enter (Escape undoes
+ * the edit), so a rename is one undo step and photos follow the room or floor
+ * from its old name to the new one, never to a half-typed name on the way.
+ */
+function NameField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(value);
+  }, [value, focused]);
+  const commit = () => {
+    const v = text.trim();
+    if (v && v !== value) onCommit(v);
+    else setText(value);
+  };
+  return (
+    <input
+      value={text}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        commit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setText(value);
+          setFocused(false);
+        }
+      }}
+    />
+  );
+}
+
+/**
  * A number input that commits each valid value as it is typed (so spinners
  * and typing both update live) but never rewrites the text while it has focus,
  * so "3." or a half-typed value is not snatched away.
@@ -115,7 +151,7 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
     <div className="inspector room-inspector">
       <label>
         Name
-        <input value={room.name} onChange={(e) => onChange({ name: e.target.value })} />
+        <NameField value={room.name} onCommit={(name) => onChange({ name })} />
       </label>
       <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
 
@@ -461,7 +497,7 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
     <div className="inspector">
       <label>
         Floor name
-        <input value={floor.name} onChange={(e) => updateFloor(variant, floor.id, { name: e.target.value })} />
+        <NameField value={floor.name} onCommit={(name) => updateFloor(variant, floor.id, { name })} />
       </label>
       <label>
         Level (0 = ground)
@@ -514,7 +550,8 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
       ) : (
         <button
           onClick={() => {
-            const b = bbox(floor.rooms.flatMap((r) => r.polygon));
+            // Centre of the rooms, or of the image on a floor with none yet.
+            const b = floor.rooms.length ? bbox(floor.rooms.flatMap((r) => r.polygon)) : { x0: 0, y0: 0, x1: floor.imageW, y1: floor.imageH };
             updateFloor(variant, floor.id, { stairs: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 } });
           }}
         >

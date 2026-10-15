@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { dehydrate, refIds, rehydrate } from "./persist";
+import { describe, expect, it, vi } from "vitest";
+import { dehydrate, imageAwareStorage, refIds, rehydrate } from "./persist";
+
+const saved = vi.hoisted(() => [] as string[]);
+vi.mock("idb-keyval", () => ({
+  setMany: async (entries: [string, unknown][]) => void saved.push(...entries.map(([k]) => k)),
+  keys: async () => [],
+  delMany: async () => {},
+  del: async () => {},
+  get: async () => undefined,
+  getMany: async () => [],
+}));
 
 const big = (c: string) => "data:image/png;base64," + c.repeat(2000);
 
@@ -19,5 +29,22 @@ describe("image refs", () => {
   it("substitutes a placeholder for a missing image", () => {
     const out = rehydrate('{"image":"@@img:gone"}', () => undefined) as { image: string };
     expect(out.image.startsWith("data:image/png")).toBe(true);
+  });
+});
+
+describe("imageAwareStorage", () => {
+  it("still saves at least every couple of seconds while updates keep coming", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = imageAwareStorage<{ n: number }>(400, 2000);
+      saved.length = 0;
+      for (let t = 0; t < 5000; t += 16) {
+        storage.setItem("k", { state: { n: t }, version: 1 });
+        await vi.advanceTimersByTimeAsync(16);
+      }
+      expect(saved.filter((k) => k === "k").length).toBeGreaterThanOrEqual(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
