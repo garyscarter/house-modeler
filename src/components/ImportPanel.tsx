@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import { extractFloorplan } from "../ai/extract";
-import { describeError } from "../ai/client";
 import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
 import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
 import { listingFloorplan } from "../lib/houses/listingAssets";
+
+// The AI modules pull in the Anthropic SDK, so they load on first use rather than with the app.
+const describeError = async (e: unknown) => (await import("../ai/client")).describeError(e);
 
 const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "gap"]);
 const WINDOW_KINDS = new Set(["window", "bay"]);
@@ -36,7 +37,7 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
       setVariant(variant, { ...base, floors: [...base.floors, floor] });
       setUi({ activeVariant: variant, tab: "plan", editFloorId: floor.id, selectedRoomId: null });
     } catch (e) {
-      setError(describeError(e));
+      setError(await describeError(e));
     }
   };
 
@@ -45,12 +46,13 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
     setNotes(null);
     try {
       const dataUrl = await fileToDataUrl(file);
+      const { extractFloorplan } = await import("../ai/extract");
       const { extraction, house } = await extractFloorplan(settings.apiKey, settings.model, dataUrl, setBusy);
       setVariant(variant, house);
       setNotes(extraction.notes);
       setUi({ activeVariant: variant, selectedRoomId: null });
     } catch (e) {
-      setError(describeError(e));
+      setError(await describeError(e));
     } finally {
       setBusy(null);
     }

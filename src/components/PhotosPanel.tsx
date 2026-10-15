@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import { assignPhotos } from "../ai/photos";
-import { describeError } from "../ai/client";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 import { listingPhotos } from "../lib/houses/listingAssets";
+
+// The AI modules pull in the Anthropic SDK, so they load on first use rather than with the app.
+const describeError = async (e: unknown) => (await import("../ai/client")).describeError(e);
 
 export function PhotosPanel() {
   const photos = useStore((s) => s.photos);
@@ -32,10 +33,11 @@ export function PhotosPanel() {
     setError(null);
     try {
       const unassigned = photos.filter((p) => !p.roomName && !p.elevation);
+      const { assignPhotos } = await import("../ai/photos");
       const res = await assignPhotos(settings.apiKey, settings.model, model, unassigned.length ? unassigned : photos, setBusy);
       for (const [id, a] of res) updatePhoto(id, a);
     } catch (e) {
-      setError(describeError(e));
+      setError(await describeError(e));
     } finally {
       setBusy(null);
     }
@@ -73,7 +75,7 @@ export function PhotosPanel() {
               try {
                 addPhotos(await listingPhotos());
               } catch (e) {
-                setError(describeError(e));
+                setError(await describeError(e));
               } finally {
                 setBusy(null);
               }
