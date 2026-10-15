@@ -1,0 +1,1 @@
+corners = np.load(sys.argv[2] + "/corners.npy")  

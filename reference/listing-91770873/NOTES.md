@@ -1,0 +1,36 @@
+# Listing 91770873: reference notes
+
+Facts used to build the built-in model (`src/lib/houses/listing91770873.ts`), and where each came from. Assets are in `src/assets/listing-91770873/` (the listing's floorplan and 37 photos).
+
+## The house
+
+- 1928 interwar semi-detached house, joined to No. 26 (the corner plot) on the plan's right (east). Garage side faces the west neighbour.
+- Two-storey part: cream render, hipped roof at the garage end, flush at the party wall, concrete interlocking tiles, brown uPVC fascias, gutters and windows. One brick chimney stack on the party wall near the ridge (chimney breasts on that wall on both floors of the plan).
+- Single-storey part (garage, galley, front hall): red brick at the front, rendered at the rear. Tiled hipped skirt round the front and sides with a flat roof behind; plain flat edge at the rear.
+- Front door: dark brown with glazed panels, on the side of the front hall projection under the porch canopy. Garage door: red, up-and-over.
+- Canted bay on the front living room with a small canopy roof.
+
+## Size and scale
+
+- Floorplan (Giraffe360): approximate total area 113.9 m² (RICS IPMS 3C), garage included. The EPC repeats 114 m².
+- Model measured inside the outside walls comes to about 110 m² with the garage: within about 3%.
+- Floorplan image is 2000 × 1414 px; the tracing uses 73 px/m. Coordinates are wall centre lines.
+
+## Orientation and plot
+
+Measured from the OS-based map in the drainage and water search (north-up), scaled so the house outline matches the traced model (agreement within about 0.15 m). Map accuracy is roughly ±0.3 m.
+
+- Front faces a compass bearing of about 162° (south-south-east); the garden faces about 342°. The floorplan's own compass says about 171°.
+- Plot about 10.6 m wide and 16.7–17.6 m deep (the rear boundary is skewed). The house fills the plot's width: the garage wall is on the west boundary, the party wall on the east.
+- Rear garden about 5.8–6.6 m deep; front garden about 2.6 m in front of the hall and 4.3 m in front of the bay.
+- West neighbour's wall is about 1.8 m beyond our garage wall.
+- No. 26: main block mirrors ours (about 6.4 m wide), a single-storey conservatory about 2.8 × 3.8 m on the shared boundary at the rear, and a set-back side extension.
+- A building backs onto the rear-left corner of the garden.
+
+The world-frame coordinates are in `listingSite()`. `scripts/` holds the image analysis used to get them (plot corners, house outline profile, neighbour profiles) and the overlay of the traced model on the floorplan.
+
+## From the searches and EPC (context, not modelled)
+
+- In a river flood zone 2 or 3 (at the edge); a coal-mining reporting area; no public sewers or water mains within the boundary.
+- EPC: rating C (69), cavity walls (main house uninsulated, extension insulated), 100 mm loft insulation, solid floor, gas boiler.
+- The 1928 conveyance has a covenant against altering the external plan or elevation without the original company's consent, and a £5 a year rentcharge: questions for the conveyancer, not the model.
