@@ -167,7 +167,7 @@ function drawWall(finish: WallFinish, hex: string): Painted {
           if (x >= W) continue;
           // Per-brick colour: most near the base, the odd darker or burnt one.
           const burnt = rnd() < 0.08;
-          c.fillStyle = vary(burnt ? base.clone().multiplyScalar(0.72) : base, rnd, 0.14, 0.03);
+          c.fillStyle = vary(burnt ? base.clone().multiplyScalar(0.78) : base, rnd, 0.1, 0.018);
           wrapRect(c, W, x, y, bw, bh);
           h.fillStyle = `rgb(${200 + rnd() * 40},${200 + rnd() * 40},${200 + rnd() * 40})`;
           wrapRect(h, W, x, y, bw, bh);

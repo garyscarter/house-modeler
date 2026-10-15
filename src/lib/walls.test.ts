@@ -46,6 +46,11 @@ describe("wallEnds", () => {
     const front = walls.findIndex((w) => isAt(w, 0, 4, 6, 4));
     expect(ends[front].ext).toEqual([EXT_WALL_T / 2, EXT_WALL_T / 2]);
     expect(ends[front].cap).toEqual([false, false]);
+    // The side walls head up the plan, to the -n side: that face stops at their inner faces.
+    expect(ends[front].inner).toEqual([
+      { side: 1, ext: -EXT_WALL_T / 2 },
+      { side: 1, ext: -EXT_WALL_T / 2 },
+    ]);
   });
 
   it("stops a partition that ends part-way along another wall, with no end face", () => {
@@ -56,7 +61,7 @@ describe("wallEnds", () => {
 
   it("caps a free-standing end", () => {
     const lone: WallSeg = { a: { x: 0, y: 0 }, b: { x: 2, y: 0 }, openings: [] };
-    expect(wallEnds([lone], [WALL_T])[0]).toEqual({ ext: [0, 0], cap: [true, true] });
+    expect(wallEnds([lone], [WALL_T])[0]).toEqual({ ext: [0, 0], cap: [true, true], inner: [null, null] });
   });
 });
 
@@ -97,6 +102,10 @@ describe("wallFaces", () => {
     expect(Math.min(...allX)).toBeCloseTo(-EXT_WALL_T / 2);
     expect(Math.max(...allX)).toBeCloseTo(6 + EXT_WALL_T / 2);
     for (const q of outer) expect(q.v[0][2]).toBeCloseTo(4 + EXT_WALL_T / 2);
+    // Inside, the faces stop at the side walls instead of poking through to their outer faces.
+    const inner = front.quads.filter((q) => q.n[2] === -1).flatMap(xs);
+    expect(Math.min(...inner)).toBeCloseTo(EXT_WALL_T / 2);
+    expect(Math.max(...inner)).toBeCloseTo(6 - EXT_WALL_T / 2);
   });
 
   it("winds every quad to face along its normal", () => {

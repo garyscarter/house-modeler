@@ -19,11 +19,19 @@ export function wallThickness(w: WallSeg): number {
 export interface WallEnds {
   /** Metres to extend the wall past its end point so a corner closes. */
   ext: [number, number];
+  /**
+   * At a corner, the side (0 = +n, 1 = -n) facing into the corner, and how
+   * far that face runs past the end point (negative: it stops short, at the
+   * other wall's face, instead of running through it to the far side).
+   */
+  inner: [{ side: 0 | 1; ext: number } | null, { side: 0 | 1; ext: number } | null];
   /** Whether the end face is visible (a free end, or one thicker than the wall it runs into). */
   cap: [boolean, boolean];
 }
 
 const JOIN_TOL = 0.06;
+/** Extra overlap at closed corners, metres. */
+const SEAM = 0.003;
 
 function frame(w: { a: V2; b: V2 }) {
   const dx = w.b.x - w.a.x;
@@ -43,8 +51,8 @@ function frame(w: { a: V2; b: V2 }) {
 export function wallEnds(walls: WallSeg[], thick: number[]): WallEnds[] {
   const frames = walls.map(frame);
   return walls.map((w, i) => {
-    const { dir } = frames[i];
-    const res: WallEnds = { ext: [0, 0], cap: [true, true] };
+    const { dir, n } = frames[i];
+    const res: WallEnds = { ext: [0, 0], cap: [true, true], inner: [null, null] };
     for (const end of [0, 1] as const) {
       const P = end ? w.b : w.a;
       const out = end ? dir : { x: -dir.x, y: -dir.y };
@@ -52,6 +60,8 @@ export function wallEnds(walls: WallSeg[], thick: number[]): WallEnds[] {
       let cont = false;
       let contCovers = false;
       let corner = 0;
+      let inner: { side: 0 | 1; ext: number } | null = null;
+      const sides = new Set<0 | 1>();
       walls.forEach((o, j) => {
         if (j === i) return;
         const f = frames[j];
@@ -71,13 +81,24 @@ export function wallEnds(walls: WallSeg[], thick: number[]): WallEnds[] {
           through = true;
         } else {
           const sin = Math.sqrt(1 - cos * cos);
-          corner = Math.max(corner, thick[j] / 2 / sin + ((thick[i] / 2) * cos) / sin);
+          const ext = thick[j] / 2 / sin + ((thick[i] / 2) * cos) / sin;
+          // The other wall heads off to one side of this one: that side's face is inside the corner.
+          const far = Math.hypot(o.a.x - P.x, o.a.y - P.y) > Math.hypot(o.b.x - P.x, o.b.y - P.y) ? o.a : o.b;
+          const side: 0 | 1 = (far.x - P.x) * n.x + (far.y - P.y) * n.y > 0 ? 0 : 1;
+          sides.add(side);
+          if (ext > corner) {
+            corner = ext;
+            inner = { side, ext: Math.min(0, -thick[j] / 2 / sin + ((thick[i] / 2) * cos) / sin) };
+          }
         }
       });
+      // Walls leaving on both sides make a T: stop at the centre line, hidden inside them.
+      if (sides.size > 1) through = true;
       if (through) res.cap[end] = false;
       else if (cont) res.cap[end] = !contCovers;
       else if (corner > 0) {
         res.ext[end] = Math.min(corner, 0.5);
+        res.inner[end] = inner;
         res.cap[end] = false;
       }
     }
@@ -280,8 +301,13 @@ export function wallFaces(inp: WallFaceInput): { quads: FaceQuad[]; skirting: Sk
     const t1 = along({ a: p.b });
     const atStart = t0 < 1e-6;
     const atEnd = t1 > len - 1e-6;
-    const T0 = atStart ? -ends.ext[0] : t0;
-    const T1 = atEnd ? len + ends.ext[1] : t1;
+    // Outer faces and the top run round the corner, overlapping by a hair so
+    // the meeting faces leave no hairline crack; the face inside the corner
+    // stops at the other wall's face.
+    const T0 = atStart ? -ends.ext[0] - (ends.ext[0] ? SEAM : 0) : t0;
+    const T1 = atEnd ? len + ends.ext[1] + (ends.ext[1] ? SEAM : 0) : t1;
+    const startOf = (s: 0 | 1) => (atStart && ends.inner[0]?.side === s ? -ends.inner[0].ext : T0);
+    const endOf = (s: 0 | 1) => (atEnd && ends.inner[1]?.side === s ? len + ends.inner[1].ext : T1);
     const cuts = [T0];
     for (const b of breaks.filter((b) => b > T0 && b < T1).sort((a, b) => a - b)) if (b > cuts[cuts.length - 1] + 1e-3 && b < T1 - 1e-3) cuts.push(b);
     cuts.push(T1);
@@ -291,11 +317,14 @@ export function wallFaces(inp: WallFaceInput): { quads: FaceQuad[]; skirting: Sk
       const s1 = cuts[k + 1];
       const mid = (s0 + s1) / 2;
       for (const s of [0, 1] as const) {
+        const a = Math.max(s0, startOf(s));
+        const b = Math.min(s1, endOf(s));
+        if (b - a < 1e-4) continue;
         const slot = slotAt(s, mid);
-        side(s, s0, s1, p.y0, p.y1, slot);
+        side(s, a, b, p.y0, p.y1, slot);
         if (inp.skirting && !isBand && slot.kind === "inside" && p.y0 <= 1e-6 && p.y1 > 0.2) {
           const off = s ? -h : h;
-          skirting.push({ a: P(s0, off), b: P(s1, off), n: s ? { x: -n.x, y: -n.y } : n, roomId: slot.roomId });
+          skirting.push({ a: P(a, off), b: P(b, off), n: s ? { x: -n.x, y: -n.y } : n, roomId: slot.roomId });
         }
       }
       if (isTop) flat(s0, s1, p.y1, true, [{ kind: "top" }, { kind: "top" }]);
