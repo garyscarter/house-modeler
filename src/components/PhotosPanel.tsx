@@ -4,6 +4,7 @@ import { assignPhotos } from "../ai/photos";
 import { describeError } from "../ai/client";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
+import { listingPhotos } from "../lib/houses/listingAssets";
 
 export function PhotosPanel() {
   const photos = useStore((s) => s.photos);
@@ -40,6 +41,7 @@ export function PhotosPanel() {
     }
   };
 
+  const isListing = model?.preset?.id.startsWith("listing-91770873") ?? false;
   const rooms = model?.floors.flatMap((f) => f.rooms.map((r) => ({ floorName: f.name, roomName: r.name }))) ?? [];
 
   return (
@@ -62,6 +64,24 @@ export function PhotosPanel() {
             }}
           />
         </label>
+        {isListing && !photos.some((p) => p.name === "front-1") && (
+          <button
+            disabled={!!busy}
+            title="Add the listing's 37 photos, already placed in their rooms or beside the right side of the house"
+            onClick={async () => {
+              setBusy("Loading listing photos");
+              try {
+                addPhotos(await listingPhotos());
+              } catch (e) {
+                setError(describeError(e));
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Load listing 91770873 photos
+          </button>
+        )}
         <button disabled={!model || !photos.length || !!busy} onClick={autoAssign}>
           {busy ? busy + "…" : "Match photos to rooms"}
         </button>

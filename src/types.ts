@@ -182,6 +182,20 @@ export interface Exterior {
   /** Roof over porch canopies: flat, or a tiled lean-to falling away from the wall. */
   canopyRoof?: "flat" | "lean-to";
   chimneys?: Chimney[];
+  /**
+   * A tiled pitched skirt around the outside edges of flat roofs that face
+   * these sides (front = bottom of the plan), hipped where two meet; the
+   * roof behind stays flat. A common way to dress a single-storey extension.
+   */
+  flatRoofSkirt?: FlatRoofSkirt;
+}
+
+export type PlanSide = "front" | "rear" | "left" | "right";
+export interface FlatRoofSkirt {
+  sides: PlanSide[];
+  /** Horizontal depth of the tiled slope from the eaves, metres. */
+  depth: number;
+  pitchDeg: number;
 }
 
 export type TileStyle = "plain" | "concrete" | "slate";

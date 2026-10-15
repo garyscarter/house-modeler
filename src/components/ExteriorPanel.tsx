@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useStore } from "../store";
-import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, type HouseModel, type TileStyle, type VariantKey, type WallFinish } from "../types";
-import { chimneyOnRidge, defaultChimney, exteriorOf } from "../lib/roof";
+import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, type HouseModel, type FlatRoofSkirt, type PlanSide, type TileStyle, type VariantKey, type WallFinish } from "../types";
+import { chimneyOnRidge, defaultChimney, exteriorOf, planRoofs } from "../lib/roof";
 import { modelBounds } from "../lib/geometry";
 import "./ExteriorPanel.css";
 
@@ -67,6 +67,14 @@ function Field({ label, children, wide }: { label: string; children: ReactNode; 
   );
 }
 
+const SIDES: [PlanSide, string][] = [
+  ["front", "Front"],
+  ["left", "Left"],
+  ["right", "Right"],
+  ["rear", "Rear"],
+];
+const NO_SKIRT: FlatRoofSkirt = { sides: [], depth: 1, pitchDeg: 30 };
+
 export function ExteriorPanel({ variant }: { variant: VariantKey }) {
   const model = useStore((s) => s.variants[variant]);
   const updateModel = useStore((s) => s.updateModel);
@@ -75,6 +83,9 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
   const set = (p: Partial<Exterior>) => updateModel(variant, { exterior: { ...ext, ...p } });
   const hasGroups = model.floors.some((f) => f.rooms.some((r) => r.roofGroup));
   const hasCanopies = model.floors.some((f) => (f.canopies ?? []).length > 0);
+  const hasFlat = planRoofs(model).flatRoofs.length > 0;
+  const skirt = ext.flatRoofSkirt ?? NO_SKIRT;
+  const setSkirt = (p: Partial<FlatRoofSkirt>) => set({ flatRoofSkirt: { ...skirt, ...p } });
 
   return (
     <div className="panel exterior-panel">
@@ -178,6 +189,34 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
         <label className="check">
           <input type="checkbox" checked={ext.gutters} onChange={(e) => set({ gutters: e.target.checked })} /> Gutters and downpipes
         </label>
+        {hasFlat && (
+          <>
+            <h4>Tiled edge on flat roofs</h4>
+            <p className="muted small">A sloping tiled skirt along the outside edges of single-storey flat roofs, hipped at the corners.</p>
+            <div className="row">
+              {SIDES.map(([side, label]) => (
+                <label key={side} className="check">
+                  <input
+                    type="checkbox"
+                    checked={skirt.sides.includes(side)}
+                    onChange={(e) => setSkirt({ sides: e.target.checked ? [...skirt.sides, side] : skirt.sides.filter((x) => x !== side) })}
+                  />{" "}
+                  {label}
+                </label>
+              ))}
+            </div>
+            {skirt.sides.length > 0 && (
+              <div className="ext-grid">
+                <Field label="Depth (m)">
+                  <input type="number" min={0.3} max={3} step={0.1} value={skirt.depth} onChange={(e) => setSkirt({ depth: parseFloat(e.target.value) || skirt.depth })} />
+                </Field>
+                <Field label="Pitch (°)">
+                  <input type="number" min={10} max={45} step={1} value={skirt.pitchDeg} onChange={(e) => setSkirt({ pitchDeg: parseFloat(e.target.value) || skirt.pitchDeg })} />
+                </Field>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section>

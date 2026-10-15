@@ -7,6 +7,7 @@ import { VARIANT_LABEL, type VariantKey } from "../types";
 import { sampleHouse } from "../lib/sample";
 import { blankFloorFromImage, emptyHouse, FLOOR_NAMES } from "../lib/manual";
 import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
+import { listingFloorplan } from "../lib/houses/listingAssets";
 
 const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "gap"]);
 const WINDOW_KINDS = new Set(["window", "bay"]);
@@ -19,7 +20,6 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
   const replaceImage = useStore((s) => s.replaceImage);
   const copyVariant = useStore((s) => s.copyVariant);
   const hasCurrent = useStore((s) => !!s.variants.current);
-  const site = useStore((s) => s.site);
   const setSite = useStore((s) => s.setSite);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,9 +173,14 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
             <button
               onClick={() => {
                 const build = variant === "current" ? listing91770873 : listing91770873Proposed;
-                setVariant(variant, build(placeholderImage()));
-                if (!site) setSite(listingSite());
-                setUi({ activeVariant: variant });
+                // The listing's own floorplan sits behind the tracing; fall back to a placeholder offline.
+                void listingFloorplan()
+                  .catch(() => placeholderImage())
+                  .then((image) => {
+                    setVariant(variant, build(image));
+                    if (!useStore.getState().site) setSite(listingSite());
+                    setUi({ activeVariant: variant });
+                  });
               }}
             >
               {variant === "current" ? "Load listing 91770873" : "Load listing 91770873 with two-storey extension"}

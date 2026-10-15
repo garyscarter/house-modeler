@@ -1,4 +1,5 @@
 import { EXT_WALL_T } from "./geometry";
+import type { FlatRoofSkirt, PlanSide } from "../types";
 import {
   FLAT_OVERHANG,
   GUTTER_R,
@@ -8,6 +9,7 @@ import {
   pushPoly,
   roofGeometry,
   roofTrim,
+  type FlatEdge,
   type FlatRoof,
   type LeanTo,
   type P3,
@@ -69,7 +71,7 @@ function pushPlainBox(out: number[], x0: number, y0: number, z0: number, x1: num
 }
 
 /** Assemble the triangle soups for a planned roof. */
-export function roofParts(plan: RoofPlan, opts: { gutters: boolean }): RoofParts {
+export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: FlatRoofSkirt }): RoofParts {
   const parts: RoofParts = {
     tiles: { pos: [], uv: [] },
     gables: [],
@@ -104,7 +106,10 @@ export function roofParts(plan: RoofPlan, opts: { gutters: boolean }): RoofParts
     }
   }
 
-  for (const fr of plan.flatRoofs) flatRoofParts(fr, parts);
+  for (const fr of plan.flatRoofs) {
+    flatRoofParts(fr, parts);
+    if (opts.skirt?.sides.length) skirtParts(fr, opts.skirt, parts);
+  }
   for (const l of plan.leanTos) leanToParts(l, parts, opts.gutters);
 
   for (const p of plan.pillars) pushBox(parts.brick, p.x - 0.15, p.y0, p.z - 0.15, p.x + 0.15, p.y1, p.z + 0.15, false);
@@ -294,5 +299,61 @@ function leanToParts(l: LeanTo, parts: RoofParts, gutters: boolean) {
   if (gutters) {
     const dg = dfo + GUTTER_R;
     parts.gutters.push([P(ua, surf(de) - 0.03, dg), P(ub, surf(de) - 0.03, dg)]);
+  }
+}
+
+/** The plan side an eaves edge faces. */
+function sideOf(e: FlatEdge): PlanSide {
+  return e.axis === "x" ? (e.out > 0 ? "front" : "rear") : e.out > 0 ? "right" : "left";
+}
+
+/**
+ * Tiled skirt slopes along the eaves edges of a flat roof facing the chosen
+ * sides. Each rises from the fascia towards the roof's middle; where two
+ * skirted edges meet at an outside corner they are mitred into a hip, other
+ * ends are closed with a small cheek. A low upstand finishes the inner top edge.
+ */
+export function skirtParts(fr: FlatRoof, skirt: FlatRoofSkirt, parts: RoofParts) {
+  const W = EXT_WALL_T / 2 + FLAT_OVERHANG;
+  const t = Math.tan((skirt.pitchDeg * Math.PI) / 180);
+  const cos = Math.cos((skirt.pitchDeg * Math.PI) / 180);
+  const yE = fr.top - 0.03;
+  const edges = fr.edges.filter((e) => e.kind === "eaves" && skirt.sides.includes(sideOf(e)));
+  // Another skirted edge turning an outside corner at this end of `e`.
+  const mitred = (e: FlatEdge, end: 0 | 1) => {
+    if (e.fascia[end] <= 0) return false;
+    const along = end === 0 ? e.a : e.b;
+    return edges.some((f) => f.axis !== e.axis && Math.abs(f.at - along) < 0.05 && (Math.abs(f.a - e.at) < 0.05 || Math.abs(f.b - e.at) < 0.05));
+  };
+  for (const e of edges) {
+    const P = (along: number, y: number, across: number): P3 => (e.axis === "x" ? [along, y, e.at + e.out * across] : [e.at + e.out * across, y, along]);
+    const outward: P3 = e.axis === "x" ? [0, 1, e.out] : [e.out, 1, 0];
+    const run = Math.max(0.2, skirt.depth);
+    const yT = yE + run * t;
+    const [oa, ob] = [e.a - e.fascia[0], e.b + e.fascia[1]];
+    const m0 = mitred(e, 0);
+    const m1 = mitred(e, 1);
+    const [ia, ib] = [m0 ? oa + run : oa, m1 ? ob - run : ob];
+    if (ib <= ia) continue;
+    const across = W - run;
+    // UVs in metres: along the eaves, and up the slope.
+    pushPoly(parts.tiles.pos, [P(oa, yE, W), P(ob, yE, W), P(ib, yT, across), P(ia, yT, across)], outward, parts.tiles.uv, [
+      [oa, 0],
+      [ob, 0],
+      [ib, run / cos],
+      [ia, run / cos],
+    ]);
+    // Upstand behind the top edge, down to the membrane.
+    const inward: P3 = e.axis === "x" ? [0, 0, -e.out] : [-e.out, 0, 0];
+    pushPoly(parts.trim, [P(ia, fr.top, across), P(ib, fr.top, across), P(ib, yT, across), P(ia, yT, across)], inward);
+    // Square ends get a vertical cheek.
+    for (const [end, at] of [
+      [m0, oa],
+      [m1, ob],
+    ] as const) {
+      if (end) continue;
+      const n: P3 = e.axis === "x" ? [at === oa ? -1 : 1, 0, 0] : [0, 0, at === oa ? -1 : 1];
+      pushPoly(parts.trim, [P(at, yE, W), P(at, yT, across), P(at, fr.top, across)], n);
+    }
   }
 }

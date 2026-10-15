@@ -158,7 +158,7 @@ export function Roof({ model }: { model: HouseModel }) {
   const ext = exteriorOf(model);
   const low = useStore((s) => s.settings.quality === "low");
   const plan = useMemo(() => planRoofs(model), [model]);
-  const geo = useMemo(() => buildGeometry(roofParts(plan, { gutters: ext.gutters })), [plan, ext.gutters]);
+  const geo = useMemo(() => buildGeometry(roofParts(plan, { gutters: ext.gutters, skirt: ext.flatRoofSkirt })), [plan, ext.gutters, ext.flatRoofSkirt]);
   useEffect(() => () => Object.values(geo).forEach((g) => g?.dispose()), [geo]);
 
   const fascia = ext.fascia === "trim" ? ext.trimColor : WHITE_TRIM;
