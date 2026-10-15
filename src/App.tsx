@@ -10,9 +10,16 @@ import { PhotoLightbox } from "./components/PhotoLightbox";
 import { SitePanel } from "./components/SitePanel";
 import { ReportPanel } from "./components/ReportPanel";
 import { SiteEditor } from "./editor/SiteEditor";
+import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
+import { useMediaQuery } from "./components/useMediaQuery";
 import { VARIANT_LABEL, type VariantKey } from "./types";
 
 type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "settings";
+
+/** Below this width the sidebar becomes a slide-over drawer (keep in step with styles.css). */
+const DRAWER_QUERY = "(max-width: 899px)";
+/** From this width the view controls fit inline in the header; narrower screens get the View popover. */
+const INLINE_QUERY = "(min-width: 1500px)";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -25,21 +32,20 @@ export default function App() {
   const showCeilings = useStore((s) => s.showCeilings);
   const maxLevel = useStore((s) => s.maxLevel);
   const showExterior = useStore((s) => s.showExterior);
-  const showSite = useStore((s) => s.showSite);
-  const site = useStore((s) => s.site);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
-  const updateModel = useStore((s) => s.updateModel);
   const tab = useStore((s) => s.tab);
   const editFloorId = useStore((s) => s.editFloorId);
   const setTab = (t: "3d" | "plan") => setUi({ tab: t });
-  const setEditFloorId = (id: string | null) => setUi({ editFloorId: id });
   const [side, setSide] = useState<Side>("floorplans");
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
+  const drawer = useMediaQuery(DRAWER_QUERY);
+  const inline = useMediaQuery(INLINE_QUERY);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
 
@@ -63,6 +69,9 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // A panel action that opens the plan editor or another floor should reveal it.
+  useEffect(() => setDrawerOpen(false), [tab, editFloorId, drawer]);
+
   const model = variants[activeVariant];
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
   const otherModel = variants[other];
@@ -71,32 +80,47 @@ export default function App() {
   const editFloor = model?.floors.find((f) => f.id === editFloorId) ?? model?.floors[0];
 
   const onSelectRoom = (floor: { id: string }, room: { id: string }) => {
-    setUi({ selectedRoomId: room.id });
-    setEditFloorId(floor.id);
+    setUi({ selectedRoomId: room.id, editFloorId: floor.id });
   };
 
   if (!hydrated) return <div className="loading">Loading…</div>;
 
+  const viewControls = tab === "3d" ? <ViewControls model={model} both={both} /> : model ? <PlanFloorSwitch model={model} /> : null;
+  const sides: [Side, string, boolean][] = [
+    ["floorplans", "Floorplans", true],
+    ["photos", `Photos (${photos.length})`, true],
+    ["exterior", "Exterior", !!model],
+    ["site", "Site", true],
+    ["report", "Report", !!model],
+    ["settings", "Settings", true],
+  ];
+
   return (
-    <div className="app">
+    <div className={drawer && drawerOpen ? "app drawer-open" : "app"}>
       <header>
+        {drawer && (
+          <button className="drawer-toggle" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Panels" title="Panels">
+            <span aria-hidden="true">☰</span>
+          </button>
+        )}
         <h1>House Modeler</h1>
-        <div className="seg">
-          <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+        <div className="seg hdr-undo">
+          <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
             ↶
           </button>
-          <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
+          <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
             ↷
           </button>
         </div>
-        <div className="seg">
+        <div className="hdr-break" />
+        <div className="seg hdr-variant">
           {(["current", "proposed"] as VariantKey[]).map((k) => (
             <button key={k} className={activeVariant === k ? "active" : ""} disabled={!variants[k]} onClick={() => setUi({ activeVariant: k, selectedRoomId: null })}>
               {VARIANT_LABEL[k]}
             </button>
           ))}
         </div>
-        <div className="seg">
+        <div className="seg hdr-tab">
           <button className={tab === "3d" ? "active" : ""} onClick={() => setTab("3d")}>
             3D view
           </button>
@@ -104,113 +128,26 @@ export default function App() {
             Check plan
           </button>
         </div>
-        {tab === "3d" && (
-          <>
-            <div className="seg">
-              <button className={viewMode === "single" ? "active" : ""} onClick={() => setUi({ viewMode: "single" })}>
-                Single
-              </button>
-              <button className={viewMode === "side-by-side" ? "active" : ""} disabled={!both} onClick={() => setUi({ viewMode: "side-by-side" })}>
-                Side by side
-              </button>
-              <button className={viewMode === "overlay" ? "active" : ""} disabled={!both} onClick={() => setUi({ viewMode: "overlay" })}>
-                Overlay
-              </button>
-            </div>
-            <div className="seg">
-              <button className={cameraMode === "orbit" ? "active" : ""} onClick={() => setUi({ cameraMode: "orbit" })}>
-                Orbit
-              </button>
-              <button className={cameraMode === "walk" ? "active" : ""} disabled={!model} onClick={() => setUi({ cameraMode: "walk", viewMode: "single" })}>
-                Walk
-              </button>
-              {cameraMode === "walk" && model && (
-                <select value={walkFloorId ?? model.floors[0]?.id} onChange={(e) => setUi({ walkFloorId: e.target.value })}>
-                  {model.floors.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {model && model.floors.length > 1 && cameraMode !== "walk" && (
-              <label className="check">
-                Show up to
-                <select value={maxLevel ?? ""} onChange={(e) => setUi({ maxLevel: e.target.value === "" ? null : parseInt(e.target.value) })}>
-                  <option value="">all floors</option>
-                  {model.floors.map((f) => (
-                    <option key={f.id} value={f.level}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="check">
-              <input type="checkbox" checked={showLabels} onChange={(e) => setUi({ showLabels: e.target.checked })} /> Labels
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={showCeilings} onChange={(e) => setUi({ showCeilings: e.target.checked })} /> Ceilings
-            </label>
-            <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
-              <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior
-            </label>
-            <label className="check" title="Plot, garden and neighbouring buildings (set up under Site)">
-              <input type="checkbox" checked={showSite} disabled={!site} onChange={(e) => setUi({ showSite: e.target.checked })} /> Site
-            </label>
-            {model && (
-              <label className="check">
-                Ceiling height
-                <input
-                  type="number"
-                  step="0.1"
-                  min="2"
-                  max="4"
-                  value={model.ceilingHeight}
-                  onChange={(e) => updateModel(activeVariant, { ceilingHeight: parseFloat(e.target.value) || 2.4 })}
-                  style={{ width: 56 }}
-                />
-                m
-              </label>
-            )}
-          </>
-        )}
-        {tab === "plan" && model && (
-          <div className="seg">
-            {model.floors.map((f) => (
-              <button key={f.id} className={!editingSite && editFloor?.id === f.id ? "active" : ""} onClick={() => setEditFloorId(f.id)}>
-                {f.name}
-              </button>
-            ))}
-            <button className={editingSite ? "active" : ""} onClick={() => setEditFloorId(SITE_EDIT_ID)} title="Plot boundary, garden and neighbours">
-              Site
-            </button>
-          </div>
-        )}
+        {viewControls && (inline ? <div className="hdr-inline">{viewControls}</div> : <ViewMenu label="View">{viewControls}</ViewMenu>)}
       </header>
 
       <div className="body">
-        <aside>
+        {drawer && drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
+        <aside className={drawer ? "drawer" : undefined} aria-hidden={drawer && !drawerOpen ? true : undefined} inert={drawer && !drawerOpen ? true : undefined}>
+          {drawer && (
+            <div className="drawer-head">
+              <b>Panels</b>
+              <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close panels">
+                ×
+              </button>
+            </div>
+          )}
           <div className="seg vertical">
-            <button className={side === "floorplans" ? "active" : ""} onClick={() => setSide("floorplans")}>
-              Floorplans
-            </button>
-            <button className={side === "photos" ? "active" : ""} onClick={() => setSide("photos")}>
-              Photos ({photos.length})
-            </button>
-            <button className={side === "exterior" ? "active" : ""} onClick={() => setSide("exterior")} disabled={!model}>
-              Exterior
-            </button>
-            <button className={side === "site" ? "active" : ""} onClick={() => setSide("site")}>
-              Site
-            </button>
-            <button className={side === "report" ? "active" : ""} onClick={() => setSide("report")} disabled={!model}>
-              Report
-            </button>
-            <button className={side === "settings" ? "active" : ""} onClick={() => setSide("settings")}>
-              Settings
-            </button>
+            {sides.map(([key, label, enabled]) => (
+              <button key={key} className={side === key ? "active" : ""} onClick={() => setSide(key)} disabled={!enabled}>
+                {label}
+              </button>
+            ))}
           </div>
           <div className="side-content">
             {side === "floorplans" && (
@@ -231,7 +168,10 @@ export default function App() {
           {!model && (
             <div className="empty">
               <h2>Start with a floorplan</h2>
-              <p>Add your API key in Settings, then upload the listing's floorplan image under Floorplans. Or load the sample house to try the viewer.</p>
+              <p>
+                Add your API key in Settings, then upload the listing's floorplan image under Floorplans. Or load the sample house to try the viewer.
+              </p>
+              {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
             </div>
           )}
           {model && tab === "3d" && viewMode === "single" && (
