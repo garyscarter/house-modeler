@@ -1,0 +1,42 @@
+.site-panel h4 { margin-top: 14px; }
+.site-inline { margin: 0; }
+
+.site-orient { display: flex; gap: 12px; align-items: center; }
+.site-orient-fields { flex: 1; min-width: 0; }
+.site-orient-fields label { margin: 4px 0; }
+.site-latlon { display: flex; gap: 8px; }
+.site-latlon label { flex: 1; min-width: 0; }
+.site-unit { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+label .site-unit input[type="number"] { width: 72px; display: inline-block; margin-top: 3px; }
+
+.site-dial { width: 96px; height: 96px; flex: none; touch-action: none; cursor: grab; user-select: none; }
+.site-dial:focus-visible { outline: 2px solid var(--accent); border-radius: 50%; }
+.site-dial .dial-face { fill: #f8fafc; stroke: var(--line); stroke-width: 1.5; }
+.site-dial .dial-tick { stroke: #cbd5e1; stroke-width: 1; }
+.site-dial .dial-n { fill: var(--danger); font-size: 11px; font-weight: 700; }
+.site-dial .dial-l { fill: var(--muted); font-size: 10px; font-weight: 600; }
+.site-dial .dial-house { fill: #efe9d8; stroke: #7a4a3a; stroke-width: 1.5; }
+.site-dial .dial-arrow { fill: var(--accent); }
+.site-dial .dial-shaft { stroke: var(--accent); stroke-width: 2.5; }
+
+.site-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 10px 0 6px; font-size: 13px; }
+.site-figures div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding: 2px 0; }
+.site-gaps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 8px; font-size: 13px; }
+.site-gaps > span { grid-column: 1 / -1; }
+.site-gaps div { display: flex; flex-direction: column; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 0; }
+.site-gaps div .small { text-transform: capitalize; }
+
+.site-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.site-item.site-neighbour { display: grid; grid-template-columns: minmax(0, 1fr) 62px 78px auto; font-size: 12px; }
+.site-item select, .site-item input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.site-item select { flex: 1; }
+.site-neighbour .site-unit { gap: 2px; }
+.site-neighbour .site-unit input { width: 100%; }
+.site-area { margin-left: auto; white-space: nowrap; }
+.site-remove { padding: 4px 9px; color: var(--muted); }
+
+.site-simple { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.site-simple p { margin: 0 0 6px; }
+.site-depths { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.site-depths label { margin: 0; font-size: 12px; color: var(--muted); }
+.site-depths input { width: 100%; }
