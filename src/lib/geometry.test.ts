@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildWalls, coveredIntervals, cutWall, diffWalls, estimatePxPerM, polygonArea, snapRooms } from "./geometry";
+import type { Opening } from "../types";
+import {
+  buildWalls,
+  coveredIntervals,
+  cutWall,
+  diffWalls,
+  estimatePxPerM,
+  openingHeights,
+  polygonArea,
+  snapRooms,
+  type WallPiece,
+  type WallSeg,
+} from "./geometry";
 import { floor, rect } from "./testing";
 
 describe("buildWalls", () => {
@@ -26,27 +38,72 @@ describe("buildWalls", () => {
 });
 
 describe("cutWall", () => {
+  const op = (kind: Opening["kind"], extra: Partial<Opening> = {}): Opening => ({ id: kind, kind, x: 0, y: 0, orientation: "h", widthM: 1, ...extra });
+  const wallWith = (...ops: [Opening, number][]): WallSeg => ({
+    a: { x: 0, y: 0 },
+    b: { x: 4, y: 0 },
+    openings: ops.map(([opening, t]) => ({ opening, t })),
+  });
+  /** Wall pieces over the opening centred at x (pieces that start at its left jamb). */
+  const over = (pieces: WallPiece[], x0: number) => pieces.filter((p) => Math.abs(p.a.x - x0) < 1e-9).map((p) => [p.y0, p.y1]);
+
   it("leaves a lintel above a door and a sill and head around a window", () => {
-    const wall = { a: { x: 0, y: 0 }, b: { x: 4, y: 0 }, openings: [] as { opening: never; t: number }[] };
-    const door = { id: "d", kind: "door" as const, x: 0, y: 0, orientation: "h" as const, widthM: 1 };
-    const win = { id: "w", kind: "window" as const, x: 0, y: 0, orientation: "h" as const, widthM: 1 };
-    const { pieces, placements } = cutWall({ ...wall, openings: [{ opening: door, t: 1 }, { opening: win, t: 3 }] }, 2.4);
+    const { pieces, placements } = cutWall(wallWith([op("door"), 1], [op("window"), 3]), 2.4);
     expect(placements).toHaveLength(2);
-    const lintel = pieces.find((p) => p.a.x === 0.5 && p.y0 > 0);
-    expect(lintel?.y0).toBeCloseTo(2.05);
-    const sill = pieces.find((p) => p.a.x === 2.5 && p.y0 === 0);
-    expect(sill?.y1).toBeCloseTo(0.9);
+    expect(over(pieces, 0.5)).toEqual([[2.05, 2.4]]);
+    expect(over(pieces, 2.5)).toEqual([
+      [0, 0.9],
+      [2.1, 2.4],
+    ]);
+    expect(placements[1]).toMatchObject({ y0: 0.9, y1: 2.1, width: 1 });
+  });
+
+  it("cuts each opening at its own sill and head", () => {
+    const high = op("window", { sill: 1.5, head: 2.0 });
+    const tall = op("door", { head: 2.2 });
+    const { pieces, placements } = cutWall(wallWith([tall, 1], [high, 3]), 2.4);
+    expect(over(pieces, 0.5)).toEqual([[2.2, 2.4]]);
+    expect(over(pieces, 2.5)).toEqual([
+      [0, 1.5],
+      [2.0, 2.4],
+    ]);
+    expect(placements.map((p) => [p.y0, p.y1])).toEqual([
+      [0, 2.2],
+      [1.5, 2.0],
+    ]);
+  });
+
+  it("leaves no lintel when the head reaches the ceiling, and none over a gap", () => {
+    const { pieces } = cutWall(wallWith([op("french", { head: 2.6 }), 1], [op("gap"), 3]), 2.4);
+    expect(over(pieces, 0.5)).toEqual([]);
+    expect(over(pieces, 2.5)).toEqual([]);
+    // The wall either side and between the openings is untouched.
+    expect(pieces.map((p) => [p.a.x, p.b.x])).toEqual([
+      [0, 0.5],
+      [1.5, 2.5],
+      [3.5, 4],
+    ]);
+  });
+
+  it("opens a bay to the floor and uses kind defaults for glazed doors", () => {
+    expect(openingHeights(op("bay"), 2.4)).toEqual({ y0: 0, y1: 2.1 });
+    expect(openingHeights(op("bifold"), 2.4)).toEqual({ y0: 0, y1: 2.1 });
+    expect(openingHeights(op("garage"), 2.4)).toEqual({ y0: 0, y1: 2.15 });
+    expect(openingHeights(op("gap"), 2.4)).toEqual({ y0: 0, y1: 2.4 });
+    // A sill above the head is clamped so the window keeps some glass.
+    expect(openingHeights(op("window", { sill: 2.5 }), 2.4)).toEqual({ y0: 2.0, y1: 2.1 });
   });
 });
 
 describe("diffWalls", () => {
   it("returns the part of a wall the other variant does not have", () => {
-    const a = [{ a: { x: 0, y: 0 }, b: { x: 4, y: 0 }, openings: [] }];
+    const a = [{ a: { x: 0, y: 0 }, b: { x: 4, y: 0 }, openings: [], exterior: true }];
     const b = [{ a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, openings: [] }];
     const d = diffWalls(a, b);
     expect(d).toHaveLength(1);
     expect(d[0].a.x).toBeCloseTo(1);
     expect(d[0].b.x).toBeCloseTo(4);
+    expect(d[0].exterior).toBe(true);
   });
 });
 
