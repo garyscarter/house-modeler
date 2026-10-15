@@ -1,0 +1,76 @@
+.report-panel details { border-top: 1px solid var(--line); padding: 2px 0 6px; }
+.report-panel details:first-of-type { border-top: 0; }
+.report-panel summary {
+  display: flex; align-items: center; gap: 6px; min-height: 40px; cursor: pointer;
+  font-weight: 600; font-size: 13px; list-style: none; user-select: none;
+}
+.report-panel summary::-webkit-details-marker { display: none; }
+.report-panel summary::before {
+  content: ""; width: 7px; height: 7px; margin: 0 4px 0 2px; flex: none;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.15s;
+}
+.report-panel details[open] > summary::before { transform: rotate(45deg); }
+.rp-count { font-weight: 600; font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 0 6px; }
+.report-panel .rp-sub { margin: 10px 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: none; }
+
+/* Areas */
+.rp-unit { margin: 0 0 6px; }
+.rp-unit button { padding: 4px 12px; min-height: 30px; }
+.rp-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.rp-table th, .rp-table td { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.rp-table th:first-child, .rp-table td:first-child { text-align: left; }
+.rp-areas thead th { font-size: 11px; color: var(--muted); font-weight: 600; }
+.rp-areas thead th:first-child { width: auto; }
+.rp-areas thead th:not(:first-child) { width: 64px; }
+.rp-areas thead th:nth-child(2):not(:last-child) { width: 50px; }
+.rp-areas thead th:last-child:nth-child(4) { width: 46px; }
+.rp-areas .rp-floor th { text-align: left; padding-top: 8px; font-size: 12px; border-bottom: 1px solid #c4cad2; }
+.rp-areas .rp-total td { font-weight: 600; }
+.rp-areas .rp-grand td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 0; padding-top: 5px; }
+.rp-areas .rp-delta { color: #15803d; }
+.rp-areas .rp-new td:first-child { color: #15803d; }
+.rp-areas .rp-gone td:first-child { color: var(--danger); text-decoration: line-through; }
+
+/* Changes */
+.rp-changes { list-style: none; margin: 0; padding: 0; }
+.rp-changes li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: start;
+  padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px;
+}
+.rp-changes li.rp-structural { background: #fffbeb; margin: 0 -4px; padding: 6px 4px; }
+.rp-desc { min-width: 0; }
+.rp-warn { display: block; color: #b45309; font-size: 11.5px; margin-top: 2px; }
+.rp-qty { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rp-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 4px; padding: 1px 5px; margin-top: 1px; background: #eef2f7; color: #475569; }
+.rp-tag-floor { background: #dcfce7; color: #166534; }
+.rp-tag-room { background: #e0e7ff; color: #3730a3; }
+.rp-tag-wall { background: #fee2e2; color: #991b1b; }
+.rp-tag-door { background: #fef3c7; color: #92400e; }
+.rp-tag-window { background: #e0f2fe; color: #075985; }
+
+/* Costs */
+.rp-costs { display: flex; flex-direction: column; gap: 6px; }
+.rp-cost { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--bg); font-size: 12.5px; }
+.rp-cost-head { display: flex; justify-content: space-between; gap: 8px; }
+.rp-cost-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; }
+.rp-cost-row b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rp-money { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.rp-money input {
+  width: 100px; min-height: 34px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; font: inherit; background: var(--panel); color: var(--text);
+}
+.rp-money input::placeholder { color: #a3aab5; }
+.rp-cost-sum { background: var(--panel); }
+.rp-cost-sum .rp-cost-row { min-height: 30px; }
+.rp-cost-total { border-top: 2px solid var(--text); margin-top: 2px; padding-top: 4px; font-size: 13.5px; font-weight: 700; }
+
+/* Notes */
+.rp-notes { margin: 0; }
+.rp-notes dt { font-weight: 600; margin-top: 6px; font-size: 12.5px; }
+.rp-notes dd { margin: 2px 0 6px; white-space: pre-wrap; font-size: 12.5px; }
+
+/* Export */
+.rp-export .row button { min-height: 36px; }
+.rp-export-group { margin-bottom: 8px; }
+.rp-plan-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.rp-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.rp-primary:hover:not(:disabled) { filter: brightness(1.08); }
