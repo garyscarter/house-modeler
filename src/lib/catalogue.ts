@@ -34,6 +34,7 @@ export type Symbol =
   | "island"
   | "shelves"
   | "dresser"
+  | "fitted-wardrobe"
   | "boiler";
 
 export interface CatalogueItem {
@@ -65,6 +66,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bedside", name: "Bedside table", category: "Bedroom", w: 0.45, d: 0.40, h: 0.55, color: WOOD, symbol: "box" },
   { id: "wardrobe-double", name: "Double wardrobe", category: "Bedroom", w: 1.00, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-triple", name: "Triple wardrobe", category: "Bedroom", w: 1.50, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
+  { id: "wardrobe-fitted", name: "Fitted wardrobe", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#f5f5f5", symbol: "fitted-wardrobe", note: "Floor to ceiling, with top boxes; set any width" },
   { id: "chest", name: "Chest of drawers", category: "Bedroom", w: 0.80, d: 0.45, h: 0.9, color: WOOD, symbol: "box" },
   { id: "dressing-table", name: "Dressing table", category: "Bedroom", w: 1.00, d: 0.45, h: 0.76, color: WOOD, symbol: "dresser", note: "With a mirror above" },
 
