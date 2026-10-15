@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { ask } from "./Dialogs";
 import { SITE_EDIT_ID, useStore } from "../store";
 import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
@@ -23,8 +24,8 @@ export function SitePanel() {
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const setSiteView = useSiteView((s) => s.setSiteView);
 
-  const loadListing = () => {
-    if (!site || window.confirm("Replace the current site with the one for listing 91770873?")) setSite(listingSite());
+  const loadListing = async () => {
+    if (!site || (await ask("Replace the current site with the one for listing 91770873?", { ok: "Replace" }))) setSite(listingSite());
   };
 
   return (
@@ -114,8 +115,8 @@ export function SitePanel() {
             <button onClick={loadListing}>Load site for listing 91770873</button>
             <button
               className="danger"
-              onClick={() => {
-                if (window.confirm("Clear the site? (Undo can bring it back.)")) setSite(undefined);
+              onClick={async () => {
+                if (await ask("Clear the site? Undo can bring it back.", { ok: "Clear", danger: true })) setSite(undefined);
               }}
             >
               Clear site
@@ -214,8 +215,8 @@ function SimpleSiteForm({ model, site }: { model: HouseModel; site: Site | undef
         {field("right", "Right")}
       </div>
       <button
-        onClick={() => {
-          if (site && !window.confirm("Replace the current site with a simple rectangular plot?")) return;
+        onClick={async () => {
+          if (site && !(await ask("Replace the current site with a simple rectangular plot?", { ok: "Replace" }))) return;
           setSite(simpleSite(model, depths, site));
         }}
       >

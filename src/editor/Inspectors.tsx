@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "../components/Dialogs";
 import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Room, VariantKey, Wall, WallFinish } from "../types";
 import { FLOOR_FINISH_LABEL, OPENING_KIND_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type StairsDir } from "../types";
 import type { CatalogueItem } from "../lib/catalogue";
@@ -278,8 +279,8 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
       )}
       <button
         className="danger"
-        onClick={() => {
-          if (!window.confirm(`Delete ${room.name}?`)) return;
+        onClick={async () => {
+          if (!(await ask(`Delete ${room.name}?`, { ok: "Delete", danger: true }))) return;
           updateFloor(variant, floor.id, (f) => ({ ...f, rooms: f.rooms.filter((x) => x.id !== room.id) }));
           setUi({ selectedRoomId: null });
         }}
@@ -587,8 +588,8 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
         </button>
         <button
           className="danger"
-          onClick={() => {
-            if (!model || !window.confirm(`Delete ${floor.name} and its rooms?`)) return;
+          onClick={async () => {
+            if (!model || !(await ask(`Delete ${floor.name} and its rooms?`, { ok: "Delete", danger: true }))) return;
             const floors = model.floors.filter((f) => f.id !== floor.id);
             if (floors.length) setVariant(variant, { ...model, floors });
             else setVariant(variant, undefined);

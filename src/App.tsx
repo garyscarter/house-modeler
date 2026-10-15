@@ -7,6 +7,7 @@ import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
+import { Dialogs } from "./components/Dialogs";
 import { SitePanel } from "./components/SitePanel";
 import { ReportPanel } from "./components/ReportPanel";
 import { SiteEditor } from "./editor/SiteEditor";
@@ -234,6 +235,7 @@ export default function App() {
         </main>
       </div>
       <PhotoLightbox />
+      <Dialogs />
     </div>
   );
 }

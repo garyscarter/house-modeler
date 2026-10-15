@@ -1,4 +1,5 @@
 import { useStore } from "../store";
+import { ask } from "./Dialogs";
 import type { HouseModel, Photo, Site } from "../types";
 import { MODELS } from "../ai/models";
 
@@ -95,8 +96,8 @@ export function SettingsPanel() {
         </label>
         <button
           className="danger"
-          onClick={() => {
-            if (window.confirm("Clear both models, the site and all photos? (Undo can bring them back.)")) reset();
+          onClick={async () => {
+            if (await ask("Clear both models, the site and all photos? Undo can bring them back.", { ok: "Clear", danger: true })) reset();
           }}
         >
           Clear all

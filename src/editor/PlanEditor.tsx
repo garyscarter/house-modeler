@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { askText } from "../components/Dialogs";
 import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
 import { CATALOGUE, CATEGORIES, byId, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
@@ -363,8 +364,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   /** Measure and drawing tools snap to corners, wall ends and fixture corners. */
   const snapMeasure = (p: Pt) => (tool === "measure" ? snapPoint(p, corners, snapTol).p : snap(p));
 
-  const addRoom = (polygon: Pt[]) => {
-    const name = window.prompt("Room name:", `Room ${floor.rooms.length + 1}`);
+  const addRoom = async (polygon: Pt[]) => {
+    const name = await askText("Room name:", `Room ${floor.rooms.length + 1}`);
     if (name === null) return;
     const room: Room = { id: uid(), name: name || `Room ${floor.rooms.length + 1}`, polygon };
     updateFloor(variant, floor.id, (f) => ({ ...f, rooms: [...f.rooms, room] }));
@@ -414,8 +415,10 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       const next = [...calib, raw];
       if (next.length === 2) {
         const d = dist(next[0], next[1]);
-        const m = parseFloat(window.prompt("Real-world distance between those two points, in metres:", "3.0") ?? "");
-        if (m > 0 && d > 0) updateFloor(variant, floor.id, { pxPerM: d / m });
+        void askText("Real-world distance between those two points, in metres:", "3.0").then((v) => {
+          const m = parseFloat(v ?? "");
+          if (m > 0 && d > 0) updateFloor(variant, floor.id, { pxPerM: d / m });
+        });
         setCalib([]);
       } else setCalib(next);
     } else if (tool === "rect") {

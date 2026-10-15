@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ask } from "./Dialogs";
 import { useStore } from "../store";
 import { fileToDataUrl, imageSize } from "../lib/image";
 import { VARIANT_LABEL, type VariantKey } from "../types";
@@ -136,8 +137,8 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         {model && variant === "proposed" && hasCurrent && (
           <button
             title="Replace the proposed design with a fresh copy of As listed"
-            onClick={() => {
-              if (window.confirm("Replace the Proposed model with a copy of As listed?")) copyVariant("current", "proposed");
+            onClick={async () => {
+              if (await ask("Replace the Proposed model with a copy of As listed?", { ok: "Replace" })) copyVariant("current", "proposed");
             }}
           >
             Reset to a copy of As listed
@@ -146,8 +147,8 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         {model && (
           <button
             className="danger"
-            onClick={() => {
-              if (window.confirm(`Remove the ${VARIANT_LABEL[variant]} model?`)) setVariant(variant, undefined);
+            onClick={async () => {
+              if (await ask(`Remove the ${VARIANT_LABEL[variant]} model?`, { ok: "Remove", danger: true })) setVariant(variant, undefined);
             }}
           >
             Remove
