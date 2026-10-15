@@ -1,6 +1,6 @@
 import { useStore } from "../store";
 import type { HouseModel, Photo, Site } from "../types";
-import { MODELS } from "../ai/client";
+import { MODELS } from "../ai/models";
 
 export function SettingsPanel() {
   const settings = useStore((s) => s.settings);

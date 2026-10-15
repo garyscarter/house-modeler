@@ -1,12 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AnthropicBeta } from "@anthropic-ai/sdk/resources/beta/beta";
 
-export const MODELS = [
-  { id: "claude-opus-5-5", label: "Claude Opus 5.5 (default)" },
-  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (faster, cheaper)" },
-  { id: "claude-fable-5-1", label: "Claude Fable 5.1 (most capable)" },
-];
-export const DEFAULT_MODEL = MODELS[0].id;
+export { DEFAULT_MODEL, MODELS } from "./models";
 
 /**
  * If the safety system declines a request, the API retries it on a fallback

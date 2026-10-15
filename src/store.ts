@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, Opening, Photo, Room, Site, VariantKey } from "./types";
 import { imageAwareStorage } from "./lib/persist";
 import { renamePhotos, scaleFloor } from "./lib/modelOps";
-import { DEFAULT_MODEL, MODELS } from "./ai/client";
+import { DEFAULT_MODEL, MODELS } from "./ai/models";
 import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./lib/houses/listing91770873";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
