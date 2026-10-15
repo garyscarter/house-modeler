@@ -1,5 +1,5 @@
 import type { Floor, HouseModel, Opening, OpeningKind, Room } from "../types";
-import { buildWalls, diffWalls, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
+import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { M2_TO_FT2 } from "./planMath";
 
 /**
@@ -23,6 +23,44 @@ const LONG_WALL = 3;
 export const roomArea = (floor: Floor, room: Room) => Math.abs(polygonArea(roomWorldPolygon(floor, room)));
 export const floorArea = (floor: Floor) => floor.rooms.reduce((s, r) => s + roomArea(floor, r), 0);
 export const modelArea = (model: HouseModel) => model.floors.reduce((s, f) => s + floorArea(f), 0);
+
+/** Rooms that aren't heated: as set on the room, else anything called a garage. */
+export const isUnheated = (room: Room) => room.unheated ?? /garage/i.test(room.name);
+
+export interface AreaSummary {
+  /** Inside the inner face of the outside walls, internal walls included: how listings and EPCs measure (IPMS 3C). */
+  internal: number;
+  /** The same, leaving out unheated rooms. */
+  heated: number;
+  unheatedRooms: string[];
+  /** Model minus the listing's printed total, as a fraction of it, when the listing gives one. */
+  vsListed?: number;
+}
+
+/**
+ * Floor areas measured the way a listing would. Room areas run to the wall
+ * centre lines, so each room loses a strip half an outside wall thick along
+ * its outside walls (corner overlaps are a few cm² and ignored).
+ */
+export function areaSummary(model: HouseModel): AreaSummary {
+  let internal = 0;
+  let heated = 0;
+  const unheatedRooms: string[] = [];
+  for (const floor of model.floors) {
+    const strip = new Map<string, number>();
+    for (const w of buildWalls(floor)) {
+      if (!w.exterior || !w.roomId) continue;
+      strip.set(w.roomId, (strip.get(w.roomId) ?? 0) + Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) * (EXT_WALL_T / 2));
+    }
+    for (const r of floor.rooms) {
+      const a = Math.max(0, roomArea(floor, r) - (strip.get(r.id) ?? 0));
+      internal += a;
+      if (isUnheated(r)) unheatedRooms.push(r.name);
+      else heated += a;
+    }
+  }
+  return { internal, heated, unheatedRooms, vsListed: model.listedArea ? (internal - model.listedArea) / model.listedArea : undefined };
+}
 
 /** Floors of two variants paired by id (copyVariant keeps ids), then by level. Sorted by level. */
 export function pairFloors(a?: HouseModel, b?: HouseModel): { level: number; a?: Floor; b?: Floor }[] {

@@ -4,6 +4,7 @@ import { FLOOR_FINISH_LABEL, OPENING_KIND_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_L
 import type { CatalogueItem } from "../lib/catalogue";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
+import { isUnheated } from "../lib/report";
 import { roomColor } from "../three/House";
 import {
   COLOUR_KINDS,
@@ -160,6 +161,11 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
       <label>
         Notes
         <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
+      </label>
+
+      <label className="check">
+        <input type="checkbox" checked={isUnheated(room)} onChange={(e) => onChange({ unheated: e.target.checked })} /> Not heated (garage, store): left out of
+        the heated area
       </label>
 
       <label>

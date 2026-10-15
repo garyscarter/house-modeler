@@ -307,8 +307,10 @@ function neighbourGeometry(n: Neighbour) {
   return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables), top: m.ridgeY };
 }
 
-/** Opacity of see-through neighbours, chosen or automatic. */
+/** Opacity of see-through neighbours when chosen in the Site panel. */
 const GHOST_OPACITY = 0.3;
+/** Opacity of a neighbour that fades on its own in front of the camera: faint, so it doesn't read as haze over the garden. */
+const FADED_OPACITY = 0.08;
 
 /**
  * A neighbour's walls and roof. It turns see-through on its own while it
@@ -346,7 +348,7 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
     probe.faded = blocks;
     for (const m of mats) {
       m.transparent = blocks;
-      m.opacity = blocks ? GHOST_OPACITY : 1;
+      m.opacity = blocks ? FADED_OPACITY : 1;
       m.depthWrite = !blocks;
       m.needsUpdate = true;
     }

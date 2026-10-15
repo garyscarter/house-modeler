@@ -3,6 +3,7 @@ import type { HouseModel, Opening } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
 import {
   areaReport,
+  areaSummary,
   changeCost,
   CONTINGENCY,
   diffModels,
@@ -211,5 +212,21 @@ describe("notes", () => {
       { floor: "Floor", room: "Kitchen", notes: "Replace units" },
       { floor: "First", room: "Bed", notes: "Damp patch" },
     ]);
+  });
+});
+
+describe("areaSummary", () => {
+  it("measures listing 91770873 within 5% of its printed 113.9 m² and leaves the garage out of the heated area", () => {
+    const s = areaSummary(listing91770873(""));
+    expect(Math.abs(s.vsListed!)).toBeLessThan(0.05);
+    expect(s.unheatedRooms).toEqual(["Garage"]);
+    expect(s.internal - s.heated).toBeGreaterThan(10);
+    expect(s.internal).toBeLessThan(modelArea(listing91770873("")));
+  });
+
+  it("honours an explicit unheated flag over the name", () => {
+    const m = listing91770873("");
+    m.floors[0].rooms.find((r) => r.name === "Garage")!.unheated = false;
+    expect(areaSummary(m).unheatedRooms).toEqual([]);
   });
 });

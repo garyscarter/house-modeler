@@ -26,6 +26,8 @@ export interface Room {
   wallPaint?: string;
   /** Finish of this room's external walls; undefined = the house default (Exterior.wallFinish). */
   exteriorFinish?: WallFinish;
+  /** Not heated (a garage or store): left out of the heated floor area. Undefined = guess from the name. */
+  unheated?: boolean;
 }
 
 export type WallFinish = "render" | "brick" | "pebbledash" | "stone" | "cladding";
@@ -246,6 +248,8 @@ export interface HouseModel {
   exterior?: Exterior;
   /** Set on built-in models so the app can offer an update when the tracing improves. */
   preset?: { id: string; version: number };
+  /** Total floor area printed on the listing's floorplan (m²), to check the tracing against. */
+  listedArea?: number;
 }
 
 /** A point in world metres on the plan: x to the right, y towards the front (bottom of the plan). */

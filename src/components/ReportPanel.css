@@ -74,3 +74,7 @@
 .rp-plan-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
 .rp-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .rp-primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.rp-check { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.rp-check h4 { margin: 0 0 4px; font-size: 13px; }
+.rp-check p { margin: 4px 0; }

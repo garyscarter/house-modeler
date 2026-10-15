@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 7 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 7 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 8 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 8 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -201,6 +201,8 @@ export function listing91770873(image: string): HouseModel {
       flatRoofSkirt: { sides: ["front", "left", "right"], depth: 1.0, pitchDeg: 30 },
     },
     preset: LISTING_PRESET,
+    // Giraffe360 floorplan, IPMS 3C, garage included (the EPC gives 114 m²).
+    listedArea: 113.9,
   };
 }
 
@@ -225,10 +227,12 @@ export function placeholderImage(): string {
  */
 export function listing91770873Proposed(image: string): HouseModel {
   const house = listing91770873(image);
+  delete house.listedArea;
   const first = house.floors.find((f) => f.level === 1)!;
   // Spans the extension footprint below: garage west wall to the stair
   // enclosure wall, full depth of the existing first floor.
-  const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { exteriorColor: BRICK, exteriorFinish: "brick", roofGroup: "extension" });
+  // Rendered to match the house above the brick ground floor.
+  const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { roofGroup: "extension" });
   first.rooms.push(newRoom);
   first.openings.push(
     op("door", 610, 1075, "v", 0.8), // from the landing (assumed)

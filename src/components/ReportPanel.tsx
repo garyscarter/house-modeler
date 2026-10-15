@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { VARIANT_LABEL, type HouseModel, type VariantKey } from "../types";
 import {
   areaReport,
+  areaSummary,
   CONTINGENCY,
   CONTINGENCY_EXAMPLE,
   diffModels,
@@ -42,6 +43,7 @@ export function ReportPanel() {
       <details open>
         <summary>Areas</summary>
         <Areas report={areas} both={!!current && !!proposed} />
+        <AreaCheck variants={variants} />
       </details>
       <details open>
         <summary>
@@ -151,6 +153,37 @@ function Areas({ report, both }: { report: AreaReport; both: boolean }) {
       </table>
       <p className="muted small">Internal areas to the traced wall centre lines, in {unit}. Check against the listing's printed sizes.</p>
     </>
+  );
+}
+
+/** Each variant's area measured as a listing or EPC would, against the listing's printed total. */
+function AreaCheck({ variants }: { variants: Partial<Record<VariantKey, HouseModel>> }) {
+  const rows = KEYS.flatMap((k) => (variants[k] ? [{ k, model: variants[k]!, s: areaSummary(variants[k]!) }] : []));
+  if (!rows.length) return null;
+  return (
+    <div className="rp-check">
+      <h4>Measured like the listing</h4>
+      {rows.map(({ k, model, s }) => (
+        <p key={k} className="small">
+          <b>{VARIANT_LABEL[k]}</b>: {fmtM2(s.internal)} m² inside the outside walls
+          {s.unheatedRooms.length > 0 && (
+            <>
+              , {fmtM2(s.heated)} m² heated (without {s.unheatedRooms.join(", ")})
+            </>
+          )}
+          .
+          {model.listedArea !== undefined && s.vsListed !== undefined && (
+            <span className={Math.abs(s.vsListed) > 0.05 ? "warn" : "muted"}>
+              {" "}
+              The listing gives {fmtM2(model.listedArea)} m²: {s.vsListed >= 0 ? "+" : ""}
+              {(s.vsListed * 100).toFixed(1)}%.
+              {Math.abs(s.vsListed) > 0.05 ? " More than 5% out: check the floor scales." : " Close enough: the scale is right."}
+            </span>
+          )}
+        </p>
+      ))}
+      <p className="muted small">The table above runs to the wall centre lines, so it reads higher.</p>
+    </div>
   );
 }
 
