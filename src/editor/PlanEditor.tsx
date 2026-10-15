@@ -72,9 +72,8 @@ const TOOLS: [Tool, string][] = [
 const TAP_SLOP = 6;
 
 /**
- * 2D check-and-fix view: the geometry drawn over the source image. Used both
- * to correct an AI extraction and to trace a plan entirely by hand, and to lay
- * out furniture. Coordinates are image px; the camera only changes the view
+ * 2D check-and-fix view: the geometry drawn over the source image. Used to
+ * correct the traced plan and to lay out furniture. Coordinates are image px; the camera only changes the view
  * box, and strokes, handles and text are sized in screen pixels.
  */
 export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Floor }) {

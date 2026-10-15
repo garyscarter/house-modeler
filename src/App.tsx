@@ -166,10 +166,8 @@ export default function App() {
         <main>
           {!model && (
             <div className="empty">
-              <h2>Start with a floorplan</h2>
-              <p>
-                Add your API key in Settings, then upload the listing's floorplan image under Floorplans. Or load the sample house to try the viewer.
-              </p>
+              <h2>Load the listing</h2>
+              <p>Open Floorplans and choose Load listing 91770873 to see the house in 3D.</p>
               {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
             </div>
           )}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { dehydrate, imageAwareStorage, refIds, rehydrate } from "./persist";
+import { dehydrate, dropAiSettings, imageAwareStorage, refIds, rehydrate } from "./persist";
 
 const saved = vi.hoisted(() => [] as string[]);
 vi.mock("idb-keyval", () => ({
@@ -46,5 +46,15 @@ describe("imageAwareStorage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("dropAiSettings", () => {
+  it("removes the API key and model but keeps other settings", () => {
+    expect(dropAiSettings({ apiKey: "sk-ant-secret", model: "m", quality: "low" })).toEqual({ quality: "low" });
+  });
+
+  it("leaves missing settings alone", () => {
+    expect(dropAiSettings(undefined)).toBeUndefined();
   });
 });

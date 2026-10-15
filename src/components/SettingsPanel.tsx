@@ -1,7 +1,6 @@
 import { useStore } from "../store";
 import { ask } from "./Dialogs";
 import type { HouseModel, Photo, Site } from "../types";
-import { MODELS } from "../ai/models";
 
 export function SettingsPanel() {
   const settings = useStore((s) => s.settings);
@@ -46,30 +45,6 @@ export function SettingsPanel() {
   return (
     <div className="panel">
       <h3>Settings</h3>
-      <label>
-        Anthropic API key
-        <input
-          type="password"
-          value={settings.apiKey}
-          placeholder="sk-ant-…"
-          onChange={(e) => setSettings({ apiKey: e.target.value })}
-          autoComplete="off"
-        />
-      </label>
-      <p className="muted small">
-        Stored only in this browser. Calls go straight from the page to the Anthropic API. If a request is declined by the model's
-        safety system, the API retries it on a fallback model automatically.
-      </p>
-      <label>
-        Model
-        <select value={settings.model} onChange={(e) => setSettings({ model: e.target.value })}>
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
       <label>
         Render quality
         <select value={settings.quality} onChange={(e) => setSettings({ quality: e.target.value as typeof settings.quality })}>

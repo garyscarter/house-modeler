@@ -4,13 +4,9 @@ import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 import { listingPhotos } from "../lib/houses/listingAssets";
 
-// The AI modules pull in the Anthropic SDK, so they load on first use rather than with the app.
-const describeError = async (e: unknown) => (await import("../ai/client")).describeError(e);
-
 export function PhotosPanel() {
   const photos = useStore((s) => s.photos);
   const model = useStore((s) => s.variants.current ?? s.variants.proposed);
-  const settings = useStore((s) => s.settings);
   const addPhotos = useStore((s) => s.addPhotos);
   const updatePhoto = useStore((s) => s.updatePhoto);
   const removePhoto = useStore((s) => s.removePhoto);
@@ -28,21 +24,6 @@ export function PhotosPanel() {
     addPhotos(added);
   };
 
-  const autoAssign = async () => {
-    if (!model) return;
-    setError(null);
-    try {
-      const unassigned = photos.filter((p) => !p.roomName && !p.elevation);
-      const { assignPhotos } = await import("../ai/photos");
-      const res = await assignPhotos(settings.apiKey, settings.model, model, unassigned.length ? unassigned : photos, setBusy);
-      for (const [id, a] of res) updatePhoto(id, a);
-    } catch (e) {
-      setError(await describeError(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const isListing = model?.preset?.id.startsWith("listing-91770873") ?? false;
   const rooms = model?.floors.flatMap((f) => f.rooms.map((r) => ({ floorName: f.name, roomName: r.name }))) ?? [];
 
@@ -50,8 +31,8 @@ export function PhotosPanel() {
     <div className="panel">
       <h3>Photos</h3>
       <p className="muted">
-        Upload the listing photos. Claude works out which room each one shows; they appear as pins in the 3D view and can be used as floor
-        textures.
+        Load the listing photos or add your own, then pick the room or side of the house each one shows. They appear as pins in the 3D
+        view and can be used as floor textures.
       </p>
       <div className="row">
         <label className="file">
@@ -75,7 +56,7 @@ export function PhotosPanel() {
               try {
                 addPhotos(await listingPhotos());
               } catch (e) {
-                setError(await describeError(e));
+                setError(e instanceof Error ? e.message : "Could not load the photos.");
               } finally {
                 setBusy(null);
               }
@@ -84,12 +65,8 @@ export function PhotosPanel() {
             Load listing 91770873 photos
           </button>
         )}
-        <button disabled={!model || !photos.length || !!busy} onClick={autoAssign}>
-          {busy ? busy + "…" : "Match photos to rooms"}
-        </button>
       </div>
       {error && <p className="error">{error}</p>}
-      {!model && photos.length > 0 && <p className="warn">Extract a floorplan first so photos have rooms to match against.</p>}
       <div className="photo-grid">
         {photos.map((p) => (
           <div key={p.id} className="photo-card">
