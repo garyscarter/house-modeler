@@ -2,7 +2,7 @@ import type { Floor, HouseModel, Opening, Site } from "../types";
 import { bbox, buildWalls, cutWall, modelBounds, pointInPolygon, polygonCentroid, roomWorldPolygon, toWorld, type V2 } from "./geometry";
 import { outwardSign, wallEnds, wallThickness } from "./walls";
 import { bayOutline } from "./openings";
-import { axisRect, doorFrame } from "./planMath";
+import { axisRect, DOUBLE_DOOR_M, doorSwing } from "./planMath";
 import {
   changeCost,
   CONTINGENCY,
@@ -132,9 +132,12 @@ export function planSvg(model: HouseModel, floor: Floor, opts: PlanSvgOptions): 
     }
     for (const pl of placements) {
       const c = { x: ox + pl.centre.x * k, y: oy + pl.centre.y * k };
-      const outside = outwardSign(pl, polys);
+      // Symbols use the opening's own frame (as the editor and 3D doors do), not the wall's direction, so hinge and swing agree.
+      const od = pl.opening.orientation === "h" ? { x: 1, y: 0 } : { x: 0, y: 1 };
+      const on = { x: -od.y, y: od.x };
+      const outside = outwardSign({ centre: pl.centre, dir: od }, polys);
       symbols.push(
-        `<g transform="matrix(${f2(dir.x)} ${f2(dir.y)} ${f2(n.x)} ${f2(n.y)} ${f2(c.x)} ${f2(c.y)})">${openingSymbol(pl.opening, pl.width * k, t * k, k, outside)}</g>`,
+        `<g transform="matrix(${f2(od.x)} ${f2(od.y)} ${f2(on.x)} ${f2(on.y)} ${f2(c.x)} ${f2(c.y)})">${openingSymbol(pl.opening, pl.width * k, t * k, k, outside)}</g>`,
       );
     }
   });
@@ -179,14 +182,12 @@ function floorExtent(floor: Floor): Extent {
 }
 
 /**
- * Plan symbol for an opening in a local frame: x along the wall, y towards
- * the wall's +n side (the default swing side, see doorFrame). Mirrors the
- * editor's OpeningSymbol, in paper mm.
+ * Plan symbol for an opening in its local frame (x along the wall, y as in
+ * doorSwing). Mirrors the editor's OpeningSymbol, in paper mm.
  */
 function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1 | -1 | 0): string {
   const half = len / 2;
-  const { hingeSide } = doorFrame(o);
-  const swing = o.flipSwing ? -1 : 1;
+  const { hinge: hingeSide, swing } = doorSwing(o, outside);
   const breakWall = `<line x1="${f2(-half)}" y1="${f2(-t / 2)}" x2="${f2(-half)}" y2="${f2(t / 2)}"/><line x1="${f2(half)}" y1="${f2(-t / 2)}" x2="${f2(half)}" y2="${f2(t / 2)}"/>`;
   const leaf = (hx: number, r: number, toward: 1 | -1) => {
     const tipY = swing * r;
@@ -197,6 +198,7 @@ function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1
   switch (o.kind) {
     case "door":
     case "front":
+      if (o.kind === "door" && outside === 0 && len > DOUBLE_DOOR_M * k) return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
       return breakWall + leaf(hingeSide * half, len, hingeSide > 0 ? -1 : 1);
     case "french":
       return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
