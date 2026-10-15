@@ -22,8 +22,12 @@ export interface Room {
   notes?: string;
   /** Floor finish drawn in 3D. Undefined = plain colour. */
   floorFinish?: FloorFinish;
-  /** Interior paint colour of this room's walls. */
+  /** Interior paint colour of this room's walls; under a covering, the wallpaper ground, tile or brick colour. */
   wallPaint?: string;
+  /** What the inside walls are covered with. Undefined = paint. */
+  wallCovering?: WallCovering;
+  /** Pattern colour of the covering (stripes, flowers, motif, tile feature strip, mortar). Undefined = the covering's default. */
+  wallAccent?: string;
   /** Finish of this room's external walls; undefined = the house default (Exterior.wallFinish). */
   exteriorFinish?: WallFinish;
   /** Not heated (a garage or store): left out of the heated floor area. Undefined = guess from the name. */
@@ -39,12 +43,23 @@ export const WALL_FINISH_LABEL: Record<WallFinish, string> = {
   cladding: "Timber cladding",
 };
 
-export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "stone" | "carpet" | "vinyl" | "concrete";
+export type WallCovering = "paint" | "stripe" | "floral" | "sprig" | "tiles" | "brick";
+export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
+  paint: "Paint",
+  stripe: "Striped wallpaper",
+  floral: "Floral wallpaper",
+  sprig: "Small-pattern wallpaper",
+  tiles: "Wall tiles",
+  brick: "Exposed brick",
+};
+
+export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "quarry" | "stone" | "carpet" | "vinyl" | "concrete";
 export const FLOOR_FINISH_LABEL: Record<FloorFinish, string> = {
   plain: "Plain colour",
   oak: "Oak boards",
   laminate: "Laminate",
   tile: "Ceramic tiles",
+  quarry: "Quarry tiles",
   stone: "Stone flags",
   carpet: "Carpet",
   vinyl: "Vinyl",

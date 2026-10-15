@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 9 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 9 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 10 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 10 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -75,11 +75,16 @@ export function listing91770873(image: string): HouseModel {
     { x: 865, y: 430 },
     [
       // The galley's rear wall is rendered like the house (rear photos); its front is hidden by the garage.
-      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, { floorFinish: "tile", color: "#9a4b32" }),
-      rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }, { floorFinish: "vinyl", color: "#b07a4f" }),
-      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK, exteriorFinish: "brick" }),
-      rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, { floorFinish: "carpet", color: "#d8cdbb" }),
-      rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: "#d8cdbb" }),
+      // Interior finishes are from the photos. The galley (galley-2, kitchen-4) shares the kitchen's
+      // octagon vinyl and has a wall of yellow-red brick in gold mortar beside 1970s splashback tiles.
+      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, { floorFinish: "vinyl", color: "#b38862", wallCovering: "brick", wallPaint: "#cf9670", wallAccent: "#d6b46e" }),
+      // White paper with large red flowers; one wall and a pier are exposed brick.
+      rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }, { floorFinish: "vinyl", color: "#b38862", wallCovering: "floral", wallPaint: "#f3f0ec", wallAccent: "#c8364a" }),
+      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "concrete" }),
+      // Cream and grey-beige stripes in both rooms; the rear room's chimney breast has a gold floral paper.
+      rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
+      rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
+      // Pale grey-oak laminate; cream walls with a paper of leaves and red buds up the stairs.
       poly("Hallway (stairs)", [
         [815, 345],
         [975, 345],
@@ -87,7 +92,7 @@ export function listing91770873(image: string): HouseModel {
         [1045, 278],
         [1045, 515],
         [815, 515],
-      ], undefined, { floorFinish: "laminate", color: "#cdb48e" }),
+      ], undefined, { floorFinish: "laminate", color: "#c4b59f", wallCovering: "sprig", wallPaint: "#f1ece2", wallAccent: "#bf4a3c" }),
       poly(
         "Hallway (front)",
         [
@@ -99,7 +104,8 @@ export function listing91770873(image: string): HouseModel {
           [730, 620],
         ],
         undefined,
-        { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "tile", color: "#8a3f2b" },
+        // Red quarry tiles and plain white walls (hall-front-1, galley-1).
+        { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "quarry", color: "#9a4a35", wallPaint: "#f3f1ec" },
       ),
     ],
     [
@@ -143,9 +149,10 @@ export function listing91770873(image: string): HouseModel {
     1,
     { x: 650, y: 1203 },
     [
-      rect("Bedroom 1", 610, 795, 775, 1040, { w: 2.23, h: 3.33 }, { floorFinish: "carpet", color: "#d9d0c4" }),
-      // Includes its fitted wardrobe along the party wall (a fixture below).
-      rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: "#d9d0c4" }),
+      // Cream paper with a small blue motif.
+      rect("Bedroom 1", 610, 795, 775, 1040, { w: 2.23, h: 3.33 }, { floorFinish: "carpet", color: "#cbbdab", wallCovering: "sprig", wallPaint: "#efe7d4", wallAccent: "#6f8fc4" }),
+      // Includes its fitted wardrobe along the party wall (a fixture below). Pale mint paint.
+      rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: "#d0c4b4", wallPaint: "#d9e5d2" }),
       // Takes in the strip west of the room that the plan labels "Cupboard": it is the fitted wardrobe (photos).
       poly(
         "Bedroom 3",
@@ -160,7 +167,8 @@ export function listing91770873(image: string): HouseModel {
         { w: 3.28, h: 3.36 },
         { floorFinish: "laminate", color: "#cdb48e", wallPaint: "#c9b3bd" },
       ),
-      rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: "#d9d0c4" }),
+      rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: "#bdae9f", wallPaint: "#f1eee8" }),
+      // Beige tiles floor to ceiling with travertine mosaic strips.
       poly("Bathroom", [
         [690, 1110],
         [810, 1110],
@@ -168,8 +176,8 @@ export function listing91770873(image: string): HouseModel {
         [610, 1285],
         [610, 1215],
         [690, 1215],
-      ], undefined, { floorFinish: "tile", color: "#d8c6b0" }),
-      rect("Stairs", 610, 1110, 690, 1215),
+      ], undefined, { floorFinish: "tile", color: "#d3c3ab", wallCovering: "tiles", wallPaint: "#dccdbb", wallAccent: "#cdbb9f" }),
+      rect("Stairs", 610, 1110, 690, 1215, undefined, { floorFinish: "carpet", color: "#bdae9f", wallPaint: "#f1eee8" }),
     ],
     [
       op("door", 745, 1040, "h", 0.8),
