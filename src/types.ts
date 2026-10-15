@@ -171,6 +171,37 @@ export interface Exterior {
   trimColor: string;
   /** Default finish for external walls (rooms can override). */
   wallFinish?: WallFinish;
+  /** Roof covering on pitched roofs, tinted by roofColor. */
+  tileStyle?: TileStyle;
+  /** Fascia, soffit and bargeboard colour: white uPVC or the window frame colour. Gutters match. */
+  fascia?: "white" | "trim";
+  /** Draw gutters along the eaves and downpipes. */
+  gutters?: boolean;
+  /** How far a separate extension roof's ridge sits below the main ridge, metres. */
+  extensionDrop?: number;
+  /** Roof over porch canopies: flat, or a tiled lean-to falling away from the wall. */
+  canopyRoof?: "flat" | "lean-to";
+  chimneys?: Chimney[];
+}
+
+export type TileStyle = "plain" | "concrete" | "slate";
+export const TILE_STYLE_LABEL: Record<TileStyle, string> = {
+  plain: "Plain clay tiles",
+  concrete: "Concrete interlocking tiles",
+  slate: "Natural slate",
+};
+
+/** A chimney stack. Position is in world metres like Site points: x to the right, y towards the front. */
+export interface Chimney {
+  id: string;
+  x: number;
+  y: number;
+  /** Footprint along x and along y, metres. */
+  w: number;
+  d: number;
+  /** Height of the top of the stack above the ridge of the roof it rises through, metres. */
+  height: number;
+  pots: number;
 }
 
 export const DEFAULT_EXTERIOR: Exterior = {
@@ -184,6 +215,12 @@ export const DEFAULT_EXTERIOR: Exterior = {
   roofColor: "#7a4a3a",
   wallColor: "#efe9d8",
   trimColor: "#4a2e1e",
+  tileStyle: "plain",
+  fascia: "white",
+  gutters: true,
+  extensionDrop: 0.3,
+  canopyRoof: "flat",
+  chimneys: [],
 };
 
 export interface HouseModel {
