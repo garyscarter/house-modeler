@@ -88,6 +88,8 @@ export interface Flight {
   /** Floor level of the lower floor and the total rise, metres. */
   baseY: number;
   rise: number;
+  /** Ceiling height of the lower floor, metres above its floor. */
+  ceiling: number;
   /** Distance up the run where the side rails begin; below it you can step on or off sideways. */
   railStart: number;
   /** Distance up the run where the stairwell opening in the upper floor begins (headroom for the eye). */
@@ -131,6 +133,7 @@ export function stairFlights(model: HouseModel, eye: number): Flight[] {
       width: f.stairsWidth ?? 0.9,
       baseY: levelY(model, f.level),
       rise,
+      ceiling: H,
       railStart: Math.min(run * 0.4, 1),
       wellStart: Math.max(0, Math.min(run * 0.9, s0)),
     });
@@ -335,7 +338,8 @@ export function spawnPoint(floor: Floor, fallback: V2): { at: V2; look: V2 } {
   let look = fallback;
   let bestD = Infinity;
   for (const op of floor.openings) {
-    if (!PASSABLE.has(op.kind)) continue;
+    // Face into the house rather than out of it.
+    if (op.kind !== "door" && op.kind !== "gap") continue;
     const p = toWorld(floor, { x: op.x, y: op.y });
     const d = Math.hypot(p.x - at.x, p.y - at.y);
     // Doors on the room's boundary sit within a few metres of its centre.

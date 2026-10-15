@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -9,10 +9,12 @@ import { modelBounds } from "../lib/geometry";
 import { useStore, type CameraMode } from "../store";
 import { Lighting, SkyBackdrop } from "./Lighting";
 import { GROUND_Y, SiteScene } from "./Site";
-import { Walker } from "./Walker";
+import { newWalkInput, Walker } from "./Walker";
 import { CaptureBridge } from "./capture";
 import { Effects } from "./Effects";
 import { SunControls } from "../components/SunControls";
+import { useWalkSettings, WalkControls } from "../components/WalkControls";
+import { useMediaQuery } from "../components/useMediaQuery";
 
 interface ViewerProps {
   model: HouseModel;
@@ -45,10 +47,18 @@ export function Viewer(props: ViewerProps) {
   const [locked, setLocked] = useState(false);
   const [view, setView] = useState<{ id: number; side: ViewSide } | null>(null);
   const quality = useStore((s) => s.settings.quality);
+  const setUi = useStore((s) => s.setUi);
+  const [walkInput] = useState(newWalkInput);
+  const [walkSettings, setWalkSettings] = useWalkSettings();
+  // Touch screens get a joystick and never lock the pointer.
+  const coarse = useMediaQuery("(pointer: coarse)");
+  const onWalkFloor = useCallback((id: string) => setUi({ walkFloorId: id }), [setUi]);
 
-  // When walking, hide floors above so the ceiling doesn't block the view;
-  // otherwise honour the "show floors up to" control.
-  const cap = walking && !showCeilings ? walkFloor.level : maxLevel ?? null;
+  // When walking, hide floors above the one you are on, except the next one
+  // up when there are stairs to it (seen through the stairwell); otherwise
+  // honour the "show floors up to" control.
+  const stairsUp = walking && !!walkFloor.stairs && model.floors.some((f) => f.level === walkFloor.level + 1);
+  const cap = walking && !showCeilings ? walkFloor.level + (stairsUp ? 1 : 0) : maxLevel ?? null;
   const levels = [...new Set([...model.floors, ...(ghost?.floors ?? [])].map((f) => f.level))];
   const visibleLevels = cap === null ? null : levels.filter((l) => l <= cap);
 
@@ -65,10 +75,18 @@ export function Viewer(props: ViewerProps) {
         </div>
       )}
       {!walking && <SunControls />}
-      {walking && !locked && (
-        <div className="walk-hint">
-          Click the view to walk. <b>WASD</b> or arrows to move, mouse to look, <b>Esc</b> to release.
-        </div>
+      {walking && (
+        <WalkControls
+          input={walkInput}
+          settings={walkSettings}
+          onSettings={setWalkSettings}
+          coarse={coarse}
+          locked={locked}
+          floors={model.floors}
+          floorId={walkFloor.id}
+          onFloor={onWalkFloor}
+          onExit={() => setUi({ cameraMode: "orbit" })}
+        />
       )}
       <Canvas
         shadows="percentage"
@@ -95,7 +113,17 @@ export function Viewer(props: ViewerProps) {
         <CaptureBridge id={captureId ?? "main"} />
         <Effects />
         {walking ? (
-          <Walker model={model} floor={walkFloor} centre={centre} onLock={setLocked} />
+          <Walker
+            model={model}
+            floor={walkFloor}
+            centre={centre}
+            input={walkInput}
+            eye={walkSettings.eye}
+            speed={walkSettings.speed}
+            coarse={coarse}
+            onFloor={onWalkFloor}
+            onLock={setLocked}
+          />
         ) : (
           <Orbit centre={centre} size={size} view={view} bounds={bounds} />
         )}
