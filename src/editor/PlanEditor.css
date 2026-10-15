@@ -1,0 +1,55 @@
+/* Plan editor: canvas, overlays and inspector details. Layout of .editor-body and .side lives in styles.css. */
+
+.plan-hint { padding: 4px 10px; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--line); min-height: 24px; }
+
+.plan-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: #fff; touch-action: none; }
+.plan-canvas svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.plan-canvas svg.tool-select { cursor: default; }
+.plan-canvas svg.tool-select .plan-fixture,
+.plan-canvas svg.tool-select .plan-opening,
+.plan-handle { cursor: move; }
+.plan-handle.add { cursor: copy; }
+.plan-hit { cursor: pointer; }
+.plan-text { pointer-events: none; }
+.plan-edge-label { cursor: text; }
+
+.plan-zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
+.plan-zoom button { min-width: 34px; padding: 5px 8px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+.edge-input { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border: 1px solid #d97706; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); font-size: 13px; }
+.edge-input input { width: 80px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+
+.side .field { margin: 8px 0; }
+.side .field-label { display: block; font-size: 13px; margin-bottom: 3px; }
+.side .size-row { display: flex; gap: 6px; align-items: center; }
+.side .size-row > input, .side .size-row > label { flex: 1; min-width: 0; }
+.side .size-row > label { margin: 6px 0; }
+.side .size-row > span { color: var(--muted); }
+.side .anchor-grid { display: grid; grid-template-columns: repeat(2, 24px); gap: 2px; flex: none; }
+.side .anchor-grid button { padding: 0; height: 22px; font-size: 12px; line-height: 1; }
+.side .anchor-grid button.active, .side .flip-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.side .colour-row { display: flex; gap: 10px; }
+.side .colour-row > label { flex: 1; }
+.side .colour-pick { display: flex; align-items: center; gap: 6px; }
+.side .colour-pick input[type="color"] { flex: 1; min-width: 0; height: 30px; padding: 2px; }
+.side .inspector textarea { display: block; width: 100%; margin-top: 3px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; font: inherit; resize: vertical; }
+.side .inspector input[type="range"] { padding: 0; border: 0; }
+.side .inspector input[type="checkbox"] { display: inline; width: auto; margin: 0; }
+.side .inspector .row { margin: 6px 0; }
+.side .inspector h4 { margin: 4px 0 6px; }
+
+@media (pointer: coarse) {
+  .plan-zoom button { min-width: 44px; min-height: 40px; font-size: 16px; }
+  .side .anchor-grid { grid-template-columns: repeat(2, 34px); }
+  .side .anchor-grid button { height: 32px; font-size: 15px; }
+  .side .inspector button, .palette-items button { min-height: 38px; }
+  .edge-input input { width: 96px; font-size: 16px; }
+}
+
+/* Narrow screens: one scrolling row of tools rather than a tall wrapped block. */
+@media (max-width: 700px) {
+  .plan-editor .plan-toolbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .plan-editor .plan-toolbar button { flex: none; }
+  .plan-editor .plan-toolbar .hint.right { display: none; }
+  .plan-hint { font-size: 11px; }
+}

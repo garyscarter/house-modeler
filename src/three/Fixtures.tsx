@@ -1,8 +1,11 @@
+import { memo, useMemo } from "react";
+import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { byId, type CatalogueItem } from "../lib/catalogue";
+import { burners, byId, type Symbol } from "../lib/catalogue";
+import { fixtureBox } from "../lib/planMath";
 
-/** Simple primitive-built furniture and fixtures, placed from the plan. */
+/** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
 export function Fixtures({ floor }: { floor: Floor }) {
   return (
     <group>
@@ -10,9 +13,10 @@ export function Fixtures({ floor }: { floor: Floor }) {
         const item = byId(f.type);
         if (!item) return null;
         const p = toWorld(floor, { x: f.x, y: f.y });
+        const b = fixtureBox(f, item);
         return (
-          <group key={f.id} position={[p.x, 0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
-            <FixtureMesh item={item} />
+          <group key={f.id} position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
+            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} />
           </group>
         );
       })}
@@ -20,95 +24,343 @@ export function Fixtures({ floor }: { floor: Floor }) {
   );
 }
 
-const white = "#f5f5f5";
-const chrome = "#b8bcc2";
+// Every part is a unit box, cylinder or quarter cylinder scaled into place, and
+// materials are shared by colour, so a kitchen of fifty parts costs a handful
+// of geometries and materials however many fixtures there are.
+const BOX = new THREE.BoxGeometry(1, 1, 1);
+const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
+/** Quarter of a unit-radius cylinder in the +x/+z quadrant, from the axis at its corner. */
+const QUARTER = new THREE.CylinderGeometry(1, 1, 1, 16, 1, false, 0, Math.PI / 2);
+const QUARTER_SHELL = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true, 0, Math.PI / 2);
+const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL };
+const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
+const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
-function FixtureMesh({ item }: { item: CatalogueItem }) {
-  const { w, d, h, color } = item;
-  const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c: string, key: string, opacity?: number) => (
-    <mesh key={key} position={[x, y, z]} castShadow>
-      <boxGeometry args={[sx, sy, sz]} />
-      {opacity !== undefined ? <meshPhysicalMaterial color={c} transparent opacity={opacity} roughness={0.1} /> : <meshStandardMaterial color={c} roughness={0.8} />}
-    </mesh>
-  );
-  switch (item.symbol) {
-    case "bed":
-      return (
-        <group>
-          {box(0, 0.15, 0, w, 0.3, d, "#8a6d4b", "base")}
-          {box(0, 0.4, d * 0.06, w - 0.06, 0.2, d - 0.12, color, "mattress")}
-          {box(0, 0.4, -d / 2 + 0.1, w - 0.1, 0.12, 0.16, "#ffffff", "pillow")} {/* pillow strip at the head */}
-          {box(0, 0.4, -d / 2 + 0.6, w - 0.06, 0.06, 0.06, "#ffffff", "sheet")} {/* sheet edge */}
-          {box(0, h / 2 + 0.3, -d / 2 + 0.03, w, h + 0.3, 0.06, "#8a6d4b", "headboard")}
-        </group>
-      );
-    case "toilet":
-      return (
-        <group>
-          {box(0, 0.42, -d / 2 + 0.1, w, 0.84, 0.2, white, "cistern")}
-          {box(0, 0.2, d * 0.12, w * 0.85, 0.4, d * 0.62, white, "bowl")}
-        </group>
-      );
-    case "basin":
-      return (
-        <group>
-          {box(0, 0.4, 0, w * 0.35, 0.8, d * 0.35, white, "pedestal")}
-          {box(0, 0.8, 0, w, 0.12, d, white, "basin")}
-          {box(0, 0.95, -d / 2 + 0.05, 0.03, 0.18, 0.03, chrome, "tap")}
-        </group>
-      );
-    case "shower":
-      return (
-        <group>
-          {box(0, 0.04, 0, w, 0.08, d, white, "tray")}
-          {box(w / 2 - 0.01, 1.05, 0, 0.02, 1.95, d, "#bfe0ee", "side", 0.35)}
-          {box(0, 1.05, d / 2 - 0.01, w, 1.95, 0.02, "#bfe0ee", "front", 0.35)}
-          {box(0, 1.9, -d / 2 + 0.05, 0.04, 0.4, 0.04, chrome, "riser")}
-        </group>
-      );
-    case "bath":
-      return (
-        <group>
-          {box(0, h / 2, 0, w, h, d, white, "panel")}
-          {box(0, h - 0.05, 0, w - 0.16, 0.12, d - 0.16, "#dbe9f0", "water")}
-          {box(w / 2 - 0.12, h + 0.08, 0, 0.03, 0.16, 0.03, chrome, "tap")}
-        </group>
-      );
-    case "sofa":
-      return (
-        <group>
-          {box(0, 0.22, 0, w, 0.44, d, color, "seat")}
-          {box(0, 0.6, -d / 2 + 0.12, w, 0.5, 0.24, color, "back")}
-          {box(-w / 2 + 0.1, 0.5, 0, 0.2, 0.25, d - 0.2, color, "arm-l")}
-          {box(w / 2 - 0.1, 0.5, 0, 0.2, 0.25, d - 0.2, color, "arm-r")}
-        </group>
-      );
-    case "table":
-      return (
-        <group>
-          {box(0, h - 0.02, 0, w, 0.04, d, color, "top")}
-          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box(sx * (w / 2 - 0.05), (h - 0.04) / 2, sz * (d / 2 - 0.05), 0.06, h - 0.04, 0.06, color, `leg${sx}${sz}`)))}
-        </group>
-      );
-    case "chair":
-      return (
-        <group>
-          {box(0, 0.45, 0, w, 0.04, d, color, "seat")}
-          {box(0, 0.68, -d / 2 + 0.02, w, 0.45, 0.04, color, "back")}
-          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box(sx * (w / 2 - 0.03), 0.22, sz * (d / 2 - 0.03), 0.04, 0.44, 0.04, color, `leg${sx}${sz}`)))}
-        </group>
-      );
-    case "car":
-      return (
-        <group>
-          {box(0, 0.45, 0, w, 0.6, d, color, "body")}
-          {box(0, 1.05, d * 0.05, w - 0.2, 0.6, d * 0.5, "#3b4652", "cabin")}
-          {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box(sx * (w / 2 - 0.05), 0.3, sz * (d * 0.32), 0.2, 0.6, 0.6, "#222", `wheel${sx}${sz}`)))}
-        </group>
-      );
-    case "appliance":
-      return box(0, h / 2, 0, w, h, d, color, "unit");
-    default:
-      return box(0, h / 2, 0, w, h, d, color, "box");
+type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror";
+const materials = new Map<string, THREE.Material>();
+function material(color: string, finish: Finish): THREE.Material {
+  const key = color + finish;
+  let m = materials.get(key);
+  if (!m) {
+    if (finish === "glass") m = new THREE.MeshPhysicalMaterial({ color, transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
+    else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.05, metalness: 0.9 });
+    else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
+    else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
+    materials.set(key, m);
   }
+  return m;
+}
+
+interface Part {
+  g: keyof typeof GEOMETRY;
+  /** Centre (for a quarter: the corner on its axis, at mid-height). */
+  p: [number, number, number];
+  s: [number, number, number];
+  c: string;
+  f: Finish;
+  /** Axis of a cylinder (default standing, along y). */
+  axis?: "x" | "z";
+}
+
+const WHITE = "#f5f5f5";
+const CHROME = "#b8bcc2";
+const STEEL = "#c9ccd0";
+const WORKTOP = "#4a4d52";
+const PLINTH = "#3f4247";
+const DARK = "#1f2125";
+const GLASS = "#bfe0ee";
+
+const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color }: { symbol: Symbol; w: number; d: number; h: number; color: string }) {
+  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color), [symbol, w, d, h, color]);
+  return (
+    <group>
+      {parts.map((pt, i) => (
+        <mesh
+          key={i}
+          geometry={GEOMETRY[pt.g]}
+          material={material(pt.c, pt.f)}
+          position={pt.p}
+          scale={pt.s}
+          rotation={pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : undefined}
+          castShadow={pt.f !== "glass"}
+          receiveShadow
+        />
+      ))}
+    </group>
+  );
+});
+
+/**
+ * The parts of a fixture in its local frame: origin at the centre of its
+ * footprint on its base, y up, back towards -z (the top of the plan).
+ */
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string): Part[] {
+  const out: Part[] = [];
+  const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
+    out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
+  const cyl = (x: number, y: number, z: number, dia: number, len: number, c: string, f: Finish = "matt", axis?: "x" | "z") =>
+    out.push({ g: "cyl", p: [x, y, z], s: [dia, len, dia], c, f, axis });
+  /** Door fronts with handles across a carcass face from y0 to y1, one per ~0.6 m. */
+  const doors = (y0: number, y1: number, z: number, pitch = 0.6, handleAtTop = true) => {
+    const n = Math.max(1, Math.round(w / pitch));
+    for (let i = 1; i < n; i++) box(-w / 2 + (i * w) / n, (y0 + y1) / 2, z, 0.006, y1 - y0 - 0.02, 0.012, DARK);
+    for (let i = 0; i < n; i++) {
+      const cx = -w / 2 + ((i + 0.5) * w) / n;
+      box(cx, handleAtTop ? y1 - 0.06 : y0 + 0.06, z + 0.012, Math.min(0.16, w / n - 0.1), 0.012, 0.02, CHROME, "metal");
+    }
+  };
+  /** A kitchen base carcass of height top, with plinth and worktop. Returns the front face z. */
+  const base = (top: number, depth = d, zc = 0, worktop = WORKTOP) => {
+    box(0, 0.05, zc - 0.03, w - 0.02, 0.1, depth - 0.08, PLINTH);
+    box(0, (0.1 + top - 0.04) / 2, zc - 0.01, w, top - 0.14, depth - 0.02, color, "satin");
+    box(0, top - 0.02, zc, w, 0.04, depth, worktop, "satin");
+    return zc + depth / 2 - 0.01;
+  };
+
+  switch (symbol) {
+    case "bed": {
+      box(0, 0.15, 0, w, 0.3, d, "#8a6d4b");
+      box(0, 0.4, d * 0.03, w - 0.06, 0.2, d - 0.12, color);
+      box(0, 0.53, -d / 2 + 0.22, w - 0.2, 0.1, 0.3, "#ffffff");
+      box(0, 0.51, d * 0.18, w - 0.04, 0.04, d * 0.6, shade(color, 0.85));
+      box(0, (h + 0.5) / 2, -d / 2 + 0.03, w, h + 0.5, 0.06, "#8a6d4b");
+      break;
+    }
+    case "cot": {
+      const rail = 0.04;
+      box(0, 0.3, 0, w - 0.06, 0.12, d - 0.06, WHITE);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - rail / 2), h / 2, sz * (d / 2 - rail / 2), rail, h, rail, color, "satin");
+      for (const sz of [-1, 1]) {
+        box(0, h - rail / 2, sz * (d / 2 - rail / 2), w, rail, rail, color, "satin");
+        box(0, 0.2, sz * (d / 2 - rail / 2), w, rail, rail, color, "satin");
+        const bars = Math.max(4, Math.round(w / 0.1));
+        for (let i = 1; i < bars; i++) box(-w / 2 + (i * w) / bars, (h + 0.2) / 2, sz * (d / 2 - rail / 2), 0.02, h - 0.2, 0.02, color, "satin");
+      }
+      for (const sx of [-1, 1]) box(sx * (w / 2 - rail / 2), (h + 0.2) / 2, 0, rail, h - 0.2, d - 0.08, color, "satin");
+      break;
+    }
+    case "toilet":
+      box(0, 0.42, -d / 2 + 0.1, w, 0.84, 0.2, WHITE, "gloss");
+      box(0, 0.2, d * 0.12, w * 0.85, 0.4, d * 0.62, WHITE, "gloss");
+      box(0, 0.41, d * 0.12, w * 0.88, 0.03, d * 0.66, WHITE, "gloss");
+      break;
+    case "basin":
+      box(0, 0.4, 0, w * 0.35, 0.8, d * 0.35, WHITE, "gloss");
+      box(0, 0.8, 0, w, 0.12, d, WHITE, "gloss");
+      cyl(0, 0.93, -d / 2 + 0.06, 0.03, 0.16, CHROME, "metal");
+      break;
+    case "vanity": {
+      box(0, 0.08, -0.02, w - 0.04, 0.16, d - 0.06, PLINTH);
+      box(0, (0.16 + h - 0.06) / 2, -0.01, w, h - 0.22, d - 0.02, color, "satin");
+      box(0, (0.16 + h - 0.06) / 2, d / 2 - 0.01, w - 0.02, 0.006, 0.012, DARK);
+      box(0, h - 0.03, 0, w, 0.06, d, WHITE, "gloss");
+      box(0, h - 0.02, 0.02, w * 0.7, 0.05, d * 0.6, "#dde6ea", "gloss");
+      cyl(0, h + 0.08, -d / 2 + 0.06, 0.03, 0.16, CHROME, "metal");
+      break;
+    }
+    case "shower":
+      box(0, 0.04, 0, w, 0.08, d, WHITE, "gloss");
+      box(w / 2 - 0.01, 1.05, 0, 0.02, 1.95, d, GLASS, "glass");
+      box(0, 1.05, d / 2 - 0.01, w, 1.95, 0.02, GLASS, "glass");
+      box(0, 1.9, -d / 2 + 0.05, 0.04, 0.4, 0.04, CHROME, "metal");
+      break;
+    case "quadrant":
+      // Tray and curved glass from the back-left corner; the walls make the straight sides.
+      out.push({ g: "quarter", p: [-w / 2, 0.04, -d / 2], s: [w, 0.08, d], c: WHITE, f: "gloss" });
+      out.push({ g: "shell", p: [-w / 2, 1.05, -d / 2], s: [w - 0.01, 1.9, d - 0.01], c: GLASS, f: "glass" });
+      box(-w / 2 + 0.06, 1.6, -d / 2 + 0.03, 0.03, 0.9, 0.03, CHROME, "metal");
+      break;
+    case "bath":
+      box(0, h / 2, 0, w, h, d, WHITE, "gloss");
+      box(0, h - 0.03, 0, w - 0.14, 0.04, d - 0.14, "#dbe9f0", "gloss");
+      cyl(w / 2 - 0.12, h + 0.08, 0, 0.03, 0.16, CHROME, "metal");
+      break;
+    case "towel-rail": {
+      for (const sx of [-1, 1]) cyl(sx * (w / 2 - 0.015), h / 2, 0, 0.03, h, color, "metal");
+      const bars = Math.max(4, Math.round(h / 0.1));
+      for (let i = 0; i < bars; i++) cyl(0, 0.05 + (i * (h - 0.1)) / (bars - 1), 0, 0.018, w - 0.03, color, "metal", "x");
+      break;
+    }
+    case "sofa": {
+      const back = Math.min(0.22, d * 0.3);
+      const arm = Math.min(0.2, w * 0.15);
+      box(0, 0.22, back / 2, w - arm * 2, 0.44, d - back, color);
+      box(0, (0.44 + h) / 2 - 0.1, -d / 2 + back / 2, w, h - 0.24, back, color);
+      box(0, 0.1, 0, w, 0.2, d, shade(color, 0.8));
+      for (const sx of [-1, 1]) box(sx * (w / 2 - arm / 2), 0.31, 0, arm, 0.62, d, color);
+      break;
+    }
+    case "corner-sofa": {
+      // A run along the back and a return down the left, as on the plan.
+      const s = Math.min(0.95, w * 0.45, d * 0.5);
+      const back = Math.min(0.22, s * 0.3);
+      const arm = Math.min(0.2, s * 0.25);
+      const base = shade(color, 0.8);
+      box(0, 0.1, -d / 2 + s / 2, w, 0.2, s, base);
+      box(-w / 2 + s / 2, 0.1, s / 2, s, 0.2, d - s, base);
+      box((back - arm) / 2, 0.32, -d / 2 + (back + s) / 2, w - back - arm, 0.24, s - back, color);
+      box(-w / 2 + (back + s) / 2, 0.32, (s - arm) / 2, s - back, 0.24, d - s - arm, color);
+      box(0, (0.44 + h) / 2 - 0.1, -d / 2 + back / 2, w, h - 0.24, back, color);
+      box(-w / 2 + back / 2, (0.44 + h) / 2 - 0.1, back / 2, back, h - 0.24, d - back, color);
+      box(w / 2 - arm / 2, 0.31, -d / 2 + s / 2, arm, 0.62, s, color);
+      box(-w / 2 + s / 2, 0.31, d / 2 - arm / 2, s, 0.62, arm, color);
+      break;
+    }
+    case "table":
+      box(0, h - 0.02, 0, w, 0.04, d, color, "satin");
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.05), (h - 0.04) / 2, sz * (d / 2 - 0.05), 0.06, h - 0.04, 0.06, color);
+      break;
+    case "chair":
+      box(0, 0.45, 0, w, 0.04, d, color);
+      box(0, 0.68, -d / 2 + 0.02, w, 0.45, 0.04, color);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.03), 0.22, sz * (d / 2 - 0.03), 0.04, 0.44, 0.04, color);
+      break;
+    case "car":
+      box(0, 0.45, 0, w, 0.6, d, color, "gloss");
+      box(0, 1.05, d * 0.05, w - 0.2, 0.6, d * 0.5, "#3b4652", "gloss");
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(sx * (w / 2 - 0.1), 0.3, sz * d * 0.32, 0.6, 0.2, "#222", "matt", "x");
+      break;
+    case "washer":
+      // Round porthole door under a control strip.
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      cyl(0, h * 0.45, d / 2 + 0.01, Math.min(w, h) * 0.55, 0.02, "#9aa3ab", "gloss", "z");
+      box(0, h - 0.06, d / 2 + 0.005, w - 0.04, 0.08, 0.01, "#d0d3d6", "satin");
+      break;
+    case "appliance":
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      if (h > 1.2) {
+        // Fridge freezer: two doors with handles.
+        box(0, h * 0.6, d / 2 + 0.003, w - 0.01, 0.008, 0.008, DARK);
+        box(-w / 2 + 0.06, h * 0.78, d / 2 + 0.02, 0.02, 0.35, 0.03, CHROME, "metal");
+        box(-w / 2 + 0.06, h * 0.42, d / 2 + 0.02, 0.02, 0.3, 0.03, CHROME, "metal");
+      } else {
+        // Dishwasher: control strip and a handle across the top.
+        box(0, h - 0.05, d / 2 + 0.005, w - 0.02, 0.08, 0.01, "#d0d3d6", "satin");
+        box(0, h - 0.13, d / 2 + 0.02, w * 0.5, 0.02, 0.03, CHROME, "metal");
+      }
+      break;
+    case "cabinet": {
+      const kitchen = h > 0.85 && h < 0.95;
+      if (kitchen) doors(0.12, h - 0.06, base(h));
+      else {
+        box(0, 0.04, 0, w - 0.04, 0.08, d - 0.04, shade(color, 0.7));
+        box(0, (h + 0.08) / 2, 0, w, h - 0.08, d, color, "satin");
+        doors(0.1, h - 0.04, d / 2, 0.55, true);
+      }
+      break;
+    }
+    case "worktop":
+      doors(0.12, h - 0.06, base(h));
+      break;
+    case "island": {
+      // Units on the front side, worktop overhanging at the back for stools.
+      const over = Math.min(0.3, d * 0.35);
+      box(0, 0.05, over / 2 - 0.02, w - 0.04, 0.1, d - over - 0.08, PLINTH);
+      box(0, (0.1 + h - 0.04) / 2, over / 2, w, h - 0.14, d - over, color, "satin");
+      box(0, h - 0.02, 0, w + 0.04, 0.04, d, WORKTOP, "satin");
+      doors(0.12, h - 0.06, d / 2);
+      break;
+    }
+    case "sink": {
+      const front = base(h);
+      doors(0.12, h - 0.06, front);
+      const bw = Math.min(w * 0.5, 0.5);
+      const bx = -w / 2 + 0.06 + bw / 2;
+      box(bx, h - 0.005, 0.02, bw, 0.012, d - 0.18, STEEL, "metal");
+      box(bx, h - 0.004, 0.02, bw - 0.04, 0.014, d - 0.22, "#8e9399", "metal");
+      box((bx + bw / 2 + w / 2) / 2, h - 0.004, 0.02, w / 2 - bx - bw / 2 - 0.06, 0.012, d - 0.18, STEEL, "metal");
+      cyl(bx, h + 0.15, -d / 2 + 0.06, 0.03, 0.3, CHROME, "metal");
+      box(bx, h + 0.29, -d / 2 + 0.14, 0.025, 0.025, 0.18, CHROME, "metal");
+      break;
+    }
+    case "hob": {
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      const rings: [number, number, number][] = [
+        [-0.3, -0.25, 0.17],
+        [0.3, -0.25, 0.13],
+        [-0.3, 0.25, 0.13],
+        [0.3, 0.25, 0.19],
+      ];
+      for (const [fx, fz, dia] of rings) cyl(fx * w, h + 0.002, fz * d, dia, 0.004, "#5a5e64", "satin");
+      break;
+    }
+    case "range": {
+      box(0, h / 2 - 0.02, 0, w, h - 0.04, d, color, "gloss");
+      box(0, h - 0.02, 0, w, 0.04, d, DARK, "gloss");
+      for (const [fx, fz] of burners(w)) cyl(fx * w, h + 0.01, fz * d, 0.12, 0.02, "#2a2a2a", "metal");
+      // One oven on a cooker, two side by side on a range, under a control panel and handle rail.
+      const ovens = w < 0.8 ? [0] : [-w / 4, w / 4];
+      for (const x of ovens) box(x, 0.42, d / 2 + 0.005, w / ovens.length - 0.08, 0.5, 0.01, "#30353a", "gloss");
+      box(0, h - 0.12, d / 2 + 0.005, w - 0.04, 0.1, 0.01, shade(color, 1.2), "satin");
+      cyl(0, 0.75, d / 2 + 0.05, 0.025, w - 0.1, CHROME, "metal", "x");
+      box(0, 0.04, 0, w - 0.02, 0.08, d - 0.04, PLINTH);
+      break;
+    }
+    case "wall-cabinet":
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      doors(0.01, h - 0.01, d / 2, 0.6, false);
+      box(0, -0.01, 0, w, 0.02, d, shade(color, 0.85), "satin");
+      break;
+    case "oven":
+    case "tall": {
+      box(0, 0.05, -0.03, w - 0.02, 0.1, d - 0.08, PLINTH);
+      box(0, (0.1 + h) / 2, 0, w, h - 0.1, d, color, "satin");
+      const front = d / 2;
+      if (symbol === "oven") {
+        // Built-in oven at eye level between a drawer below and a door above.
+        box(0, 1.1, front + 0.005, w - 0.04, 0.58, 0.01, "#2a2d31", "gloss");
+        box(0, 1.27, front + 0.03, w - 0.16, 0.02, 0.03, CHROME, "metal");
+        box(0, 0.8, front, w - 0.02, 0.006, 0.012, DARK);
+        box(0, 1.4, front, w - 0.02, 0.006, 0.012, DARK);
+        box(0, 0.75, front + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
+        box(0, 1.46, front + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
+      } else {
+        box(0, 1.35, front, w - 0.02, 0.006, 0.012, DARK);
+        box(w / 2 - 0.05, 1.1, front + 0.012, 0.012, 0.3, 0.02, CHROME, "metal");
+        box(w / 2 - 0.05, 1.6, front + 0.012, 0.012, 0.3, 0.02, CHROME, "metal");
+      }
+      break;
+    }
+    case "shelves": {
+      const t = 0.02;
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, shade(color, 0.85));
+      for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), h / 2, 0, t, h, d, color, "satin");
+      const n = Math.max(2, Math.round(h / 0.35));
+      for (let i = 0; i <= n; i++) box(0, t / 2 + (i * (h - t)) / n, 0, w - t * 2, t, d, color, "satin");
+      // A few rows of books so it reads as a bookcase.
+      const bookColours = ["#7b3b3b", "#2f4f6f", "#5d6b3a", "#b08a4a"];
+      for (let i = 0; i < n; i++) {
+        const y = t + (i * (h - t)) / n;
+        const bh = Math.min(0.26, (h - t) / n - t - 0.04);
+        bookColours.forEach((c, j) => box(-w / 2 + t + (w - t * 2) * (0.05 + j * 0.2 + ((i * 7) % 3) * 0.02), y + bh / 2, 0.01, (w - t * 2) * 0.16, bh, d * 0.75, c));
+      }
+      break;
+    }
+    case "dresser": {
+      box(0, h - 0.02, 0, w, 0.04, d, color, "satin");
+      box(w / 2 - 0.22, (h - 0.04) / 2 + 0.05, 0, 0.42, h - 0.14, d - 0.02, color, "satin");
+      for (const sz of [-1, 1]) box(-w / 2 + 0.03, (h - 0.04) / 2, sz * (d / 2 - 0.03), 0.04, h - 0.04, 0.04, color);
+      box(w / 2 - 0.22, 0.03, 0, 0.42, 0.06, d - 0.06, shade(color, 0.8));
+      box(0, h + 0.4, -d / 2 + 0.03, w * 0.6, 0.7, 0.03, shade(color, 0.8), "satin");
+      box(0, h + 0.4, -d / 2 + 0.05, w * 0.6 - 0.06, 0.64, 0.01, "#cfd8dc", "mirror");
+      break;
+    }
+    case "boiler":
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      box(0, 0.08, d / 2 + 0.005, w - 0.06, 0.1, 0.01, "#4b5563", "satin");
+      cyl(0, h + 0.1, -d / 2 + 0.1, 0.1, 0.2, "#e5e7eb", "satin");
+      break;
+    default:
+      box(0, h / 2, 0, w, h, d, color, "satin");
+  }
+  return out;
+}
+
+/** Lighten (k > 1) or darken (k < 1) a hex colour. */
+function shade(hex: string, k: number): string {
+  const c = new THREE.Color(hex);
+  c.r = Math.min(1, c.r * k);
+  c.g = Math.min(1, c.g * k);
+  c.b = Math.min(1, c.b * k);
+  return "#" + c.getHexString();
 }
