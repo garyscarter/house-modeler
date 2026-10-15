@@ -137,3 +137,10 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
     },
   };
 }
+
+/** Drop the retired Anthropic API key and model so the key does not linger in IndexedDB. */
+export function dropAiSettings<T extends object>(settings: T | undefined): Omit<T, "apiKey" | "model"> | undefined {
+  if (!settings) return undefined;
+  const { apiKey: _apiKey, model: _model, ...rest } = settings as T & { apiKey?: string; model?: string };
+  return rest;
+}

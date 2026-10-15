@@ -1,9 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, Opening, Photo, Room, Site, VariantKey } from "./types";
-import { imageAwareStorage } from "./lib/persist";
-import { renamePhotos, scaleFloor } from "./lib/modelOps";
-import { DEFAULT_MODEL, MODELS } from "./ai/models";
+import { dropAiSettings, imageAwareStorage } from "./lib/persist";
+import { renamePhotos } from "./lib/modelOps";
 import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./lib/houses/listing91770873";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
@@ -12,8 +11,6 @@ export type Tab = "3d" | "plan";
 export const SITE_EDIT_ID = "site";
 
 export interface Settings {
-  apiKey: string;
-  model: string;
   /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
   quality: "high" | "balanced" | "low";
 }
@@ -76,7 +73,6 @@ interface State {
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
   updateModel: (k: VariantKey, patch: Partial<HouseModel>) => void;
   /** Swap the floorplan image behind every floor, scaling geometry to the new pixel size. */
-  replaceImage: (k: VariantKey, image: string, w: number, h: number) => void;
   setSite: (site: Site | undefined) => void;
   updateSite: (patch: Partial<Site> | ((s: Site) => Site)) => void;
   addPhotos: (p: Photo[]) => void;
@@ -137,7 +133,7 @@ export const useStore = create<State>()(
         variants: {},
         photos: [],
         site: undefined,
-        settings: { apiKey: "", model: DEFAULT_MODEL, quality: "high" },
+        settings: { quality: "high" },
         sun: { enabled: false, dayOfYear: 172, hour: 15 },
         costRates: {},
         past: [],
@@ -206,13 +202,6 @@ export const useStore = create<State>()(
             if (!m) return {};
             return { variants: { ...st.variants, [k]: { ...m, ...patch } } };
           }),
-        replaceImage: (k, image, w, h) =>
-          setState((st) => {
-            const m = st.variants[k];
-            if (!m) return {};
-            const floors = m.floors.map((f) => scaleFloor(f, w / f.imageW, image, w, h));
-            return { variants: { ...st.variants, [k]: { ...m, floors } } };
-          }),
         updateFloor: (k, floorId, patch) =>
           setState((st) => {
             const m = st.variants[k];
@@ -275,7 +264,7 @@ export const useStore = create<State>()(
         sun: s.sun,
         costRates: s.costRates,
       }),
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const st = persisted as Partial<Persisted> & { variants?: Record<string, HouseModel> };
         if (version < 2) {
@@ -298,9 +287,9 @@ export const useStore = create<State>()(
             }
           }
           if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = listingSite();
-          if (st.settings && !MODELS.some((m) => m.id === st.settings!.model)) st.settings = { ...st.settings, model: DEFAULT_MODEL };
           if (st.settings && !st.settings.quality) st.settings = { ...st.settings, quality: "high" };
         }
+        if (version < 4) st.settings = dropAiSettings(st.settings) as Persisted["settings"];
         return st as Persisted;
       },
       // Older saves lack the newer persisted fields; keep the defaults for those.
