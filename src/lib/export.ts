@@ -212,7 +212,7 @@ function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1
       return breakWall + glazing(-t / 2) + glazing(0) + glazing(t / 2);
     case "bay": {
       const s = outside || 1;
-      const outline = bayOutline(len / k, t / k).map((p) => `${f2(p.x * k)},${f2(s * p.z * k)}`);
+      const outline = bayOutline(len / k, t / k, o.depth).map((p) => `${f2(p.x * k)},${f2(s * p.z * k)}`);
       return breakWall + `<polygon points="${outline.join(" ")}" fill="#e0f2fe"/>` + glazing(0);
     }
     case "patio": {

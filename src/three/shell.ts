@@ -207,7 +207,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       // The room is on the side away from outside.
       const along = (pl.centre.x - wall.a.x) * pl.dir.x + (pl.centre.y - wall.a.y) * pl.dir.y;
       const roomId = spanAt(spans[out === 1 ? 1 : 0], along);
-      parts = bayParts(pl, wallT, out, roomId, { sill: windowSill(op), plinth: inp.plinthY ?? 0 });
+      parts = bayParts(pl, wallT, out, roomId, { sill: windowSill(op), plinth: inp.plinthY ?? 0, depth: op.depth });
       if (parts.bayFloor) bayFloors.push({ roomId, poly: parts.bayFloor.map((p) => toPlan(frame, p.x, p.z)) });
     } else if (op.kind === "bay") {
       // A bay on an internal wall makes no sense; draw it as a window.

@@ -69,6 +69,8 @@ export interface Opening {
   flipSwing?: boolean;
   /** Windows: sill height above the floor, metres (default 0.9). */
   sill?: number;
+  /** Bays: how far the bay projects from the wall, metres (default 0.6). */
+  depth?: number;
   /** Head (top) height above the floor, metres (default 2.1 windows, 2.05 doors). */
   head?: number;
 }

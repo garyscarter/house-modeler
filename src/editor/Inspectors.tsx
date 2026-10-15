@@ -5,6 +5,7 @@ import type { CatalogueItem } from "../lib/catalogue";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
+import { DEFAULT_BAY_DEPTH } from "../lib/openings";
 import { roomColor } from "../three/House";
 import {
   COLOUR_KINDS,
@@ -354,6 +355,20 @@ export function OpeningInspector({
                 label="Sill height"
                 onCommit={(v) => onChange({ sill: v })}
                 onClear={() => onChange({ sill: undefined })}
+              />
+            </label>
+          )}
+          {k === "bay" && (
+            <label>
+              Depth (m)
+              <NumberField
+                value={opening.depth}
+                placeholder={String(DEFAULT_BAY_DEPTH)}
+                min={0.1}
+                max={1.5}
+                label="Bay depth"
+                onCommit={(v) => onChange({ depth: v })}
+                onClear={() => onChange({ depth: undefined })}
               />
             </label>
           )}

@@ -59,7 +59,7 @@ export function collisionSegments(floor: Floor, ceiling: number): Seg[] {
       const half = { x: (pl.dir.x * pl.width) / 2, y: (pl.dir.y * pl.width) / 2 };
       const side = kind === "bay" ? outwardSign(pl, polys) : 0;
       if (kind === "bay" && side) {
-        const pts = bayOutline(pl.width, t * 2).map((p) => ({
+        const pts = bayOutline(pl.width, t * 2, pl.opening.depth).map((p) => ({
           x: pl.centre.x + pl.dir.x * p.x - pl.dir.y * p.z * side,
           y: pl.centre.y + pl.dir.y * p.x + pl.dir.x * p.z * side,
         }));

@@ -131,7 +131,7 @@ export const OpeningSymbol = memo(function OpeningSymbol({
     case "bay": {
       // The 3D bay's canted outline, projecting outwards, with a glazed line set in from its faces.
       const out = outside || 1;
-      const shape = bayOutline(len / m, t / m);
+      const shape = bayOutline(len / m, t / m, o.depth);
       const depth = shape[1].z - shape[0].z;
       const inset = Math.min((px * 4) / m, depth * 0.3);
       const glass = bayOutline(len / m - inset * 2, t / m, depth - inset);
