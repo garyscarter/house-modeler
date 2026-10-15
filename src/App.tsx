@@ -27,8 +27,6 @@ export default function App() {
   const photos = useStore((s) => s.photos);
   const activeVariant = useStore((s) => s.activeVariant);
   const viewMode = useStore((s) => s.viewMode);
-  const cameraMode = useStore((s) => s.cameraMode);
-  const walkFloorId = useStore((s) => s.walkFloorId);
   const showLabels = useStore((s) => s.showLabels);
   const showCeilings = useStore((s) => s.showCeilings);
   const maxLevel = useStore((s) => s.maxLevel);
@@ -179,8 +177,6 @@ export default function App() {
             <Viewer
               model={model}
               photos={photos}
-              cameraMode={cameraMode}
-              walkFloorId={walkFloorId}
               showLabels={showLabels}
               showCeilings={showCeilings}
               selectedRoomId={selectedRoomId}
@@ -198,8 +194,6 @@ export default function App() {
                   captureId={k}
                   model={variants[k]!}
                   photos={photos}
-                  cameraMode="orbit"
-                  walkFloorId={null}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   selectedRoomId={selectedRoomId}
@@ -219,8 +213,6 @@ export default function App() {
               model={model}
               ghost={otherModel}
               photos={photos}
-              cameraMode="orbit"
-              walkFloorId={null}
               showLabels={showLabels}
               showCeilings={showCeilings}
               selectedRoomId={selectedRoomId}

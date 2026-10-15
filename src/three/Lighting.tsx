@@ -32,7 +32,7 @@ const UP = new THREE.Vector3(0, 1, 0);
  * is the real sun for the site's location, date and time; below the
  * horizon only a dim twilight remains.
  */
-export function Lighting({ centre, size, walking }: { centre: THREE.Vector3; size: number; walking: boolean }) {
+export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number }) {
   const sun = useSunInfo();
   const site = useStore((s) => s.site);
   const showSite = useStore((s) => s.showSite);
@@ -105,20 +105,18 @@ export function Lighting({ centre, size, walking }: { centre: THREE.Vector3; siz
     l.shadow.needsUpdate = true;
   }, [box, dir, quality]);
 
-  // Walk mode wants bright, even light indoors; the sun still comes through the windows.
-  const keyIntensity = (active ? 5 * day.sun : 4.2) * (walking ? 0.5 : 1);
+  const keyIntensity = active ? 5 * day.sun : 4.2;
   const keyColor = useMemo(() => (active ? WHITE_SUN.clone().lerp(LOW_SUN, day.warmth) : WHITE_SUN.clone()), [active, day.warmth]);
   const skyLevel = active ? day.sky : 1;
   const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1), [active, day.sky]);
 
   useEffect(() => {
-    scene.environmentIntensity = skyLevel * (walking ? 1.1 : 0.5);
-  }, [scene, skyLevel, walking]);
+    scene.environmentIntensity = skyLevel * 0.5;
+  }, [scene, skyLevel]);
 
   return (
     <>
-      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={skyLevel * (walking ? 1.5 : 0.5)} />
-      <ambientLight intensity={walking ? 0.6 : 0} />
+      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={skyLevel * 0.5} />
       {/* Always casts, even at night, so the sun setting doesn't recompile every material. */}
       <directionalLight ref={light} intensity={keyIntensity} color={keyColor} castShadow />
       {site && <CompassBridge frontBearing={site.frontBearing} />}

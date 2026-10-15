@@ -1,6 +1,6 @@
 import type { Floor, HouseModel } from "../types";
 import { buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
-import { flightL, flightPoint, flightS, stairFlights, type Flight } from "./walk";
+import { flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
 
 /**
  * Stairwells: the opening in the floor above each flight, and where its
@@ -37,8 +37,7 @@ const CIRCULATION = /stair|landing|hall/i;
  * (in a real house that is the boxed-in bulkhead over the lower steps).
  */
 export function stairwells(model: HouseModel): Stairwell[] {
-  // stairFlights starts the opening where an eye at `eye` clears the ceiling with 0.15 m to spare.
-  return stairFlights(model, HEADROOM - 0.15).map((flight) => {
+  return stairFlights(model, HEADROOM).map((flight) => {
     const a = flightPoint(flight, flight.wellStart, -flight.width / 2);
     const b = flightPoint(flight, flight.run, flight.width / 2);
     const full: Rect = { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
@@ -153,9 +152,11 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
   const side = (sign: number): V2 => ({ x: across.x * sign, y: across.y * sign });
 
   for (const l of [-f.width / 2, f.width / 2]) {
-    const a = flightPoint(f, 0, l);
+    // On the side the winders are entered from, the rail starts at the newel where they turn.
+    const s0 = f.turn && Math.sign(l) === f.turn ? f.width : 0;
+    const a = flightPoint(f, s0, l);
     const b = flightPoint(f, f.run, l);
-    if (openSide(lower, a, b, side(Math.sign(l)), model.ceilingHeight)) out.lower.push({ a, b, ya: 0, yb: f.rise });
+    if (openSide(lower, a, b, side(Math.sign(l)), model.ceilingHeight)) out.lower.push({ a, b, ya: stairHeight(f, s0, l * 0.999), yb: f.rise });
   }
   for (const r of well.rects) {
     const corners = [

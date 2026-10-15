@@ -7,7 +7,6 @@ import { DEFAULT_MODEL, MODELS } from "./ai/models";
 import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./lib/houses/listing91770873";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
-export type CameraMode = "orbit" | "walk";
 export type Tab = "3d" | "plan";
 /** editFloorId value that opens the site editor instead of a floor. */
 export const SITE_EDIT_ID = "site";
@@ -56,8 +55,6 @@ interface State {
   tab: Tab;
   editFloorId: string | null;
   viewMode: ViewMode;
-  cameraMode: CameraMode;
-  walkFloorId: string | null;
   selectedRoomId: string | null;
   selectedPhotoId: string | null;
   showLabels: boolean;
@@ -93,8 +90,6 @@ interface State {
         | "tab"
         | "editFloorId"
         | "viewMode"
-        | "cameraMode"
-        | "walkFloorId"
         | "selectedRoomId"
         | "selectedPhotoId"
         | "showLabels"
@@ -176,8 +171,6 @@ export const useStore = create<State>()(
         tab: "3d",
         editFloorId: null,
         viewMode: "single",
-        cameraMode: "orbit",
-        walkFloorId: null,
         selectedRoomId: null,
         selectedPhotoId: null,
         showLabels: true,

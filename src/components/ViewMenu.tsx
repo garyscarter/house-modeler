@@ -4,13 +4,11 @@ import type { HouseModel } from "../types";
 import "./ViewMenu.css";
 
 /**
- * What the 3D view shows: compare mode, camera, floors and overlays. Rendered
+ * What the 3D view shows: compare mode, floors and overlays. Rendered
  * inline in the header on wide screens and inside the View popover otherwise.
  */
 export function ViewControls({ model, both }: { model: HouseModel | undefined; both: boolean }) {
   const viewMode = useStore((s) => s.viewMode);
-  const cameraMode = useStore((s) => s.cameraMode);
-  const walkFloorId = useStore((s) => s.walkFloorId);
   const showLabels = useStore((s) => s.showLabels);
   const showCeilings = useStore((s) => s.showCeilings);
   const maxLevel = useStore((s) => s.maxLevel);
@@ -34,24 +32,7 @@ export function ViewControls({ model, both }: { model: HouseModel | undefined; b
           Overlay
         </button>
       </div>
-      <div className="seg" role="group" aria-label="Camera">
-        <button data-pick className={cameraMode === "orbit" ? "active" : ""} onClick={() => setUi({ cameraMode: "orbit" })}>
-          Orbit
-        </button>
-        <button data-pick className={cameraMode === "walk" ? "active" : ""} disabled={!model} onClick={() => setUi({ cameraMode: "walk", viewMode: "single" })}>
-          Walk
-        </button>
-        {cameraMode === "walk" && model && (
-          <select value={walkFloorId ?? model.floors[0]?.id} onChange={(e) => setUi({ walkFloorId: e.target.value })} aria-label="Walk on floor">
-            {model.floors.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-      {model && model.floors.length > 1 && cameraMode !== "walk" && (
+      {model && model.floors.length > 1 && (
         <label className="check">
           Show up to
           <select value={maxLevel ?? ""} onChange={(e) => setUi({ maxLevel: e.target.value === "" ? null : parseInt(e.target.value) })}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -6,22 +6,17 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room } from "../types";
 import { House } from "./House";
 import { modelBounds } from "../lib/geometry";
-import { useStore, type CameraMode } from "../store";
+import { useStore } from "../store";
 import { Lighting, SkyBackdrop } from "./Lighting";
 import { GROUND_Y, SiteScene } from "./Site";
-import { newWalkInput, Walker } from "./Walker";
 import { CaptureBridge } from "./capture";
 import { Effects } from "./Effects";
 import { SunControls } from "../components/SunControls";
-import { useWalkSettings, WalkControls } from "../components/WalkControls";
-import { useMediaQuery } from "../components/useMediaQuery";
 
 interface ViewerProps {
   model: HouseModel;
   ghost?: HouseModel;
   photos: Photo[];
-  cameraMode: CameraMode;
-  walkFloorId: string | null;
   showLabels: boolean;
   showCeilings: boolean;
   selectedRoomId: string | null;
@@ -34,60 +29,30 @@ interface ViewerProps {
 }
 
 export function Viewer(props: ViewerProps) {
-  const { model, ghost, photos, cameraMode, walkFloorId, showLabels, showCeilings, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId } =
-    props;
+  const { model, ghost, photos, showLabels, showCeilings, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId } = props;
   const bounds = useMemo(() => modelBounds([...model.floors, ...(ghost?.floors ?? [])]), [model, ghost]);
   const centre = useMemo(
     () => new THREE.Vector3((bounds.x0 + bounds.x1) / 2, 1, (bounds.y0 + bounds.y1) / 2),
     [bounds],
   );
   const size = Math.max(bounds.w, bounds.h, 6);
-  const walkFloor = model.floors.find((f) => f.id === walkFloorId) ?? model.floors[0];
-  const walking = cameraMode === "walk" && !!walkFloor;
-  const [locked, setLocked] = useState(false);
   const [view, setView] = useState<{ id: number; side: ViewSide } | null>(null);
   const quality = useStore((s) => s.settings.quality);
-  const setUi = useStore((s) => s.setUi);
-  const [walkInput] = useState(newWalkInput);
-  const [walkSettings, setWalkSettings] = useWalkSettings();
-  // Touch screens get a joystick and never lock the pointer.
-  const coarse = useMediaQuery("(pointer: coarse)");
-  const onWalkFloor = useCallback((id: string) => setUi({ walkFloorId: id }), [setUi]);
-
-  // When walking, hide floors above the one you are on, except the next one
-  // up when there are stairs to it (seen through the stairwell); otherwise
-  // honour the "show floors up to" control.
-  const stairsUp = walking && !!walkFloor.stairs && model.floors.some((f) => f.level === walkFloor.level + 1);
-  const cap = walking && !showCeilings ? walkFloor.level + (stairsUp ? 1 : 0) : maxLevel ?? null;
+  const cap = maxLevel ?? null;
   const levels = [...new Set([...model.floors, ...(ghost?.floors ?? [])].map((f) => f.level))];
   const visibleLevels = cap === null ? null : levels.filter((l) => l <= cap);
 
   return (
     <div className="viewer">
       {title && <div className="viewer-title">{title}</div>}
-      {!walking && (
-        <div className="view-buttons">
-          {(["front", "rear", "left", "right", "top"] as ViewSide[]).map((side) => (
-            <button key={side} onClick={() => setView({ id: Date.now(), side })} title={`Look at the ${side}`}>
-              {side}
-            </button>
-          ))}
-        </div>
-      )}
-      {!walking && <SunControls />}
-      {walking && (
-        <WalkControls
-          input={walkInput}
-          settings={walkSettings}
-          onSettings={setWalkSettings}
-          coarse={coarse}
-          locked={locked}
-          floors={model.floors}
-          floorId={walkFloor.id}
-          onFloor={onWalkFloor}
-          onExit={() => setUi({ cameraMode: "orbit" })}
-        />
-      )}
+      <div className="view-buttons">
+        {(["front", "rear", "left", "right", "top"] as ViewSide[]).map((side) => (
+          <button key={side} onClick={() => setView({ id: Date.now(), side })} title={`Look at the ${side}`}>
+            {side}
+          </button>
+        ))}
+      </div>
+      <SunControls />
       <Canvas
         shadows="percentage"
         dpr={DPR[quality]}
@@ -95,38 +60,24 @@ export function Viewer(props: ViewerProps) {
         onPointerMissed={() => {}}
       >
         <SkyBackdrop />
-        <Lighting centre={centre} size={size} walking={walking} />
+        <Lighting centre={centre} size={size} />
         <House
           model={model}
           photos={photos}
-          showLabels={showLabels && !walking}
-          showCeilings={showCeilings || walking}
-          selectedRoomId={walking ? null : selectedRoomId}
-          onSelectRoom={walking ? undefined : onSelectRoom}
+          showLabels={showLabels}
+          showCeilings={showCeilings}
+          selectedRoomId={selectedRoomId}
+          onSelectRoom={onSelectRoom}
           visibleLevels={visibleLevels}
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}
         />
         {ghost && <House model={ghost} photos={[]} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
         <SiteScene centre={centre} size={size} model={model} />
-        {!walking && <ContactShadows position={[centre.x, GROUND_Y - 0.01, centre.z]} scale={size * 3} blur={2} opacity={0.35} far={20} />}
+        <ContactShadows position={[centre.x, GROUND_Y - 0.01, centre.z]} scale={size * 3} blur={2} opacity={0.35} far={20} />
         <CaptureBridge id={captureId ?? "main"} />
         <Effects />
-        {walking ? (
-          <Walker
-            model={model}
-            floor={walkFloor}
-            centre={centre}
-            input={walkInput}
-            eye={walkSettings.eye}
-            speed={walkSettings.speed}
-            coarse={coarse}
-            onFloor={onWalkFloor}
-            onLock={setLocked}
-          />
-        ) : (
-          <Orbit centre={centre} size={size} view={view} bounds={bounds} />
-        )}
+        <Orbit centre={centre} size={size} view={view} bounds={bounds} />
       </Canvas>
     </div>
   );

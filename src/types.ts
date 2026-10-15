@@ -143,6 +143,8 @@ export interface Floor {
   stairsLen?: number;
   /** Width of the flight, metres. Default 0.9. */
   stairsWidth?: number;
+  /** Winders at the foot turning the bottom steps a quarter turn, entered from this side (facing up the flight). Default straight. */
+  stairsTurn?: "left" | "right";
   /** Covered outdoor areas (porch, carport): polygons in image px, roofed at this floor's ceiling. */
   canopies?: Pt[][];
 }

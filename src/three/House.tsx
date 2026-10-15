@@ -11,6 +11,7 @@ import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
+import { floorFlight, stairTreads } from "../lib/stairs";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { FLOOR_COLOUR, getMaterial, type MatSpec } from "./textures";
@@ -22,7 +23,6 @@ import {
   modelBounds,
   polygonCentroid,
   roomWorldPolygon,
-  toWorld,
   type V2,
   type WallPiece,
 } from "../lib/geometry";
@@ -193,7 +193,7 @@ function FloorGroup({
           </WallBox>
         ))}
 
-      {floor.stairs && hasAbove && <Stairs floor={floor} height={H + model.slabThickness} />}
+      {floor.stairs && hasAbove && <Stairs model={model} floor={floor} />}
 
       <Fixtures floor={floor} />
 
@@ -381,26 +381,48 @@ function WallBox({ piece, children, thickness }: { piece: WallPiece; children: R
   );
 }
 
-/** A straight flight from this floor to the one above, rising in `stairsDir`. */
-function Stairs({ floor, height }: { floor: Floor; height: number }) {
-  const c = toWorld(floor, floor.stairs!);
-  const run = floor.stairsLen ?? 2.6;
-  const w = floor.stairsWidth ?? 0.9;
-  const steps = Math.max(6, Math.round(run / 0.25));
-  // Local flight rises towards +z; rotate so +z points in the chosen plan direction.
-  const rot = { down: 0, up: Math.PI, right: Math.PI / 2, left: -Math.PI / 2 }[floor.stairsDir ?? "up"];
+/**
+ * The flight from this floor to the one above: each tread a solid block down
+ * to the floor (the understairs is boxed in), carpeted across its top riser,
+ * with kite winders at the foot when the flight turns there.
+ */
+function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
+  const geom = useMemo(() => {
+    const f = floorFlight(model, floor);
+    if (!f) return null;
+    const treads = stairTreads(f);
+    const riser = f.rise / treads.length;
+    const body: THREE.BufferGeometry[] = [];
+    const carpet: THREE.BufferGeometry[] = [];
+    // Shapes are drawn on the plan (x, -y) and extruded up, then stood upright.
+    const block = (pts: V2[], y0: number, y1: number) => new THREE.ExtrudeGeometry(shapeFrom(pts), { depth: y1 - y0, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, y0, 0);
+    for (const t of treads) {
+      if (t.top - riser > 0.001) body.push(block(t.pts, 0, t.top - riser));
+      carpet.push(block(t.pts, Math.max(0, t.top - riser), t.top));
+    }
+    const merge = (parts: THREE.BufferGeometry[]) => {
+      const g = parts.length ? mergeGeometries(parts) : null;
+      parts.forEach((p) => p.dispose());
+      return g;
+    };
+    return { body: merge(body), carpet: merge(carpet) };
+  }, [model, floor]);
+  useEffect(() => () => {
+    geom?.body?.dispose();
+    geom?.carpet?.dispose();
+  }, [geom]);
+  if (!geom) return null;
   return (
-    <group position={[c.x, 0, c.y]} rotation={[0, rot, 0]}>
-      {Array.from({ length: steps }, (_, i) => (
-        <mesh key={i} position={[0, ((i + 0.5) * height) / steps, -run / 2 + ((i + 0.5) * run) / steps]} castShadow material={getMaterial(STAIR)}>
-          <boxGeometry args={[w, height / steps, run / steps]} />
-        </mesh>
-      ))}
+    <group>
+      {geom.body && <mesh geometry={geom.body} material={getMaterial(UNDERSTAIRS)} castShadow receiveShadow />}
+      {geom.carpet && <mesh geometry={geom.carpet} material={getMaterial(STAIR_CARPET)} castShadow receiveShadow />}
     </group>
   );
 }
 
-const STAIR: MatSpec = { kind: "plain", color: "#a89a86", roughness: 0.8 };
+/** Painted understairs panelling and beige stair carpet, as in the listing photos. */
+const UNDERSTAIRS: MatSpec = { kind: "paint", color: "#f1eee8" };
+const STAIR_CARPET: MatSpec = { kind: "plain", color: "#c7b9a5", roughness: 1 };
 
 function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: Photo[] }) {
   const mine = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);

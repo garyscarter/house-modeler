@@ -47,7 +47,7 @@ main { flex: 1; min-width: 0; position: relative; display: flex; }
 .split { display: flex; flex: 1; }
 .split .viewer + .viewer { border-left: 2px solid var(--line); }
 .viewer { position: relative; flex: 1; min-width: 0; }
-/* !important: OrbitControls writes touch-action: auto inline when it is disposed (switching to walk). */
+/* !important: OrbitControls writes touch-action: auto inline when it is disposed. */
 .viewer canvas { display: block; touch-action: none !important; }
 .viewer-title { position: absolute; top: 8px; left: 10px; z-index: 2; background: rgba(255,255,255,0.85); padding: 3px 8px; border-radius: 4px; font-weight: 600; pointer-events: none; }
 .empty { margin: auto; max-width: 420px; text-align: center; color: var(--muted); }
