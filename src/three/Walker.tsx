@@ -1,19 +1,8 @@
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Floor, HouseModel } from "../types";
-import {
-  buildWalkWorld,
-  displayFloorId,
-  flightPoint,
-  groundY,
-  moveWalker,
-  settleWalker,
-  spawnPoint,
-  type Flight,
-  type WalkState,
-  type WalkWorld,
-} from "../lib/walk";
+import { buildWalkWorld, displayFloorId, groundY, moveWalker, settleWalker, spawnPoint, type WalkState } from "../lib/walk";
 
 /** Input shared between the walker and its on-screen controls: the joystick, -1..1 with y forward. */
 export interface WalkInput {
@@ -226,7 +215,6 @@ export function Walker({
     };
   }, [gl, camera, scene, raycaster, coarse, onLock]);
 
-  useStairwell(world, state);
 
   // Scripted checks in development read and place the walker.
   useEffect(() => {
@@ -284,101 +272,4 @@ export function Walker({
   });
 
   return null;
-}
-
-/**
- * Cut the stairwell out of the ceiling below and the floor above the flight
- * nearest the walker, by clipping every material to the outside of a box
- * over the flight. Without it you would climb through the ceiling.
- */
-function useStairwell(world: WalkWorld, state: RefObject<WalkState | null>) {
-  const gl = useThree((s) => s.gl);
-  const scene = useThree((s) => s.scene);
-  const planes = useMemo(() => Array.from({ length: 6 }, () => new THREE.Plane()), []);
-  const current = useRef<Flight | null>(null);
-  const frame = useRef(0);
-  // Materials are shared through a cache, so put back every one we touched, in the scene or not.
-  const touched = useMemo(() => new Set<THREE.Material>(), []);
-
-  useEffect(() => {
-    gl.localClippingEnabled = true;
-    return () => {
-      gl.localClippingEnabled = false;
-      for (const m of touched) {
-        m.clippingPlanes = null;
-        m.clipIntersection = false;
-      }
-      touched.clear();
-    };
-  }, [gl, touched]);
-
-  useFrame(() => {
-    const st = state.current;
-    if (!st) return;
-    const flight = nearestFlight(world, st);
-    if (flight !== current.current) {
-      current.current = flight;
-      if (flight) boxPlanes(planes, flight);
-      else for (const p of planes) p.set(p.normal.set(0, 1, 0), 1e6);
-      frame.current = 0;
-    }
-    // New meshes (a floor appearing as you climb) pick the planes up within a few frames.
-    if (frame.current++ % 20 !== 0) return;
-    scene.traverse((o) => {
-      for (const m of materialsOf(o)) {
-        if (m.clippingPlanes === planes || (m as THREE.ShaderMaterial).isShaderMaterial) continue;
-        m.clippingPlanes = planes;
-        m.clipIntersection = true;
-        touched.add(m);
-      }
-    });
-  });
-}
-
-const NONE: THREE.Material[] = [];
-function materialsOf(o: THREE.Object3D): THREE.Material[] {
-  const m = (o as THREE.Mesh).material;
-  if (!m || !(o as THREE.Mesh).isMesh) return NONE;
-  return Array.isArray(m) ? m : [m];
-}
-
-/** The flight below or above the walker's floor nearest to it, if any. */
-function nearestFlight(world: WalkWorld, st: WalkState): Flight | null {
-  if (st.flight >= 0) return world.flights[st.flight];
-  let best: Flight | null = null;
-  let bestD = Infinity;
-  for (const f of world.flights) {
-    if (f.lowerId !== st.floorId && f.upperId !== st.floorId) continue;
-    const d = Math.hypot(f.centre.x - st.x, f.centre.y - st.y);
-    if (d < bestD) {
-      bestD = d;
-      best = f;
-    }
-  }
-  return best;
-}
-
-/**
- * Six planes whose intersection (clipIntersection) is the stairwell: across
- * the flight, from where the opening starts to just short of the top tread
- * (House.tsx draws max(6, run / 0.25) treads), and from just under the lower
- * ceiling to just above the upper floor.
- */
-function boxPlanes(planes: THREE.Plane[], f: Flight) {
-  const treads = Math.max(6, Math.round(f.run / 0.25));
-  const a = flightPoint(f, f.wellStart, -f.width / 2);
-  const b = flightPoint(f, f.run * (1 - 1 / treads), f.width / 2);
-  const x0 = Math.min(a.x, b.x);
-  const x1 = Math.max(a.x, b.x);
-  const z0 = Math.min(a.y, b.y);
-  const z1 = Math.max(a.y, b.y);
-  const y0 = f.baseY + f.ceiling - 0.02;
-  const y1 = f.baseY + f.rise + 0.03;
-  // A point is clipped when it is on the negative side of all six: inside the box.
-  planes[0].set(planes[0].normal.set(1, 0, 0), -x1);
-  planes[1].set(planes[1].normal.set(-1, 0, 0), x0);
-  planes[2].set(planes[2].normal.set(0, 0, 1), -z1);
-  planes[3].set(planes[3].normal.set(0, 0, -1), z0);
-  planes[4].set(planes[4].normal.set(0, 1, 0), -y1);
-  planes[5].set(planes[5].normal.set(0, -1, 0), y0);
 }

@@ -9,6 +9,8 @@ import { wallThickness } from "../lib/walls";
 import { Roof } from "./Roof";
 import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
+import { Balustrade } from "./Balustrade";
+import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { FLOOR_COLOUR, getMaterial, type MatSpec } from "./textures";
@@ -99,6 +101,7 @@ export function House({
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
   const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
+  const wells = useMemo(() => stairwells(model), [model]);
   return (
     <group>
       {showExterior && !ghost && ext.showRoof && <Roof model={model} />}
@@ -115,6 +118,7 @@ export function House({
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
+          wells={wells}
         />
       ))}
     </group>
@@ -131,6 +135,7 @@ function FloorGroup({
   selectedRoomId,
   onSelectRoom,
   otherFloor,
+  wells,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -141,8 +146,21 @@ function FloorGroup({
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   otherFloor?: Floor | null;
+  wells: Stairwell[];
 }) {
   const y0 = floorBaseY(model, floor);
+  // Openings in this floor (stairwells from below) and in the ceiling over it (stairwells up from here).
+  const holes = useMemo(() => wells.filter((w) => w.upperId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
+  const ceilingHoles = useMemo(() => wells.filter((w) => w.lowerId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
+  const rails = useMemo(() => {
+    const out: RailRun[] = [];
+    for (const w of wells) {
+      if (w.lowerId !== floor.id && w.upperId !== floor.id) continue;
+      const b = balustrades(model, w);
+      out.push(...(w.lowerId === floor.id ? b.lower : b.upper));
+    }
+    return out;
+  }, [wells, model, floor.id]);
   const H = model.ceilingHeight;
   const hasAbove = model.floors.some((f) => f.level === floor.level + 1);
   const allWalls = useMemo(() => buildWalls(floor), [floor]);
@@ -164,8 +182,9 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} />
-      {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} />)}
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} />
+      {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+      <Balustrade runs={rails} />
 
       {otherWalls &&
         changed.map((w, i) => (
@@ -199,6 +218,7 @@ function FloorShell({
   photos,
   selectedRoomId,
   onSelectRoom,
+  holes,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -206,6 +226,8 @@ function FloorShell({
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  /** Stairwell openings to leave out of the floor and slab. */
+  holes: Rect[];
 }) {
   const ext = exteriorOf(model);
   const H = model.ceilingHeight;
@@ -236,17 +258,19 @@ function FloorShell({
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 
+  const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
+  // Each room's floor, as pieces when a stairwell opening is cut out of it.
+  const polys = useMemo(() => floor.rooms.map((r) => cutWells(roomWorldPolygon(floor, r), holes)), [floor, holes]);
+
   // One slab under all the rooms so nothing floats.
   const slabGeom = useMemo(() => {
-    const parts = floor.rooms.map((r) => new THREE.ExtrudeGeometry(shapeFrom(roomWorldPolygon(floor, r)), { depth: slab, bevelEnabled: false }));
+    const parts = polys.flat().map((p) => new THREE.ExtrudeGeometry(shapeFrom(p), { depth: slab, bevelEnabled: false }));
     const merged = parts.length ? mergeGeometries(parts) : null;
     parts.forEach((g) => g.dispose());
     return merged;
-  }, [floor, slab]);
+  }, [polys, slab]);
   useEffect(() => () => slabGeom?.dispose(), [slabGeom]);
 
-  const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
-  const polys = useMemo(() => floor.rooms.map((r) => roomWorldPolygon(floor, r)), [floor]);
   return (
     <group>
       {slabGeom && <mesh geometry={slabGeom} rotation={[-Math.PI / 2, 0, 0]} position={[0, -slab, 0]} material={getMaterial(SLAB)} receiveShadow />}
@@ -254,7 +278,7 @@ function FloorShell({
         <RoomFloor
           key={room.id}
           room={room}
-          poly={polys[i]}
+          polys={polys[i]}
           photos={photos}
           selected={room.id === selectedRoomId}
           onSelect={() => onSelectRoom?.(floor, room)}
@@ -266,7 +290,7 @@ function FloorShell({
           <RoomFloor
             key={"bay" + i}
             room={room}
-            poly={b.poly}
+            polys={[b.poly]}
             photos={photos}
             selected={room.id === selectedRoomId}
             onSelect={() => onSelectRoom?.(floor, room)}
@@ -296,9 +320,9 @@ function floorSpec(room: Room, selected: boolean): MatSpec {
   return { kind: "floor", finish, color: room.color ?? FLOOR_COLOUR[finish], selected };
 }
 
-function RoomFloor({ room, poly, photos, selected, onSelect }: { room: Room; poly: V2[]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
+function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
   // Shape coordinates are metres, so the UVs keep boards and tiles at their real size.
-  const geom = useMemo(() => new THREE.ShapeGeometry(shapeFrom(poly)), [poly]);
+  const geom = useMemo(() => new THREE.ShapeGeometry(polys.map(shapeFrom)), [polys]);
   useEffect(() => () => geom.dispose(), [geom]);
   const photo = room.floorPhotoId ? photos.find((p) => p.id === room.floorPhotoId) : undefined;
   const material = getMaterial(floorSpec(room, selected));
@@ -331,9 +355,9 @@ function PhotoFloorMaterial({ url, tint }: { url: string; tint: string }) {
   return <meshStandardMaterial map={tex} color={tint} roughness={0.8} />;
 }
 
-function RoomCeiling({ floor, room, height }: { floor: Floor; room: Room; height: number }) {
-  const poly = useMemo(() => roomWorldPolygon(floor, room), [floor, room]);
-  const geom = useMemo(() => new THREE.ShapeGeometry(shapeFrom(poly)), [poly]);
+function RoomCeiling({ floor, room, height, holes }: { floor: Floor; room: Room; height: number; holes: Rect[] }) {
+  const polys = useMemo(() => cutWells(roomWorldPolygon(floor, room), holes), [floor, room, holes]);
+  const geom = useMemo(() => new THREE.ShapeGeometry(polys.map(shapeFrom)), [polys]);
   useEffect(() => () => geom.dispose(), [geom]);
   return (
     <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
