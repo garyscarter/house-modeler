@@ -65,6 +65,7 @@ interface Part {
 const WHITE = "#f5f5f5";
 const CHROME = "#b8bcc2";
 const STEEL = "#c9ccd0";
+const KNOB = "#ece8df";
 const WORKTOP = "#4a4d52";
 const PLINTH = "#3f4247";
 const DARK = "#1f2125";
@@ -343,6 +344,35 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(w / 2 - 0.22, 0.03, 0, 0.42, 0.06, d - 0.06, shade(color, 0.8));
       box(0, h + 0.4, -d / 2 + 0.03, w * 0.6, 0.7, 0.03, shade(color, 0.8), "satin");
       box(0, h + 0.4, -d / 2 + 0.05, w * 0.6 - 0.06, 0.64, 0.01, "#cfd8dc", "mirror");
+      break;
+    }
+    case "fitted-wardrobe": {
+      // Flat-panel doors over a full-height carcass: tall doors below and a row of top boxes
+      // above them, as in the photos. Thin dark joints stand in for the shadow gaps.
+      const t = 0.02; // door thickness
+      const gap = 0.006; // joint between doors
+      const top = Math.min(0.4, h * 0.2); // top-box height
+      const skirt = 0.06;
+      const front = d / 2;
+      const zd = front - t / 2;
+      const joint = shade(color, 0.5);
+      box(0, h / 2, -t / 2, w, h, d - t, shade(color, 0.9), "satin");
+      const n = Math.max(1, Math.round(w / 0.55));
+      const dw = w / n;
+      const rows: [number, number, number][] = [
+        [skirt, h - top - gap, 1.0],
+        [h - top, h, h - top + 0.08],
+      ];
+      for (const [y0, y1, knobY] of rows) {
+        for (let i = 0; i < n; i++) {
+          const x = -w / 2 + (i + 0.5) * dw;
+          box(x, (y0 + y1) / 2, zd, dw - gap, y1 - y0 - gap, t, color, "satin");
+          // Knobs sit on the edge nearest the middle of each pair of doors.
+          cyl(x + (i % 2 ? -1 : 1) * (dw / 2 - 0.05), knobY, front + 0.01, 0.03, 0.02, KNOB, "satin", "z");
+        }
+      }
+      for (let i = 1; i < n; i++) box(-w / 2 + i * dw, (h + skirt) / 2, zd, gap, h - skirt, t, joint);
+      box(0, skirt / 2, zd, w, skirt, t, shade(color, 0.85), "satin");
       break;
     }
     case "boiler":

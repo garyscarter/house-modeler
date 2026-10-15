@@ -108,8 +108,7 @@ export function listing91770873(image: string): HouseModel {
       op("window", 910, 22, "h", 1.7),
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
-      op("door", 730, 412, "v", 0.75), // garage -> hall
-      op("door", 1170, 278, "h", 2.0), // opening between the two living rooms
+      op("bifold", 1170, 278, "h", 2.0), // bi-fold between the two living rooms
       { ...op("bay", 1185, 515, "h", 2.4), depth: 0.3 }, // shallow canted bay on the front living room (photos)
       op("door", 1045, 410, "v", 0.8), // hall -> front living room
       op("door", 770, 345, "h", 0.8), // kitchen -> front hall
@@ -143,10 +142,22 @@ export function listing91770873(image: string): HouseModel {
     { x: 650, y: 1203 },
     [
       rect("Bedroom 1", 610, 795, 775, 1040, { w: 2.23, h: 3.33 }, { floorFinish: "carpet", color: "#d9d0c4" }),
-      // Includes its fitted wardrobe along the party wall.
+      // Includes its fitted wardrobe along the party wall (a fixture below).
       rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: "#d9d0c4" }),
-      rect("Bedroom 3", 850, 1040, 1075, 1285, { w: 3.28, h: 3.36 }, { floorFinish: "laminate", color: "#cdb48e", wallPaint: "#c9b3bd" }),
-      rect("Cupboard", 810, 1110, 850, 1285),
+      // Takes in the strip west of the room that the plan labels "Cupboard": it is the fitted wardrobe (photos).
+      poly(
+        "Bedroom 3",
+        [
+          [850, 1040],
+          [1075, 1040],
+          [1075, 1285],
+          [810, 1285],
+          [810, 1110],
+          [850, 1110],
+        ],
+        { w: 3.28, h: 3.36 },
+        { floorFinish: "laminate", color: "#cdb48e", wallPaint: "#c9b3bd" },
+      ),
       rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: "#d9d0c4" }),
       poly("Bathroom", [
         [690, 1110],
@@ -172,6 +183,15 @@ export function listing91770873(image: string): HouseModel {
     ],
     { x: 650, y: 1162 },
   );
+  // Fitted wardrobes from the photos, backs against the walls at their inner faces
+  // (the party wall is 0.25 m thick, internal walls 0.1 m). rot 90 turns the back to
+  // the east, 270 to the west.
+  first.fixtures = [
+    // Bedroom 2: light grey, floor to ceiling along the party wall (the grey strip on the plan).
+    { id: uid(), type: "wardrobe-fitted", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, color: "#cfd2d6" },
+    // Bedroom 3: white, in the strip beside the room door.
+    { id: uid(), type: "wardrobe-fitted", x: 833, y: 1195, rot: 270, w: 2.2, d: 0.55 },
+  ];
 
   return {
     floors: [ground, first],

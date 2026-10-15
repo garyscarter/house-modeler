@@ -220,6 +220,14 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <rect key="m" x={x0 + w * 0.2} y={y0} width={w * 0.6} height={0.04 * m} fill={outline} fillOpacity={0.5} stroke="none" />,
         <line key="k" x1={x0 + w * 0.3} y1={y0} x2={x0 + w * 0.3} y2={y1} {...thin} />,
       );
+    case "fitted-wardrobe":
+      // Door joints across a thin front strip, and the hanging rail dashed along the middle.
+      return g(
+        body(0),
+        front(0.03 * m),
+        ...dividers(0.55, y1 - 0.03 * m, y1),
+        <line key="r" x1={x0 + 0.04 * m} y1={y0 + d * 0.4} x2={x1 - 0.04 * m} y2={y0 + d * 0.4} {...thin} strokeDasharray={`${stroke * 5} ${stroke * 3}`} />,
+      );
     case "boiler":
       return g(body(r * 0.5), <circle key="f" cx={0} cy={y0 + d * 0.3} r={Math.min(w, d) * 0.15} {...line} />);
     default:
