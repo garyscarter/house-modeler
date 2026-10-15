@@ -30,6 +30,7 @@ import {
   viewBoxOf,
   wallLines,
   abutNeighbours,
+  DOUBLE_DOOR_M,
   type Cam,
   type Placement,
   type Seg,
@@ -270,7 +271,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     const raw = toImage(e);
     if (!d) {
       setAltHeld(e.altKey);
-      if (e.pointerType === "mouse") setHover(tool === "rect" || tool === "room" || tool === "wall" || tool === "measure" ? snapMeasure(raw) : raw);
+      // Only the drawing tools and placing follow the mouse; in Select mode a move must not redraw the plan.
+      if (e.pointerType === "mouse" && tool !== "select" && tool !== "door" && tool !== "window" && tool !== "gap" && tool !== "calibrate")
+        setHover(tool === "place" ? raw : snapMeasure(raw));
       return;
     }
     if (d.kind === "fixture") {
@@ -813,6 +816,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           ) : selectedOpening ? (
             <OpeningInspector
               opening={selectedOpening}
+              pair={selectedOpening.kind === "door" && selectedOpening.widthM > DOUBLE_DOOR_M && outsideSide(selectedOpening, floor.rooms, 0.3 * ppm) === 0}
               onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.map((o) => (o.id === selectedOpening.id ? { ...o, ...p } : o)) }))}
               onDelete={removeSelected}
             />

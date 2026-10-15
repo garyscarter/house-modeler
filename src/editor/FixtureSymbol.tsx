@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from "react";
+import { createElement, memo, type ReactNode } from "react";
 import { burners, type CatalogueItem } from "../lib/catalogue";
 
 /**
@@ -8,7 +8,7 @@ import { burners, type CatalogueItem } from "../lib/catalogue";
  * so lines stay crisp at any zoom; `m` is one metre in image px for details
  * with a real size (seat depth, burners, panel widths).
  */
-export function FixtureSymbol({
+export const FixtureSymbol = memo(function FixtureSymbol({
   item,
   w,
   d,
@@ -225,7 +225,7 @@ export function FixtureSymbol({
     default:
       return body();
   }
-}
+});
 
 /** Whether a #rrggbb colour is dark enough to need light detail drawn on it. */
 function isDark(hex: string): boolean {

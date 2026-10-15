@@ -247,7 +247,18 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
   );
 }
 
-export function OpeningInspector({ opening, onChange, onDelete }: { opening: Opening; onChange: (p: Partial<Opening>) => void; onDelete: () => void }) {
+export function OpeningInspector({
+  opening,
+  pair,
+  onChange,
+  onDelete,
+}: {
+  opening: Opening;
+  /** Drawn as a pair of leaves (a wide internal door), so there is no hinge side to flip. */
+  pair?: boolean;
+  onChange: (p: Partial<Opening>) => void;
+  onDelete: () => void;
+}) {
   const k = opening.kind;
   const sill = defaultSill(k);
   const head = defaultHead(k);
@@ -278,7 +289,7 @@ export function OpeningInspector({ opening, onChange, onDelete }: { opening: Ope
       </div>
       {SWING_KINDS.includes(k) && (
         <div className="row flip-row">
-          {k !== "french" && (
+          {k !== "french" && !pair && (
             <button className={opening.flipHinge ? "active" : ""} onClick={() => onChange({ flipHinge: !opening.flipHinge || undefined })}>
               Flip hinge
             </button>
