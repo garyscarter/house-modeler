@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { Opening } from "../types";
-import { doorFrame } from "../lib/planMath";
+import { bayOutline, bifoldPanels } from "../lib/openings";
+import { DOUBLE_DOOR_M, doorSwing } from "../lib/planMath";
 
 const INK = "#1f2937";
 const SELECTED = "#d97706";
@@ -8,11 +9,12 @@ const SELECTED = "#d97706";
 /**
  * Architectural plan symbol for an opening, drawn in a local frame where x
  * runs along the wall (left to right for "h" walls, top to bottom for "v")
- * and +y is the default swing side (see doorFrame). `len` is the opening's
- * width and `t` the wall thickness, both image px; `px` is one screen pixel in
- * image px so strokes stay the same on screen at any zoom. `outside` is the
- * local y sign of the outside of the house (0 for an internal wall), used to
- * project bays outwards and draw a garage door's travel inwards.
+ * and +y is down the plan for "h" and left for "v" (see doorSwing). `len` is
+ * the opening's width and `t` the wall thickness, both image px; `px` is one
+ * screen pixel in image px so strokes stay the same on screen at any zoom.
+ * `outside` is the local y sign of the outside of the house (0 for an
+ * internal wall), so doors swing, bays project and garage doors travel the
+ * same way as in the 3D view.
  */
 export const OpeningSymbol = memo(function OpeningSymbol({
   opening: o,
@@ -35,8 +37,7 @@ export const OpeningSymbol = memo(function OpeningSymbol({
   const ink = selected ? SELECTED : INK;
   const sw = px * (selected ? 2 : 1.3);
   const half = len / 2;
-  const { hingeSide } = doorFrame(o);
-  const swing = o.flipSwing ? -1 : 1;
+  const { hinge, swing } = doorSwing(o, outside);
   const thin = { stroke: ink, strokeWidth: sw * 0.75, fill: "none" as const };
   const bold = { stroke: ink, strokeWidth: sw * 1.6, fill: "none" as const, strokeLinecap: "round" as const };
   // A white break in the wall outline, with the two jambs.
@@ -71,7 +72,14 @@ export const OpeningSymbol = memo(function OpeningSymbol({
       body = (
         <>
           {breakWall}
-          {leaf(hingeSide * half, len, hingeSide > 0 ? -1 : 1)}
+          {!outside && o.widthM > DOUBLE_DOOR_M ? (
+            <>
+              {leaf(-half, half, 1)}
+              {leaf(half, half, -1)}
+            </>
+          ) : (
+            leaf(hinge * half, len, hinge > 0 ? -1 : 1)
+          )}
         </>
       );
       break;
@@ -79,7 +87,7 @@ export const OpeningSymbol = memo(function OpeningSymbol({
       body = (
         <>
           {breakWall}
-          {leaf(hingeSide * half, len, hingeSide > 0 ? -1 : 1, o.color ?? "#b3202e")}
+          {leaf(hinge * half, len, hinge > 0 ? -1 : 1, o.color ?? "#b3202e")}
         </>
       );
       break;
@@ -93,18 +101,19 @@ export const OpeningSymbol = memo(function OpeningSymbol({
       );
       break;
     case "bifold": {
-      // Folding leaves drawn half open as a zigzag on the swing side, stacking at the hinge jamb.
-      const n = Math.max(2, Math.min(7, Math.round(len / (0.75 * m))));
+      // Folding leaves drawn half open as a zigzag on the swing side, stacking at the hinge jamb;
+      // as many panels as the 3D door has inside its 60 mm frame.
+      const n = bifoldPanels(Math.max(0.2, o.widthM - 0.12));
       const p = len / n;
       const pts = Array.from({ length: n + 1 }, (_, i) => {
-        const x = hingeSide * half - hingeSide * i * p;
+        const x = hinge * half - hinge * i * p;
         return `${x},${i % 2 ? swing * p * 0.45 : 0}`;
       });
       body = (
         <>
           {breakWall}
           <polyline points={pts.join(" ")} {...bold} strokeLinejoin="round" />
-          <circle cx={hingeSide * half} cy={0} r={px * 3} fill={ink} />
+          <circle cx={hinge * half} cy={0} r={px * 3} fill={ink} />
         </>
       );
       break;
@@ -120,18 +129,18 @@ export const OpeningSymbol = memo(function OpeningSymbol({
       );
       break;
     case "bay": {
-      // Canted bay projecting outwards with a glazed line set in from its face.
+      // The 3D bay's canted outline, projecting outwards, with a glazed line set in from its faces.
       const out = outside || 1;
-      const depth = Math.min(0.6 * m, len * 0.4);
-      const face = Math.max(len - depth * 2, len * 0.35) / 2;
-      const outline = `${-half},${(out * t) / 2} ${-face},${out * (t / 2 + depth)} ${face},${out * (t / 2 + depth)} ${half},${(out * t) / 2}`;
-      const inset = Math.min(px * 4, depth * 0.3);
-      const glass = `${-half + inset},${(out * t) / 2} ${-face + inset * 0.4},${out * (t / 2 + depth - inset)} ${face - inset * 0.4},${out * (t / 2 + depth - inset)} ${half - inset},${(out * t) / 2}`;
+      const shape = bayOutline(len / m, t / m);
+      const depth = shape[1].z - shape[0].z;
+      const inset = Math.min((px * 4) / m, depth * 0.3);
+      const glass = bayOutline(len / m - inset * 2, t / m, depth - inset);
+      const pts = (ps: { x: number; z: number }[]) => ps.map((q) => `${q.x * m},${out * q.z * m}`).join(" ");
       body = (
         <>
           {breakWall}
-          <polygon points={outline} fill="#e0f2fe" fillOpacity={0.6} stroke={ink} strokeWidth={sw} strokeLinejoin="round" />
-          <polyline points={glass} {...thin} />
+          <polygon points={pts(shape)} fill="#e0f2fe" fillOpacity={0.6} stroke={ink} strokeWidth={sw} strokeLinejoin="round" />
+          <polyline points={pts(glass)} {...thin} />
           <line x1={-half} y1={0} x2={half} y2={0} {...thin} />
         </>
       );

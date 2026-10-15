@@ -205,8 +205,9 @@ export function wallLines(floor: Floor, intT: number, extT: number): WallLine[] 
 /**
  * Snap a fixture's back against the nearest wall: the back (local -y at
  * rotation 0) sits on the wall face and the front looks into the room on the
- * side the fixture is already on. Near the end of a wall the side snaps flush
- * into the corner too. Returns null when no wall face is within tol.
+ * side the fixture is already on. Near a corner or a crossing wall its side
+ * snaps flush to that wall's face too. Returns null when no wall face is
+ * within tol.
  *
  * In a corner, where two walls are in reach, the one that keeps the fixture's
  * current rotation (prefRot) wins unless the other is clearly closer, so a run
@@ -233,18 +234,57 @@ export function snapToWall(c: Pt, w: number, d: number, walls: WallLine[], tol: 
     const turnAway = prefRot !== undefined && Math.abs(((rot - prefRot + 540) % 360) - 180) > 1 ? tol : 0;
     const score = Math.abs(gap) + turnAway;
     if (best && score >= best.score) continue;
-    let t = along;
-    const lo = halfT + w / 2;
-    const hi = len - halfT - w / 2;
-    if (Math.abs(t - lo) < tol) t = lo;
-    else if (Math.abs(t - hi) < tol) t = hi;
     const off = halfT + d / 2;
+    const t = flushAlong(along, w, a, { x: ux, y: uy }, n, off, walls, tol) ?? endSnap(along, w, len, halfT, tol);
     best = {
       score,
       place: { x: a.x + ux * t + n.x * off, y: a.y + uy * t + n.y * off, rot: Math.round(rot * 1e6) / 1e6 },
     };
   }
   return best?.place ?? null;
+}
+
+/**
+ * Slide a fixture along its wall so a side sits flush on the face of a wall
+ * crossing it (a room corner, or a partition), whatever that wall's thickness;
+ * one that would poke through such a wall is pushed back to the side its
+ * centre is on. `along` is the fixture centre's distance from a along the wall
+ * direction u, n points into the room and off is the centre's distance from
+ * the wall line.
+ */
+function flushAlong(along: number, w: number, a: Pt, u: Pt, n: Pt, off: number, walls: WallLine[], tol: number): number | null {
+  let best: number | null = null;
+  let forced: number | null = null;
+  const nearer = (t: number, than: number | null) => than === null || Math.abs(t - along) < Math.abs(than - along);
+  for (const o of walls) {
+    const ox = o.b.x - o.a.x;
+    const oy = o.b.y - o.a.y;
+    const olen = Math.hypot(ox, oy);
+    if (olen < 1e-6 || Math.abs((ox * u.x + oy * u.y) / olen) > 0.2) continue;
+    // The crossing wall's ends in this wall's frame (along, into the room).
+    const pa = { s: (o.a.x - a.x) * u.x + (o.a.y - a.y) * u.y, q: (o.a.x - a.x) * n.x + (o.a.y - a.y) * n.y };
+    const pb = { s: (o.b.x - a.x) * u.x + (o.b.y - a.y) * u.y, q: (o.b.x - a.x) * n.x + (o.b.y - a.y) * n.y };
+    // It must reach the fixture's centre line, not stop short or start beyond it.
+    if (Math.min(pa.q, pb.q) > off + 1e-6 || Math.max(pa.q, pb.q) < off - 1e-6 || Math.abs(pb.q - pa.q) < 1e-9) continue;
+    const at = pa.s + ((pb.s - pa.s) * (off - pa.q)) / (pb.q - pa.q);
+    const reach = o.halfT + w / 2;
+    if (Math.abs(along - at) < reach - 1e-6) {
+      const t = along >= at ? at + reach : at - reach;
+      if (nearer(t, forced)) forced = t;
+    } else {
+      for (const t of [at + reach, at - reach]) if (Math.abs(t - along) < tol && nearer(t, best)) best = t;
+    }
+  }
+  return forced ?? best;
+}
+
+/** Near an open end of a wall, slide flush with it; otherwise stay put. */
+function endSnap(along: number, w: number, len: number, halfT: number, tol: number): number {
+  const lo = halfT + w / 2;
+  const hi = len - halfT - w / 2;
+  if (Math.abs(along - lo) < tol) return lo;
+  if (Math.abs(along - hi) < tol) return hi;
+  return along;
 }
 
 /** A placed fixture's footprint (image px) and vertical extent (metres), for lining items up. */
@@ -369,7 +409,7 @@ export function defaultHead(kind: OpeningKind): number | undefined {
 
 /**
  * Which side of an opening's wall is outside, as the sign of the local y axis
- * (the default swing side, see doorFrame): 1 or -1, or 0 when both or neither
+ * (see doorSwing): 1 or -1, or 0 when both or neither
  * side is in a room (an internal wall, or a stray opening).
  */
 export function outsideSide(o: Pick<Opening, "x" | "y" | "orientation">, rooms: Room[], probe: number): 1 | -1 | 0 {
@@ -380,18 +420,21 @@ export function outsideSide(o: Pick<Opening, "x" | "y" | "orientation">, rooms: 
   return pos === neg ? 0 : pos ? -1 : 1;
 }
 
+/** Openings wider than this with kind "door" are a pair of leaves, as in the 3D view. */
+export const DOUBLE_DOOR_M = 1.25;
+
 /**
- * Hinge and swing frame of a door in image px, shared by the plan symbol and
- * the 3D door. Along the wall the axis runs left to right ("h") or top to
- * bottom ("v"); by default the hinge is at the start jamb and the leaf swings
- * towards (-axis.y, axis.x), i.e. down the plan for "h" walls and left for "v"
- * walls. flipHinge moves the hinge to the far jamb; flipSwing swings to the
- * other side of the wall.
+ * Hinge jamb and swing side of a door in the opening's local frame (x along
+ * the wall: left to right for "h" walls, top to bottom for "v"; +y is down the
+ * plan for "h" and left for "v", the 3D view's local +z). These follow the 3D
+ * doors exactly: the hinge is at the start jamb (-1) unless flipHinge; internal
+ * doors swing to +y, external doors and front doors open inwards, French and
+ * bi-fold doors outwards; flipSwing reverses the swing.
  */
-export function doorFrame(o: Pick<Opening, "orientation" | "flipHinge" | "flipSwing">): { axis: Pt; hingeSide: 1 | -1; swing: Pt } {
-  const axis = o.orientation === "h" ? { x: 1, y: 0 } : { x: 0, y: 1 };
-  const s = o.flipSwing ? -1 : 1;
-  return { axis, hingeSide: o.flipHinge ? 1 : -1, swing: { x: -axis.y * s, y: axis.x * s } };
+export function doorSwing(o: Pick<Opening, "kind" | "flipHinge" | "flipSwing">, outside: 1 | -1 | 0): { hinge: 1 | -1; swing: 1 | -1 } {
+  const outwards = o.kind === "french" || o.kind === "bifold";
+  const base: 1 | -1 = outside === 0 ? 1 : outwards ? outside : outside === 1 ? -1 : 1;
+  return { hinge: o.flipHinge ? 1 : -1, swing: o.flipSwing ? (base === 1 ? -1 : 1) : base };
 }
 
 /**

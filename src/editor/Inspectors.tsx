@@ -37,6 +37,7 @@ export function NumberField({
   label,
   autoFocus,
   onDone,
+  onClear,
 }: {
   value: number | undefined;
   onCommit: (v: number) => void;
@@ -49,6 +50,8 @@ export function NumberField({
   autoFocus?: boolean;
   /** Called on Enter or Escape (e.g. to close a pop-up field). */
   onDone?: () => void;
+  /** Called when the field is emptied, for values that fall back to a default. */
+  onClear?: () => void;
 }) {
   const [text, setText] = useState(fmt2(value));
   const [focused, setFocused] = useState(false);
@@ -71,6 +74,7 @@ export function NumberField({
       onBlur={() => setFocused(false)}
       onChange={(e) => {
         setText(e.target.value);
+        if (e.target.value === "" && onClear) return onClear();
         const v = parseFloat(e.target.value);
         if (Number.isFinite(v) && v > min && (max === undefined || v <= max)) onCommit(v);
       }}
@@ -289,13 +293,29 @@ export function OpeningInspector({ opening, onChange, onDelete }: { opening: Ope
           {sill !== undefined && (
             <label>
               Sill (m)
-              <NumberField value={opening.sill} placeholder={String(sill)} min={-0.001} max={3} label="Sill height" onCommit={(v) => onChange({ sill: v })} />
+              <NumberField
+                value={opening.sill}
+                placeholder={String(sill)}
+                min={-0.001}
+                max={3}
+                label="Sill height"
+                onCommit={(v) => onChange({ sill: v })}
+                onClear={() => onChange({ sill: undefined })}
+              />
             </label>
           )}
           {head !== undefined && (
             <label>
               Head (m)
-              <NumberField value={opening.head} placeholder={String(head)} min={0.5} max={4} label="Head height" onCommit={(v) => onChange({ head: v })} />
+              <NumberField
+                value={opening.head}
+                placeholder={String(head)}
+                min={0.5}
+                max={4}
+                label="Head height"
+                onCommit={(v) => onChange({ head: v })}
+                onClear={() => onChange({ head: undefined })}
+              />
             </label>
           )}
         </div>
@@ -407,7 +427,9 @@ export function FixtureInspector({
           Remove
         </button>
       </div>
-      <p className="muted small">Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). R turns 90°, Shift+R 15°.</p>
+      <p className="muted small">
+        Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). Tap it again to pick the item under it. R turns 90°, Shift+R 15°.
+      </p>
     </div>
   );
 }

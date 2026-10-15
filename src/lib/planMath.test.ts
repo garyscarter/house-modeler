@@ -4,7 +4,7 @@ import {
   axisRect,
   comparePrinted,
   convexOverlap,
-  doorFrame,
+  doorSwing,
   edgeLengthsM,
   fitCam,
   fixtureSolids,
@@ -143,6 +143,25 @@ describe("snapping", () => {
     const kept = snapToWall({ x: 40, y: 45 }, 60, 60, [top, left], 20, 0)!;
     expect(kept).toEqual({ x: 36, y: 36, rot: 0 });
   });
+
+  it("slides flush against the face of a crossing wall of a different thickness", () => {
+    // A thick outside wall along the top and a thin partition coming down from it.
+    const top: WallLine = { a: { x: 0, y: 0 }, b: { x: 300, y: 0 }, halfT: 9 };
+    const left: WallLine = { a: { x: 0, y: 0 }, b: { x: 0, y: 400 }, halfT: 3 };
+    const mid: WallLine = { a: { x: 200, y: 0 }, b: { x: 200, y: 400 }, halfT: 3 };
+    const corner = snapToWall({ x: 40, y: 45 }, 60, 60, [top, left, mid], 20, 0)!;
+    expect(corner.x).toBeCloseTo(33);
+    expect(corner.y).toBeCloseTo(39);
+    // Either side of a partition.
+    expect(snapToWall({ x: 160, y: 45 }, 60, 60, [top, left, mid], 20, 0)!.x).toBeCloseTo(167);
+    expect(snapToWall({ x: 240, y: 45 }, 60, 60, [top, left, mid], 20, 0)!.x).toBeCloseTo(233);
+    // Dragged over a partition, it is pushed back to the side its centre is on, however far.
+    expect(snapToWall({ x: 215, y: 45 }, 60, 60, [top, left, mid], 20, 0)!.x).toBeCloseTo(233);
+    expect(snapToWall({ x: 190, y: 45 }, 120, 60, [top, left, mid], 20, 0)!.x).toBeCloseTo(137);
+    // A partition that stops short of the unit is ignored.
+    const stub: WallLine = { a: { x: 200, y: 0 }, b: { x: 200, y: 20 }, halfT: 3 };
+    expect(snapToWall({ x: 160, y: 45 }, 60, 60, [top, stub], 20, 0)!.x).toBe(160);
+  });
 });
 
 describe("lining up a run", () => {
@@ -193,11 +212,18 @@ describe("overlaps", () => {
 });
 
 describe("doors", () => {
-  it("hinges at the start jamb and swings down or left unless flipped", () => {
-    expect(doorFrame({ orientation: "h" })).toEqual({ axis: { x: 1, y: 0 }, hingeSide: -1, swing: { x: -0, y: 1 } });
-    const v = doorFrame({ orientation: "v", flipHinge: true, flipSwing: true });
-    expect(v.hingeSide).toBe(1);
-    expect(v.swing).toEqual({ x: 1, y: -0 });
+  it("hinges at the start jamb and swings to +y on an internal wall unless flipped", () => {
+    expect(doorSwing({ kind: "door" }, 0)).toEqual({ hinge: -1, swing: 1 });
+    expect(doorSwing({ kind: "door", flipHinge: true, flipSwing: true }, 0)).toEqual({ hinge: 1, swing: -1 });
+  });
+
+  it("opens external doors inwards and French and bi-fold doors outwards, like the 3D view", () => {
+    // Outside on local -y: a back door swings to +y (into the room).
+    expect(doorSwing({ kind: "door" }, -1).swing).toBe(1);
+    expect(doorSwing({ kind: "front" }, 1).swing).toBe(-1);
+    expect(doorSwing({ kind: "french" }, 1).swing).toBe(1);
+    expect(doorSwing({ kind: "bifold" }, -1).swing).toBe(-1);
+    expect(doorSwing({ kind: "french", flipSwing: true }, 1).swing).toBe(-1);
   });
 });
 

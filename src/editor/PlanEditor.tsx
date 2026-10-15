@@ -45,7 +45,8 @@ type Drag =
   | { kind: "opening"; openingId: string }
   | { kind: "stairs" }
   | { kind: "wallEnd"; wallId: string; end: "a" | "b" }
-  | { kind: "fixture"; fixtureId: string; dx: number; dy: number }
+  /** Moves once the press wanders beyond a few pixels; a tap on an item that was already selected picks the next item under it. */
+  | { kind: "fixture"; fixtureId: string; dx: number; dy: number; x0: number; y0: number; moved: boolean; wasSelected: boolean }
   /** Background drag: pans once it moves beyond a few pixels, otherwise it is a click. */
   | { kind: "pan"; x0: number; y0: number; cam0: Cam; moved: boolean }
   | { kind: "pinch"; cam0: Cam; m0: Pt; d0: number };
@@ -119,6 +120,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const segs = useMemo(() => lines.map((l) => [l.a, l.b] as Seg), [lines]);
   const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
   const clashes = useMemo(() => overlappingIds(solids, 0.5), [solids]);
+  // Wall-hung and worktop items draw over the units below them, whatever order they were placed in.
+  const drawOrder = useMemo(() => [...(floor.fixtures ?? [])].sort((a, b) => (byId(a.type)?.mount ?? 0) - (byId(b.type)?.mount ?? 0)), [floor.fixtures]);
   const footprints = useMemo(
     () =>
       (floor.fixtures ?? []).flatMap((fx) => {
@@ -270,6 +273,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       if (e.pointerType === "mouse") setHover(tool === "rect" || tool === "room" || tool === "wall" || tool === "measure" ? snapMeasure(raw) : raw);
       return;
     }
+    if (d.kind === "fixture") {
+      if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < TAP_SLOP) return;
+      d.moved = true;
+    }
+    // A drag that ends off its handle must not also click the room under the pointer.
+    if (d.kind !== "pan" && d.kind !== "pinch") suppressClick.current = true;
     switch (d.kind) {
       case "pinch": {
         if (pointers.current.size < 2) return;
@@ -325,7 +334,18 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const endPointer = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
-    if (drag.current?.kind === "pinch") {
+    const d = drag.current;
+    if (d?.kind === "fixture" && !d.moved && d.wasSelected && e.type === "pointerup") {
+      // Tapping the selected item again reaches whatever is under it (a base unit below a wall cabinet).
+      const p = toImage(e);
+      const under = [...drawOrder]
+        .reverse()
+        .filter((fx) => solids.find((s) => s.id === fx.id && pointInPolygon(p, s.corners)))
+        .map((fx) => fx.id);
+      const i = under.indexOf(d.fixtureId);
+      if (under.length > 1 && i >= 0) select({ fixture: under[(i + 1) % under.length] });
+    }
+    if (d?.kind === "pinch") {
       if (pointers.current.size < 2) drag.current = null;
     } else drag.current = null;
   };
@@ -520,7 +540,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               <RoomLabel key={"l" + r.id} room={r} ppm={ppm} px={px} fontSize={fontSize} />
             ))}
 
-            {(floor.fixtures ?? []).map((fx) => {
+            {drawOrder.map((fx) => {
               const item = byId(fx.type);
               if (!item) return null;
               const b = fixtureBox(fx, item);
@@ -531,9 +551,10 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   className="plan-fixture"
                   onPointerDown={(e) => {
                     if (tool !== "select") return;
+                    const wasSelected = fx.id === selectedFixtureId;
                     select({ fixture: fx.id });
                     const p = toImage(e);
-                    startDrag(e, { kind: "fixture", fixtureId: fx.id, dx: fx.x - p.x, dy: fx.y - p.y });
+                    startDrag(e, { kind: "fixture", fixtureId: fx.id, dx: fx.x - p.x, dy: fx.y - p.y, x0: e.clientX, y0: e.clientY, moved: false, wasSelected });
                   }}
                   onClick={(e) => {
                     if (tool === "select") e.stopPropagation();
