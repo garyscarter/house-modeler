@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 11 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 11 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 12 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 12 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -140,8 +140,12 @@ export function listing91770873(image: string): HouseModel {
       ),
     ],
     [
-      op("door", 635, 22, "h", 0.85), // back door
-      op("window", 690, 22, "h", 0.95),
+      // Back door and the galley window beside it: the plan draws the door 571-636 and the window
+      // 657-780 with a 0.3 m pier between; rear-1 agrees once its perspective is fitted to the other
+      // rear openings. The window is about 1.7 m wide and 1.15 m tall, its sill a tile course above the
+      // worktop (kitchen-1, -4) and its head a little above the door's (rear-1).
+      op("door", 604, 22, "h", 0.85), // back door
+      op("window", 719, 22, "h", 1.7, { sill: 1.0, head: 2.15 }),
       op("window", 910, 22, "h", 1.7),
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
