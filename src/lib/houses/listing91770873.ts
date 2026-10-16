@@ -146,7 +146,7 @@ export function listing91770873(image: string): HouseModel {
       // worktop (kitchen-1, -4) and its head a little above the door's (rear-1).
       op("door", 604, 22, "h", 0.85), // back door
       op("window", 719, 22, "h", 1.7, { sill: 1.0, head: 2.15 }),
-      op("window", 910, 22, "h", 1.7),
+      op("window", 910, 22, "h", 1.7, { sill: 1.0, head: 2.15 }), // level with the galley window (rear photos)
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
       op("bifold", 1170, 278, "h", 2.0), // bi-fold between the two living rooms
