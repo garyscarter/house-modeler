@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 10 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 10 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 11 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 11 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
