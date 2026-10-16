@@ -20,7 +20,7 @@ Then open the URL Vite prints. `npm run check` runs the type check and the unit 
 ## Using it
 
 - **Floorplans**: load the built-in listing, with or without the two-storey extension. **Proposed** can start as a copy of As listed.
-- **Check plan** (the plan editor): drag corners and openings, draw rooms and walls, and add doors, windows, French and bi-fold doors and bays. Pinch or scroll to zoom and drag to pan. Each room shows its area and the selected room its edge lengths. Tap an edge length to type a new one, or type a room's width and depth. **Measure** gives the distance between two points. The room inspector has notes, floor finish, wall paint, outside finish and an "unheated" flag. The furniture catalogue has UK sizes; items snap to walls and can be resized, recoloured, rotated and duplicated.
+- **Check plan** (the plan editor): drag corners and openings, draw rooms and walls, and add doors, windows, French and bi-fold doors and bays. Pinch or scroll to zoom and drag to pan. Each room shows its area and the selected room its edge lengths. Tap an edge length to type a new one, or type a room's width and depth. **Measure** gives the distance between two points. The room inspector has notes, floor finish, wall paint or covering (paint, wallpapers, tiles or exposed brick), outside finish and an "unheated" flag; any wall can have its own covering, such as a feature wall or a tiled splashback, and is lit on the plan as you pick it. The furniture catalogue has UK sizes; items snap to walls and can be resized, recoloured, rotated and duplicated.
 - **3D view**: orbit, or use the camera presets for street-level elevations. **View** holds side by side and overlay compare, which floors to show, labels, ceilings, the exterior and the site.
 - **Exterior**: hipped or gabled roof, party wall side, tiles, fascias and gutters, the tiled skirt round single-storey flat roofs, porch canopies, extension roofs and chimneys.
 - **Site**: plot boundary, fences and walls, garden surfaces and neighbouring houses, edited on a plan with distances to the boundary. The **Sun study** shows the sun and shadows for any day and time, and how many hours of sun each part of the garden gets.
@@ -30,7 +30,7 @@ Then open the URL Vite prints. `npm run check` runs the type check and the unit 
 
 ## How it works
 
-- `src/lib/`: pure, tested logic. `geometry.ts` (plan to world, walls, openings cut into walls), `walls.ts` and `openings.ts` (wall shells, frames, doors and bays), `roof.ts` and `roofParts.ts` (roof planning and parts), `site.ts` and `sun.ts`, `stairs.ts` and `stairwell.ts` (stair geometry), `planMath.ts` (editor maths), `report.ts` and `export.ts` (areas, change list, costs, plan SVGs, CSV).
+- `src/lib/`: pure, tested logic. `geometry.ts` (plan to world, walls, openings cut into walls), `walls.ts` and `openings.ts` (wall shells, frames, doors and bays), `wallCovering.ts` and `featureWalls.ts` (room and per-wall coverings), `roof.ts` and `roofParts.ts` (roof planning and parts), `site.ts` and `sun.ts`, `stairs.ts` and `stairwell.ts` (stair geometry), `planMath.ts` (editor maths), `report.ts` and `export.ts` (areas, change list, costs, plan SVGs, CSV).
 - `src/three/`: react-three-fiber scene, with procedural textures generated once and cached, and one merged mesh per material per floor.
 - `src/editor/`: the SVG plan and site editors.
 - State lives in a zustand store persisted to IndexedDB. Images are stored separately, and writes are debounced and flushed when the page hides. Model edits can be undone.

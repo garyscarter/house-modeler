@@ -73,6 +73,9 @@ const ROLL = 0.53;
 const WALL_TILE_W = 0.25;
 const WALL_TILE_H = 0.4;
 const MOSAIC = 0.05;
+/** Small square splashback tiles, 150 mm, six by six to a repeat. */
+const SQUARE = 0.15;
+const SQUARES = 6;
 /** Size of one repeat of each covering, metres; tiles are wider when they carry a strip. */
 function coverTile(p: Pattern, strip: boolean): [number, number] {
   switch (p) {
@@ -80,16 +83,22 @@ function coverTile(p: Pattern, strip: boolean): [number, number] {
       return [ROLL, ROLL];
     case "floral":
       return [ROLL, 0.64];
+    case "rose":
+      return [ROLL, 0.62];
+    case "trail":
+      return [ROLL, 0.48];
     case "sprig":
       return [ROLL, 0.36];
     case "tiles":
       return [6 * WALL_TILE_W + (strip ? 2 * MOSAIC : 0), 3 * WALL_TILE_H];
+    case "squares":
+      return [SQUARES * SQUARE, SQUARES * SQUARE];
     case "brick":
       return WALL_TILE.brick;
   }
 }
-const COVER_PX: Record<Exclude<Pattern, "brick">, number> = { stripe: 512, floral: 900, sprig: 900, tiles: 512 };
-const COVER_ROUGHNESS: Record<Pattern, number> = { stripe: 0.8, floral: 0.88, sprig: 0.88, tiles: 0.28, brick: WALL_ROUGHNESS.brick };
+const COVER_PX: Record<Exclude<Pattern, "brick">, number> = { stripe: 512, floral: 900, rose: 900, trail: 900, sprig: 900, tiles: 512, squares: 700 };
+const COVER_ROUGHNESS: Record<Pattern, number> = { stripe: 0.8, floral: 0.88, rose: 0.85, trail: 0.88, sprig: 0.88, tiles: 0.28, squares: 0.3, brick: WALL_ROUGHNESS.brick };
 
 /** Small deterministic PRNG so textures look the same on every load. */
 function rng(seed: number) {
@@ -777,6 +786,172 @@ function drawCover(p: Pattern, hex: string, accentHex: string | null): { color: 
       grain(c, W, H, rnd, 5);
       return { color: cc, height: null };
     }
+    case "rose": {
+      // Large stylised roses, two to a roll in a half-drop, each set in a fine ring, on
+      // trailing stems with big pointed leaves. Leaves and rings take a greyed hue across
+      // the colour wheel from the flowers, so gold flowers sit among lilac-grey leaves.
+      const hsl = { h: 0, s: 0, l: 0 };
+      accent.getHSL(hsl);
+      const leafCol = new THREE.Color().setHSL((hsl.h + 0.62) % 1, 0.12, 0.7);
+      const leafC = css(leafCol);
+      const lineC = css(tint(leafCol, 0, 1.2, 0.86));
+      const veinC = css(base.clone().lerp(leafCol, 0.3));
+      const dark = css(tint(accent, 0, 1.05, 0.8));
+      const light = css(tint(accent, 0, 0.75, 1.22));
+      const R = 0.085 * sx;
+      const blooms = [
+        [0.27 * W, 0.24 * H],
+        [0.77 * W, 0.74 * H],
+      ];
+      // Each bloom sends stems out towards its neighbours, leafy along their length.
+      const stems = blooms.flatMap(([x, y]) =>
+        [-0.75, 0.45, 2.3, 3.6].map((a) => {
+          const l = (0.17 + rnd() * 0.05) * sx;
+          const ex = x + Math.cos(a) * l;
+          const ey = y + Math.sin(a) * l;
+          const bend = (rnd() > 0.5 ? 1 : -1) * l * 0.3;
+          const mx = (x + ex) / 2 - Math.sin(a) * bend;
+          const my = (y + ey) / 2 + Math.cos(a) * bend;
+          const leaves = ([0.45, 0.75, 1] as const).map((t) => {
+            const u = 1 - t;
+            const turn = t === 1 ? 0 : t === 0.75 ? 0.8 : -0.8;
+            const along = Math.atan2(2 * u * (my - y) + 2 * t * (ey - my), 2 * u * (mx - x) + 2 * t * (ex - mx));
+            return { x: u * u * x + 2 * u * t * mx + t * t * ex, y: u * u * y + 2 * u * t * my + t * t * ey, a: along + turn, l: (0.1 + rnd() * 0.035) * sx };
+          });
+          return { curve: [x, y, mx, my, ex, ey], leaves };
+        }),
+      );
+      // Stems and leaves everywhere first, then the blooms over them.
+      wrapped(c, W, H, () => {
+        c.lineCap = "round";
+        for (const { curve, leaves } of stems) {
+          const [x0, y0, mx, my, ex, ey] = curve;
+          c.strokeStyle = lineC;
+          c.lineWidth = 0.003 * sx;
+          c.beginPath();
+          c.moveTo(x0, y0);
+          c.quadraticCurveTo(mx, my, ex, ey);
+          c.stroke();
+          for (const lf of leaves) {
+            c.fillStyle = leafC;
+            blade(c, lf.x, lf.y, lf.a, lf.l, lf.l * 0.3);
+            c.fill();
+            c.strokeStyle = veinC;
+            c.lineWidth = 0.0018 * sx;
+            c.beginPath();
+            c.moveTo(lf.x, lf.y);
+            c.lineTo(lf.x + Math.cos(lf.a) * lf.l * 0.8, lf.y + Math.sin(lf.a) * lf.l * 0.8);
+            c.stroke();
+          }
+        }
+      });
+      wrapped(c, W, H, () => {
+        for (const [x, y] of blooms) {
+          // The ring is filled with the ground, so stems stop at it.
+          c.fillStyle = css(base);
+          c.strokeStyle = lineC;
+          c.lineWidth = 0.0025 * sx;
+          c.beginPath();
+          c.arc(x, y, R * 1.5, 0, Math.PI * 2);
+          c.fill();
+          c.stroke();
+          // Outer petals, then a smaller darker ring of them, then the cupped heart.
+          for (const [n, dist, pr, turn, from, to] of [
+            [8, 0.6, 0.45, 0, light, css(accent)],
+            [6, 0.33, 0.36, 0.4, css(accent), dark],
+          ] as const) {
+            for (let k = 0; k < n; k++) {
+              const a = turn + (k * Math.PI * 2) / n;
+              const px = x + Math.cos(a) * R * dist;
+              const py = y + Math.sin(a) * R * dist;
+              const g = c.createRadialGradient(px, py, 0, px, py, R * pr);
+              g.addColorStop(0, from);
+              g.addColorStop(1, to);
+              c.fillStyle = g;
+              c.strokeStyle = dark;
+              c.lineWidth = 0.0012 * sx;
+              c.beginPath();
+              c.arc(px, py, R * pr, 0, Math.PI * 2);
+              c.fill();
+              c.stroke();
+            }
+          }
+          c.fillStyle = dark;
+          c.beginPath();
+          c.arc(x, y, R * 0.2, 0, Math.PI * 2);
+          c.fill();
+          c.strokeStyle = light;
+          c.lineWidth = 0.0015 * sx;
+          for (let k = 0; k < 3; k++) {
+            c.beginPath();
+            c.arc(x, y, R * (0.08 + k * 0.05), k, k + 3.6);
+            c.stroke();
+          }
+        }
+      });
+      grain(c, W, H, rnd, 5);
+      return { color: cc, height: null };
+    }
+    case "trail": {
+      // Trailing stems climbing the roll, three across in a half-drop, with long pointed
+      // leaves either side and small buds on short stalks.
+      const leafCol = leaf(0.08, 0.6, 0.66);
+      const leafC = css(leafCol);
+      const lineC = css(tint(leafCol, 0, 1.2, 0.76));
+      const bud = css(accent);
+      const budDark = css(tint(accent, 0, 1, 0.72));
+      const A = 0.018 * sx;
+      const nodes = 8;
+      const stems = [0, 1, 2].map((i) => {
+        const x0 = ((i + 0.5) / 3) * W;
+        const phase = i * 2.1;
+        // A whole number of waves per repeat, so stems run on from one repeat to the next.
+        const xAt = (y: number) => x0 + A * Math.sin((2 * Math.PI * y) / H + phase);
+        const leaves = Array.from({ length: nodes }, (_, k) => {
+          const y = ((k + 0.5 * (i % 2)) / nodes) * H;
+          const side = k % 2 ? 1 : -1;
+          // Leaves sweep upwards and outwards; canvas y runs down the wall.
+          return { x: xAt(y), y, side, a: -Math.PI / 2 + side * (0.75 + rnd() * 0.35), l: (0.06 + rnd() * 0.02) * sx, bud: k % 3 === 1 };
+        });
+        return { xAt, leaves };
+      });
+      wrapped(c, W, H, () => {
+        c.lineCap = "round";
+        for (const { xAt, leaves } of stems) {
+          c.strokeStyle = lineC;
+          c.lineWidth = 0.0016 * sx;
+          c.beginPath();
+          for (let y = 0; y <= H; y += H / 60) (y ? c.lineTo(xAt(y), y) : c.moveTo(xAt(y), y));
+          c.stroke();
+          for (const { x, y, side, a, l, bud: hasBud } of leaves) {
+            c.fillStyle = leafC;
+            blade(c, x, y, a, l, l * 0.24);
+            c.fill();
+            c.strokeStyle = lineC;
+            c.lineWidth = 0.0009 * sx;
+            c.stroke();
+            if (!hasBud) continue;
+            // A bud on a short curved stalk on the other side.
+            const sa = -Math.PI / 2 - side * 0.9;
+            const bx = x + Math.cos(sa) * 0.022 * sx;
+            const by = y + Math.sin(sa) * 0.022 * sx;
+            c.lineWidth = 0.0012 * sx;
+            c.beginPath();
+            c.moveTo(x, y);
+            c.quadraticCurveTo(x + Math.cos(sa + 0.4) * 0.012 * sx, y + Math.sin(sa + 0.4) * 0.012 * sx, bx, by);
+            c.stroke();
+            c.fillStyle = bud;
+            blade(c, bx, by, sa - side * 0.2, 0.019 * sx, 0.0075 * sx);
+            c.fill();
+            c.fillStyle = budDark;
+            blade(c, bx, by, sa - side * 0.2, 0.009 * sx, 0.005 * sx);
+            c.fill();
+          }
+        }
+      });
+      grain(c, W, H, rnd, 5);
+      return { color: cc, height: null };
+    }
     case "tiles": {
       // Portrait tiles in a stack bond with fine pale grout, and a column of small mosaics when a strip colour is set.
       const [hc, h] = canvas(W, H);
@@ -812,6 +987,45 @@ function drawCover(p: Pattern, hex: string, accentHex: string | null): { color: 
       }
       c.fillRect(W - j, 0, j, H);
       c.fillRect(0, H - j, W, j);
+      return { color: cc, height: hc };
+    }
+    case "squares": {
+      // 1970s splashback: each tile's glaze pools cream in the middle and runs to the
+      // edge colour at its borders, darkest in the corners, in dark grout.
+      const [hc, h] = canvas(W, H);
+      const joint = 0.003;
+      const grout = css(tint(accent, 0, 0.55, 0.5));
+      c.fillStyle = grout;
+      c.fillRect(0, 0, W, H);
+      h.fillStyle = "#303030";
+      h.fillRect(0, 0, W, H);
+      const steps = 14;
+      const size = (SQUARE - joint) * sx;
+      for (let i = 0; i < SQUARES; i++)
+        for (let j = 0; j < SQUARES; j++) {
+          const x = (i * SQUARE + joint / 2) * sx;
+          const y = (j * SQUARE + joint / 2) * sy;
+          const rim = (0.03 + rnd() * 0.022) * sx;
+          const edge = accent.clone().lerp(base, 0.1 + rnd() * 0.25);
+          const centre = new THREE.Color(vary(base, rnd, 0.04, 0.01));
+          for (let k = 0; k <= steps; k++) {
+            const f = k / steps;
+            const inset = f * rim;
+            // Eased so the colour falls off quickly from the rim and the middle stays clear.
+            c.fillStyle = css(edge.clone().lerp(centre, 1 - (1 - f) ** 1.7));
+            c.beginPath();
+            c.roundRect(x + inset, y + inset, size - 2 * inset, size - 2 * inset, inset * 1.6);
+            c.fill();
+            // Height: a slightly cushioned face, so the grout reads as a sunken joint.
+            const hv = Math.round(150 + 60 * Math.min(1, f * 2));
+            h.fillStyle = `rgb(${hv},${hv},${hv})`;
+            h.beginPath();
+            h.roundRect(x + inset * 0.3, y + inset * 0.3, size - 0.6 * inset, size - 0.6 * inset, inset * 0.5);
+            h.fill();
+          }
+        }
+      blotches(c, W, H, rnd, 40, 0.02, 20, 60);
+      grain(c, W, H, rnd, 4);
       return { color: cc, height: hc };
     }
   }

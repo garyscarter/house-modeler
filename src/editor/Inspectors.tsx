@@ -10,6 +10,7 @@ import { DEFAULT_BAY_DEPTH } from "../lib/openings";
 import { WALL_COVERING_LABEL, type WallCovering } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
 import { roomColor } from "../three/House";
+import { FeatureWalls } from "./FeatureWalls";
 import {
   COLOUR_KINDS,
   DOOR_KINDS,
@@ -136,7 +137,20 @@ const CORNERS: [Corner, string, string][] = [
   ["br", "↘", "bottom-right"],
 ];
 
-export function RoomInspector({ variant, floor, room, onChange }: { variant: VariantKey; floor: Floor; room: Room; onChange: (p: Partial<Room>) => void }) {
+export function RoomInspector({
+  variant,
+  floor,
+  room,
+  onChange,
+  onHighlightEdge,
+}: {
+  variant: VariantKey;
+  floor: Floor;
+  room: Room;
+  onChange: (p: Partial<Room>) => void;
+  /** Light one of the room's edges on the plan (null: none). */
+  onHighlightEdge?: (edge: number | null) => void;
+}) {
   const updateFloor = useStore((s) => s.updateFloor);
   const photos = useStore((s) => s.photos);
   const setUi = useStore((s) => s.setUi);
@@ -261,6 +275,7 @@ export function RoomInspector({ variant, floor, room, onChange }: { variant: Var
           </span>
         </label>
       )}
+      <FeatureWalls floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
       <label>
         Floor texture from photo
         <select value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>

@@ -76,15 +76,41 @@ export function listing91770873(image: string): HouseModel {
     [
       // The galley's rear wall is rendered like the house (rear photos); its front is hidden by the garage.
       // Interior finishes are from the photos. The galley (galley-2, kitchen-4) shares the kitchen's
-      // octagon vinyl and has a wall of yellow-red brick in gold mortar beside 1970s splashback tiles.
-      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, { floorFinish: "vinyl", color: "#b38862", wallCovering: "brick", wallPaint: "#cf9670", wallAccent: "#d6b46e" }),
-      // White paper with large red flowers; one wall and a pier are exposed brick.
-      rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }, { floorFinish: "vinyl", color: "#b38862", wallCovering: "floral", wallPaint: "#f3f0ec", wallAccent: "#c8364a" }),
+      // octagon vinyl. Its cooker wall and back-door wall are 1970s splashback squares, cream
+      // shading to brown; the wall to the garage (edge 2) is yellow-red brick in gold mortar.
+      rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, {
+        floorFinish: "vinyl",
+        color: "#b38862",
+        wallCovering: "squares",
+        wallPaint: "#f0e0bb",
+        wallAccent: "#a5662f",
+        wallFinishes: { 2: { covering: "brick", paint: "#cf9670", accent: "#d6b46e" } },
+      }),
+      // White paper with large red flowers. The rear wall with the pier between the windows
+      // (edge 0; kitchen-1, -4) is red brick, and the wall to the garage (edge 3; kitchen-3)
+      // carries on the galley's yellow brick.
+      rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }, {
+        floorFinish: "vinyl",
+        color: "#b38862",
+        wallCovering: "floral",
+        wallPaint: "#f3f0ec",
+        wallAccent: "#c8364a",
+        wallFinishes: { 0: { covering: "brick", paint: "#c06a4a", accent: "#ddcca6" }, 3: { covering: "brick", paint: "#cf9670", accent: "#d6b46e" } },
+      }),
       rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "concrete" }),
-      // Cream and grey-beige stripes in both rooms; the rear room's chimney breast has a gold floral paper.
-      rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
+      // Cream and grey-beige stripes in both rooms; the rear room's chimney-breast wall on the party
+      // wall (edge 1) has a cream paper with large gold flowers and grey leaves (living-rear-1, -3).
+      rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, {
+        floorFinish: "carpet",
+        color: "#d6cfc4",
+        wallCovering: "stripe",
+        wallPaint: "#efe8da",
+        wallAccent: "#cdc1ab",
+        wallFinishes: { 1: { covering: "rose", paint: "#f4f0e6", accent: "#c9b44e" } },
+      }),
       rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
-      // Pale grey-oak laminate; cream walls with a paper of leaves and red buds up the stairs.
+      // Pale grey-oak laminate; cream walls, with a paper of leaves and red buds only on the stair
+      // wall (edge 5, along the flight's west side; hall-stairs-1, -2).
       poly("Hallway (stairs)", [
         [815, 345],
         [975, 345],
@@ -92,7 +118,12 @@ export function listing91770873(image: string): HouseModel {
         [1045, 278],
         [1045, 515],
         [815, 515],
-      ], undefined, { floorFinish: "laminate", color: "#c4b59f", wallCovering: "sprig", wallPaint: "#f1ece2", wallAccent: "#bf4a3c" }),
+      ], undefined, {
+        floorFinish: "laminate",
+        color: "#c4b59f",
+        wallPaint: "#f1ece2",
+        wallFinishes: { 5: { covering: "trail", paint: "#f1ece2", accent: "#c9503f" } },
+      }),
       poly(
         "Hallway (front)",
         [

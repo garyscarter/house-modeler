@@ -37,6 +37,13 @@
 .side .inspector input[type="checkbox"] { display: inline; width: auto; margin: 0; }
 .side .inspector .row { margin: 6px 0; }
 .side .inspector h4 { margin: 4px 0 6px; }
+.side .feature-walls ul { list-style: none; margin: 4px 0; padding: 0; }
+.side .feature-walls li { margin: 2px -6px; padding: 4px 6px 6px; border-left: 3px solid transparent; border-radius: 4px; }
+.side .feature-walls li.lit { border-left-color: #db2777; background: #fdf2f8; }
+.side .feature-walls .wall-name { display: block; width: 100%; padding: 2px 0; border: 0; background: none; text-align: left; font-size: 13px; }
+.side .feature-walls .wall-finish { display: flex; align-items: center; gap: 6px; }
+.side .feature-walls .wall-finish select { flex: 1; min-width: 0; margin: 0; }
+.side .feature-walls .wall-finish input[type="color"] { flex: none; width: 40px; height: 30px; margin: 0; padding: 2px; }
 
 @media (pointer: coarse) {
   .plan-zoom button { min-width: 44px; min-height: 40px; font-size: 16px; }

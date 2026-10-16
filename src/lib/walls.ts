@@ -116,6 +116,8 @@ export interface Span {
   t0: number;
   t1: number;
   roomId: string | null;
+  /** The room's polygon edge this stretch runs along, for feature walls (see featureWalls.ts). */
+  edge?: number;
 }
 
 /**
@@ -160,8 +162,12 @@ export function sideSpans(w: { a: V2; b: V2 }, side: 1 | -1, probe: number, room
 }
 
 export function spanAt(spans: Span[], t: number): string | null {
-  for (const s of spans) if (t <= s.t1) return s.roomId;
-  return spans.length ? spans[spans.length - 1].roomId : null;
+  return spanOf(spans, t)?.roomId ?? null;
+}
+
+/** The span covering t (the last one beyond the end), if any. */
+export function spanOf(spans: Span[], t: number): Span | undefined {
+  return spans.find((s) => t <= s.t1) ?? spans[spans.length - 1];
 }
 
 /**
@@ -170,7 +176,7 @@ export function spanAt(spans: Span[], t: number): string | null {
  * joinery part (frames, glass, sills; see openings.ts).
  */
 export type FaceSlot =
-  | { kind: "inside"; roomId: string }
+  | { kind: "inside"; roomId: string; edge?: number }
   | { kind: "outside"; roomId: string | null }
   | { kind: "top" }
   | { kind: "part"; mat: PartMat };
@@ -227,8 +233,8 @@ export function wallFaces(inp: WallFaceInput): { quads: FaceQuad[]; skirting: Sk
   const clampT = (t: number) => Math.max(0, Math.min(len, t));
   /** Slot for side 0 (+n) or 1 (-n) at t. */
   const slotAt = (side: 0 | 1, t: number): FaceSlot => {
-    const own = spanAt(spans[side], clampT(t));
-    return own ? { kind: "inside", roomId: own } : { kind: "outside", roomId: spanAt(spans[1 - side], clampT(t)) };
+    const own = spanOf(spans[side], clampT(t));
+    return own?.roomId ? { kind: "inside", roomId: own.roomId, edge: own.edge } : { kind: "outside", roomId: spanAt(spans[1 - side], clampT(t)) };
   };
   const push = (v: [V3, V3, V3, V3], nn: V3, uv: [number, number][], slot: FaceSlot) => {
     const e1 = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];

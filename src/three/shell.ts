@@ -13,6 +13,7 @@ import {
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
 import { bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
 import { interiorFinish } from "../lib/wallCovering";
+import { spansByEdge } from "../lib/featureWalls";
 import { type MatSpec, matKey } from "./textures";
 
 /**
@@ -132,6 +133,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   const rooms: RoomPoly[] = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
   const roomsById = new Map<string, Room>(floor.rooms.map((r) => [r.id, r]));
   const polys = rooms.map((r) => r.poly);
+  // Only rooms with feature walls need their faces split edge by edge.
+  const featurePolys = new Map(rooms.filter((r) => roomsById.get(r.id)?.wallFinishes).map((r) => [r.id, r.poly]));
   const thick = walls.map(wallThickness);
   const ends = wallEnds(walls, thick);
   const batch = new Batcher();
@@ -144,7 +147,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null): MatSpec => {
     switch (slot.kind) {
       case "inside": {
-        const f = interiorFinish(roomsById.get(slot.roomId), wall?.color);
+        const f = interiorFinish(roomsById.get(slot.roomId), wall?.color, slot.edge);
         return f.covering === "paint" ? { kind: "paint", color: f.color } : { kind: "cover", ...f };
       }
       case "outside":
@@ -170,7 +173,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       if (inp.plinthY !== null) bands.push({ a: wall.a, b: wall.b, y0: inp.plinthY, y1: 0 });
     }
     const probe = thick[i] / 2 + 0.08;
-    const spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>] = [sideSpans(wall, 1, probe, rooms), sideSpans(wall, -1, probe, rooms)];
+    const spansOn = (s: 1 | -1) => spansByEdge(wall, sideSpans(wall, s, probe, rooms), (id) => featurePolys.get(id));
+    const spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>] = [spansOn(1), spansOn(-1)];
     const { quads, skirting } = wallFaces({
       wall,
       thickness: thick[i],
