@@ -73,6 +73,9 @@ const ROLL = 0.53;
 const WALL_TILE_W = 0.25;
 const WALL_TILE_H = 0.4;
 const MOSAIC = 0.05;
+/** Small square splashback tiles, 150 mm, six by six to a repeat. */
+const SQUARE = 0.15;
+const SQUARES = 6;
 /** Size of one repeat of each covering, metres; tiles are wider when they carry a strip. */
 function coverTile(p: Pattern, strip: boolean): [number, number] {
   switch (p) {
@@ -84,12 +87,14 @@ function coverTile(p: Pattern, strip: boolean): [number, number] {
       return [ROLL, 0.36];
     case "tiles":
       return [6 * WALL_TILE_W + (strip ? 2 * MOSAIC : 0), 3 * WALL_TILE_H];
+    case "squares":
+      return [SQUARES * SQUARE, SQUARES * SQUARE];
     case "brick":
       return WALL_TILE.brick;
   }
 }
-const COVER_PX: Record<Exclude<Pattern, "brick">, number> = { stripe: 512, floral: 900, sprig: 900, tiles: 512 };
-const COVER_ROUGHNESS: Record<Pattern, number> = { stripe: 0.8, floral: 0.88, sprig: 0.88, tiles: 0.28, brick: WALL_ROUGHNESS.brick };
+const COVER_PX: Record<Exclude<Pattern, "brick">, number> = { stripe: 512, floral: 900, sprig: 900, tiles: 512, squares: 700 };
+const COVER_ROUGHNESS: Record<Pattern, number> = { stripe: 0.8, floral: 0.88, sprig: 0.88, tiles: 0.28, squares: 0.3, brick: WALL_ROUGHNESS.brick };
 
 /** Small deterministic PRNG so textures look the same on every load. */
 function rng(seed: number) {
@@ -812,6 +817,45 @@ function drawCover(p: Pattern, hex: string, accentHex: string | null): { color: 
       }
       c.fillRect(W - j, 0, j, H);
       c.fillRect(0, H - j, W, j);
+      return { color: cc, height: hc };
+    }
+    case "squares": {
+      // 1970s splashback: each tile's glaze pools cream in the middle and runs to the
+      // edge colour at its borders, darkest in the corners, in dark grout.
+      const [hc, h] = canvas(W, H);
+      const joint = 0.003;
+      const grout = css(tint(accent, 0, 0.55, 0.5));
+      c.fillStyle = grout;
+      c.fillRect(0, 0, W, H);
+      h.fillStyle = "#303030";
+      h.fillRect(0, 0, W, H);
+      const steps = 14;
+      const size = (SQUARE - joint) * sx;
+      for (let i = 0; i < SQUARES; i++)
+        for (let j = 0; j < SQUARES; j++) {
+          const x = (i * SQUARE + joint / 2) * sx;
+          const y = (j * SQUARE + joint / 2) * sy;
+          const rim = (0.022 + rnd() * 0.018) * sx;
+          const edge = accent.clone().lerp(base, 0.1 + rnd() * 0.25);
+          const centre = new THREE.Color(vary(base, rnd, 0.04, 0.01));
+          for (let k = 0; k <= steps; k++) {
+            const f = k / steps;
+            const inset = f * rim;
+            // Eased so the colour falls off quickly from the rim and the middle stays clear.
+            c.fillStyle = css(edge.clone().lerp(centre, 1 - (1 - f) ** 2.2));
+            c.beginPath();
+            c.roundRect(x + inset, y + inset, size - 2 * inset, size - 2 * inset, inset * 1.6);
+            c.fill();
+            // Height: a slightly cushioned face, so the grout reads as a sunken joint.
+            const hv = Math.round(150 + 60 * Math.min(1, f * 2));
+            h.fillStyle = `rgb(${hv},${hv},${hv})`;
+            h.beginPath();
+            h.roundRect(x + inset * 0.3, y + inset * 0.3, size - 0.6 * inset, size - 0.6 * inset, inset * 0.5);
+            h.fill();
+          }
+        }
+      blotches(c, W, H, rnd, 40, 0.02, 20, 60);
+      grain(c, W, H, rnd, 4);
       return { color: cc, height: hc };
     }
   }

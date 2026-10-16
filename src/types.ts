@@ -28,6 +28,13 @@ export interface Room {
   wallCovering?: WallCovering;
   /** Pattern colour of the covering (stripes, flowers, motif, tile feature strip, mortar). Undefined = the covering's default. */
   wallAccent?: string;
+  /**
+   * Feature walls: a finish of their own for some walls, keyed by polygon edge
+   * (edge i runs from polygon[i] to the next corner). Adding or removing a
+   * corner in the editor renumbers them (see lib/featureWalls.ts); keys for
+   * edges that no longer exist are ignored.
+   */
+  wallFinishes?: Record<number, WallOverride>;
   /** Finish of this room's external walls; undefined = the house default (Exterior.wallFinish). */
   exteriorFinish?: WallFinish;
   /** Not heated (a garage or store): left out of the heated floor area. Undefined = guess from the name. */
@@ -43,15 +50,28 @@ export const WALL_FINISH_LABEL: Record<WallFinish, string> = {
   cladding: "Timber cladding",
 };
 
-export type WallCovering = "paint" | "stripe" | "floral" | "sprig" | "tiles" | "brick";
+export type WallCovering = "paint" | "stripe" | "floral" | "sprig" | "tiles" | "squares" | "brick";
 export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   paint: "Paint",
   stripe: "Striped wallpaper",
   floral: "Floral wallpaper",
   sprig: "Small-pattern wallpaper",
   tiles: "Wall tiles",
+  squares: "Small square tiles",
   brick: "Exposed brick",
 };
+
+/**
+ * One wall's own finish. Fields left out follow the room; a covering other
+ * than the room's starts from that covering's default colours.
+ */
+export interface WallOverride {
+  covering?: WallCovering;
+  /** Base colour: paint, wallpaper ground, tile or brick. */
+  paint?: string;
+  /** Pattern colour of the covering. */
+  accent?: string;
+}
 
 export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "quarry" | "stone" | "carpet" | "vinyl" | "concrete";
 export const FLOOR_FINISH_LABEL: Record<FloorFinish, string> = {

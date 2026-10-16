@@ -39,6 +39,7 @@ import {
   type Size,
 } from "../lib/planMath";
 import { roomColor } from "../three/House";
+import { insertCorner, removeCorner } from "../lib/featureWalls";
 import "./PlanEditor.css";
 
 type Tool = "select" | "rect" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
@@ -88,6 +89,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [altHeld, setAltHeld] = useState(false);
   const [measure, setMeasure] = useState<Pt[]>([]);
   const [edgeEdit, setEdgeEdit] = useState<{ roomId: string; idx: number } | null>(null);
+  /** The selected room's wall lit from its row in the inspector. */
+  const [litEdge, setLitEdge] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
@@ -705,8 +708,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
-                              const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-                              updateRoom(variant, floor.id, r.id, { polygon: [...r.polygon.slice(0, i + 1), mid, ...r.polygon.slice(i + 1)] });
+                              updateRoom(variant, floor.id, r.id, insertCorner(r, i, { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }));
                             }}
                           >
                             <title>Add a corner here</title>
@@ -729,7 +731,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         onClick={(e) => e.stopPropagation()}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
-                          if (r.polygon.length > 3) updateRoom(variant, floor.id, r.id, { polygon: r.polygon.filter((_, j) => j !== i) });
+                          if (r.polygon.length > 3) updateRoom(variant, floor.id, r.id, removeCorner(r, i));
                         }}
                       >
                         <title>Drag to move; double-click to remove the corner</title>
@@ -738,6 +740,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   </g>
                 );
               })}
+            {selected && litEdge !== null && litEdge < selected.polygon.length && <LitEdge room={selected} idx={litEdge} px={px} fontSize={fontSize} />}
             {selected && tool === "select" && (
               <EdgeLabels room={selected} ppm={ppm} px={px} fontSize={fontSize} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onEdit={(idx) => setEdgeEdit({ roomId: selected.id, idx })} />
             )}
@@ -815,7 +818,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               onRemove={removeSelected}
             />
           ) : selected ? (
-            <RoomInspector key={selected.id} variant={variant} floor={floor} room={selected} onChange={(p) => updateRoom(variant, floor.id, selected.id, p)} />
+            <RoomInspector
+              key={selected.id}
+              variant={variant}
+              floor={floor}
+              room={selected}
+              onChange={(p) => updateRoom(variant, floor.id, selected.id, p)}
+              onHighlightEdge={setLitEdge}
+            />
           ) : selectedOpening ? (
             <OpeningInspector
               opening={selectedOpening}
@@ -923,6 +933,25 @@ function edgeLabelAt(room: Room, i: number, px: number): { p: Pt; angle: number 
   if (angle > 90) angle -= 180;
   if (angle <= -90) angle += 180;
   return { p: { x: (a.x + b.x) / 2 + n.x * px * 16, y: (a.y + b.y) / 2 + n.y * px * 16 }, angle };
+}
+
+/** One of the room's walls picked out on the plan, numbered as in the inspector's list. */
+function LitEdge({ room, idx, px, fontSize }: { room: Room; idx: number; px: number; fontSize: number }) {
+  const a = room.polygon[idx];
+  const b = room.polygon[(idx + 1) % room.polygon.length];
+  const n = inwardNormals(room.polygon)[idx];
+  // The number sits inside the room, clear of the edge's length label.
+  const c = { x: (a.x + b.x) / 2 + n.x * px * 40, y: (a.y + b.y) / 2 + n.y * px * 40 };
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#db2777" strokeOpacity={0.45} strokeWidth={px * 12} strokeLinecap="round" />
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#db2777" strokeWidth={px * 3} strokeLinecap="round" />
+      <circle cx={c.x} cy={c.y} r={fontSize * 0.95} fill="#db2777" stroke="#fff" strokeWidth={px * 1.5} />
+      <text x={c.x} y={c.y} dy="0.35em" fontSize={fontSize * 0.9} textAnchor="middle" fill="#fff" fontWeight={700}>
+        {idx + 1}
+      </text>
+    </g>
+  );
 }
 
 function EdgeLabels({ room, ppm, px, fontSize, editing, onEdit }: { room: Room; ppm: number; px: number; fontSize: number; editing: number | null; onEdit: (i: number) => void }) {
