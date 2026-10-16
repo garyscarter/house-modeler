@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "tsc --noEmit && vitest run"
+    "check": "tsc --noEmit && vitest run",
+    "build:hosted": "node scripts/build-hosted.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

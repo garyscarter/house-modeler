@@ -8,6 +8,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 - **Name every subagent after a famous pop star** (Madonna, Beyoncé, Adele, Prince, Kylie, Dua Lipa, ...), and use the name in the agent's description and in its prompt.
 - **Pick the model and effort to fit the job.** Use Opus with high effort for judgement-heavy or visual work (matching photos, rendering, geometry, reviews). Use Sonnet with medium to high effort for well-specified changes (removals, refactors, wiring, data edits). Use Haiku with low effort for quick lookups and mechanical edits.
 - Tell the user which subagents you launched, what each is doing, and the model and effort each was given (a short table), and repeat that summary when reporting their results.
+- **End every task with a link to the hosted latest version.** After merging and pushing, run `npm run build:hosted` and publish `dist-hosted/house-modeler.html` with the Artifact tool to the same URL, https://claude.ai/artifact/T9t6mnk6DjA4vGxw25pvTg (pass it as `url` from a new session, with `root: "dist-hosted"` and every file under `assets/` in `files`, mapping files that no longer exist to null). Then give the user the link.
 - Give each subagent a self-contained prompt: the goal, the files it owns, the files other agents are touching (to stay out of), how to verify, and the commit trailer to use.
 
 ## Working on it
