@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
-import { bayOutline, bayParts, bifoldPanels, boxQuads, casements, openingParts, type Box } from "./openings";
+import { bifoldLayout } from "./bifold";
+import { bayOutline, bayParts, boxQuads, casements, openingParts, type Box } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -66,13 +67,20 @@ describe("doors", () => {
 
   it("folds bi-fold panels into a stack at the hinge jamb", () => {
     const w = 3;
-    const n = bifoldPanels(w - 0.12);
+    const n = bifoldLayout(w, false).n;
     const panes = glass(openingParts(place("bifold", w, {}, 2.1), T, 1).boxes);
     expect(panes).toHaveLength(n);
     // All within the outer third of the opening on the hinge side (left by default).
     for (const p of panes) expect(p.p[0]).toBeLessThan(-w / 2 + w / 3);
     const flipped = glass(openingParts(place("bifold", w, { flipHinge: true }, 2.1), T, 1).boxes);
     for (const p of flipped) expect(p.p[0]).toBeGreaterThan(w / 2 - w / 3);
+  });
+
+  it("gives internal bi-folds a lining and no threshold, external ones a frame and threshold", () => {
+    const mats = (out: 1 | 0) => openingParts(place("bifold", 2, {}, 2.1), T, out).boxes.map((b) => b.mat);
+    expect(mats(0)).not.toContain("threshold");
+    expect(mats(0)).toContain("joinery");
+    expect(mats(1)).toContain("threshold");
   });
 
   it("draws nothing for a gap", () => {
