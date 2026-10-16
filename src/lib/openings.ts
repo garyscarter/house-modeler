@@ -1,5 +1,6 @@
 import type { Opening } from "../types";
 import type { OpeningPlacement, V2 } from "./geometry";
+import { bifoldLayout, type BifoldLayout } from "./bifold";
 import type { FaceQuad, FaceSlot, V3 } from "./walls";
 
 /**
@@ -326,36 +327,30 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       break;
     }
     case "bifold": {
-      boxes.push(...doorFrame(w, y1, zf));
-      boxes.push(...bifoldStack(w - 2 * FW, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true)));
+      // Internal bi-folds get a lining like internal doors, external ones a frame and threshold.
+      const layout = bifoldLayout(w, !out);
+      boxes.push(...(out ? doorFrame(w, y1, zf) : doorLining(w, y1, wallT)));
+      boxes.push(...bifoldStack(layout, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true)));
       break;
     }
   }
   return { boxes, quads: [] };
 }
 
-/** Panels of a bi-fold door of this width (about 0.6-0.9 m each). */
-export function bifoldPanels(width: number): number {
-  return Math.max(2, Math.round(width / 0.8));
-}
-
 /**
  * Bi-fold panels folded into a concertina stack against one jamb: each
  * panel stands nearly square to the wall, alternately folding out and back.
  */
-function bifoldStack(w: number, h: number, zf: number, side: number, swing: number): Box[] {
-  const n = bifoldPanels(w);
-  const pw = w / n;
-  const fold = (78 * Math.PI) / 180;
+function bifoldStack(l: BifoldLayout, h: number, zf: number, side: number, swing: number): Box[] {
   const boxes: Box[] = [];
-  let x = side * (w / 2);
+  let x = side * (l.clear / 2);
   let z = zf + swing * (FD / 2);
-  for (let i = 0; i < n; i++) {
-    const dx = -side * Math.cos(fold);
-    const dz = (i % 2 ? -1 : 1) * swing * Math.sin(fold);
-    boxes.push(...place(glazedLeaf(h, 0.05, i === n - 1)(pw), [x, 0.015, z], rotTo(dx, dz)));
-    x += dx * pw;
-    z += dz * pw;
+  for (let i = 0; i < l.n; i++) {
+    const dx = -side * l.run;
+    const dz = (i % 2 ? -1 : 1) * swing * l.throw;
+    boxes.push(...place(glazedLeaf(h, 0.05, i === l.n - 1)(l.panel), [x, 0.015, z], rotTo(dx, dz)));
+    x += dx;
+    z += dz;
   }
   return boxes;
 }

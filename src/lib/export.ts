@@ -1,6 +1,7 @@
 import type { Floor, HouseModel, Opening, Site } from "../types";
 import { bbox, buildWalls, cutWall, modelBounds, pointInPolygon, polygonCentroid, roomWorldPolygon, toWorld, type V2 } from "./geometry";
 import { outwardSign, wallEnds, wallThickness } from "./walls";
+import { bifoldLayout, bifoldZigzag } from "./bifold";
 import { bayOutline } from "./openings";
 import { axisRect, DOUBLE_DOOR_M, doorSwing } from "./planMath";
 import { floorFlight, stairTreads } from "./stairs";
@@ -204,9 +205,7 @@ function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1
     case "french":
       return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
     case "bifold": {
-      const n = Math.max(2, Math.min(7, Math.round(len / (0.75 * k))));
-      const p = len / n;
-      const zig = Array.from({ length: n + 1 }, (_, i) => `${f2(hingeSide * half - hingeSide * i * p)},${f2(i % 2 ? swing * p * 0.45 : 0)}`);
+      const zig = bifoldZigzag(bifoldLayout(len / k, outside === 0), hingeSide, swing).map((q) => `${f2(q.x * k)},${f2(q.y * k)}`);
       return breakWall + `<polyline points="${zig.join(" ")}" stroke-width="0.4" stroke-linejoin="round"/>`;
     }
     case "window":

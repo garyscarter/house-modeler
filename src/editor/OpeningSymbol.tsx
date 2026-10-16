@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { Opening } from "../types";
-import { bayOutline, bifoldPanels } from "../lib/openings";
+import { bifoldLayout, bifoldZigzag } from "../lib/bifold";
+import { bayOutline } from "../lib/openings";
 import { DOUBLE_DOOR_M, doorSwing } from "../lib/planMath";
 
 const INK = "#1f2937";
@@ -101,14 +102,8 @@ export const OpeningSymbol = memo(function OpeningSymbol({
       );
       break;
     case "bifold": {
-      // Folding leaves drawn half open as a zigzag on the swing side, stacking at the hinge jamb;
-      // as many panels as the 3D door has inside its 60 mm frame.
-      const n = bifoldPanels(Math.max(0.2, o.widthM - 0.12));
-      const p = len / n;
-      const pts = Array.from({ length: n + 1 }, (_, i) => {
-        const x = hinge * half - hinge * i * p;
-        return `${x},${i % 2 ? swing * p * 0.45 : 0}`;
-      });
+      // The folded leaves, stacked at the hinge jamb exactly as in the 3D view.
+      const pts = bifoldZigzag(bifoldLayout(len / m, outside === 0), hinge, swing).map((q) => `${q.x * m},${q.y * m}`);
       body = (
         <>
           {breakWall}
