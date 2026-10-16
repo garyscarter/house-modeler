@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    branch: claude/laughing-sagan-n08ai0
+    branch: main
     autoDeploy: true
     # npm 10 can fail `npm ci` with an "edgesOut" error, so fall back to npm 11.
     # --include=dev keeps TypeScript and Vite installed even if NODE_ENV is production.
