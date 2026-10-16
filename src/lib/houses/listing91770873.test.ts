@@ -34,7 +34,7 @@ describe("the built-in listing", () => {
 
   it("fits a wardrobe in each of the two bedrooms, backs to the walls and doors to the room", () => {
     const wardrobes = first.fixtures ?? [];
-    expect(wardrobes.map((f) => f.type)).toEqual(["wardrobe-fitted", "wardrobe-fitted"]);
+    expect(wardrobes.map((f) => f.type)).toEqual(["wardrobe-shaker", "wardrobe-fitted"]);
     for (const [fx, room, backs] of [
       [wardrobes[0], "Bedroom 2", { x: 1, y: 0 }],
       [wardrobes[1], "Bedroom 3", { x: -1, y: 0 }],

@@ -198,7 +198,7 @@ export function listing91770873(image: string): HouseModel {
   // the east, 270 to the west.
   first.fixtures = [
     // Bedroom 2: light grey, floor to ceiling along the party wall (the grey strip on the plan).
-    { id: uid(), type: "wardrobe-fitted", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, color: "#cfd2d6" },
+    { id: uid(), type: "wardrobe-shaker", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, color: "#d3d6da" },
     // Bedroom 3: white, in the strip beside the room door.
     { id: uid(), type: "wardrobe-fitted", x: 833, y: 1195, rot: 270, w: 2.2, d: 0.55 },
   ];

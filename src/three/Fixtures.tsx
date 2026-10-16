@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { burners, byId, type Symbol } from "../lib/catalogue";
+import { burners, byId, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 
 /** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
@@ -357,7 +357,7 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       const zd = front - t / 2;
       const joint = shade(color, 0.5);
       box(0, h / 2, -t / 2, w, h, d - t, shade(color, 0.9), "satin");
-      const n = Math.max(1, Math.round(w / 0.55));
+      const n = wardrobeDoorCount(symbol, w);
       const dw = w / n;
       const rows: [number, number, number][] = [
         [skirt, h - top - gap, 1.0],
@@ -373,6 +373,47 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       }
       for (let i = 1; i < n; i++) box(-w / 2 + i * dw, (h + skirt) / 2, zd, gap, h - skirt, t, joint);
       box(0, skirt / 2, zd, w, skirt, t, shade(color, 0.85), "satin");
+      break;
+    }
+    case "shaker-wardrobe": {
+      // Full-height framed doors, as in the photos: a recessed panel above a shorter one, each
+      // outlined by a thin raised bead, with a round knob on the edge nearest the middle of each
+      // pair of doors. A run with an odd number of doors starts with a single one.
+      const t = 0.018;
+      const gap = 0.005;
+      const skirt = 0.08;
+      const zd = d / 2 - t / 2;
+      const front = d / 2;
+      const bead = shade(color, 1.2);
+      box(0, h / 2, -t / 2, w, h, d - t, shade(color, 0.9), "satin");
+      box(0, skirt / 2, zd, w, skirt, t, shade(color, 0.85), "satin");
+      // A dark backer just behind the door fronts, so the joints between doors read as solid shadow gaps.
+      box(0, (skirt + h - 0.02) / 2, zd, w, h - 0.02 - skirt, t * 0.8, shade(color, 0.5));
+      const n = wardrobeDoorCount(symbol, w);
+      const dw = w / n;
+      const y0 = skirt;
+      const y1 = h - 0.02;
+      const rail = 0.07; // rail and stile width outside the bead
+      const mid = y0 + (y1 - y0) * 0.33; // bottom of the long upper panel
+      const knobY = mid + 0.1;
+      const lone = n % 2; // doors before the first pair
+      for (let i = 0; i < n; i++) {
+        const x = -w / 2 + (i + 0.5) * dw;
+        box(x, (y0 + y1) / 2, zd, dw - gap, y1 - y0, t, color, "satin");
+        const bw = dw - gap - 2 * rail;
+        // Bead round each panel, standing 6 mm proud of the door face.
+        for (const [by0, by1] of [
+          [y0 + rail, mid - rail / 2],
+          [mid + rail / 2, y1 - rail],
+        ]) {
+          const bh = by1 - by0;
+          const bc = (by0 + by1) / 2;
+          for (const sy of [by0, by1]) box(x, sy, front + 0.003, bw, 0.009, 0.006, bead, "satin");
+          for (const sx of [-1, 1]) box(x + (sx * bw) / 2, bc, front + 0.003, 0.009, bh, 0.006, bead, "satin");
+        }
+        const right = i < lone || (i - lone) % 2 === 0;
+        cyl(x + (right ? 1 : -1) * (dw / 2 - 0.045), knobY, front + 0.012, 0.032, 0.024, KNOB, "satin", "z");
+      }
       break;
     }
     case "boiler":

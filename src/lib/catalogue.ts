@@ -35,6 +35,7 @@ export type Symbol =
   | "shelves"
   | "dresser"
   | "fitted-wardrobe"
+  | "shaker-wardrobe"
   | "boiler";
 
 export interface CatalogueItem {
@@ -55,6 +56,11 @@ export interface CatalogueItem {
 const UNIT = "#e0dccf";
 const WOOD = "#c9a26b";
 
+/** Doors across a fitted wardrobe of width `w` metres; the plan symbol and the 3D model both divide it this way. */
+export function wardrobeDoorCount(symbol: Symbol, w: number): number {
+  return Math.max(1, Math.round(w / (symbol === "shaker-wardrobe" ? 0.45 : 0.55)));
+}
+
 export const CATALOGUE: CatalogueItem[] = [
   // Beds: UK mattress sizes plus ~5 cm of frame each way
   { id: "bed-single", name: "Single bed", category: "Bedroom", w: 0.95, d: 1.95, h: 0.5, color: "#d9c7e8", symbol: "bed", note: "Mattress 90 × 190 cm" },
@@ -67,6 +73,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "wardrobe-double", name: "Double wardrobe", category: "Bedroom", w: 1.00, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-triple", name: "Triple wardrobe", category: "Bedroom", w: 1.50, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-fitted", name: "Fitted wardrobe", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#f5f5f5", symbol: "fitted-wardrobe", note: "Floor to ceiling, with top boxes; set any width" },
+  { id: "wardrobe-shaker", name: "Fitted wardrobe (shaker)", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#cfd2d6", symbol: "shaker-wardrobe", note: "Floor to ceiling, framed doors with knobs; set any width" },
   { id: "chest", name: "Chest of drawers", category: "Bedroom", w: 0.80, d: 0.45, h: 0.9, color: WOOD, symbol: "box" },
   { id: "dressing-table", name: "Dressing table", category: "Bedroom", w: 1.00, d: 0.45, h: 0.76, color: WOOD, symbol: "dresser", note: "With a mirror above" },
 
