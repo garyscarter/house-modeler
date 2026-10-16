@@ -1,0 +1,22 @@
+# Render Blueprint: one passcode-protected web service that builds and serves the app.
+# See "Hosting on Render" in README.md. Never put the passcode in this file.
+services:
+  - type: web
+    name: house-modeler
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: claude/laughing-sagan-n08ai0
+    autoDeploy: true
+    # npm 10 can fail `npm ci` with an "edgesOut" error, so fall back to npm 11.
+    # --include=dev keeps TypeScript and Vite installed even if NODE_ENV is production.
+    buildCommand: (npm ci --include=dev || npx -y npm@11.6.2 ci --include=dev) && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PASSCODE
+        sync: false # you type this in the Render dashboard when creating the Blueprint
+      - key: SESSION_SECRET
+        generateValue: true

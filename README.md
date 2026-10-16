@@ -13,6 +13,27 @@ npm run dev
 
 Then open the URL Vite prints. `npm run check` runs the type check and the unit tests; `npm run build` produces a static site in `dist/` that can be served from anywhere. On an iPad or phone, **Add to Home Screen** installs it as an app.
 
+## Hosting on Render
+
+`render.yaml` describes a small Node web service (`server/server.mjs`, no extra dependencies) that serves the built site only to people who have entered a passcode, so it can be opened on a desktop, iPad or phone. Once signed in, a browser stays signed in for 30 days.
+
+1. In the [Render dashboard](https://dashboard.render.com) choose **New → Blueprint** and connect this GitHub repository.
+2. When prompted, type a value for `PASSCODE` (at least 4 characters). It is never stored in the repository. `SESSION_SECRET` is generated for you.
+3. Apply the Blueprint and wait for the first deploy to finish (a few minutes).
+4. Open the `onrender.com` URL shown for the service, enter the passcode and, on an iPad or phone, **Add to Home Screen**.
+
+To change the passcode, edit `PASSCODE` under the service's **Environment** tab and save. Render redeploys, and everyone is signed out. Visiting `/logout` signs out the current browser.
+
+The free plan sleeps the service after about 15 minutes without a visit, and the next visit can take up to a minute to wake it. Wrong passcodes are limited to 10 per 15 minutes for each address.
+
+To run it locally:
+
+```bash
+npm run build && PASSCODE=choose-a-passcode npm start
+```
+
+Then open <http://localhost:10000> (set `PORT` to change it). The server refuses to start without a `PASSCODE`.
+
 ## Listing 91770873
 
 **Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan and 37 photos are bundled (**Photos → Load listing 91770873 photos**). `reference/listing-91770873/NOTES.md` records the facts used and where each came from.
