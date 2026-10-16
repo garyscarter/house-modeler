@@ -50,11 +50,13 @@ export const WALL_FINISH_LABEL: Record<WallFinish, string> = {
   cladding: "Timber cladding",
 };
 
-export type WallCovering = "paint" | "stripe" | "floral" | "sprig" | "tiles" | "squares" | "brick";
+export type WallCovering = "paint" | "stripe" | "floral" | "rose" | "trail" | "sprig" | "tiles" | "squares" | "brick";
 export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   paint: "Paint",
   stripe: "Striped wallpaper",
   floral: "Floral wallpaper",
+  rose: "Large-rose wallpaper",
+  trail: "Trailing-leaf wallpaper",
   sprig: "Small-pattern wallpaper",
   tiles: "Wall tiles",
   squares: "Small square tiles",

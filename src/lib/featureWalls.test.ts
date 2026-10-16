@@ -187,9 +187,9 @@ describe("the listing's feature walls", () => {
   };
 
   it("sit where the photos put them", () => {
-    expect(where("Living Room (rear)")).toEqual(["floral outside, right"]);
+    expect(where("Living Room (rear)")).toEqual(["rose outside, right"]);
     expect(where("Kitchen (galley)")).toEqual(["brick to Garage"]);
     expect(where("Kitchen")).toEqual(["brick outside, rear", "brick to Garage"]);
-    expect(where("Hallway (stairs)")).toEqual(["sprig to Hallway (front)"]);
+    expect(where("Hallway (stairs)")).toEqual(["trail to Hallway (front)"]);
   });
 });

@@ -55,7 +55,13 @@ export function edgeSpans(seg: { a: V2; b: V2 }, poly: V2[], tol = LINE_TOL): Ed
   for (const c of cands) {
     // What of this edge's stretch nearer edges have not already taken.
     let free: [number, number][] = [[c.t0, c.t1]];
-    for (const [c0, c1] of claimed) free = free.flatMap(([f0, f1]) => [[f0, Math.min(f1, c0)], [Math.max(f0, c1), f1]] as [number, number][]).filter(([f0, f1]) => f1 - f0 > MIN_RUN);
+    for (const [c0, c1] of claimed)
+      free = free
+        .flatMap(([f0, f1]): [number, number][] => [
+          [f0, Math.min(f1, c0)],
+          [Math.max(f0, c1), f1],
+        ])
+        .filter(([f0, f1]) => f1 - f0 > MIN_RUN);
     for (const [t0, t1] of free) out.push({ edge: c.edge, t0, t1 });
     claimed.push([c.t0, c.t1]);
   }

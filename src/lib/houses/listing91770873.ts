@@ -106,7 +106,7 @@ export function listing91770873(image: string): HouseModel {
         wallCovering: "stripe",
         wallPaint: "#efe8da",
         wallAccent: "#cdc1ab",
-        wallFinishes: { 1: { covering: "floral", paint: "#f3efe4", accent: "#b9a446" } },
+        wallFinishes: { 1: { covering: "rose", paint: "#f4f0e6", accent: "#c9b44e" } },
       }),
       rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
       // Pale grey-oak laminate; cream walls, with a paper of leaves and red buds only on the stair
@@ -122,7 +122,7 @@ export function listing91770873(image: string): HouseModel {
         floorFinish: "laminate",
         color: "#c4b59f",
         wallPaint: "#f1ece2",
-        wallFinishes: { 5: { covering: "sprig", paint: "#f1ece2", accent: "#bf4a3c" } },
+        wallFinishes: { 5: { covering: "trail", paint: "#f1ece2", accent: "#c9503f" } },
       }),
       poly(
         "Hallway (front)",

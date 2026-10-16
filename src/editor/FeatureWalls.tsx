@@ -15,7 +15,9 @@ export function FeatureWalls({ floor, room, onChange, onHighlight }: { floor: Fl
   const [pinned, setPinned] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const lit = hover ?? pinned;
-  useEffect(() => onHighlight?.(lit), [lit, onHighlight]);
+  useEffect(() => {
+    onHighlight?.(lit);
+  }, [lit, onHighlight]);
   useEffect(() => () => onHighlight?.(null), [onHighlight]);
   const lens = edgeLengthsM(room.polygon, floor.pxPerM);
   const roomCovering = room.wallCovering ?? "paint";
