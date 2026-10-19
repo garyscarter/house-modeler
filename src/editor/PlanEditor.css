@@ -9,7 +9,7 @@
 .plan-canvas svg.tool-select .plan-opening,
 .plan-handle { cursor: move; }
 .plan-handle.add { cursor: copy; }
-.plan-hit { cursor: pointer; }
+.plan-hit, .plan-canopy { cursor: pointer; }
 .plan-text { pointer-events: none; }
 .plan-edge-label { cursor: text; }
 

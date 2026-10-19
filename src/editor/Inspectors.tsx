@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ask } from "../components/Dialogs";
-import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Room, VariantKey, Wall, WallFinish } from "../types";
+import { canopySize } from "../lib/canopy";
+import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
 import { FLOOR_FINISH_LABEL, OPENING_KIND_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type StairsDir } from "../types";
 import type { CatalogueItem } from "../lib/catalogue";
 import { useStore } from "../store";
@@ -329,6 +330,61 @@ export function RoomInspector({
         }}
       >
         Delete room
+      </button>
+    </div>
+  );
+}
+
+/** A porch canopy: its size (when rectangular), which corner stays put, and delete. */
+export function CanopyInspector({
+  poly,
+  ppm,
+  onResize,
+  onDelete,
+}: {
+  poly: Pt[];
+  ppm: number;
+  onResize: (wPx: number, hPx: number, fixed: Corner) => void;
+  onDelete: () => void;
+}) {
+  const [anchor, setAnchor] = useState<Corner>("tl");
+  const size = canopySize(poly);
+  const b = bbox(poly);
+  const w = (size?.w ?? b.w) / ppm;
+  const h = (size?.h ?? b.h) / ppm;
+  return (
+    <div className="inspector canopy-inspector">
+      <b>Porch canopy</b>
+      <p className="muted small">Roof area {formatArea(areaM2(poly, ppm))}. Roofed at this floor's ceiling; choose flat or lean-to under Exterior.</p>
+      {size ? (
+        <div className="field">
+          <span className="field-label">Size, width × depth (m)</span>
+          <div className="size-row">
+            <NumberField value={w} min={0.1} label="Canopy width" onCommit={(v) => onResize(v * ppm, h * ppm, anchor)} />
+            <span>×</span>
+            <NumberField value={h} min={0.1} label="Canopy depth" onCommit={(v) => onResize(w * ppm, v * ppm, anchor)} />
+            <div className="anchor-grid" role="group" aria-label="Corner that stays put">
+              {CORNERS.map(([c, arrow, name]) => (
+                <button key={c} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
+                  {arrow}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="muted small">The highlighted corner stays put. Drag the corners on the plan, or drag the canopy to move it.</p>
+        </div>
+      ) : (
+        <p className="muted small">
+          Extent {w.toFixed(2)} × {h.toFixed(2)} m. Drag the corners on the plan to reshape it.
+        </p>
+      )}
+      <button
+        className="danger"
+        onClick={async () => {
+          if (await ask("Delete this canopy?", { ok: "Delete", danger: true })) onDelete();
+        }}
+      >
+        Delete canopy
       </button>
     </div>
   );

@@ -5,7 +5,7 @@ import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../typ
 import { CATALOGUE, CATEGORIES, byId, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
-import { FixtureInspector, FloorInspector, NumberField, OpeningInspector, RoomInspector, WallInspector } from "./Inspectors";
+import { CanopyInspector, FixtureInspector, FloorInspector, NumberField, OpeningInspector, RoomInspector, WallInspector } from "./Inspectors";
 import { useCoarsePointer, usePlanCamera } from "./usePlanCamera";
 import { uid } from "../types";
 import { useStore } from "../store";
@@ -39,14 +39,18 @@ import {
   type Size,
 } from "../lib/planMath";
 import { roomColor } from "../three/House";
+import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";
 import "./PlanEditor.css";
 
-type Tool = "select" | "rect" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
+type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
 
 type Drag =
   | { kind: "corner"; roomId: string; idx: number }
   | { kind: "opening"; openingId: string }
+  | { kind: "canopyCorner"; idx: number }
+  /** The selected canopy follows the pointer once the press wanders beyond a few pixels; list0 is how the canopies stood at the press. */
+  | { kind: "canopy"; idx: number; p0: Pt; x0: number; y0: number; list0: Pt[][]; moved: boolean }
   | { kind: "stairs" }
   | { kind: "wallEnd"; wallId: string; end: "a" | "b" }
   /** Moves once the press wanders beyond a few pixels; a tap on an item that was already selected picks the next item under it. */
@@ -55,11 +59,12 @@ type Drag =
   | { kind: "pan"; x0: number; y0: number; cam0: Cam; moved: boolean }
   | { kind: "pinch"; cam0: Cam; m0: Pt; d0: number };
 
-type Selection = { room?: string; opening?: string; wall?: string; fixture?: string };
+type Selection = { room?: string; opening?: string; wall?: string; fixture?: string; canopy?: number };
 
 const TOOLS: [Tool, string][] = [
   ["select", "Select"],
   ["rect", "Rectangle room"],
+  ["canopy", "Canopy"],
   ["room", "Polygon room"],
   ["door", "Door"],
   ["window", "Window"],
@@ -94,6 +99,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
+  /** Canopies have no ids, so the selected one is its index in floor.canopies. */
+  const [selectedCanopy, setSelectedCanopy] = useState<number | null>(null);
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
   const [category, setCategory] = useState(CATEGORIES[0]);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -168,15 +175,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const toScreen = (p: Pt): Pt => ({ x: (p.x - (cam?.x ?? 0)) / px, y: (p.y - (cam?.y ?? 0)) / px });
 
   /** Snap to room corners and wall ends, then to their x / y lines, so walls line up. */
-  const snap = (p: Pt, exclude?: Pt) => {
-    const pts = [...floor.rooms.flatMap((r) => r.polygon), ...(floor.walls ?? []).flatMap((w) => [w.a, w.b])].filter((v) => v !== exclude);
-    return snapPoint(p, pts, snapTol).p;
-  };
+  const snapTargets = useMemo(() => [...floor.rooms.flatMap((r) => r.polygon), ...(floor.walls ?? []).flatMap((w) => [w.a, w.b])], [floor.rooms, floor.walls]);
+  const snap = (p: Pt, exclude?: Pt) => snapPoint(p, snapTargets.filter((v) => v !== exclude), snapTol).p;
 
   const select = (s: Selection) => {
     setSelectedOpeningId(s.opening ?? null);
     setSelectedWallId(s.wall ?? null);
     setSelectedFixtureId(s.fixture ?? null);
+    setSelectedCanopy(s.canopy ?? null);
     setUi({ selectedRoomId: s.room ?? null });
     setEdgeEdit(null);
   };
@@ -190,8 +196,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setFixtures((all) => [...all, copy]);
     select({ fixture: copy.id });
   };
+  const canopies = floor.canopies ?? [];
+  const setCanopies = (fn: (c: Pt[][]) => Pt[][]) => updateFloor(variant, floor.id, (f) => ({ ...f, canopies: fn(f.canopies ?? []) }));
   const removeSelected = () => {
-    if (selectedFixtureId) {
+    if (selectedCanopy !== null) {
+      setCanopies((all) => removeCanopy(all, selectedCanopy));
+      setSelectedCanopy(null);
+    } else if (selectedFixtureId) {
       setFixtures((all) => all.filter((x) => x.id !== selectedFixtureId));
       setSelectedFixtureId(null);
     } else if (selectedOpeningId) {
@@ -231,6 +242,10 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       removeSelected();
     }
   };
+  // A room picked from elsewhere (the 3D view) takes over from the canopy.
+  useEffect(() => {
+    if (selectedRoomId) setSelectedCanopy(null);
+  }, [selectedRoomId]);
   const keyRef = useRef(onKey);
   keyRef.current = onKey;
   useEffect(() => {
@@ -280,7 +295,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         setHover(tool === "place" ? raw : snapMeasure(raw));
       return;
     }
-    if (d.kind === "fixture") {
+    if (d.kind === "fixture" || d.kind === "canopy") {
       if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < TAP_SLOP) return;
       d.moved = true;
     }
@@ -324,6 +339,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           ...f,
           rooms: f.rooms.map((r) => (r.id === d.roomId ? { ...r, polygon: r.polygon.map((v, i) => (i === d.idx ? p : v)) } : r)),
         }));
+        return;
+      }
+      case "canopyCorner":
+        if (selectedCanopy !== null) setCanopies((all) => moveCanopyCorner(all, selectedCanopy, d.idx, snap(raw)));
+        return;
+      case "canopy": {
+        // Shift the whole canopy; one of its corners snaps to a room corner or wall end unless Alt is held.
+        const shift = { dx: raw.x - d.p0.x, dy: raw.y - d.p0.y };
+        const poly = d.list0[d.idx];
+        const adj = poly && !e.altKey ? snapShift(poly, shift.dx, shift.dy, snapTargets, snapTol) : shift;
+        setCanopies(() => moveCanopy(d.list0, d.idx, adj.dx, adj.dy));
         return;
       }
       case "stairs":
@@ -424,6 +450,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         });
         setCalib([]);
       } else setCalib(next);
+    } else if (tool === "canopy") {
+      const p = snap(raw);
+      if (draft.length === 0) setDraft([p]);
+      else {
+        const a = draft[0];
+        setDraft([]);
+        if (Math.abs(a.x - p.x) < snapTol || Math.abs(a.y - p.y) < snapTol) return;
+        setCanopies((all) => addCanopy(all, a, p));
+        setTool("select");
+        select({ canopy: canopies.length });
+      }
     } else if (tool === "rect") {
       const p = snap(raw);
       if (draft.length === 0) setDraft([p]);
@@ -446,8 +483,10 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         setDraft([]);
       } else setDraft([...draft, p]);
     } else {
+      // Rooms sit over canopies, so they win where the two overlap.
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
-      select({ room: hit?.id });
+      const roof = hit ? -1 : canopyAt(canopies, raw);
+      select(roof >= 0 ? { canopy: roof } : { room: hit?.id });
     }
   };
 
@@ -457,6 +496,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   };
 
   const selected = floor.rooms.find((r) => r.id === selectedRoomId);
+  const selectedCanopyPoly = selectedCanopy !== null ? canopies[selectedCanopy] : undefined;
   const selectedOpening = floor.openings.find((o) => o.id === selectedOpeningId);
   const selectedWall = (floor.walls ?? []).find((w) => w.id === selectedWallId);
   const selectedFixture = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
@@ -500,7 +540,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         <span className="hint right">Scale {ppm.toFixed(1)} px/m</span>
       </div>
       <div className="plan-hint">
-        {tool === "select" && "Tap a room, opening or item to edit it. Drag corners and items; drag the background to pan, pinch or scroll to zoom."}
+        {tool === "canopy" && (draft.length ? "Click the opposite corner of the canopy." : "Click one corner of the porch canopy, then the opposite corner. Corners snap to walls and rooms.")}
+        {tool === "select" && "Tap a room, canopy, opening or item to edit it. Drag corners and items; drag the background to pan, pinch or scroll to zoom."}
         {tool === "rect" && (draft.length ? "Click the opposite corner." : "Click one corner of the room, then the opposite corner. Corners snap to existing ones.")}
         {tool === "room" && "Click each corner in order, then click the first corner again (or Finish room). Esc cancels."}
         {tool === "door" && "Click on a wall to place a door."}
@@ -529,6 +570,34 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             className={`tool-${tool}`}
           >
             <image href={floor.image} x={0} y={0} width={floor.imageW} height={floor.imageH} opacity={0.9} />
+            <defs>
+              <pattern id="canopy-hatch" patternUnits="userSpaceOnUse" width={px * 8} height={px * 8} patternTransform="rotate(45)">
+                <rect width={px * 8} height={px * 8} fill="#67e8f9" fillOpacity={0.16} />
+                <line x1={0} y1={0} x2={0} y2={px * 8} stroke="#0e7490" strokeOpacity={0.55} strokeWidth={px * 1.2} />
+              </pattern>
+            </defs>
+            {canopies.map((c, i) => {
+              const sel = i === selectedCanopy;
+              return (
+                <polygon
+                  key={"c" + i}
+                  points={c.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="url(#canopy-hatch)"
+                  stroke={sel ? "#d97706" : "#0e7490"}
+                  strokeWidth={stroke * (sel ? 2.2 : 1.5)}
+                  strokeDasharray={`${px * 7} ${px * 4}`}
+                  strokeLinejoin="round"
+                  className="plan-canopy"
+                  onPointerDown={(e) => {
+                    // Only the selected canopy drags, so a swipe over an unselected one still pans the plan.
+                    if (tool !== "select" || !sel) return;
+                    startDrag(e, { kind: "canopy", idx: i, p0: toImage(e), x0: e.clientX, y0: e.clientY, list0: canopies, moved: false });
+                  }}
+                >
+                  <title>Porch canopy. Tap to edit; drag the selected one to move it.</title>
+                </polygon>
+              );
+            })}
             {floor.rooms.length === 0 && tool === "select" && (
               <text x={vb.x + vb.w / 2} y={vb.y + vb.h * 0.08} fontSize={fontSize * 1.2} textAnchor="middle" fill="#2563eb" fontWeight={600} {...halo}>
                 No rooms yet. Pick "Rectangle room" and click two opposite corners of each room.
@@ -544,6 +613,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 strokeWidth={stroke * (r.id === selectedRoomId ? 2.2 : 1.2)}
                 strokeLinejoin="round"
               />
+            ))}
+            {canopies.map((c, i) => (
+              <CanopyLabel key={"cl" + i} poly={c} ppm={ppm} px={px} fontSize={fontSize} />
             ))}
             {orderedRooms.map((r) => (
               <RoomLabel key={"l" + r.id} room={r} ppm={ppm} px={px} fontSize={fontSize} />
@@ -740,6 +812,22 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   </g>
                 );
               })}
+            {tool === "select" &&
+              selectedCanopyPoly?.map((p, i) => (
+                <Handle
+                  key={"ch" + i}
+                  at={p}
+                  r={handleR}
+                  hit={hitR}
+                  fill="#fff7ed"
+                  ink="#d97706"
+                  sw={stroke * 2}
+                  onPointerDown={(e) => startDrag(e, { kind: "canopyCorner", idx: i })}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <title>Drag to resize the canopy</title>
+                </Handle>
+              ))}
             {selected && litEdge !== null && litEdge < selected.polygon.length && <LitEdge room={selected} idx={litEdge} px={px} fontSize={fontSize} />}
             {selected && tool === "select" && (
               <EdgeLabels room={selected} ppm={ppm} px={px} fontSize={fontSize} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onEdit={(idx) => setEdgeEdit({ roomId: selected.id, idx })} />
@@ -750,7 +838,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {calib.map((p, i) => (
               <circle key={i} cx={p.x} cy={p.y} r={handleR} fill="#ef4444" />
             ))}
-            {tool === "rect" && draft.length === 1 && hover && (
+            {(tool === "rect" || tool === "canopy") && draft.length === 1 && hover && (
               <rect
                 x={Math.min(draft[0].x, hover.x)}
                 y={Math.min(draft[0].y, hover.y)}
@@ -772,7 +860,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 style={{ pointerEvents: "none" }}
               />
             )}
-            {(tool === "rect" || tool === "room" || tool === "wall" || tool === "measure") && hover && (
+            {(tool === "rect" || tool === "canopy" || tool === "room" || tool === "wall" || tool === "measure") && hover && (
               <circle cx={hover.x} cy={hover.y} r={px * 4} fill={tool === "measure" ? "#7c3aed" : "#16a34a"} style={{ pointerEvents: "none" }} />
             )}
           </svg>
@@ -826,6 +914,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               onChange={(p) => updateRoom(variant, floor.id, selected.id, p)}
               onHighlightEdge={setLitEdge}
             />
+          ) : selectedCanopyPoly ? (
+            <CanopyInspector
+              key={selectedCanopy}
+              poly={selectedCanopyPoly}
+              ppm={ppm}
+              onResize={(w, h, fixed) => setCanopies((all) => resizeCanopy(all, selectedCanopy!, w, h, fixed))}
+              onDelete={() => {
+                setCanopies((all) => removeCanopy(all, selectedCanopy!));
+                setSelectedCanopy(null);
+              }}
+            />
           ) : selectedOpening ? (
             <OpeningInspector
               opening={selectedOpening}
@@ -840,7 +939,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               onDelete={removeSelected}
             />
           ) : (
-            <p className="muted">Select a room to check its size and finishes, an opening to change its type and size, an item of furniture, or a wall.</p>
+            <p className="muted">Select a room to check its size and finishes, a porch canopy, an opening to change its type and size, an item of furniture, or a wall.</p>
           )}
           <hr />
           <div className="palette">
@@ -918,6 +1017,27 @@ function RoomLabel({ room, ppm, px, fontSize }: { room: Room; ppm: number; px: n
       {onScreen > 60 && (
         <text x={c.x} y={c.y + fontSize * 1.2} fontSize={fontSize * 0.82} textAnchor="middle" fill="#374151" {...halo}>
           {formatArea(area)}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** "Canopy" with its size, sized in screen pixels; the size is dropped when the canopy is small on screen. */
+function CanopyLabel({ poly, ppm, px, fontSize }: { poly: Pt[]; ppm: number; px: number; fontSize: number }) {
+  const c = polygonCentroid(poly);
+  const b = bbox(poly);
+  const onScreen = Math.min(b.w, b.h) / px;
+  if (onScreen < 24) return null;
+  const halo = { paintOrder: "stroke" as const, stroke: "#fff", strokeWidth: px * 3, strokeLinejoin: "round" as const, strokeOpacity: 0.85 };
+  return (
+    <g className="plan-text">
+      <text x={c.x} y={c.y} fontSize={fontSize} textAnchor="middle" fill="#0e7490" fontWeight={600} {...halo}>
+        Canopy
+      </text>
+      {onScreen > 50 && (
+        <text x={c.x} y={c.y + fontSize * 1.2} fontSize={fontSize * 0.82} textAnchor="middle" fill="#155e75" {...halo}>
+          {(b.w / ppm).toFixed(2)} × {(b.h / ppm).toFixed(2)} m
         </text>
       )}
     </g>
