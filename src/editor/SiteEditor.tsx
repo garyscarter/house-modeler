@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSite, useStore } from "../store";
 import { SiteVariantNote } from "../components/SiteVariantNote";
+import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { bbox, polygonCentroid } from "../lib/geometry";
@@ -585,6 +586,7 @@ function Inspector({
             ))}
           </select>
         </label>
+        <SurfaceFinishField surface={s} onChange={(finish) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, finish } : x)) }))} />
         <SlopeFields surface={s} onChange={(slope) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, slope } : x)) }))} />
         <p className="muted small">{areaOf(s.polygon).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">

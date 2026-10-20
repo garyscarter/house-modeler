@@ -51,7 +51,7 @@ export const FLOOR_COLOUR: Record<Exclude<FloorFinish, "plain">, string> = {
   tile: "#e4e0d8",
   quarry: "#9a4a35",
   stone: "#b7ae9f",
-  carpet: "#a39a8c",
+  carpet: "#d4c8b6",
   vinyl: "#d5d0c6",
   concrete: "#a9a8a3",
 };
@@ -1072,6 +1072,12 @@ export function matKey(s: MatSpec): string {
 }
 
 const SELECTED = "#ffd166";
+/**
+ * Floors face up into the blue sky light and the bounce off the ceiling is missing, so a floor
+ * painted in a warm beige comes out cool blue-grey (carpets in the listing's photos are oatmeal).
+ * Multiplying the floor colour by this warm tint cancels most of that cast.
+ */
+const FLOOR_WARMTH = new THREE.Color("#ffecd2");
 const heightMaps = new Map<string, THREE.CanvasTexture>();
 const floorMaps = new Map<string, THREE.CanvasTexture>();
 let plaster: THREE.CanvasTexture | null = null;
@@ -1134,7 +1140,7 @@ function create(s: MatSpec): THREE.Material {
         side: THREE.DoubleSide,
       });
     case "floor": {
-      if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : s.color, roughness: 0.85 });
+      if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : new THREE.Color(s.color).multiply(FLOOR_WARMTH), roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);
       // the pattern is seeded, so every colour shares one height map.
       const key = `${s.finish}|${s.color}`;
@@ -1153,7 +1159,7 @@ function create(s: MatSpec): THREE.Material {
         map,
         bumpMap: bump,
         bumpScale: 1,
-        color: s.selected ? SELECTED : "#ffffff",
+        color: s.selected ? SELECTED : FLOOR_WARMTH,
         roughness: FLOOR_ROUGHNESS[s.finish],
       });
     }

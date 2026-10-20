@@ -8,6 +8,7 @@ import { compassPoint } from "../lib/sun";
 import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpleSite, type PlotDepths } from "../lib/site";
 import { useSiteView } from "../three/siteView";
 import { SlopeFields } from "./SlopeFields";
+import { SurfaceFinishField } from "./SurfaceFinishField";
 import "./SitePanel.css";
 
 const fmtArea = (a: number) => `${a.toFixed(a < 100 ? 1 : 0)} m²`;
@@ -112,6 +113,7 @@ export function SitePanel() {
                 ✕
               </button>
             </div>
+            <SurfaceFinishField surface={s} onChange={(finish) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, finish } : x)) }))} />
             <details className="site-slope">
               <summary className="muted small">{s.slope ? "Slopes up" : "Flat"}</summary>
               <SlopeFields surface={s} onChange={(slope) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, slope } : x)) }))} />

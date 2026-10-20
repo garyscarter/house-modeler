@@ -6,6 +6,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
 import { wallThickness } from "../lib/walls";
+import { ceilingY } from "../lib/ceiling";
 import { Roof } from "./Roof";
 import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
@@ -360,7 +361,7 @@ function RoomCeiling({ floor, room, height, holes }: { floor: Floor; room: Room;
   const geom = useMemo(() => new THREE.ShapeGeometry(polys.map(shapeFrom)), [polys]);
   useEffect(() => () => geom.dispose(), [geom]);
   return (
-    <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]}>
+    <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingY(height), 0]}>
       <meshStandardMaterial color="#f3f3f0" emissive="#ffffff" emissiveIntensity={0.35} side={THREE.DoubleSide} />
     </mesh>
   );

@@ -9,6 +9,7 @@ import { roofGeometry, type RoofEnd } from "../lib/roof";
 import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
 import { clipSegmentOutside, edgesOf } from "../lib/site";
 import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
+import { surfaceLook } from "../lib/surfaceFinish";
 import { triangles } from "./Roof";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { useSiteView } from "./siteView";
@@ -75,7 +76,7 @@ function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
   if (!m) {
     m = new THREE.MeshStandardMaterial({
       map: siteTexture(kind).map,
-      roughness: kind === "road" || kind === "pavement" ? 0.95 : 1,
+      roughness: kind === "road" || kind === "pavement" || kind === "tarmac" ? 0.95 : 1,
       polygonOffset: layer > 0,
       polygonOffsetFactor: -layer,
       polygonOffsetUnits: -layer * 4,
@@ -133,7 +134,7 @@ function Surface({ surface }: { surface: SiteSurface }) {
   useDispose(line);
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
-      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
+      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surfaceLook(surface), layer)} receiveShadow />
       {edge && <mesh geometry={edge} material={plainMaterial("#a19e96")} castShadow receiveShadow />}
       {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>

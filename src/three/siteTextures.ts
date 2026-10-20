@@ -1,12 +1,12 @@
 import * as THREE from "three";
-import type { SurfaceKind } from "../types";
+import type { SurfaceFinish, SurfaceKind } from "../types";
 
 /**
  * Procedural textures for the garden, boundaries and street, drawn once on
  * a canvas and shared by every viewer. Each covers `metres` of ground, so a
  * geometry with UVs in metres sets repeat to 1 / metres.
  */
-export type TextureKind = SurfaceKind | "ground" | "fence" | "brick" | "hedge";
+export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge";
 
 export interface SiteTexture {
   map: THREE.Texture;
@@ -55,11 +55,28 @@ function slabs(g: CanvasRenderingContext2D, r: () => number, cols: number, rows:
   }
 }
 
+/** Rectangular blocks in stretcher bond, each filled by `colour()`, with `gap` pixels of joint between them. */
+function blockPaving(g: CanvasRenderingContext2D, joint: string, cols: number, rows: number, colour: () => string, gap: number) {
+  g.fillStyle = joint;
+  g.fillRect(0, 0, SIZE, SIZE);
+  const w = SIZE / cols;
+  const h = SIZE / rows;
+  for (let j = 0; j < rows; j++) {
+    const off = (j % 2) * (w / 2);
+    for (let i = -1; i < cols + 1; i++) {
+      g.fillStyle = colour();
+      g.fillRect(i * w + off + gap / 2, j * h + gap / 2, w - gap, h - gap);
+    }
+  }
+}
+
 function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
   const g = canvas.getContext("2d")!;
-  const r = rng(kind.length * 7919 + kind.charCodeAt(0));
+  // The finishes that stand in for a kind's usual look share its seed, so they draw the same texture.
+  const seedKind = kind === "block-mixed" ? "drive" : kind === "slabs" ? "patio" : kind;
+  const r = rng(seedKind.length * 7919 + seedKind.charCodeAt(0));
   let metres = 2;
   switch (kind) {
     case "lawn":
@@ -88,6 +105,7 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       break;
     }
     case "patio":
+    case "slabs":
       slabs(g, r, 3, 3, 38, 26, 72, "#9b917f");
       speckle(g, r, 6000, 0.25, 0.2);
       metres = 1.8;
@@ -102,24 +120,64 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       speckle(g, r, 7000, 0.15, 0.22);
       metres = 1.8;
       break;
-    case "drive": {
+    case "drive":
+    case "block-mixed": {
       // Block paving, 200 x 100 mm in stretcher bond, brindle colours.
-      g.fillStyle = "#6f6258";
-      g.fillRect(0, 0, SIZE, SIZE);
-      const cols = 6;
-      const rows = 12;
-      const w = SIZE / cols;
-      const h = SIZE / rows;
-      for (let j = 0; j < rows; j++) {
-        for (let i = -1; i < cols + 1; i++) {
-          const off = (j % 2) * (w / 2);
-          const red = r() < 0.6;
-          g.fillStyle = red ? hsl(14 + r() * 8, 30 + r() * 15, 42 + r() * 10) : hsl(30, 8 + r() * 6, 40 + r() * 12);
-          g.fillRect(i * w + off + 1.5, j * h + 1.5, w - 3, h - 3);
-        }
-      }
+      blockPaving(g, "#6f6258", 6, 12, () => (r() < 0.6 ? hsl(14 + r() * 8, 30 + r() * 15, 42 + r() * 10) : hsl(30, 8 + r() * 6, 40 + r() * 12)), 3);
       speckle(g, r, 4000, 0.15, 0.2);
       metres = 1.2;
+      break;
+    }
+    case "block-weathered": {
+      // Small 200 x 100 mm blocks, long weathered: mostly charcoal and slate with some faded red,
+      // darkened and mottled by moss, oil and wear, in dirty joints (rear-garden, rear-4).
+      blockPaving(
+        g,
+        "#3b3836",
+        8,
+        16,
+        () => {
+          const v = r();
+          if (v < 0.34) return hsl(10 + r() * 8, 26 + r() * 12, 38 + r() * 9);
+          if (v < 0.5) return hsl(14 + r() * 8, 14 + r() * 8, 29 + r() * 7);
+          return hsl(25 + r() * 20, 3 + r() * 5, 33 + r() * 11);
+        },
+        2,
+      );
+      for (let i = 0; i < 70; i++) {
+        g.fillStyle = r() < 0.5 ? `rgba(70,80,50,${0.05 + r() * 0.07})` : `rgba(0,0,0,${0.06 + r() * 0.08})`;
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 14 + r() * 36, 8 + r() * 22, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      speckle(g, r, 5000, 0.1, 0.25);
+      metres = 1.2;
+      break;
+    }
+    case "tarmac": {
+      // Asphalt: dark grey with a fine pale aggregate and the odd darker patch.
+      g.fillStyle = "#4b4c4f";
+      g.fillRect(0, 0, SIZE, SIZE);
+      for (let i = 0; i < 6; i++) {
+        g.fillStyle = `rgba(0,0,0,${0.05 + r() * 0.07})`;
+        g.fillRect(r() * SIZE, r() * SIZE, 50 + r() * 140, 40 + r() * 100);
+      }
+      speckle(g, r, 28000, 0.2, 0.3, 2);
+      metres = 3;
+      break;
+    }
+    case "gravel": {
+      // Pea shingle: small rounded stones in buff, grey and brown.
+      g.fillStyle = "#8d8472";
+      g.fillRect(0, 0, SIZE, SIZE);
+      for (let i = 0; i < 4200; i++) {
+        g.fillStyle = hsl(32 + r() * 14, 6 + r() * 14, 40 + r() * 32);
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 2 + r() * 3.5, 1.5 + r() * 2.5, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      speckle(g, r, 3000, 0.1, 0.35);
+      metres = 1;
       break;
     }
     case "bed": {

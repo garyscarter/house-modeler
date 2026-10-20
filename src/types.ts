@@ -39,6 +39,8 @@ export interface Room {
   exteriorFinish?: WallFinish;
   /** Not heated (a garage or store): left out of the heated floor area. Undefined = guess from the name. */
   unheated?: boolean;
+  /** Colour of the skirting boards in this room (dark stained wood, quarry tile…). Undefined = white-painted. */
+  skirtingColor?: string;
 }
 
 export type WallFinish = "render" | "brick" | "pebbledash" | "stone" | "cladding";
@@ -388,10 +390,25 @@ export interface SurfaceSlope {
   base?: number;
 }
 
+/**
+ * What a hard surface (drive, patio, path, pavement) is laid with. Left out, it
+ * looks as it always has: block paving on a drive, slabs on a patio and so on.
+ */
+export type SurfaceFinish = "tarmac" | "block-mixed" | "block-weathered" | "slabs" | "gravel";
+export const SURFACE_FINISH_LABEL: Record<SurfaceFinish, string> = {
+  tarmac: "Tarmac (asphalt)",
+  "block-mixed": "Block paving, red and grey mixed",
+  "block-weathered": "Block paving, weathered dark grey and red",
+  slabs: "Paving slabs",
+  gravel: "Gravel",
+};
+
 export interface SiteSurface {
   id: string;
   kind: SurfaceKind;
   polygon: WPt[];
+  /** Absent: the usual look of this kind of surface (see lib/surfaceFinish.ts). */
+  finish?: SurfaceFinish;
   /** Absent: flat at ground level. */
   slope?: SurfaceSlope;
 }
