@@ -11,7 +11,7 @@ import {
   type WallSeg,
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
-import { bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
 import { interiorFinish, outsideLook } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { type MatSpec, matKey } from "./textures";
@@ -68,6 +68,7 @@ export function shade(hex: string, f: number): string {
 /** Default leaf colour by kind: oak internal doors, red front and garage doors. */
 function leafColour(op: Opening): string {
   if (op.color) return op.color;
+  if (op.kind === "archway") return DEFAULT_ARCHWAY_COLOUR;
   return op.kind === "door" ? "#c9a26b" : "#b3202e";
 }
 

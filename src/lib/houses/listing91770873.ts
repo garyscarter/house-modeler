@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 14 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 14 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 15 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 15 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -157,7 +157,7 @@ export function listing91770873(image: string): HouseModel {
       op("window", 910, 22, "h", 1.7, { sill: 1.0, head: 2.15 }), // level with the galley window (rear photos)
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
-      op("bifold", 1170, 278, "h", 2.0), // bi-fold between the two living rooms
+      op("archway", 1170, 278, "h", 2.0), // open archway between the two living rooms, lined in dark stained timber (not bi-folds)
       { ...op("bay", 1185, 515, "h", 2.4), depth: 0.3 }, // shallow canted bay on the front living room (photos)
       op("door", 1045, 410, "v", 0.8), // hall -> front living room
       op("door", 770, 345, "h", 0.8), // kitchen -> front hall

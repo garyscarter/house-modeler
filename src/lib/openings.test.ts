@@ -83,6 +83,16 @@ describe("doors", () => {
     expect(mats(1)).toContain("threshold");
   });
 
+  it("draws an archway as an open, lined opening with no leaves, glass or threshold", () => {
+    const { boxes } = openingParts(place("archway", 2, {}, 2.1), T, 0);
+    expect(boxes.length).toBeGreaterThan(0);
+    expect(boxes.every((b) => b.mat === "leaf")).toBe(true);
+    // Head lining sits at the head and architraves stand proud of both wall faces.
+    expect(Math.max(...boxes.map((b) => b.p[1] + b.s[1] / 2))).toBeGreaterThan(2.1);
+    expect(boxes.some((b) => b.p[2] > T / 2)).toBe(true);
+    expect(boxes.some((b) => b.p[2] < -T / 2)).toBe(true);
+  });
+
   it("draws nothing for a gap", () => {
     expect(openingParts(place("gap", 1.2, {}, 2.4), T, 0).boxes).toEqual([]);
   });

@@ -216,9 +216,10 @@ const KIND_NOUN: Record<OpeningKind, string> = {
   patio: "sliding patio door",
   french: "French doors",
   bifold: "bi-fold doors",
+  archway: "archway",
 };
 
-export const categoryOf = (kind: OpeningKind): ChangeCategory => (kind === "window" || kind === "bay" ? "Window" : kind === "gap" ? "Opening" : "Door");
+export const categoryOf = (kind: OpeningKind): ChangeCategory => (kind === "window" || kind === "bay" ? "Window" : kind === "gap" || kind === "archway" ? "Opening" : "Door");
 const newLine = (kind: OpeningKind): CostLineId => {
   const c = categoryOf(kind);
   return c === "Window" ? "newWindow" : c === "Door" ? "newDoor" : "alterOpening";

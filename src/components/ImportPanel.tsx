@@ -4,7 +4,7 @@ import { VARIANT_LABEL, type VariantKey } from "../types";
 import { PRESETS } from "../lib/houses/listing91770873";
 import { loadListing, updatePreset } from "../lib/presetActions";
 
-const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "gap"]);
+const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "archway", "gap"]);
 const WINDOW_KINDS = new Set(["window", "bay"]);
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {

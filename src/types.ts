@@ -120,7 +120,7 @@ export interface Opening {
   head?: number;
 }
 
-export type OpeningKind = "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front" | "french" | "bifold";
+export type OpeningKind = "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front" | "french" | "bifold" | "archway";
 export const OPENING_KIND_LABEL: Record<OpeningKind, string> = {
   door: "Door (swing, open)",
   front: "Front door (closed, panelled)",
@@ -131,6 +131,7 @@ export const OPENING_KIND_LABEL: Record<OpeningKind, string> = {
   patio: "Patio / sliding doors",
   french: "French doors",
   bifold: "Bi-fold doors",
+  archway: "Archway (open, lined)",
 };
 
 /** A free-standing wall segment not derived from a room outline (nib, partition, garden wall). */

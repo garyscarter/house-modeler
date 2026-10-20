@@ -228,6 +228,11 @@ function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1
         `<rect x="${f2(-half)}" y="${f2(inward > 0 ? t / 2 : -t / 2 - travel)}" width="${f2(len)}" height="${f2(travel)}" stroke-dasharray="1 0.6"/>`
       );
     }
+    case "archway": {
+      const lt = Math.max(0.025 * k, 0.4);
+      const lining = (x: number) => `<rect x="${f2(x)}" y="${f2(-t / 2)}" width="${f2(lt)}" height="${f2(t)}" fill="#3b2418" stroke="none"/>`;
+      return lining(-half) + lining(half - lt) + `<line x1="${f2(-half)}" y1="${f2(-t / 2)}" x2="${f2(half)}" y2="${f2(-t / 2)}" stroke-dasharray="0.8 0.6"/><line x1="${f2(-half)}" y1="${f2(t / 2)}" x2="${f2(half)}" y2="${f2(t / 2)}" stroke-dasharray="0.8 0.6"/>`;
+    }
     case "gap":
       return `<line x1="${f2(-half)}" y1="${f2(-t / 2)}" x2="${f2(half)}" y2="${f2(-t / 2)}" stroke-dasharray="0.8 0.6"/><line x1="${f2(-half)}" y1="${f2(t / 2)}" x2="${f2(half)}" y2="${f2(t / 2)}" stroke-dasharray="0.8 0.6"/>`;
   }

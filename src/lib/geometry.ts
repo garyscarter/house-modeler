@@ -301,6 +301,7 @@ const DEFAULT_HEAD: Record<Opening["kind"], number> = {
   front: 2.05,
   french: 2.1,
   bifold: 2.1,
+  archway: 2.1,
   patio: 2.1,
   garage: 2.15,
   window: 2.1,

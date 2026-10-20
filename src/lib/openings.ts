@@ -49,6 +49,8 @@ const SET_BACK = 0.04;
 const OPEN = (75 * Math.PI) / 180;
 
 export const DEFAULT_BAY_DEPTH = 0.6;
+/** Dark stained timber of the lining and architrave of an archway (listing photos). */
+export const DEFAULT_ARCHWAY_COLOUR = "#3b2418";
 
 /** Number of casements for a window of this width (UK: about 0.5-0.75 m each). */
 export function casements(width: number): number {
@@ -201,20 +203,20 @@ function doorFrame(w: number, h: number, z: number): Box[] {
  * Lining and architraves of an internal door: the lining covers the reveal
  * through the wall and the architrave trims both faces.
  */
-function doorLining(w: number, h: number, wallT: number): Box[] {
+function doorLining(w: number, h: number, wallT: number, mat: PartMat = "joinery"): Box[] {
   const lt = 0.025;
   const aw = 0.065;
   const b: Box[] = [
-    { mat: "joinery", p: [-w / 2 + lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
-    { mat: "joinery", p: [w / 2 - lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
-    { mat: "joinery", p: [0, h - lt / 2, 0], s: [w, lt, wallT + 0.004] },
+    { mat, p: [-w / 2 + lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
+    { mat, p: [w / 2 - lt / 2, h / 2, 0], s: [lt, h, wallT + 0.004] },
+    { mat, p: [0, h - lt / 2, 0], s: [w, lt, wallT + 0.004] },
   ];
   for (const side of [1, -1]) {
     const z = side * (wallT / 2 + 0.008);
     b.push(
-      { mat: "joinery", p: [-w / 2 - aw / 2 + lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
-      { mat: "joinery", p: [w / 2 + aw / 2 - lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
-      { mat: "joinery", p: [0, h + aw / 2, z], s: [w + 2 * aw - 2 * lt, aw, 0.016] },
+      { mat, p: [-w / 2 - aw / 2 + lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
+      { mat, p: [w / 2 + aw / 2 - lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
+      { mat, p: [0, h + aw / 2, z], s: [w + 2 * aw - 2 * lt, aw, 0.016] },
     );
   }
   return b;
@@ -326,6 +328,10 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       boxes.push(...leaf(lw, hz, lw, -1, s, (80 * Math.PI) / 180, glazedLeaf(lh, 0.055)));
       break;
     }
+    case "archway":
+      // Open and doorless: just the lining through the wall and architraves on both faces.
+      boxes.push(...doorLining(w, y1, wallT, "leaf"));
+      break;
     case "bifold": {
       // Internal bi-folds get a lining like internal doors, external ones a frame and threshold.
       const layout = bifoldLayout(w, !out);

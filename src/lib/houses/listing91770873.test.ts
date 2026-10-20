@@ -11,10 +11,10 @@ const ground = house.floors[0];
 const first = house.floors[1];
 
 describe("the built-in listing", () => {
-  it("has no door between the garage and the hall, and a bi-fold between the living rooms", () => {
+  it("has no door between the garage and the hall, and an archway between the living rooms", () => {
     expect(ground.openings.some((o) => o.x === 730 && o.y === 412)).toBe(false);
     const between = ground.openings.find((o) => o.x === 1170 && o.y === 278);
-    expect(between).toMatchObject({ kind: "bifold", widthM: 2.0 });
+    expect(between).toMatchObject({ kind: "archway", widthM: 2.0 });
   });
 
   it("puts every opening on a wall", () => {

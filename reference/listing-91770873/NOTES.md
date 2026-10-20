@@ -13,6 +13,7 @@ Facts used to build the built-in model (`src/lib/houses/listing91770873.ts`), an
   - Brown fascia about 0.2 m deep below a brown half-round gutter. Under the porch, the garage's front wall around the door is cream render, not brick (front-3).
 - Front door: dark brown with glazed panels, on the side of the front hall projection under the porch canopy. Garage door: red, up-and-over.
 - Canted bay on the front living room with a small canopy roof.
+- The 2.0 m opening between the two living rooms is an open, square-headed archway with no doors (not bi-folds), lined and trimmed on both faces in dark stained timber. In living-front-1 its head is about 2.1 m (about 87% of the 2.4 m ceiling) and its overall width, architraves included, about 2.2 m; the model keeps the 2.0 m traced width and a 2.1 m head, drawn as the "archway" opening kind (living-rear-1, living-front-1, living-rear-3).
 
 ## Size and scale
 

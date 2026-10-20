@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { Opening } from "../types";
 import { bifoldLayout, bifoldZigzag } from "../lib/bifold";
-import { bayOutline } from "../lib/openings";
+import { bayOutline, DEFAULT_ARCHWAY_COLOUR } from "../lib/openings";
 import { DOUBLE_DOOR_M, doorSwing } from "../lib/planMath";
 
 const INK = "#1f2937";
@@ -171,6 +171,20 @@ export const OpeningSymbol = memo(function OpeningSymbol({
             strokeWidth={sw * 0.7}
             strokeDasharray={`${px * 5} ${px * 3}`}
           />
+        </>
+      );
+      break;
+    }
+    case "archway": {
+      // Open: the wall ends with a lining on each reveal and a dashed head line.
+      const lt = Math.max(px * 2, 0.025 * m);
+      body = (
+        <>
+          <rect x={-half} y={-t / 2} width={len} height={t} fill="#fff" />
+          <rect x={-half} y={-t / 2} width={lt} height={t} fill={o.color ?? DEFAULT_ARCHWAY_COLOUR} />
+          <rect x={half - lt} y={-t / 2} width={lt} height={t} fill={o.color ?? DEFAULT_ARCHWAY_COLOUR} />
+          <line x1={-half} y1={-t / 2} x2={half} y2={-t / 2} {...thin} strokeDasharray={`${px * 4} ${px * 3}`} />
+          <line x1={-half} y1={t / 2} x2={half} y2={t / 2} {...thin} strokeDasharray={`${px * 4} ${px * 3}`} />
         </>
       );
       break;

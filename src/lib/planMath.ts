@@ -392,9 +392,9 @@ export function overlappingIds(solids: Solid[], eps = 0): Set<string> {
 /** Door-like openings that are drawn with a swing or fold and can be flipped. */
 export const SWING_KINDS: OpeningKind[] = ["door", "front", "french", "bifold"];
 /** Openings with a head height (no sill). */
-export const DOOR_KINDS: OpeningKind[] = ["door", "front", "french", "bifold", "patio", "garage"];
+export const DOOR_KINDS: OpeningKind[] = ["door", "front", "french", "bifold", "patio", "garage", "archway"];
 /** Openings painted in a single colour. */
-export const COLOUR_KINDS: OpeningKind[] = ["door", "front", "garage"];
+export const COLOUR_KINDS: OpeningKind[] = ["door", "front", "garage", "archway"];
 
 /** Default sill and head heights above the floor, metres. Matches cutWall. */
 export function defaultSill(kind: OpeningKind): number | undefined {

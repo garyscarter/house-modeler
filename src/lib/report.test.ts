@@ -230,3 +230,15 @@ describe("areaSummary", () => {
     expect(areaSummary(m).unheatedRooms).toEqual([]);
   });
 });
+
+describe("archway between the living rooms", () => {
+  it("is not reported as a change between As listed and the built-in Proposed", () => {
+    const a = listing91770873("x");
+    const b = listing91770873Proposed("x");
+    const arch = a.floors[0].openings.find((o) => o.kind === "archway")!;
+    expect(arch).toBeTruthy();
+    expect(b.floors[0].openings.find((o) => o.x === arch.x && o.y === arch.y)?.kind).toBe("archway");
+    const text = diffModels(a, b).map((c) => c.description).join("\n");
+    expect(text).not.toMatch(/archway|bi-fold/i);
+  });
+});

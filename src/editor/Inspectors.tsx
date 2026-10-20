@@ -7,7 +7,7 @@ import type { CatalogueItem } from "../lib/catalogue";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
-import { DEFAULT_BAY_DEPTH } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH } from "../lib/openings";
 import { WALL_COVERING_LABEL, type WallCovering } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
 import { roomColor } from "../three/House";
@@ -491,7 +491,7 @@ export function OpeningInspector({
       {COLOUR_KINDS.includes(k) && (
         <label>
           Colour
-          <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
+          <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
         </label>
       )}
       <p className="muted small">Drag it along the wall on the plan; it snaps onto the nearest wall.</p>
