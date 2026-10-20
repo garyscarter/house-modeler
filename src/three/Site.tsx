@@ -134,7 +134,7 @@ function Surface({ surface }: { surface: SiteSurface }) {
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
       <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
-      {edge && <mesh geometry={edge} material={plainMaterial("#a19e96")} castShadow receiveShadow />}
+      {edge && <mesh geometry={edge} material={plainMaterial(surface.kind === "bed" ? "#9a4d3a" : "#a19e96")} castShadow receiveShadow />}
       {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );

@@ -244,6 +244,19 @@ export function listing91770873(image: string): HouseModel {
     { id: uid(), type: "wardrobe-shaker", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, color: "#d3d6da" },
     // Bedroom 3: white, in the strip beside the room door.
     { id: uid(), type: "wardrobe-fitted", x: 833, y: 1195, rot: 270, w: 2.2, d: 0.55 },
+    // Bedroom 1: blue-grey with cream beading, a double plus a single, in the south-west corner by the door
+    // (bedroom-1-1). The desk run's drawer pedestals are in the same colour along the west wall up to the
+    // window end (bedroom-1-2); both are shortened a little to fit the 3.3 m room.
+    { id: uid(), type: "wardrobe-shaker", x: 637, y: 981, rot: 270, w: 1.5, d: 0.6, color: "#c9d0d8" },
+    { id: uid(), type: "custom", x: 633, y: 862, rot: 270, w: 1.7, d: 0.5, h: 0.75, color: "#c9d0d8", label: "Fitted desk" },
+    // Bathroom: rectangular shower with a sliding door in the north-east corner (door side to the west),
+    // gloss white vanity and mirror cabinet on the east wall, WC in the west alcove and a chrome ladder rail
+    // on the wall beside it (bathroom-1, bathroom-2, bathroom-wc).
+    { id: uid(), type: "shower", x: 777, y: 1150, rot: 90, w: 1.0, d: 0.8, color: "#cfe3ec" },
+    { id: uid(), type: "vanity", x: 790, y: 1225, rot: 90, w: 0.65, d: 0.45, color: "#f6f6f4" },
+    { id: uid(), type: "wall-unit", x: 801, y: 1225, rot: 90, w: 0.65, d: 0.15, h: 0.6, color: "#eef1f2", label: "Mirror cabinet" },
+    { id: uid(), type: "toilet", x: 639, y: 1250, rot: 270 },
+    { id: uid(), type: "towel-rail", x: 697, y: 1185, rot: 270, w: 0.5, h: 1.5, color: "#dfe3e6" },
   ];
 
   return {
@@ -340,6 +353,8 @@ const block = (name: string, x0: number, y0: number, x1: number, y1: number, ext
   roof: "flat",
   ...extra,
 });
+/** A brick-kerbed bed standing about 0.3 m proud of the ground. */
+const RAISED_BED: SiteSurface["slope"] = { toward: "back", rise: 0, base: 0.3 };
 const surface = (kind: SiteSurface["kind"], pts: [number, number][], slope?: SiteSurface["slope"]): SiteSurface => ({
   id: uid(),
   kind,
@@ -415,15 +430,29 @@ export function listingSite(): Site {
       block("Outbuilding behind the garden", -7.7, -15.1, 1.4, -11.5, { eaves: 2.4, roof: "flat" }),
     ],
     surfaces: [
+      // The patio runs about 4 m out from the rear wall to the raised brick-kerbed shrub bed (rear-garden, rear-2, rear-4).
       surface("patio", [
         [-4.59, -5.59],
         [5.78, -5.59],
-        [5.8, -8.0],
-        [-4.53, -8.0],
+        [5.8, -9.6],
+        [-4.53, -9.6],
       ]),
+      // Long raised bed along the back of the patio, parallel to the house, with a conifer (rear-garden).
+      surface(
+        "bed",
+        [
+          [-4.53, -9.6],
+          [5.8, -9.6],
+          [5.82, -10.5],
+          [-4.5, -10.5],
+        ],
+        RAISED_BED,
+      ),
+      // Curved raised planter in front of the patio doors (rear-3, rear-4), as a polygon.
+      surface("bed", Array.from({ length: 20 }, (_, i) => [4.1 + 1.5 * Math.cos((i / 20) * Math.PI * 2), -7.2 + 0.8 * Math.sin((i / 20) * Math.PI * 2)] as [number, number]), RAISED_BED),
       surface("lawn", [
-        [-4.53, -8.0],
-        [5.8, -8.0],
+        [-4.5, -10.5],
+        [5.82, -10.5],
         [5.84, -12.05],
         [-4.44, -11.24],
       ]),

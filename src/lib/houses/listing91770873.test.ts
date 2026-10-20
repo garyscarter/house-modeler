@@ -35,7 +35,7 @@ describe("the built-in listing", () => {
   });
 
   it("fits a wardrobe in each of the two bedrooms, backs to the walls and doors to the room", () => {
-    const wardrobes = first.fixtures ?? [];
+    const wardrobes = (first.fixtures ?? []).slice(0, 2);
     expect(wardrobes.map((f) => f.type)).toEqual(["wardrobe-shaker", "wardrobe-fitted"]);
     for (const [fx, room, backs] of [
       [wardrobes[0], "Bedroom 2", { x: 1, y: 0 }],
@@ -81,5 +81,38 @@ describe("the listing's garden walls", () => {
     expect(floor - atDoor).toBeLessThanOrEqual(0.05);
     // Where the path leaves the drive's east edge it is no more than a centimetre off the drive.
     for (const z of [2.6, 3.0, 3.5]) expect(Math.abs(surfaceHeightAt(path, { x: -1.85, y: z }) - surfaceHeightAt(drive, { x: -1.85, y: z }))).toBeLessThan(0.01);
+  });
+});
+
+describe("Bedroom 1 and bathroom fittings, rear garden beds", () => {
+  const fixtures = first.fixtures ?? [];
+  const inRoom = (fx: (typeof fixtures)[number], room: string) => {
+    const b = fixtureBox(fx, byId(fx.type)!);
+    const poly = roomWorldPolygon(first, first.rooms.find((r) => r.name === room)!);
+    return rectCorners(fx, b.w * first.pxPerM, b.d * first.pxPerM, fx.rot).every((c) => pointInPolygon(toWorld(first, c), poly));
+  };
+
+  it("keeps the Bedroom 1 run and every bathroom fitting inside its room", () => {
+    const by = (type: string) => fixtures.filter((f) => f.type === type);
+    expect(by("wardrobe-shaker").some((f) => f.color === "#c9d0d8" && inRoom(f, "Bedroom 1"))).toBe(true);
+    expect(fixtures.some((f) => f.label === "Fitted desk" && inRoom(f, "Bedroom 1"))).toBe(true);
+    for (const type of ["shower", "vanity", "toilet", "towel-rail", "wall-unit"]) {
+      const f = by(type);
+      expect(f.length, type).toBe(1);
+      expect(inRoom(f[0], "Bathroom"), type).toBe(true);
+    }
+  });
+
+  it("runs the patio out to a raised brick bed with a raised curved planter in front of the doors", () => {
+    const { surfaces } = listingSite();
+    const patio = surfaces.find((s) => s.kind === "patio")!;
+    expect(Math.min(...patio.polygon.map((p) => p.y))).toBeLessThanOrEqual(-9);
+    const beds = surfaces.filter((s) => s.kind === "bed");
+    expect(beds.length).toBe(2);
+    for (const bed of beds) {
+      const n = bed.polygon.length;
+      const c = bed.polygon.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
+      expect(surfaceHeightAt(bed, c)).toBeGreaterThan(0.2);
+    }
   });
 });
