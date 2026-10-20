@@ -1,4 +1,4 @@
-import type { Floor, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, WPt } from "../../types";
+import type { Floor, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, SurfaceFinish, WPt } from "../../types";
 import { DEFAULT_EXTERIOR, uid } from "../../types";
 
 /**
@@ -49,6 +49,16 @@ const op = (
   ...extra,
 });
 
+// Downstairs the skirting is dark stained mahogany (the front hall's is quarry tile); upstairs it is white.
+const DARK_SKIRTING = "#3e2418";
+const QUARRY_SKIRTING = "#8f4632";
+// Warm oatmeal carpets (the renderer's sky light cools floors, so these read a little lighter than they print).
+const CARPET_LIVING = "#e6dac8";
+const CARPET_BEDROOM = "#e6dac8";
+const CARPET_STAIRS = "#dfd0ba";
+// Cream bathroom floor tiles (bathroom-1, -2, -wc).
+const BATHROOM_FLOOR = "#e6d9bf";
+
 export const LISTING_PRESET = { id: "listing-91770873", version: 15 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 15 };
 
@@ -81,6 +91,7 @@ export function listing91770873(image: string): HouseModel {
       rect("Kitchen (galley)", 530, 22, 730, 160, { w: 3.05, h: 1.86 }, {
         floorFinish: "vinyl",
         color: "#b38862",
+        skirtingColor: DARK_SKIRTING,
         wallCovering: "squares",
         wallPaint: "#f0e0bb",
         wallAccent: "#a5662f",
@@ -92,6 +103,7 @@ export function listing91770873(image: string): HouseModel {
       rect("Kitchen", 730, 22, 975, 345, { w: 3.18, h: 4.38 }, {
         floorFinish: "vinyl",
         color: "#b38862",
+        skirtingColor: DARK_SKIRTING,
         wallCovering: "floral",
         wallPaint: "#f3f0ec",
         wallAccent: "#c8364a",
@@ -110,13 +122,14 @@ export function listing91770873(image: string): HouseModel {
       // wall (edge 1) has a cream paper with large gold flowers and grey leaves (living-rear-1, -3).
       rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, {
         floorFinish: "carpet",
-        color: "#d6cfc4",
+        color: CARPET_LIVING,
+        skirtingColor: DARK_SKIRTING,
         wallCovering: "stripe",
         wallPaint: "#efe8da",
         wallAccent: "#cdc1ab",
         wallFinishes: { 1: { covering: "rose", paint: "#f4f0e6", accent: "#c9b44e" } },
       }),
-      rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: "#d6cfc4", wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
+      rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: CARPET_LIVING, skirtingColor: DARK_SKIRTING, wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
       // Pale grey-oak laminate; cream walls, with a paper of leaves and red buds only on the stair
       // wall (edge 5, along the flight's west side; hall-stairs-1, -2).
       poly("Hallway (stairs)", [
@@ -129,6 +142,7 @@ export function listing91770873(image: string): HouseModel {
       ], undefined, {
         floorFinish: "laminate",
         color: "#c4b59f",
+        skirtingColor: DARK_SKIRTING,
         wallPaint: "#f1ece2",
         wallFinishes: { 5: { covering: "trail", paint: "#f1ece2", accent: "#c9503f" } },
       }),
@@ -144,7 +158,7 @@ export function listing91770873(image: string): HouseModel {
         ],
         undefined,
         // Red quarry tiles and plain white walls (hall-front-1, galley-1).
-        { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "quarry", color: "#9a4a35", wallPaint: "#f3f1ec" },
+        { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "quarry", color: "#9a4a35", skirtingColor: QUARRY_SKIRTING, wallPaint: "#f3f1ec" },
       ),
     ],
     [
@@ -193,9 +207,9 @@ export function listing91770873(image: string): HouseModel {
     { x: 650, y: 1203 },
     [
       // Cream paper with a small blue motif.
-      rect("Bedroom 1", 610, 795, 775, 1040, { w: 2.23, h: 3.33 }, { floorFinish: "carpet", color: "#cbbdab", wallCovering: "sprig", wallPaint: "#efe7d4", wallAccent: "#6f8fc4" }),
+      rect("Bedroom 1", 610, 795, 775, 1040, { w: 2.23, h: 3.33 }, { floorFinish: "carpet", color: CARPET_BEDROOM, wallCovering: "sprig", wallPaint: "#efe7d4", wallAccent: "#6f8fc4" }),
       // Includes its fitted wardrobe along the party wall (a fixture below). Pale mint paint.
-      rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: "#d0c4b4", wallPaint: "#d9e5d2" }),
+      rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: CARPET_BEDROOM, wallPaint: "#d9e5d2" }),
       // Takes in the strip west of the room that the plan labels "Cupboard": it is the fitted wardrobe (photos).
       poly(
         "Bedroom 3",
@@ -210,7 +224,7 @@ export function listing91770873(image: string): HouseModel {
         { w: 3.28, h: 3.36 },
         { floorFinish: "laminate", color: "#cdb48e", wallPaint: "#c9b3bd" },
       ),
-      rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: "#bdae9f", wallPaint: "#f1eee8" }),
+      rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: CARPET_STAIRS, wallPaint: "#f1eee8" }),
       // Beige tiles floor to ceiling with travertine mosaic strips.
       poly("Bathroom", [
         [690, 1110],
@@ -219,8 +233,8 @@ export function listing91770873(image: string): HouseModel {
         [610, 1285],
         [610, 1215],
         [690, 1215],
-      ], undefined, { floorFinish: "tile", color: "#d3c3ab", wallCovering: "tiles", wallPaint: "#dccdbb", wallAccent: "#cdbb9f" }),
-      rect("Stairs", 610, 1110, 690, 1215, undefined, { floorFinish: "carpet", color: "#bdae9f", wallPaint: "#f1eee8" }),
+      ], undefined, { floorFinish: "tile", color: BATHROOM_FLOOR, wallCovering: "tiles", wallPaint: "#dccdbb", wallAccent: "#cdbb9f" }),
+      rect("Stairs", 610, 1110, 690, 1215, undefined, { floorFinish: "carpet", color: CARPET_STAIRS, wallPaint: "#f1eee8" }),
     ],
     [
       op("door", 745, 1040, "h", 0.8),
@@ -355,10 +369,19 @@ const block = (name: string, x0: number, y0: number, x1: number, y1: number, ext
 });
 /** A brick-kerbed bed standing about 0.3 m proud of the ground. */
 const RAISED_BED: SiteSurface["slope"] = { toward: "back", rise: 0, base: 0.3 };
+
+/**
+ * What the listing's hard surfaces are laid with: the drive is dark grey tarmac with a raised kerb against
+ * the lawn (front-3, front-1), the rear patio is small weathered dark grey and red block paving (rear-garden,
+ * rear-2, rear-4). Applied by kind so every drive and patio surface of the plot gets it.
+ */
+const LISTING_FINISH: Partial<Record<SiteSurface["kind"], SurfaceFinish>> = { drive: "tarmac", patio: "block-weathered" };
+
 const surface = (kind: SiteSurface["kind"], pts: [number, number][], slope?: SiteSurface["slope"]): SiteSurface => ({
   id: uid(),
   kind,
   polygon: w(pts),
+  ...(LISTING_FINISH[kind] ? { finish: LISTING_FINISH[kind] } : {}),
   ...(slope ? { slope } : {}),
 });
 

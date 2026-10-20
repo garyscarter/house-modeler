@@ -14,6 +14,7 @@ import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, typ
 import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
 import { interiorFinish, outsideLook } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
+import { skirtingColour } from "../lib/skirting";
 import { type MatSpec, matKey } from "./textures";
 
 /**
@@ -200,7 +201,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       const side = Math.sign(-dir.y * s.n.x + dir.x * s.n.y) || 1;
       const centre = { x: (s.a.x + s.b.x) / 2, y: (s.a.y + s.b.y) / 2 };
       const box: Box = { mat: "joinery", p: [0, SKIRTING_H / 2, (side * SKIRTING_T) / 2], s: [l, SKIRTING_H, SKIRTING_T] };
-      for (const q of boxQuads([box], { centre, dir })) batch.add(q, slotSpec(q.slot, null, null));
+      const boardSpec: MatSpec = { kind: "plain", color: skirtingColour(roomsById.get(s.roomId)), roughness: 0.6 };
+      for (const q of boxQuads([box], { centre, dir })) batch.add(q, boardSpec);
     }
 
     for (const pl of placements) addOpening(pl, wall, thick[i], spans);

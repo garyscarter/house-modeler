@@ -10,6 +10,7 @@ import { isUnheated } from "../lib/report";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH } from "../lib/openings";
 import { WALL_COVERING_LABEL, type WallCovering } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
+import { skirtingColour } from "../lib/skirting";
 import { roomColor } from "../three/House";
 import { FeatureWalls } from "./FeatureWalls";
 import {
@@ -244,6 +245,19 @@ export function RoomInspector({
             <input type="color" value={wallBase(room)} onChange={(e) => onChange({ wallPaint: e.target.value })} />
             {room.wallPaint && (
               <button className="link" onClick={() => onChange({ wallPaint: undefined })}>
+                Clear
+              </button>
+            )}
+          </span>
+        </label>
+      </div>
+      <div className="colour-row">
+        <label>
+          Skirting colour
+          <span className="colour-pick">
+            <input type="color" value={skirtingColour(room)} onChange={(e) => onChange({ skirtingColor: e.target.value })} />
+            {room.skirtingColor && (
+              <button className="link" onClick={() => onChange({ skirtingColor: undefined })}>
                 Clear
               </button>
             )}
