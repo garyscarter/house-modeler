@@ -231,6 +231,26 @@ export const FixtureSymbol = memo(function FixtureSymbol({
       );
     case "boiler":
       return g(body(r * 0.5), <circle key="f" cx={0} cy={y0 + d * 0.3} r={Math.min(w, d) * 0.15} {...line} />);
+    case "hood": {
+      // Canopy (dashed, overhead) with its grille, and the line of the cabinet front above it.
+      const cab = Math.min(d, 0.33 * m);
+      return g(
+        body(0),
+        <rect key="g" x={x0 + 0.04 * m} y={y0 + d * 0.2} width={w - 0.08 * m} height={d * 0.6} {...thin} strokeDasharray={dash} />,
+        <line key="c" x1={x0} y1={y0 + cab} x2={x1} y2={y0 + cab} {...thin} strokeDasharray={dash} />,
+      );
+    }
+    case "fireplace": {
+      // Marble hearth across the footprint, the surround against the wall and the fire set into it.
+      const surW = w * 0.9;
+      const sd = Math.min(0.14 * m, d * 0.4);
+      const fw = Math.min(0.5 * m, surW * 0.45);
+      return g(
+        <rect key="h" x={x0} y={y0} width={w} height={d} fill={ghost || clash ? fill : "#ece6da"} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <rect key="s" x={-surW / 2} y={y0} width={surW} height={sd} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <rect key="f" x={-fw / 2} y={y0 + 0.02 * m} width={fw} height={0.1 * m} fill={ghost || clash ? fill : "#c8a24a"} fillOpacity={fo} stroke={outline} strokeWidth={sw * 0.6} />,
+      );
+    }
     default:
       return body();
   }

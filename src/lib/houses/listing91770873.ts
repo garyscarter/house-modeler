@@ -128,17 +128,34 @@ export function listing91770873(image: string): HouseModel {
         floorFinish: "concrete",
         wallFinishes: { 2: { outside: { finish: "render", color: RENDER } } },
       }),
-      // Cream and grey-beige stripes in both rooms; the rear room's chimney-breast wall on the party
-      // wall (edge 1) has a cream paper with large gold flowers and grey leaves (living-rear-1, -3).
-      rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, {
-        floorFinish: "carpet",
-        color: CARPET_LIVING,
-        skirtingColor: DARK_SKIRTING,
-        wallCovering: "stripe",
-        wallPaint: "#efe8da",
-        wallAccent: "#cdc1ab",
-        wallFinishes: { 1: { covering: "rose", paint: "#f4f0e6", accent: "#c9b44e" } },
-      }),
+      // Cream and grey-beige stripes in both rooms. The chimney breast stands on the party wall
+      // where the plan draws it (faces at x 1253, y 97 and 210; the notch edges are wall centre
+      // lines, 9 px in from those faces), projecting about 0.38 m with an alcove either side.
+      // The breast and both alcoves (edges 1-5) have a cream paper with large gold flowers and grey
+      // leaves (living-rear-1, -3).
+      poly(
+        "Living Room (rear)",
+        [
+          [975, 22],
+          [1290, 22],
+          [1290, 106],
+          [1262, 106],
+          [1262, 201],
+          [1290, 201],
+          [1290, 278],
+          [975, 278],
+        ],
+        { w: 4.45, h: 3.32 },
+        {
+          floorFinish: "carpet",
+          color: CARPET_LIVING,
+          skirtingColor: DARK_SKIRTING,
+          wallCovering: "stripe",
+          wallPaint: "#efe8da",
+          wallAccent: "#cdc1ab",
+          wallFinishes: Object.fromEntries([1, 2, 3, 4, 5].map((i) => [i, { covering: "rose" as const, paint: "#f4f0e6", accent: "#c9b44e" }])),
+        },
+      ),
       rect("Living Room (front)", 1045, 278, 1290, 515, { w: 3.40, h: 3.26 }, { floorFinish: "carpet", color: CARPET_LIVING, skirtingColor: DARK_SKIRTING, wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" }),
       // Pale grey-oak laminate; cream walls, with a paper of leaves and red buds only on the stair
       // wall (edge 5, along the flight's west side; hall-stairs-1, -2).
@@ -190,6 +207,18 @@ export function listing91770873(image: string): HouseModel {
       op("door", 770, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> front hall
       op("door", 950, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> stairs hall
       op("door", 960, 515, "h", 0.8, MAHOGANY_DOOR), // stairs hall -> front hall
+      // Glazed door across the corridor from the front hall to the kitchen, hung on its east jamb
+      // (plan: leaf 745-805 at y 443, opening north; galley-1). It sits in a short partition (ground.walls below).
+      op("door", 772, 443, "h", 0.85, { ...MAHOGANY_DOOR, flipHinge: true, flipSwing: true }),
+      // Ledged plank door from the kitchen to the cupboard under the top of the stairs (plan: the grey
+      // cupboard at x 836-900, y 345-405, its door 836-890; kitchen-2: latch on the west, so hung on
+      // the east jamb, opening into the kitchen).
+      op("door", 863, 345, "h", 0.7, { style: "ledged", color: "#3a2516", liningColor: "#3a2516", flipHinge: true, flipSwing: true }),
+      // Serving hatch from the kitchen to the rear living room. On the kitchen side a dark timber frame
+      // about 1.25 m wide (y 110-202) sits over the returned units, but only its south half is open,
+      // glazed with frosted sliding panes; the north half is a papered panel (kitchen-1, -2). The living
+      // room side shows just that opening (living-rear-2). Fitted to kitchen-1's perspective.
+      op("window", 975, 170, "v", 0.65, { sill: 1.0, head: 1.45, glazing: "fixed", sillStyle: "none" }),
       // Two leaded obscure panes over two panels (hall-front-1, front-3).
       op("front", 730, 575, "v", 0.9, { color: "#4f2f22", style: "half-glazed-2" }), // front door (dark brown, glazed)
       // Hall windows: a fixed pane under a top-hung top light (front-2); the side one is barred (galley-1).
@@ -217,6 +246,40 @@ export function listing91770873(image: string): HouseModel {
   ground.stairsLen = 2.3;
   ground.stairsWidth = 0.9;
   ground.stairsTurn = "right";
+  // The partition holding the glazed door across the corridor between the front hall and the kitchen,
+  // and the back of the rear living room's chimney breast: the notch leaves the party wall open there,
+  // so a 0.1 m wall flush with the party wall's outer face (1290 + 9 px) closes it.
+  ground.walls = [
+    { id: uid(), a: { x: 730, y: 443 }, b: { x: 815, y: 443 } },
+    { id: uid(), a: { x: 1295.5, y: 106 }, b: { x: 1295.5, y: 201 }, color: RENDER },
+  ];
+  // Kitchen and galley units from the photos (kitchen-1 to -4, galley-2): cream shaker doors and a dark
+  // speckled worktop. Backs sit at the walls' inner faces (rear wall 0.25 m thick, so y 31.1; the
+  // kitchen's east wall and the galley's wall to the garage 0.1 m; the galley's west wall 0.25 m).
+  // rot 0 backs onto the rear wall, 90 onto the east, 270 onto the west.
+  const UNITS = "#efe6cf";
+  const TOP = "#3a3032";
+  ground.fixtures = [
+    // Along the rear wall from the back door's jamb to the east wall: a washing-machine space at the
+    // galley/kitchen junction, the sink under the galley window, then units to the corner.
+    { id: uid(), type: "washing-machine", x: 660, y: 53, rot: 0 },
+    { id: uid(), type: "sink-unit", x: 718.4, y: 53, rot: 0, color: UNITS, worktop: TOP },
+    { id: uid(), type: "worktop-run", x: 863.1, y: 53, rot: 0, w: 2.965, color: UNITS, worktop: TOP },
+    // Returning down the kitchen's east wall under the serving hatch.
+    { id: uid(), type: "worktop-run", x: 949.45, y: 115.1, rot: 90, w: 1.1, color: UNITS, worktop: TOP },
+    // The galley's west wall, from the rear wall: a base unit, a gas hob over a double oven, and an
+    // under-counter fridge against the brick wall to the garage. Kept 0.5 m deep so the run stops at
+    // the back door's jamb (plan 571).
+    { id: uid(), type: "base-unit", x: 557.4, y: 51.75, rot: 270, w: 0.565, d: 0.5, color: UNITS, worktop: TOP },
+    { id: uid(), type: "cooker", x: 557.4, y: 94.27, rot: 270, d: 0.5, color: "#1f2023", label: "Gas hob, double oven" },
+    { id: uid(), type: "fridge-freezer", x: 557.4, y: 136.25, rot: 270, w: 0.55, d: 0.5, h: 0.85, color: "#f2f1ec", label: "Fridge" },
+    // Three cream wall units, the middle one short over a black canopy hood.
+    { id: uid(), type: "wall-unit", x: 551.17, y: 51.75, rot: 270, w: 0.565, color: UNITS },
+    { id: uid(), type: "cooker-hood", x: 555.55, y: 94.27, rot: 270, color: UNITS },
+    { id: uid(), type: "wall-unit", x: 551.17, y: 136.25, rot: 270, w: 0.55, color: UNITS },
+    // Rear living room: carved mahogany surround on the chimney breast's face (x 1253), marble hearth.
+    { id: uid(), type: "fireplace", x: 1234.6, y: 153.5, rot: 90 },
+  ];
 
   const first = base(
     "Floor 1",
@@ -228,18 +291,29 @@ export function listing91770873(image: string): HouseModel {
       // Includes its fitted wardrobe along the party wall (a fixture below). Pale mint paint.
       rect("Bedroom 2", 775, 795, 1075, 1040, { w: 3.47, h: 3.32 }, { floorFinish: "carpet", color: CARPET_BEDROOM, wallPaint: "#d9e5d2" }),
       // Takes in the strip west of the room that the plan labels "Cupboard": it is the fitted wardrobe (photos).
+      // A chimney breast fills its north-east corner on the party wall (plan x 1050-1075, y 1040-1112;
+      // bedroom-3-2), notched at wall centre lines 9 px in from its faces and kept more than 0.25 m off
+      // the party wall's line so the two stay separate walls. Only the party wall and the breast
+      // (edges 1-3) are dusky mauve; the other walls are a very pale lilac-grey (bedroom-3-1 to -3).
       poly(
         "Bedroom 3",
         [
           [850, 1040],
-          [1075, 1040],
+          [1056, 1040],
+          [1056, 1103],
+          [1075, 1103],
           [1075, 1285],
           [810, 1285],
           [810, 1110],
           [850, 1110],
         ],
         { w: 3.28, h: 3.36 },
-        { floorFinish: "laminate", color: "#cdb48e", wallPaint: "#c9b3bd" },
+        {
+          floorFinish: "laminate",
+          color: "#cdb48e",
+          wallPaint: "#e3dce0",
+          wallFinishes: Object.fromEntries([1, 2, 3].map((i) => [i, { covering: "paint" as const, paint: "#a68b97" }])),
+        },
       ),
       rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: CARPET_STAIRS, wallPaint: "#f1eee8" }),
       // Beige tiles floor to ceiling with travertine mosaic strips.
@@ -269,6 +343,8 @@ export function listing91770873(image: string): HouseModel {
     ],
     { x: 650, y: 1162 },
   );
+  // Back of Bedroom 3's chimney breast, closing the party wall behind its notch (as on the ground floor).
+  first.walls = [{ id: uid(), a: { x: 1080.5, y: 1040 }, b: { x: 1080.5, y: 1103 }, color: RENDER }];
   // Fitted wardrobes from the photos, backs against the walls at their inner faces
   // (the party wall is 0.25 m thick, internal walls 0.1 m). rot 90 turns the back to
   // the east, 270 to the west.
