@@ -70,6 +70,21 @@ describe("the listing's garden walls", () => {
     expect(Math.abs(site.boundary[i + 1].x - pillar.x)).toBeLessThan(0.15);
   });
 
+  it("closes the front garden on the east with a low brick wall from the house front to the pavement", () => {
+    const site = listingSite();
+    const edges = site.boundaryEdges ?? [];
+    const front = (515 - 430) / 73; // the front living room's wall line
+    const k = site.boundary.findIndex((p) => p.x > 5 && Math.abs(p.y - front) < 0.05);
+    expect(k).toBeGreaterThan(0);
+    // The stretch behind it, along the party wall, stays as it was; the stretch in front is a low wall to the pavement.
+    expect(edges[k - 1].kind).toBe("fence");
+    expect(edges[k]).toMatchObject({ kind: "wall", height: 0.95 });
+    expect(site.boundary[k + 1].y).toBeCloseTo(5.5);
+    // On the line the old edge ran along, so the plot is unchanged.
+    const [a, b] = [site.boundary[k - 1], site.boundary[k + 1]];
+    expect(site.boundary[k].x).toBeCloseTo(a.x + ((b.x - a.x) * (front - a.y)) / (b.y - a.y), 2);
+  });
+
   it("has a drive that rises from the pavement to just under the garage door's floor, with the path matching it", () => {
     const site = listingSite();
     const drive = site.surfaces.find((x) => x.kind === "drive")!;
