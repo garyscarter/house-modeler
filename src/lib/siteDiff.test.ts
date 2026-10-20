@@ -120,10 +120,11 @@ describe("site changes", () => {
     b.frontBearing = 170;
     const text = diffSites(a, b).map((c) => c.description);
     expect(text).toContain(`Patio removed (${areaOf(a.surfaces.find((s) => s.kind === "patio")!.polygon).toFixed(1)} m²)`);
-    expect(text).toContain("New path (2.0 m²)");
+    // The listing already has a path (along the hall front), so the new one is told apart by position.
+    expect(text).toContain("New front path (2.0 m²)");
     expect(text).toContain(`${a.neighbours[0].name} removed`);
     expect(text).toContain("Orientation changed from 162° to 170°");
-    expect(diffSites(a, b).find((c) => c.description.startsWith("New path"))?.costLine).toBe("newPaving");
+    expect(diffSites(a, b).find((c) => c.description.startsWith("New front path"))?.costLine).toBe("newPaving");
   });
 
   it("names front and back lawns apart", () => {
