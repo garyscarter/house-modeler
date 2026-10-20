@@ -25,7 +25,7 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
     // v1 stored garage doors as door.style === "garage".
     for (const m of Object.values(st.variants ?? {})) {
       for (const f of m.floors) {
-        for (const o of f.openings as (Opening & { style?: string })[]) {
+        for (const o of f.openings as unknown as { kind: Opening["kind"]; style?: string }[]) {
           if (o.style === "garage") o.kind = "garage";
           delete o.style;
         }

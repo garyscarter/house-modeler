@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
-import { FLOOR_FINISH_LABEL, OPENING_KIND_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type StairsDir } from "../types";
+import { DEFAULT_EXTERIOR, FLOOR_FINISH_LABEL, GLAZING_LABEL, OPENING_KIND_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type GlazingPattern, type OpeningStyle, type SillStyle, type StairsDir } from "../types";
 import type { CatalogueItem } from "../lib/catalogue";
-import { useStore } from "../store";
+import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
-import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, styleOptions } from "../lib/openings";
 import { WALL_COVERING_LABEL, type WallCovering } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
 import { skirtingColour } from "../lib/skirting";
@@ -404,6 +404,93 @@ export function CanopyInspector({
   );
 }
 
+/** A colour that falls back to a default when unset, with a button to go back to it. */
+function OptionalColour({ label, value, fallback, onChange }: { label: string; value: string | undefined; fallback: string; onChange: (v: string | undefined) => void }) {
+  return (
+    <label>
+      {label}
+      <span className="row">
+        <input type="color" value={value ?? fallback} onChange={(e) => onChange(e.target.value)} />
+        {value !== undefined && (
+          <button className="small" title="Back to the default" onClick={() => onChange(undefined)}>
+            Default
+          </button>
+        )}
+      </span>
+    </label>
+  );
+}
+
+/** Style, glazing, sill and trim colours of an opening, where its kind has them. */
+function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Partial<Opening>) => void }) {
+  const k = opening.kind;
+  const styles = styleOptions(k);
+  const glazed = k === "window" || k === "bay";
+  const framed = k !== "gap" && k !== "archway";
+  const trim = useModel()?.exterior?.trimColor ?? DEFAULT_EXTERIOR.trimColor;
+  return (
+    <>
+      {styles.length > 0 && (
+        <label>
+          Style
+          <select value={opening.style ?? ""} onChange={(e) => onChange({ style: (e.target.value || undefined) as OpeningStyle | undefined })}>
+            <option value="">Default</option>
+            {styles.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {(k === "door" || k === "front" || k === "french") && (
+        <label>
+          Drawn open (°)
+          <NumberField
+            value={opening.openDeg}
+            placeholder={k === "front" ? "0" : k === "french" ? "80" : "75"}
+            min={-0.001}
+            max={180}
+            step={5}
+            label="Open angle"
+            onCommit={(v) => onChange({ openDeg: v })}
+            onClear={() => onChange({ openDeg: undefined })}
+          />
+        </label>
+      )}
+      {glazed && (
+        <div className="size-row">
+          <label>
+            Glazing
+            <select value={opening.glazing ?? "grid"} onChange={(e) => onChange({ glazing: e.target.value === "grid" ? undefined : (e.target.value as GlazingPattern) })}>
+              {(Object.keys(GLAZING_LABEL) as GlazingPattern[]).map((g) => (
+                <option key={g} value={g}>
+                  {GLAZING_LABEL[g]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sill outside
+            <select value={opening.sillStyle ?? "stone"} onChange={(e) => onChange({ sillStyle: e.target.value === "stone" ? undefined : (e.target.value as SillStyle) })}>
+              {(Object.keys(SILL_STYLE_LABEL) as SillStyle[]).map((s) => (
+                <option key={s} value={s}>
+                  {SILL_STYLE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="size-row">
+        {k === "window" && <OptionalColour label="Window board" value={opening.boardColor} fallback="#f3f1ea" onChange={(boardColor) => onChange({ boardColor })} />}
+        {(k === "door" || k === "bifold") && <OptionalColour label="Lining (inside)" value={opening.liningColor} fallback="#f3f1ea" onChange={(liningColor) => onChange({ liningColor })} />}
+        {framed && <OptionalColour label="Frame" value={opening.frameColor} fallback={trim} onChange={(frameColor) => onChange({ frameColor })} />}
+      </div>
+    </>
+  );
+}
+
 export function OpeningInspector({
   opening,
   pair,
@@ -508,6 +595,7 @@ export function OpeningInspector({
           <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
         </label>
       )}
+      <OpeningLook opening={opening} onChange={onChange} />
       <p className="muted small">Drag it along the wall on the plan; it snaps onto the nearest wall.</p>
       <button className="danger" onClick={onDelete}>
         Delete opening
