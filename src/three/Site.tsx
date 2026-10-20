@@ -7,6 +7,7 @@ import { useStore } from "../store";
 import { roofGeometry, type RoofEnd } from "../lib/roof";
 import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
 import { clipSegmentOutside, edgesOf } from "../lib/site";
+import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
 import { triangles } from "./Roof";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { useSiteView } from "./siteView";
@@ -107,18 +108,75 @@ function useDisposeAll(list: (THREE.BufferGeometry | null | undefined)[]) {
 }
 const useDispose = (g: THREE.BufferGeometry | null) => useEffect(() => () => g?.dispose(), [g]);
 
+/** A flat surface, or one lifted and ramped by its slope, with a kerb-coloured edge where it stands proud of the ground. */
 function Surface({ surface }: { surface: SiteSurface }) {
   const layer = LAYER[surface.kind];
-  const geom = useMemo(() => new THREE.ShapeGeometry(flatShape(surface.polygon)), [surface.polygon]);
+  const slope = effectiveSlope(surface.slope);
+  const geom = useMemo(() => {
+    const g = new THREE.ShapeGeometry(flatShape(surface.polygon));
+    if (!slope) return g;
+    // Shape space is (x, -z, 0) and the mesh is turned flat, so a vertex's local z becomes its height.
+    const pos = g.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, slopeHeight(surface.polygon, slope, { x: pos.getX(i), y: -pos.getY(i) }));
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+    return g;
+  }, [surface.polygon, slope?.toward, slope?.rise, slope?.base]); // eslint-disable-line react-hooks/exhaustive-deps
+  const edge = useMemo(
+    () => (slope ? surfaceEdge(surface.polygon, (p) => slopeHeight(surface.polygon, slope, p), 0.01 * layer + 0.02) : null),
+    [surface.polygon, slope?.toward, slope?.rise, slope?.base, layer], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const line = useMemo(() => (surface.kind === "road" ? centreLine(surface.polygon) : null), [surface.polygon, surface.kind]);
   useDispose(geom);
+  useDispose(edge);
   useDispose(line);
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
       <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surface.kind, layer)} receiveShadow />
-      {line && <mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
+      {edge && <mesh geometry={edge} material={plainMaterial("#a19e96")} castShadow receiveShadow />}
+      {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );
+}
+
+/**
+ * The sides of a raised surface: a vertical strip down each edge from the
+ * surface's height there to `sink` below its own level, so a ramp or raised
+ * path doesn't show a gap under its edge. Edges that lie at ground level
+ * (the low end of a ramp) come out as nothing. Built in the surface's local
+ * frame (x, up, z), facing outwards.
+ */
+function surfaceEdge(poly: V2[], height: (p: V2) => number, sink: number): THREE.BufferGeometry | null {
+  const n = poly.length;
+  if (n < 3) return null;
+  let area = 0;
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % n];
+    area += a.x * b.y - b.x * a.y;
+  });
+  const pos: number[] = [];
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % n];
+    const ha = height(a);
+    const hb = height(b);
+    if (ha < 0.004 && hb < 0.004) return;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    // Outward in plan for an anticlockwise polygon is (dy, -dx); flip for clockwise.
+    const out = area >= 0 ? { x: dy, y: -dx } : { x: -dy, y: dx };
+    const A = [a.x, -sink, a.y];
+    const B = [b.x, -sink, b.y];
+    const At = [a.x, ha, a.y];
+    const Bt = [b.x, hb, b.y];
+    // Normal of (A, B, Bt) = (B - A) x (Bt - A); keep the winding that faces outwards.
+    const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+    const v = [Bt[0] - A[0], Bt[1] - A[1], Bt[2] - A[2]];
+    const nx = u[1] * v[2] - u[2] * v[1];
+    const nz = u[0] * v[1] - u[1] * v[0];
+    const tris = nx * out.x + nz * out.y >= 0 ? [A, B, Bt, A, Bt, At] : [A, Bt, B, A, At, Bt];
+    for (const q of tris) pos.push(q[0], q[1], q[2]);
+  });
+  return pos.length ? triangles(pos) : null;
 }
 
 /**

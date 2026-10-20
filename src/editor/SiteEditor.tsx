@@ -15,6 +15,7 @@ import {
   sideClearances,
   simpleSite,
 } from "../lib/site";
+import { SlopeFields } from "../components/SlopeFields";
 import "./SiteEditor.css";
 
 type Tool = "select" | "surface" | "neighbour";
@@ -583,6 +584,7 @@ function Inspector({
             ))}
           </select>
         </label>
+        <SlopeFields surface={s} onChange={(slope) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, slope } : x)) }))} />
         <p className="muted small">{areaOf(s.polygon).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">
           {vertexButton}

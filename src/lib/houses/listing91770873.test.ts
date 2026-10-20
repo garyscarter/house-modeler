@@ -3,6 +3,7 @@ import { byId } from "../catalogue";
 import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { fixtureBox, rectCorners } from "../planMath";
 import { planRoofs } from "../roof";
+import { surfaceHeightAt } from "../surfaceSlope";
 import { listing91770873, listingSite } from "./listing91770873";
 
 const house = listing91770873("");
@@ -67,5 +68,18 @@ describe("the listing's garden walls", () => {
     const i = edges.findIndex((e, k) => e.kind === "wall" && site.boundary[k + 1] && Math.abs(site.boundary[k + 1].y - pillar.z) < 0.01);
     expect(i).toBeGreaterThanOrEqual(0);
     expect(Math.abs(site.boundary[i + 1].x - pillar.x)).toBeLessThan(0.15);
+  });
+
+  it("has a drive that rises from the pavement to just under the garage door's floor, with the path matching it", () => {
+    const site = listingSite();
+    const drive = site.surfaces.find((x) => x.kind === "drive")!;
+    const path = site.surfaces.find((x) => x.kind === "path")!;
+    const floor = 0.26; // the ground floor's finished level above the ground
+    expect(surfaceHeightAt(drive, { x: -3, y: 5.5 })).toBeCloseTo(0, 6); // level with the pavement
+    const atDoor = surfaceHeightAt(drive, { x: -3, y: 1.16 });
+    expect(floor - atDoor).toBeGreaterThanOrEqual(0);
+    expect(floor - atDoor).toBeLessThanOrEqual(0.05);
+    // Where the path leaves the drive's east edge it is no more than a centimetre off the drive.
+    for (const z of [2.6, 3.0, 3.5]) expect(Math.abs(surfaceHeightAt(path, { x: -1.85, y: z }) - surfaceHeightAt(drive, { x: -1.85, y: z }))).toBeLessThan(0.01);
   });
 });
