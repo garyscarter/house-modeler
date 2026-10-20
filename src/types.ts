@@ -323,6 +323,10 @@ export interface BoundaryEdge {
   kind: "fence" | "wall" | "hedge" | "open";
   /** Height in metres. */
   height: number;
+  /** Walls only: the finish on top. Default "coping" (grey concrete); "brick" is a course of bricks on edge. */
+  top?: "coping" | "brick";
+  /** Walls only: brick piers about every 3 m. Default true. */
+  piers?: boolean;
 }
 
 /** A neighbouring building block (or outbuilding), drawn as simple massing. */

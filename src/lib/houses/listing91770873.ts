@@ -362,22 +362,26 @@ export function listingSite(): Site {
       // West side: brick wall up the drive to the garage-front pier, the
       // garage wall itself, a brick wall with a block panel and bin store
       // at the back of the house (rear-1, rear-2, rear-4), then hedge.
-      [-4.77, 1.2], // 7
-      [-4.59, -5.59], // 8
-      [-4.55, -7.0], // 9
+      // The wall ends under the porch pillar (canopy corner at x -4.589,
+      // z 2.60), centred so its street face is flush with the pillar's.
+      [-4.626, 2.6], // 7 wall meets the pillar
+      [-4.59, 1.2], // 8
+      [-4.59, -5.59], // 9
+      [-4.55, -7.0], // 10
     ]),
     // Edge i runs from boundary[i] to boundary[i + 1].
     boundaryEdges: [
       { kind: "fence", height: 1.8 }, // 0 rear: not visible in any photo
       { kind: "fence", height: 1.8 }, // 1 east, back garden: not visible
-      { kind: "wall", height: 1.4 }, // 2 east, beside No. 26's conservatory
+      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside No. 26's conservatory
       { kind: "fence", height: 1.8 }, // 3 east, along the party wall (hidden)
-      { kind: "wall", height: 0.9 }, // 4 front garden wall
+      { kind: "wall", height: 0.9, top: "brick", piers: false }, // 4 front garden wall
       { kind: "open", height: 0 }, // 5 drive opening
-      { kind: "wall", height: 1 }, // 6 west side of the drive
-      { kind: "fence", height: 1.8 }, // 7 west, along the garage wall (hidden)
-      { kind: "wall", height: 1.3 }, // 8 west, rear corner of the house
-      { kind: "hedge", height: 2 }, // 9 west, back garden
+      { kind: "wall", height: 1, top: "brick", piers: false }, // 6 west side of the drive
+      { kind: "fence", height: 1.8 }, // 7 west, beside the pillar (hidden)
+      { kind: "fence", height: 1.8 }, // 8 west, along the garage wall (hidden)
+      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 9 west, rear corner of the house
+      { kind: "hedge", height: 2 }, // 10 west, back garden
     ],
     neighbours: [
       // Pale render with a brick band, sharing our roof covering.

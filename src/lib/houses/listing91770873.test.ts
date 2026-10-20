@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { byId } from "../catalogue";
 import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { fixtureBox, rectCorners } from "../planMath";
-import { listing91770873 } from "./listing91770873";
+import { planRoofs } from "../roof";
+import { listing91770873, listingSite } from "./listing91770873";
 
 const house = listing91770873("");
 const ground = house.floors[0];
@@ -49,5 +50,22 @@ describe("the built-in listing", () => {
       expect([Math.sin(r), -Math.cos(r)].map((v) => Math.round(v) + 0)).toEqual([backs.x, backs.y]);
       expect(b.h).toBe(house.ceilingHeight);
     }
+  });
+});
+
+describe("the listing's garden walls", () => {
+  it("have brick-on-edge tops without piers, and the drive wall ends under the porch pillar", () => {
+    const site = listingSite();
+    const edges = site.boundaryEdges ?? [];
+    const walls = edges.filter((e) => e.kind === "wall");
+    expect(walls.length).toBeGreaterThan(0);
+    for (const w of walls) {
+      expect(w.top).toBe("brick");
+      expect(w.piers).toBe(false);
+    }
+    const pillar = planRoofs(house).pillars[0];
+    const i = edges.findIndex((e, k) => e.kind === "wall" && site.boundary[k + 1] && Math.abs(site.boundary[k + 1].y - pillar.z) < 0.01);
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(site.boundary[i + 1].x - pillar.x)).toBeLessThan(0.15);
   });
 });

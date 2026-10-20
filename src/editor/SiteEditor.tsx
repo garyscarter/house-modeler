@@ -545,6 +545,21 @@ function Inspector({
                 <input type="number" step={0.1} min={0.3} max={4} value={edges[i].height} onChange={(e) => setEdge({ height: Math.max(0.1, num(e.target.value, edges[i].height)) })} />
               </label>
             )}
+            {edges[i].kind === "wall" && (
+              <>
+                <label>
+                  Top
+                  <select value={edges[i].top ?? "coping"} onChange={(e) => setEdge({ top: e.target.value as "coping" | "brick" })}>
+                    <option value="coping">Coping</option>
+                    <option value="brick">Brick on edge</option>
+                  </select>
+                </label>
+                <label className="check">
+                  <input type="checkbox" checked={edges[i].piers ?? true} onChange={(e) => setEdge({ piers: e.target.checked })} />
+                  Piers
+                </label>
+              </>
+            )}
           </>
         )}
         <div className="row">{vertexButton}</div>
