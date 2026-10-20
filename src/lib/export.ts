@@ -438,10 +438,12 @@ export function changesCsv(changes: Change[], rates: Record<string, number>): st
 
 export interface PrintInput {
   date: string;
-  variants: { label: string; model: HouseModel; notes: RoomNote[] }[];
+  /** Each layout, with its own plot (for the plans' north arrow). */
+  variants: { label: string; model: HouseModel; notes: RoomNote[]; site?: Site }[];
   areas: AreaReport;
   changes?: Change[];
   rates: Record<string, number>;
+  /** Plot for layouts that don't carry their own. */
   site?: Site;
   /** PNG data URLs of the 3D view, with captions. */
   snapshots: { caption: string; src: string }[];
@@ -525,7 +527,7 @@ export function printHtml(p: PrintInput): string {
   const scale = planScale(extent);
   for (const v of p.variants) {
     for (const f of [...v.model.floors].sort((a, b) => a.level - b.level)) {
-      const svg = planSvg(v.model, f, { variant: v.label, date: p.date, site: p.site, extent, scale }).replace(/^<\?xml[^>]*>\n/, "");
+      const svg = planSvg(v.model, f, { variant: v.label, date: p.date, site: v.site ?? p.site, extent, scale }).replace(/^<\?xml[^>]*>\n/, "");
       sec.push(`<section class="plan">${svg}</section>`);
     }
   }

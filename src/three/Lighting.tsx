@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { useStore } from "../store";
+import { useViewedSite } from "./viewedVariant";
 import { daylight, worldToBearing } from "../lib/sun";
 import { useSunInfo } from "./useSun";
 import { GROUND_Y } from "./Site";
@@ -34,7 +35,7 @@ const UP = new THREE.Vector3(0, 1, 0);
  */
 export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number }) {
   const sun = useSunInfo();
-  const site = useStore((s) => s.site);
+  const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
   const quality = useStore((s) => s.settings.quality);
   const scene = useThree((s) => s.scene);

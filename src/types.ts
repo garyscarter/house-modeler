@@ -313,7 +313,7 @@ export interface WPt {
   y: number;
 }
 
-/** Plot, neighbours and orientation. Shared by both variants. World frame = the model's world metres. */
+/** Plot, neighbours and orientation. Each variant has its own (see lib/sites.ts). World frame = the model's world metres. */
 export interface Site {
   /** Compass bearing in degrees that the front of the house (the bottom of the plan) faces. 180 = due south. */
   frontBearing: number;

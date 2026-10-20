@@ -3,7 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import type { Floor, HouseModel, Photo, Room } from "../types";
+import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
 import { modelBounds } from "../lib/geometry";
 import { useStore } from "../store";
@@ -12,6 +12,8 @@ import { GROUND_Y, SiteScene } from "./Site";
 import { CaptureBridge } from "./capture";
 import { Effects } from "./Effects";
 import { SunControls } from "../components/SunControls";
+import { ViewedVariant } from "./viewedVariant";
+import { SiteDiff } from "./SiteDiff";
 
 interface ViewerProps {
   model: HouseModel;
@@ -26,10 +28,14 @@ interface ViewerProps {
   showExterior?: boolean;
   /** Identifier used by exports to find this viewer's renderer. */
   captureId?: string;
+  /** The layout this view shows; its plot, sun and lighting follow it. Defaults to the active one. */
+  variant?: VariantKey;
+  /** The layout `ghost` comes from, so the overlay can mark plot boundary changes. */
+  ghostVariant?: VariantKey;
 }
 
 export function Viewer(props: ViewerProps) {
-  const { model, ghost, photos, showLabels, showCeilings, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId } = props;
+  const { model, ghost, photos, showLabels, showCeilings, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId, variant, ghostVariant } = props;
   const bounds = useMemo(() => modelBounds([...model.floors, ...(ghost?.floors ?? [])]), [model, ghost]);
   const centre = useMemo(
     () => new THREE.Vector3((bounds.x0 + bounds.x1) / 2, 1, (bounds.y0 + bounds.y1) / 2),
@@ -43,6 +49,7 @@ export function Viewer(props: ViewerProps) {
   const visibleLevels = cap === null ? null : levels.filter((l) => l <= cap);
 
   return (
+    <ViewedVariant.Provider value={variant}>
     <div className="viewer">
       {title && <div className="viewer-title">{title}</div>}
       <div className="view-buttons">
@@ -74,12 +81,14 @@ export function Viewer(props: ViewerProps) {
         />
         {ghost && <House model={ghost} photos={[]} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
         <SiteScene centre={centre} size={size} model={model} />
+        {ghost && variant && ghostVariant && <SiteDiff variant={variant} other={ghostVariant} />}
         <ContactShadows position={[centre.x, GROUND_Y - 0.01, centre.z]} scale={size * 3} blur={2} opacity={0.35} far={20} />
         <CaptureBridge id={captureId ?? "main"} />
         <Effects />
         <Orbit centre={centre} size={size} view={view} bounds={bounds} />
       </Canvas>
     </div>
+    </ViewedVariant.Provider>
   );
 }
 

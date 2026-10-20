@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Floor, HouseModel, Opening, Photo, Room, Site, VariantKey } from "./types";
-import { dropAiSettings, imageAwareStorage } from "./lib/persist";
+import type { Floor, HouseModel, Photo, Room, Site, VariantKey } from "./types";
+import { imageAwareStorage } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
-import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./lib/houses/listing91770873";
+import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
+import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
 export type Tab = "3d" | "plan";
@@ -28,14 +29,18 @@ export interface SunState {
 interface Snapshot {
   variants: Partial<Record<VariantKey, HouseModel>>;
   photos: Photo[];
-  site: Site | undefined;
+  sites: Sites;
 }
 
 interface State {
   variants: Partial<Record<VariantKey, HouseModel>>;
   photos: Photo[];
-  /** Plot, neighbours and orientation, shared by both variants. */
-  site: Site | undefined;
+  /**
+   * Plot, neighbours and orientation for each variant (see lib/sites.ts).
+   * Kept beside the models rather than inside them so a plot edit leaves the
+   * house model untouched and the 3D house is not rebuilt for it.
+   */
+  sites: Sites;
   settings: Settings;
   sun: SunState;
   /** Cost rates for the report, keyed by line item. */
@@ -72,9 +77,10 @@ interface State {
   updateFloor: (k: VariantKey, floorId: string, patch: Partial<Floor> | ((f: Floor) => Floor)) => void;
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
   updateModel: (k: VariantKey, patch: Partial<HouseModel>) => void;
-  /** Swap the floorplan image behind every floor, scaling geometry to the new pixel size. */
-  setSite: (site: Site | undefined) => void;
-  updateSite: (patch: Partial<Site> | ((s: Site) => Site)) => void;
+  /** Set (or clear) a variant's plot; the active variant's when `k` is left out. */
+  setSite: (site: Site | undefined, k?: VariantKey) => void;
+  /** Edit a variant's plot (the active one's by default). Proposed borrowing As listed's gets its own copy first. */
+  updateSite: (patch: Partial<Site> | ((s: Site) => Site), k?: VariantKey) => void;
   addPhotos: (p: Photo[]) => void;
   updatePhoto: (id: string, patch: Partial<Photo>) => void;
   removePhoto: (id: string) => void;
@@ -99,7 +105,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "site" | "settings" | "sun" | "costRates">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -110,7 +116,6 @@ let lastPush = 0;
 const photoSource = (variants: State["variants"]): VariantKey | undefined =>
   variants.current ? "current" : variants.proposed ? "proposed" : undefined;
 
-const isListing = (m?: HouseModel) => m?.preset?.id === LISTING_PRESET.id || m?.preset?.id === LISTING_PROPOSED_PRESET.id;
 
 export const useStore = create<State>()(
   persist(
@@ -119,20 +124,20 @@ export const useStore = create<State>()(
       const setState: typeof rawSet = (partial) => {
         const st = get();
         const patch = typeof partial === "function" ? partial(st) : partial;
-        const touches = "variants" in patch || "photos" in patch || "site" in patch;
+        const touches = "variants" in patch || "photos" in patch || "sites" in patch;
         if (touches) {
           const now = Date.now();
-          const snap: Snapshot = { variants: st.variants, photos: st.photos, site: st.site };
+          const snap: Snapshot = { variants: st.variants, photos: st.photos, sites: st.sites };
           const past = now - lastPush < COALESCE_MS && st.past.length ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
           lastPush = now;
           rawSet({ ...patch, past, future: [] });
         } else rawSet(patch);
       };
-      const snapshot = (st: State): Snapshot => ({ variants: st.variants, photos: st.photos, site: st.site });
+      const snapshot = (st: State): Snapshot => ({ variants: st.variants, photos: st.photos, sites: st.sites });
       return {
         variants: {},
         photos: [],
-        site: undefined,
+        sites: {},
         settings: { quality: "high" },
         sun: { enabled: false, dayOfYear: 172, hour: 15 },
         costRates: {},
@@ -194,7 +199,8 @@ export const useStore = create<State>()(
             delete copy.preset;
             // The listing's printed area describes As listed, not a layout made from it.
             if (to !== "current") delete copy.listedArea;
-            return { variants: { ...st.variants, [to]: copy } };
+            // The copy starts on the same plot, which it can then change on its own.
+            return { variants: { ...st.variants, [to]: copy }, sites: copySiteOf(st.sites, from, to) };
           }),
         updateModel: (k, patch) =>
           setState((st) => {
@@ -240,17 +246,17 @@ export const useStore = create<State>()(
             }
             return { variants: { ...st.variants, [k]: { ...m, floors } }, ...(photos !== st.photos ? { photos } : {}) };
           }),
-        setSite: (site) => setState({ site }),
-        updateSite: (patch) =>
+        setSite: (site, k) => setState((st) => ({ sites: setSiteOf(st.sites, k ?? st.activeVariant, site) })),
+        updateSite: (patch, k) =>
           setState((st) => {
-            if (!st.site) return {};
-            return { site: typeof patch === "function" ? patch(st.site) : { ...st.site, ...patch } };
+            const sites = updateSiteOf(st.sites, k ?? st.activeVariant, patch);
+            return sites === st.sites ? {} : { sites };
           }),
         addPhotos: (p) => setState((st) => ({ photos: [...st.photos, ...p] })),
         updatePhoto: (id, patch) => setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
         removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
         setUi: (p) => rawSet(p),
-        reset: () => setState({ variants: {}, photos: [], site: undefined, selectedRoomId: null, selectedPhotoId: null }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, selectedRoomId: null, selectedPhotoId: null }),
       };
     },
     {
@@ -259,39 +265,13 @@ export const useStore = create<State>()(
       partialize: (s): Persisted => ({
         variants: s.variants,
         photos: s.photos,
-        site: s.site,
+        sites: s.sites,
         settings: s.settings,
         sun: s.sun,
         costRates: s.costRates,
       }),
-      version: 4,
-      migrate: (persisted, version) => {
-        const st = persisted as Partial<Persisted> & { variants?: Record<string, HouseModel> };
-        if (version < 2) {
-          // v1 stored garage doors as door.style === "garage".
-          for (const m of Object.values(st.variants ?? {})) {
-            for (const f of m.floors) {
-              for (const o of f.openings as (Opening & { style?: string })[]) {
-                if (o.style === "garage") o.kind = "garage";
-                delete o.style;
-              }
-            }
-          }
-        }
-        if (version < 3) {
-          // The built-in listing is a hipped semi joined to No. 26 on the right.
-          for (const m of Object.values(st.variants ?? {})) {
-            const ext = m.exterior as Partial<NonNullable<HouseModel["exterior"]>> | undefined;
-            if (isListing(m) && ext && ext.roofStyle === undefined) {
-              m.exterior = { ...(ext as NonNullable<HouseModel["exterior"]>), roofStyle: "hip", partyWall: "right" };
-            }
-          }
-          if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = listingSite();
-          if (st.settings && !st.settings.quality) st.settings = { ...st.settings, quality: "high" };
-        }
-        if (version < 4) st.settings = dropAiSettings(st.settings) as Persisted["settings"];
-        return st as Persisted;
-      },
+      version: PERSIST_VERSION,
+      migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
       // Older saves lack the newer persisted fields; keep the defaults for those.
       merge: (persisted, current) => ({ ...current, ...((persisted ?? {}) as Partial<Persisted>) }),
     },
@@ -299,3 +279,5 @@ export const useStore = create<State>()(
 );
 
 export const useModel = (k?: VariantKey) => useStore((s) => s.variants[k ?? s.activeVariant]);
+/** The plot variant `k` (default: the active one) shows: its own, or As listed's while Proposed has none. */
+export const useSite = (k?: VariantKey) => useStore((s) => siteOf(s.sites, k ?? s.activeVariant));

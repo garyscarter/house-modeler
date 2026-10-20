@@ -1,18 +1,20 @@
 import { useStore } from "../store";
 import { ask } from "./Dialogs";
-import type { HouseModel, Photo, Site } from "../types";
+import type { HouseModel, Photo } from "../types";
+import { sitesFromImport } from "../lib/sites";
 
 export function SettingsPanel() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const variants = useStore((s) => s.variants);
   const photos = useStore((s) => s.photos);
-  const site = useStore((s) => s.site);
+  const sites = useStore((s) => s.sites);
   const costRates = useStore((s) => s.costRates);
   const reset = useStore((s) => s.reset);
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ variants, photos, site, costRates }, null, 2)], { type: "application/json" });
+    // `sites` holds each layout's own plot; older exports had one shared `site`, which import still reads.
+    const blob = new Blob([JSON.stringify({ variants, photos, sites, costRates }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "house-model.json";
@@ -21,7 +23,7 @@ export function SettingsPanel() {
   };
 
   const importJson = async (file: File) => {
-    let data: { variants?: Record<string, HouseModel>; photos?: Photo[]; site?: Site; costRates?: Record<string, number> };
+    let data: { variants?: Record<string, HouseModel>; photos?: Photo[]; sites?: unknown; site?: unknown; costRates?: Record<string, number> };
     try {
       data = JSON.parse(await file.text());
     } catch {
@@ -37,9 +39,10 @@ export function SettingsPanel() {
     }
     // One undoable step: replace everything at once.
     useStore.setState({ costRates: data.costRates ?? costRates });
-    useStore.getState().setVariant("current", looksLikeModel(current) ? current : undefined);
-    useStore.getState().setVariant("proposed", looksLikeModel(proposed) ? proposed : undefined);
-    useStore.setState({ photos: Array.isArray(data.photos) ? data.photos : [], site: data.site });
+    const models = { current: looksLikeModel(current) ? current : undefined, proposed: looksLikeModel(proposed) ? proposed : undefined };
+    useStore.getState().setVariant("current", models.current);
+    useStore.getState().setVariant("proposed", models.proposed);
+    useStore.setState({ photos: Array.isArray(data.photos) ? data.photos : [], sites: sitesFromImport({ sites: data.sites, site: data.site, variants: models }) });
   };
 
   return (

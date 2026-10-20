@@ -20,6 +20,7 @@ import {
 } from "../lib/report";
 import { changesCsv, downloadBlob, fileDate, planExtent, planScale, planSvg, printHtml, slug } from "../lib/export";
 import { captureImage, exportGlb, useCaptureIds } from "../three/capture";
+import { siteOf } from "../lib/sites";
 import "./ReportPanel.css";
 
 const KEYS: VariantKey[] = ["current", "proposed"];
@@ -29,10 +30,14 @@ type AreaUnit = "m²" | "ft²";
 export function ReportPanel() {
   const variants = useStore((s) => s.variants);
   const rates = useStore((s) => s.costRates);
+  const sites = useStore((s) => s.sites);
   const current = variants.current;
   const proposed = variants.proposed;
   const areas = useMemo(() => areaReport(current, proposed), [current, proposed]);
-  const changes = useMemo(() => (current && proposed ? diffModels(current, proposed) : undefined), [current, proposed]);
+  const changes = useMemo(
+    () => (current && proposed ? diffModels(current, proposed, { a: siteOf(sites, "current"), b: siteOf(sites, "proposed") }) : undefined),
+    [current, proposed, sites],
+  );
   const estimate = useMemo(() => changes && estimateCosts(changes, rates), [changes, rates]);
   const notes = useMemo(() => KEYS.flatMap((k) => (variants[k] ? [{ key: k, notes: roomNotes(variants[k]!) }] : [])), [variants]);
   const noteCount = notes.reduce((s, v) => s + v.notes.length, 0);
@@ -343,7 +348,7 @@ const captureLabel = (id: string, active: VariantKey) => (id === "current" || id
 
 function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) {
   const variants = useStore((s) => s.variants);
-  const site = useStore((s) => s.site);
+  const sites = useStore((s) => s.sites);
   const rates = useStore((s) => s.costRates);
   const active = useStore((s) => s.activeVariant);
   const ids = useCaptureIds();
@@ -379,7 +384,7 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
 
   const plan = (k: VariantKey, m: HouseModel, floorId: string) => {
     const f = m.floors.find((x) => x.id === floorId)!;
-    const svg = planSvg(m, f, { variant: VARIANT_LABEL[k], date: longDate(), site, extent, scale });
+    const svg = planSvg(m, f, { variant: VARIANT_LABEL[k], date: longDate(), site: siteOf(sites, k), extent, scale });
     downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `plan-${slug(VARIANT_LABEL[k])}-${slug(f.name)}-${date}.svg`);
   };
 
@@ -397,11 +402,10 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
       }
       const html = printHtml({
         date: longDate(),
-        variants: present.map((k) => ({ label: VARIANT_LABEL[k], model: variants[k]!, notes: roomNotes(variants[k]!) })),
+        variants: present.map((k) => ({ label: VARIANT_LABEL[k], model: variants[k]!, notes: roomNotes(variants[k]!), site: siteOf(sites, k) })),
         areas,
         changes,
         rates,
-        site,
         snapshots,
       });
       if (!w) {
