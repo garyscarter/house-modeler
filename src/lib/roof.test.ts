@@ -3,6 +3,7 @@ import {
   FLAT_OVERHANG,
   chimneyOnRidge,
   defaultChimney,
+  exteriorOf,
   leanToHeightAt,
   planFlat,
   planRoofs,
@@ -13,8 +14,8 @@ import {
   type RoofBlock,
 } from "./roof";
 import { EXT_WALL_T } from "./geometry";
-import { footAt, roofParts } from "./roofParts";
-import type { HouseModel } from "../types";
+import { footAt, roofParts, skirtEnd, skirtParts, skirtRun, skirtedEdges, type RoofParts } from "./roofParts";
+import type { FlatRoofSkirt, HouseModel } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
 
 const base: RoofBlock = { x0: 0, z0: 0, x1: 10, z1: 6, y: 5, axis: "x", pitchDeg: 45, overhang: 0.3, start: "gable", end: "gable", wallT: 0.2 };
@@ -318,5 +319,176 @@ describe("chimneys and downpipes", () => {
     const off = roofParts(plan, { gutters: false });
     expect(off.gutters).toHaveLength(0);
     expect(off.pipes).toHaveLength(0);
+  });
+});
+
+describe("flat roof skirt", () => {
+  const W = EXT_WALL_T / 2 + FLAT_OVERHANG;
+  const blank = (): RoofParts => ({
+    tiles: { pos: [], uv: [] },
+    gables: [],
+    trim: [],
+    membrane: { pos: [], uv: [] },
+    edgeTrim: [],
+    flashing: [],
+    brick: { pos: [], uv: [] },
+    cement: [],
+    caps: [],
+    gutters: [],
+    pipes: [],
+    pots: [],
+  });
+  const verts = (pos: number[]) => Array.from({ length: pos.length / 3 }, (_, i) => pos.slice(i * 3, i * 3 + 3));
+  const listing = (canopies?: { x: number; y: number }[][]) => {
+    const m = listing91770873("");
+    if (canopies) m.floors.find((f) => f.level === 0)!.canopies = canopies;
+    const plan = planRoofs(m);
+    return { m, plan, fr: plan.flatRoofs[0], skirt: exteriorOf(m).flatRoofSkirt!, main: plan.blocks[0] };
+  };
+  // Front wall of the porch and hall, and the left and right walls of the single-storey part, world metres.
+  const FRONT = (620 - 430) / 73;
+  const LEFT = (530 - 865) / 73;
+  const RIGHT = (1045 - 865) / 73;
+
+  it("runs the listing's front skirt right up to the two-storey wall over the hall, hipped at both ends", () => {
+    const { fr, skirt, main } = listing();
+    const run = skirtRun(fr, skirt);
+    // Set deeper than there is room for, it stops at the face of the two-storey wall.
+    expect(run).toBeLessThan(skirt.depth);
+    expect(FRONT + W - run).toBeCloseTo(main.z1 + EXT_WALL_T / 2, 6);
+    const pieces = skirtedEdges(fr, skirt);
+    const front = pieces.find((e) => e.axis === "x" && Math.abs(e.at - FRONT) < 1e-6)!;
+    expect([skirtEnd(front, 0, pieces), skirtEnd(front, 1, pieces)]).toEqual(["hip", "hip"]);
+    // A flashing along the wall where the top of the slope meets it.
+    const parts = blank();
+    skirtParts(fr, skirt, parts);
+    const top = fr.top - 0.03 + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
+    expect(Math.max(...verts(parts.tiles.pos).map((v) => v[1]))).toBeCloseTo(top, 6);
+    expect(verts(parts.flashing).some((v) => Math.abs(v[2] - (main.z1 + EXT_WALL_T / 2)) < 0.01 && v[1] > top)).toBe(true);
+    // Hip tiles on both front corners.
+    expect(parts.caps).toHaveLength(2);
+  });
+
+  it("returns the skirt round the corners and keeps it off the back of the garage", () => {
+    const { plan, fr, skirt, main } = listing();
+    const pieces = skirtedEdges(fr, skirt);
+    const sides = pieces.filter((e) => e.axis === "z");
+    expect(sides).toHaveLength(2);
+    // The right return runs back to the two-storey wall; the left one stops short, open-ended.
+    const right = sides.find((e) => e.out === 1)!;
+    expect(skirtEnd(right, 0, pieces)).toBe("wall");
+    expect(right.a).toBeCloseTo(main.z1, 6);
+    const left = sides.find((e) => e.out === -1)!;
+    expect(left.cut).toEqual([true, false]);
+    expect(left.a).toBeCloseTo(FRONT + W - skirt.returns!, 6);
+    const parts = roofParts(plan, { gutters: true, skirt });
+    // Every tile below the main roof's eaves belongs to the skirt, and none reaches the rear.
+    const low = verts(parts.tiles.pos).filter((v) => v[1] < main.y - 1);
+    expect(low.length).toBeGreaterThan(0);
+    for (const v of low) expect(v[2]).toBeGreaterThan(FRONT + W - skirt.returns! - 1e-6);
+    // The tiles cover the front eaves, so the drip trim stays on the plain edges only.
+    const trim = verts(parts.edgeTrim);
+    expect(trim.some((v) => v[2] > FRONT)).toBe(false);
+    expect(trim.some((v) => v[2] < (22 - 430) / 73)).toBe(true);
+  });
+
+  it("gutters the skirt, round the hips, with downpipes where the gutters stop", () => {
+    const { plan, fr, skirt, main } = listing();
+    const parts = roofParts(plan, { gutters: true, skirt });
+    const yG = fr.top - 0.06;
+    const front = parts.gutters.find(([a, b]) => Math.abs(a[1] - yG) < 1e-6 && Math.abs(a[2] - b[2]) < 1e-6 && a[2] > FRONT)!;
+    expect(front).toBeDefined();
+    // Out past both front corners, to meet the returns' gutters.
+    expect(Math.min(front[0][0], front[1][0])).toBeLessThan(LEFT - W);
+    expect(Math.max(front[0][0], front[1][0])).toBeGreaterThan(RIGHT + W);
+    // Downpipes to the ground in the corner by the two-storey wall, and where the left return stops.
+    const feet = parts.pipes.filter(([, b]) => Math.abs(b[1] - plan.groundY) < 1e-6).map(([, b]) => b);
+    expect(feet.some((p) => p[0] > RIGHT && Math.abs(p[2] - (main.z1 + EXT_WALL_T / 2 + 0.15)) < 0.01)).toBe(true);
+    expect(feet.some((p) => p[0] < LEFT && p[2] < FRONT - 1)).toBe(true);
+  });
+
+  it("mitres a valley into an inside corner, keeping one depth all round", () => {
+    const L = [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 2 },
+      { x: 2, y: 2 },
+      { x: 2, y: 4 },
+      { x: 0, y: 4 },
+    ];
+    const fr = planFlat([L], [], [], 2.4, 2.7)!;
+    const skirt: FlatRoofSkirt = { sides: ["front", "rear", "left", "right"], depth: 0.8, pitchDeg: 30 };
+    const pieces = skirtedEdges(fr, skirt);
+    expect(pieces).toHaveLength(6);
+    const inner = pieces.find((e) => e.axis === "x" && Math.abs(e.at - 2) < 1e-9)!;
+    expect([skirtEnd(inner, 0, pieces), skirtEnd(inner, 1, pieces)]).toEqual(["valley", "hip"]);
+    expect(skirtRun(fr, skirt)).toBeCloseTo(0.8);
+    // Both slopes run up the valley to the same point, and nothing rises above the top of the slopes.
+    const parts = blank();
+    skirtParts(fr, skirt, parts);
+    const yT = 2.7 - 0.03 + 0.8 * Math.tan(Math.PI / 6);
+    const c = 2 + W - 0.8;
+    const atValley = verts(parts.tiles.pos).filter((v) => Math.abs(v[0] - c) < 1e-6 && Math.abs(v[2] - c) < 1e-6 && Math.abs(v[1] - yT) < 1e-6);
+    expect(atValley.length).toBeGreaterThanOrEqual(2);
+    for (const v of verts(parts.tiles.pos)) expect(v[1]).toBeLessThanOrEqual(yT + 1e-9);
+  });
+
+  it("cuts the depth back so facing slopes meet in a ridge instead of crossing", () => {
+    const strip = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 5 },
+      { x: 0, y: 5 },
+    ];
+    const fr = planFlat([strip], [], [], 2.4, 2.7)!;
+    expect(skirtRun(fr, { sides: ["left", "right"], depth: 2, pitchDeg: 30 })).toBeCloseTo(0.5 + W);
+    // Hipped at both ends of the short edges, which close to a point: every edge still gets its slope.
+    const parts = blank();
+    skirtParts(fr, { sides: ["front", "rear", "left", "right"], depth: 2, pitchDeg: 30 }, parts);
+    expect(parts.tiles.pos.length / 9).toBeGreaterThanOrEqual(4);
+  });
+
+  it("still roofs the porch when its canopy is narrowed, made shallower or removed", () => {
+    const cases: [string, { x: number; y: number }[][]][] = [
+      [
+        "narrowed",
+        [
+          [
+            { x: 530, y: 515 },
+            { x: 680, y: 515 },
+            { x: 680, y: 620 },
+            { x: 530, y: 620 },
+          ],
+        ],
+      ],
+      [
+        "shallower",
+        [
+          [
+            { x: 530, y: 515 },
+            { x: 730, y: 515 },
+            { x: 730, y: 575 },
+            { x: 530, y: 575 },
+          ],
+        ],
+      ],
+      ["removed", []],
+    ];
+    for (const [name, canopies] of cases) {
+      const { plan, fr, skirt, main } = listing(canopies);
+      const pieces = skirtedEdges(fr, skirt);
+      const run = skirtRun(fr, skirt);
+      // Where the garage front meets the porch or hall the skirt turns an inside corner.
+      const ends = pieces.flatMap((e) => [skirtEnd(e, 0, pieces), skirtEnd(e, 1, pieces)]);
+      expect(ends, name).toContain("valley");
+      const parts = roofParts(plan, { gutters: true, skirt });
+      // Every skirted stretch gets its slope, and nothing rises above the top of the slopes.
+      expect(parts.tiles.pos.length / 9, name).toBeGreaterThanOrEqual(pieces.length + roofGeometry(main).slopes.length / 9);
+      const yT = fr.top - 0.03 + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
+      for (const v of verts(parts.tiles.pos).filter((p) => p[1] < main.y - 1)) expect(v[1], name).toBeLessThanOrEqual(yT + 1e-9);
+    }
+    // A narrowed porch limits the depth all round, so the slopes up its two sides meet in a ridge.
+    const narrow = listing(cases[0][1]);
+    expect(skirtRun(narrow.fr, narrow.skirt)).toBeCloseTo((680 - 530) / 73 / 2 + W, 6);
   });
 });

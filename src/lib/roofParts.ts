@@ -4,6 +4,7 @@ import {
   FLAT_OVERHANG,
   GUTTER_R,
   LEAN_DEPTH,
+  PIPE_R,
   leanToHeightAt,
   leanToSurface,
   pushPoly,
@@ -107,8 +108,9 @@ export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: Flat
   }
 
   for (const fr of plan.flatRoofs) {
-    flatRoofParts(fr, parts);
-    if (opts.skirt?.sides.length) skirtParts(fr, opts.skirt, parts);
+    const skirted = skirtedEdges(fr, opts.skirt);
+    flatRoofParts(fr, parts, skirted);
+    if (skirted.length) skirtParts(fr, opts.skirt!, parts, { gutters: opts.gutters, foot: (x, z, from) => footAt(plan, x, z, from) });
   }
   for (const l of plan.leanTos) leanToParts(l, parts, opts.gutters);
 
@@ -147,8 +149,8 @@ export function footAt(plan: RoofPlan, x: number, z: number, from: number): numb
   return foot;
 }
 
-/** Membrane, fascias, soffits, edge trims and flashings of one flat roof. */
-function flatRoofParts(fr: FlatRoof, parts: RoofParts) {
+/** Membrane, fascias, soffits, edge trims and flashings of one flat roof. Skirted edges get no drip trim: the tiles cover them. */
+function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = []) {
   const half = EXT_WALL_T / 2;
   const W = half + FLAT_OVERHANG;
   const ySoffit = fr.y - 0.04;
@@ -194,31 +196,35 @@ function flatRoofParts(fr: FlatRoof, parts: RoofParts) {
       quad(parts.flashing, a, b, -(half + 0.006), -(half + 0.006), fr.top - 0.01, fr.top + 0.15, N(-1));
       continue;
     }
-    const [sa, sb] = [e.a - e.strip[0], e.b + e.strip[1]];
-    pushPoly(parts.membrane.pos, [P(sa, fr.top, 0), P(sb, fr.top, 0), P(sb, fr.top, W), P(sa, fr.top, W)], up, parts.membrane.uv, [
-      [P(sa, 0, 0)[0], P(sa, 0, 0)[2]],
-      [P(sb, 0, 0)[0], P(sb, 0, 0)[2]],
-      [P(sb, 0, W)[0], P(sb, 0, W)[2]],
-      [P(sa, 0, W)[0], P(sa, 0, W)[2]],
-    ]);
     const [fa, fb] = [e.a - e.fascia[0], e.b + e.fascia[1]];
     quad(parts.trim, fa, fb, W, W, ySoffit, fr.top - 0.03, N(1));
     quad(parts.trim, fa, fb, W, W - BOARD, ySoffit, ySoffit, down);
     const [oa, ob] = [e.a - e.soffit[0], e.b + e.soffit[1]];
     quad(parts.trim, oa, ob, half, W - BOARD, ySoffit, ySoffit, down);
+    // Stretches the skirt's tiles cover need neither the membrane strip nor the drip trim.
+    // (Past a corner too, where the drip trim would otherwise run on a little.)
+    const tiled = skirted.filter((s) => s.src === e).map((s): [number, number] => [s.a - s.fascia[0] - (s.cut[0] ? 0 : 0.05), s.b + s.fascia[1] + (s.cut[1] ? 0 : 0.05)]);
+    for (const [sa, sb] of subtract(e.a - e.strip[0], e.b + e.strip[1], tiled))
+      pushPoly(parts.membrane.pos, [P(sa, fr.top, 0), P(sb, fr.top, 0), P(sb, fr.top, W), P(sa, fr.top, W)], up, parts.membrane.uv, [
+        [P(sa, 0, 0)[0], P(sa, 0, 0)[2]],
+        [P(sb, 0, 0)[0], P(sb, 0, 0)[2]],
+        [P(sb, 0, W)[0], P(sb, 0, W)[2]],
+        [P(sa, 0, W)[0], P(sa, 0, W)[2]],
+      ]);
     // Drip trim: a slim edge standing proud of the membrane to hold water back.
-    const [ta, tb] = [fa - (e.fascia[0] > 0 ? 0.015 : 0), fb + (e.fascia[1] > 0 ? 0.015 : 0)];
     const [ci, co, yb, yt] = [W - 0.02, W + 0.015, fr.top - 0.06, fr.top + 0.035];
-    quad(parts.edgeTrim, ta, tb, co, co, yb, yt, N(1));
-    quad(parts.edgeTrim, ta, tb, ci, ci, fr.top - 0.005, yt, N(-1));
-    quad(parts.edgeTrim, ta, tb, ci, co, yt, yt, up);
-    quad(parts.edgeTrim, ta, tb, W, co, yb, yb, down);
-    for (const [at, sign] of [
-      [ta, -1],
-      [tb, 1],
-    ] as const) {
-      const n: P3 = e.axis === "x" ? [sign, 0, 0] : [0, 0, sign];
-      pushPoly(parts.edgeTrim, [P(at, yb, W), P(at, yb, co), P(at, yt, co), P(at, yt, ci), P(at, fr.top - 0.005, ci)], n);
+    for (const [ta, tb] of subtract(fa - (e.fascia[0] > 0 ? 0.015 : 0), fb + (e.fascia[1] > 0 ? 0.015 : 0), tiled)) {
+      quad(parts.edgeTrim, ta, tb, co, co, yb, yt, N(1));
+      quad(parts.edgeTrim, ta, tb, ci, ci, fr.top - 0.005, yt, N(-1));
+      quad(parts.edgeTrim, ta, tb, ci, co, yt, yt, up);
+      quad(parts.edgeTrim, ta, tb, W, co, yb, yb, down);
+      for (const [at, sign] of [
+        [ta, -1],
+        [tb, 1],
+      ] as const) {
+        const n: P3 = e.axis === "x" ? [sign, 0, 0] : [0, 0, sign];
+        pushPoly(parts.edgeTrim, [P(at, yb, W), P(at, yb, co), P(at, yt, co), P(at, yt, ci), P(at, fr.top - 0.005, ci)], n);
+      }
     }
   }
 }
@@ -307,53 +313,206 @@ function sideOf(e: FlatEdge): PlanSide {
   return e.axis === "x" ? (e.out > 0 ? "front" : "rear") : e.out > 0 ? "right" : "left";
 }
 
+/** A stretch of a flat roof's eaves edge under the tiled skirt. */
+export interface SkirtEdge extends FlatEdge {
+  /** The eaves edge it is part of. */
+  src: FlatEdge;
+  /** Ends where a return stops short of the edge's own end. */
+  cut: [boolean, boolean];
+}
+
+/** Whether a perpendicular edge in `list` turns the corner at end `end` of `e`. */
+function turnsCorner(e: FlatEdge, end: 0 | 1, list: FlatEdge[]) {
+  const along = end === 0 ? e.a : e.b;
+  return list.some((f) => f.axis !== e.axis && Math.abs(f.at - along) < 0.05 && (Math.abs(f.a - e.at) < 0.05 || Math.abs(f.b - e.at) < 0.05));
+}
+
 /**
- * Tiled skirt slopes along the eaves edges of a flat roof facing the chosen
- * sides. Each rises from the fascia towards the roof's middle; where two
- * skirted edges meet at an outside corner they are mitred into a hip, other
- * ends are closed with a small cheek. A low upstand finishes the inner top edge.
+ * The stretches of a flat roof's eaves that carry the tiled skirt: every
+ * eaves edge facing one of the skirt's sides, plus its returns, which carry
+ * it round an outside corner and a set distance along the next edge.
  */
-export function skirtParts(fr: FlatRoof, skirt: FlatRoofSkirt, parts: RoofParts) {
-  const W = EXT_WALL_T / 2 + FLAT_OVERHANG;
+export function skirtedEdges(fr: FlatRoof, skirt: FlatRoofSkirt | undefined): SkirtEdge[] {
+  if (!skirt?.sides.length) return [];
+  const eaves = fr.edges.filter((e) => e.kind === "eaves");
+  const full = eaves.filter((e) => skirt.sides.includes(sideOf(e)));
+  const out: SkirtEdge[] = full.map((e) => ({ ...e, src: e, cut: [false, false] }));
+  const ret = skirt.returns ?? 0;
+  if (ret <= 0) return out;
+  for (const e of eaves) {
+    if (full.includes(e)) continue;
+    const [t0, t1] = [e.fascia[0] > 0 && turnsCorner(e, 0, full), e.fascia[1] > 0 && turnsCorner(e, 1, full)];
+    // Returns are measured from the outside corner of the eaves.
+    const [oa, ob] = [e.a - e.fascia[0], e.b + e.fascia[1]];
+    const [ra, rb] = [oa + ret, ob - ret];
+    if ((t0 && t1 && ra >= rb) || (t0 && ra >= ob) || (t1 && rb <= oa)) {
+      out.push({ ...e, src: e, cut: [false, false] });
+      continue;
+    }
+    if (t0) out.push({ ...e, b: ra, fascia: [e.fascia[0], 0], src: e, cut: [false, true] });
+    if (t1) out.push({ ...e, a: rb, fascia: [0, e.fascia[1]], src: e, cut: [true, false] });
+  }
+  return out;
+}
+
+/**
+ * Edges across the roof from `e`, which a slope rising from `e` heads for, with how far the
+ * slope can run from the eaves before it reaches them: to the face of a taller wall or of an
+ * unskirted edge, or halfway to a skirted stretch facing it (the two would meet in a ridge).
+ */
+function facing(e: FlatEdge, all: FlatEdge[], skirted: SkirtEdge[]) {
+  const half = EXT_WALL_T / 2;
+  const W = half + FLAT_OVERHANG;
+  const opposite = (g: FlatEdge) => g !== e && g.axis === e.axis && g.out === -e.out && (e.at - g.at) * e.out > 0 && Math.min(e.b, g.b) - Math.max(e.a, g.a) > 0.05;
+  const dist = (g: FlatEdge) => Math.abs(e.at - g.at);
+  return [
+    ...all.filter(opposite).map((g) => ({ g, reach: dist(g) + W - half })),
+    ...skirted.filter(opposite).map((g) => ({ g: g as FlatEdge, reach: dist(g) / 2 + W })),
+  ];
+}
+
+/**
+ * Horizontal depth of a flat roof's skirt. It is the same all round, so hips
+ * and valleys run at 45 degrees and meet cleanly, and it is cut back so no
+ * slope runs into a taller wall or through the slope facing it: a skirt set
+ * deeper than the roof allows stops against the wall above it.
+ */
+export function skirtRun(fr: FlatRoof, skirt: FlatRoofSkirt): number {
+  const skirted = skirtedEdges(fr, skirt);
+  let run = Math.max(0.2, skirt.depth);
+  for (const e of skirted) for (const { reach } of facing(e, fr.edges, skirted)) run = Math.min(run, reach);
+  return run;
+}
+
+/**
+ * How a skirted edge ends: mitred into a hip (outside corner) or a valley
+ * (inside corner) where the skirt turns the corner, square where it does not,
+ * or against a taller wall.
+ */
+export type SkirtEnd = "hip" | "valley" | "square" | "wall";
+export function skirtEnd(e: SkirtEdge, end: 0 | 1, skirted: SkirtEdge[]): SkirtEnd {
+  if (e.cut[end]) return "square";
+  const turns = turnsCorner(e, end, skirted);
+  const adj = e.fascia[end];
+  if (adj > 0) return turns ? "hip" : "square";
+  // Fascias run back by the full eaves width from an inside corner, and by less to a taller wall.
+  if (adj < -EXT_WALL_T / 2 - 1e-6) return turns ? "valley" : "square";
+  return "wall";
+}
+
+/** Parts of [a, b] not covered by any of `cut`. */
+function subtract(a: number, b: number, cut: [number, number][]): [number, number][] {
+  let out: [number, number][] = [[a, b]];
+  for (const [c0, c1] of cut) {
+    out = out.flatMap(([s, e]): [number, number][] => (c1 <= s || c0 >= e ? [[s, e]] : ([[s, c0], [c1, e]] as [number, number][]).filter(([p, q]) => q - p > 0.01)));
+  }
+  return out;
+}
+
+/**
+ * Tiled skirt slopes along the eaves of a flat roof facing the chosen sides,
+ * and their returns (see skirtedEdges), all rising the same depth from the
+ * fascia towards the roof's middle (see skirtRun). Where two skirted stretches
+ * meet they are mitred into a hip at an outside corner or a valley at an
+ * inside one; other open ends, such as the end of a return, get a cheek, and
+ * ends against a taller wall a flashing. A low upstand finishes the
+ * top edge, or a flashing where it meets a taller wall. Gutters run along the
+ * fascias and round the hips, with a downpipe at each end that does not turn
+ * a corner; `foot` says where a downpipe at (x, z) coming down from `from` stops.
+ */
+export function skirtParts(
+  fr: FlatRoof,
+  skirt: FlatRoofSkirt,
+  parts: RoofParts,
+  opts: { gutters?: boolean; foot?: (x: number, z: number, from: number) => number } = {},
+) {
+  const edges = skirtedEdges(fr, skirt);
+  if (!edges.length) return;
+  const half = EXT_WALL_T / 2;
+  const W = half + FLAT_OVERHANG;
   const t = Math.tan((skirt.pitchDeg * Math.PI) / 180);
   const cos = Math.cos((skirt.pitchDeg * Math.PI) / 180);
   const yE = fr.top - 0.03;
-  const edges = fr.edges.filter((e) => e.kind === "eaves" && skirt.sides.includes(sideOf(e)));
-  // Another skirted edge turning an outside corner at this end of `e`.
-  const mitred = (e: FlatEdge, end: 0 | 1) => {
-    if (e.fascia[end] <= 0) return false;
-    const along = end === 0 ? e.a : e.b;
-    return edges.some((f) => f.axis !== e.axis && Math.abs(f.at - along) < 0.05 && (Math.abs(f.a - e.at) < 0.05 || Math.abs(f.b - e.at) < 0.05));
-  };
+  const run = skirtRun(fr, skirt);
+  const yT = yE + run * t;
+  const across = W - run;
+  const ySoffit = fr.y - 0.04;
+  const yG = yE - 0.03;
+  const vG = W + GUTTER_R;
+  const hips = new Map<string, [P3, P3]>();
   for (const e of edges) {
-    const P = (along: number, y: number, across: number): P3 => (e.axis === "x" ? [along, y, e.at + e.out * across] : [e.at + e.out * across, y, along]);
-    const outward: P3 = e.axis === "x" ? [0, 1, e.out] : [e.out, 1, 0];
-    const run = Math.max(0.2, skirt.depth);
-    const yT = yE + run * t;
+    const P = (along: number, y: number, ac: number): P3 => (e.axis === "x" ? [along, y, e.at + e.out * ac] : [e.at + e.out * ac, y, along]);
+    // Normal pointing along the edge (sign +1 towards b), and away from the roof.
+    const N = (sign: number): P3 => (e.axis === "x" ? [sign, 0, 0] : [0, 0, sign]);
+    const outward: P3 = e.axis === "x" ? [0, 0, e.out] : [e.out, 0, 0];
+    const ends = [skirtEnd(e, 0, edges), skirtEnd(e, 1, edges)] as const;
     const [oa, ob] = [e.a - e.fascia[0], e.b + e.fascia[1]];
-    const m0 = mitred(e, 0);
-    const m1 = mitred(e, 1);
-    const [ia, ib] = [m0 ? oa + run : oa, m1 ? ob - run : ob];
-    if (ib <= ia) continue;
-    const across = W - run;
-    // UVs in metres: along the eaves, and up the slope.
-    pushPoly(parts.tiles.pos, [P(oa, yE, W), P(ob, yE, W), P(ib, yT, across), P(ia, yT, across)], outward, parts.tiles.uv, [
+    const inset = (k: SkirtEnd) => (k === "hip" ? run : k === "valley" ? -run : 0);
+    const [ia, ib] = [oa + inset(ends[0]), ob - inset(ends[1])];
+    if (ib < ia - 1e-6) continue;
+    pushPoly(parts.tiles.pos, [P(oa, yE, W), P(ob, yE, W), P(ib, yT, across), P(ia, yT, across)], [outward[0], 1, outward[2]], parts.tiles.uv, [
       [oa, 0],
       [ob, 0],
       [ib, run / cos],
       [ia, run / cos],
     ]);
-    // Upstand behind the top edge, down to the membrane.
-    const inward: P3 = e.axis === "x" ? [0, 0, -e.out] : [-e.out, 0, 0];
-    pushPoly(parts.trim, [P(ia, fr.top, across), P(ib, fr.top, across), P(ib, yT, across), P(ia, yT, across)], inward);
-    // Square ends get a vertical cheek.
-    for (const [end, at] of [
-      [m0, oa],
-      [m1, ob],
-    ] as const) {
-      if (end) continue;
-      const n: P3 = e.axis === "x" ? [at === oa ? -1 : 1, 0, 0] : [0, 0, at === oa ? -1 : 1];
-      pushPoly(parts.trim, [P(at, yE, W), P(at, yT, across), P(at, fr.top, across)], n);
+
+    // Top edge: a flashing where it reaches a taller wall, an upstand down to the membrane elsewhere.
+    const walls = facing(e, fr.edges, edges)
+      .filter(({ g, reach }) => g.kind === "abutment" && reach <= run + 1e-6)
+      .map(({ g }): [number, number] => [Math.max(ia, g.a), Math.min(ib, g.b)])
+      .filter(([p, q]) => q > p);
+    for (const [p, q] of walls) {
+      const ac = across + 0.006;
+      pushPoly(parts.flashing, [P(p, yT - 0.02, ac), P(q, yT - 0.02, ac), P(q, yT + 0.1, ac), P(p, yT + 0.1, ac)], outward);
+    }
+    const inward: P3 = [-outward[0], 0, -outward[2]];
+    for (const [p, q] of subtract(ia, ib, walls)) pushPoly(parts.trim, [P(p, fr.top, across), P(q, fr.top, across), P(q, yT, across), P(p, yT, across)], inward);
+
+    // At each end: where a return stops, the face of the taller wall the skirt stops against, or the outside corner of the walls.
+    const face = (end: 0 | 1) => {
+      const sign = end === 0 ? -1 : 1;
+      if (e.cut[end]) return end === 0 ? e.a : e.b;
+      return (end === 0 ? e.a : e.b) + (ends[end] === "wall" ? -sign * half : sign * half);
+    };
+    if (opts.gutters) {
+      // Gutters meet the next one round a hip or into a valley, and stop at a wall or an open end.
+      const gEnd = (end: 0 | 1) => {
+        const sign = end === 0 ? -1 : 1;
+        const at = end === 0 ? oa : ob;
+        const k = ends[end];
+        return k === "hip" ? at + sign * GUTTER_R : k === "valley" ? at - sign * GUTTER_R : k === "wall" ? face(end) : at;
+      };
+      parts.gutters.push([P(gEnd(0), yG, vG), P(gEnd(1), yG, vG)]);
+    }
+    for (const end of [0, 1] as const) {
+      const kind = ends[end];
+      const sign = end === 0 ? -1 : 1;
+      const at = end === 0 ? oa : ob;
+      if (kind === "hip") {
+        const a = P(at, yE, W);
+        const b = P(at - sign * run, yT, across);
+        const key = [...a, ...b].map((v) => v.toFixed(3)).join(",");
+        hips.set(key, [a, b]);
+        continue;
+      }
+      if (kind === "valley") continue;
+      if (kind === "square") pushPoly(parts.trim, [P(at, yE, W), P(at, yT, across), P(at, fr.top, across)], N(sign));
+      else {
+        const f = face(end) - sign * 0.006;
+        pushPoly(parts.flashing, [P(f, yE - 0.02, W), P(f, yT - 0.02, across), P(f, yT + 0.15, across), P(f, yE + 0.15, W)], N(-sign));
+      }
+      // A downpipe where the gutter stops, unless that is at an inside corner.
+      if (opts.gutters && (kind === "wall" || e.cut[end] || e.fascia[end] > 0)) {
+        const up = face(end) - sign * 0.15;
+        const vp = half + PIPE_R + 0.02;
+        const path: P3[] = [P(up, yG - GUTTER_R, vG), P(up, ySoffit - 0.06, vG), P(up, ySoffit - 0.06 - 0.8 * (vG - vp), vp)];
+        for (let i = 0; i + 1 < path.length; i++) parts.pipes.push([path[i], path[i + 1]]);
+        const head = path[path.length - 1];
+        const foot = opts.foot ? opts.foot(head[0], head[2], head[1]) : 0;
+        parts.pipes.push([head, [head[0], foot, head[2]]]);
+      }
     }
   }
+  for (const line of hips.values()) parts.caps.push({ line, pitchDeg: skirt.pitchDeg });
 }

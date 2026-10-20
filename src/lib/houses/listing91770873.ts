@@ -49,8 +49,8 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 12 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 12 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 13 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 13 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -261,9 +261,14 @@ export function listing91770873(image: string): HouseModel {
       // One brick stack on the party wall near the ridge, shared with No. 26
       // (chimney breasts are drawn on that wall on both floors of the plan).
       chimneys: [{ id: "party-stack", x: 5.82, y: -2.4, w: 0.9, d: 0.6, height: 0.9, pots: 2 }],
-      // The single-storey front has a tiled, hipped skirt round the front and
-      // sides with a flat roof behind; the rear edge is plain (rear photos).
-      flatRoofSkirt: { sides: ["front", "left", "right"], depth: 1.0, pitchDeg: 30 },
+      // The single-storey part has a flat roof dressed with a tiled skirt across the
+      // front, over the porch, garage and hall, hipped at both ends (front-street,
+      // front-2). It rises about 0.9 m, right up to the two-storey wall over the hall
+      // (front-1): set deeper than that, it stops against the wall. It returns round
+      // the corners: on the right all the way back to the two-storey wall, on the left
+      // a short way down the garage side (length assumed), since the rear photos show
+      // nothing rising above the plain flat edge at the back (rear-1, rear-4).
+      flatRoofSkirt: { sides: ["front"], depth: 1.8, pitchDeg: 30, returns: 2.0 },
     },
     preset: LISTING_PRESET,
     // Giraffe360 floorplan, IPMS 3C, garage included (the EPC gives 114 m²).

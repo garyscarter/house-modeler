@@ -192,7 +192,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
         {hasFlat && (
           <>
             <h4>Tiled edge on flat roofs</h4>
-            <p className="muted small">A sloping tiled skirt along the outside edges of single-storey flat roofs, hipped at the corners.</p>
+            <p className="muted small">A sloping tiled skirt along the outside edges of single-storey flat roofs, hipped at the corners. It can turn a corner and stop a short way along the next side.</p>
             <div className="row">
               {SIDES.map(([side, label]) => (
                 <label key={side} className="check">
@@ -212,6 +212,16 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
                 </Field>
                 <Field label="Pitch (°)">
                   <input type="number" min={10} max={45} step={1} value={skirt.pitchDeg} onChange={(e) => setSkirt({ pitchDeg: parseFloat(e.target.value) || skirt.pitchDeg })} />
+                </Field>
+                <Field label="Return round corners (m)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={skirt.returns ?? 0}
+                    onChange={(e) => setSkirt({ returns: Math.max(0, parseFloat(e.target.value) || 0) })}
+                  />
                 </Field>
               </div>
             )}

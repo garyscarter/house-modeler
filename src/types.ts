@@ -239,6 +239,12 @@ export interface FlatRoofSkirt {
   /** Horizontal depth of the tiled slope from the eaves, metres. */
   depth: number;
   pitchDeg: number;
+  /**
+   * How far the skirt turns an outside corner onto a side not in `sides`,
+   * metres from the corner, ending there in a cheek. A front skirt is often
+   * returned only a short way down the sides. Unset or 0: no returns.
+   */
+  returns?: number;
 }
 
 export type TileStyle = "plain" | "concrete" | "slate";

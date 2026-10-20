@@ -6,7 +6,11 @@ Facts used to build the built-in model (`src/lib/houses/listing91770873.ts`), an
 
 - 1928 interwar semi-detached house, joined to No. 26 (the corner plot) on the plan's right (east). Garage side faces the west neighbour.
 - Two-storey part: cream render, hipped roof at the garage end, flush at the party wall, concrete interlocking tiles, brown uPVC fascias, gutters and windows. One brick chimney stack on the party wall near the ridge (chimney breasts on that wall on both floors of the plan).
-- Single-storey part (garage, galley, front hall): red brick at the front, rendered at the rear. Tiled hipped skirt round the front and sides with a flat roof behind; plain flat edge at the rear.
+- Single-storey part (garage, galley, front hall): red brick at the front, rendered at the rear. Flat roof, dressed across the whole front (porch, garage and hall) with one tiled slope under one fascia and gutter line; the porch over the drive is under the same roof, on a brick pier at its front-left corner (front-2, front-3, front-street).
+  - The slope rises about 0.9 m at about 30°, all the way up to the two-storey wall over the hall, with a thin flashing where it meets it (front-1, front-street). Measured against the garage door in front-street, the fascia's underside is about 2.2 m above the garage floor and the top of the slope about 3.2 m.
+  - Hipped at both ends, with hip tiles. On the right the hip runs back to the two-storey wall beside the bay, with a downpipe in that corner (front-1, front-2). The left end is hipped over the pier and the gutter turns the corner (front-3); how far the slope returns down the garage side is not visible (it faces the boundary). The model assumes 2 m.
+  - The rear photos (rear-1, rear-4) show nothing rising above the plain flat edge at the back, so the slope does not run the length of the garage side.
+  - Brown fascia about 0.2 m deep below a brown half-round gutter. Under the porch, the garage's front wall around the door is cream render, not brick (front-3).
 - Front door: dark brown with glazed panels, on the side of the front hall projection under the porch canopy. Garage door: red, up-and-over.
 - Canted bay on the front living room with a small canopy roof.
 
