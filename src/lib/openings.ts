@@ -1,4 +1,5 @@
-import type { Opening } from "../types";
+import type { DoorStyle, GarageStyle, GlazingPattern, Opening, OpeningKind, OpeningStyle, SillStyle } from "../types";
+import { DOOR_STYLE_LABEL, GARAGE_STYLE_LABEL } from "../types";
 import type { OpeningPlacement, V2 } from "./geometry";
 import { bifoldLayout, type BifoldLayout } from "./bifold";
 import type { FaceQuad, FaceSlot, V3 } from "./walls";
@@ -14,11 +15,26 @@ import type { FaceQuad, FaceSlot, V3 } from "./walls";
  */
 
 /**
- * Material of a part. "frame" is the house's window and door frame colour,
- * "joinery" painted internal woodwork, "leaf"/"panel" the opening's own
- * colour (and a lighter shade of it for raised panels).
+ * Material of a part. "frame" is the house's window and door frame colour
+ * (or the opening's frameColor), "joinery" painted internal woodwork,
+ * "lining" a door's lining and architraves, "board" a window board inside,
+ * "leaf"/"panel"/"groove" the opening's own colour (and a lighter or darker
+ * shade of it for raised panels and plank joints), "obscure" patterned glass.
  */
-export type PartMat = "frame" | "joinery" | "glass" | "sill" | "leaf" | "panel" | "metal" | "lead" | "threshold";
+export type PartMat =
+  | "frame"
+  | "joinery"
+  | "lining"
+  | "board"
+  | "glass"
+  | "obscure"
+  | "sill"
+  | "leaf"
+  | "panel"
+  | "groove"
+  | "metal"
+  | "lead"
+  | "threshold";
 
 export interface Box {
   mat: PartMat;
@@ -45,12 +61,37 @@ const FD = 0.07;
 const SW = 0.045;
 /** How far window and external door frames sit back from the outer face. */
 const SET_BACK = 0.04;
-/** Open angle of swing doors, radians. */
-const OPEN = (75 * Math.PI) / 180;
 
 export const DEFAULT_BAY_DEPTH = 0.6;
 /** Dark stained timber of the lining and architrave of an archway (listing photos). */
 export const DEFAULT_ARCHWAY_COLOUR = "#3b2418";
+
+/** Styles offered for a kind of opening (none for kinds without a leaf style). */
+export function styleOptions(kind: OpeningKind): { value: OpeningStyle; label: string }[] {
+  if (kind === "door" || kind === "front") return (Object.keys(DOOR_STYLE_LABEL) as DoorStyle[]).map((value) => ({ value, label: DOOR_STYLE_LABEL[value] }));
+  if (kind === "garage") return (Object.keys(GARAGE_STYLE_LABEL) as GarageStyle[]).map((value) => ({ value, label: GARAGE_STYLE_LABEL[value] }));
+  return [];
+}
+
+/** The look of an opening with no style: panelled internal doors, glazed external doors, the classic front door, a panel-grid garage door. */
+export function defaultStyle(kind: OpeningKind, external: boolean): OpeningStyle | undefined {
+  if (kind === "door") return external ? "glazed" : "panel";
+  if (kind === "front") return "front";
+  if (kind === "garage") return "panel-grid";
+  return undefined;
+}
+
+/** The opening's style if its kind offers it, else the kind's default. */
+export function resolvedStyle(op: Opening, external: boolean): OpeningStyle | undefined {
+  if (op.style && styleOptions(op.kind).some((o) => o.value === op.style)) return op.style;
+  return defaultStyle(op.kind, external);
+}
+
+/** Open angle of a swing leaf, radians: the opening's openDeg, or `deg`. */
+function openAngle(op: Opening, deg: number): number {
+  const d = op.openDeg ?? deg;
+  return (Math.max(0, Math.min(180, d)) * Math.PI) / 180;
+}
 
 /** Number of casements for a window of this width (UK: about 0.5-0.75 m each). */
 export function casements(width: number): number {
@@ -79,13 +120,107 @@ function place(boxes: Box[], o: V3, ry: number): Box[] {
   }));
 }
 
+/** One pane of a glazed frame, bounded by frame or bar centre lines; `sash` gives it an opening casement's border. */
+interface Cell {
+  a: number;
+  b: number;
+  lo: number;
+  hi: number;
+  sash: boolean;
+}
+
+/** Bars of a glazed frame inside the outer frame: vertical (x set) or horizontal (y set), from `from` to `to`. */
+type Bar = { x: number; from: number; to: number } | { y: number; from: number; to: number };
+
+/** Height of the rail under the top lights of a frame from y0 to y1. */
+const topRail = (y0: number, y1: number) => y1 - Math.min(0.42, (y1 - y0) * 0.3);
+
+/** Number of top lights across a fixed pane of width w (about one per 0.85 m). */
+export function topLights(w: number): number {
+  return Math.max(1, Math.round(w / 0.85));
+}
+
+/**
+ * How a frame from x0 to x1 and y0 to y1 is divided into panes:
+ * - grid: `n` casements side by side, with fixed top lights over a transom when `transom`;
+ * - fixed: one fixed pane;
+ * - fixed-top: one large fixed pane under a transom and one or more top-hung top lights;
+ * - casement-fixed-casement: full-height side casements either side of a fixed centre pane under a top light.
+ */
+export function glazingLayout(
+  pattern: GlazingPattern,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  n: number,
+  transom: boolean,
+): { cells: Cell[]; bars: Bar[] } {
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const yt = topRail(y0, y1);
+  if (pattern === "fixed" || (pattern === "fixed-top" && h < 0.6)) return { cells: [{ a: x0, b: x1, lo: y0, hi: y1, sash: false }], bars: [] };
+  if (pattern === "fixed-top") {
+    const k = topLights(w);
+    const cells: Cell[] = [{ a: x0, b: x1, lo: y0, hi: yt, sash: false }];
+    const bars: Bar[] = [{ y: yt, from: x0, to: x1 }];
+    for (let j = 0; j < k; j++) {
+      cells.push({ a: x0 + (j * w) / k, b: x0 + ((j + 1) * w) / k, lo: yt, hi: y1, sash: true });
+      if (j) bars.push({ x: x0 + (j * w) / k, from: yt, to: y1 });
+    }
+    return { cells, bars };
+  }
+  if (pattern === "casement-fixed-casement" && w >= 0.9 && h >= 0.6) {
+    const sw = Math.max(0.3, Math.min(0.6, w * 0.24));
+    const xa = x0 + sw;
+    const xb = x1 - sw;
+    return {
+      cells: [
+        { a: x0, b: xa, lo: y0, hi: y1, sash: true },
+        { a: xa, b: xb, lo: y0, hi: yt, sash: false },
+        { a: xa, b: xb, lo: yt, hi: y1, sash: true },
+        { a: xb, b: x1, lo: y0, hi: y1, sash: true },
+      ],
+      bars: [
+        { x: xa, from: y0, to: y1 },
+        { x: xb, from: y0, to: y1 },
+        { y: yt, from: xa, to: xb },
+      ],
+    };
+  }
+  // Grid: casements, each with a fixed top light on tall frames.
+  const top = transom ? yt : y1;
+  const cw = w / n;
+  const cells: Cell[] = [];
+  const bars: Bar[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = x0 + i * cw;
+    const b = x0 + (i + 1) * cw;
+    if (i) bars.push({ x: a, from: y0, to: y1 });
+    cells.push({ a, b, lo: y0, hi: top, sash: true });
+    if (transom) cells.push({ a, b, lo: yt, hi: y1, sash: false });
+  }
+  if (transom) bars.push({ y: yt, from: x0, to: x1 });
+  return { cells, bars };
+}
+
 /**
  * A glazed frame from x0 to x1 and y0 to y1, centred at depth z: outer
- * frame, mullions between `n` casements and, on tall frames, a transom with
- * fixed top lights. Casements below the transom get a sash border on the
- * side `face` (the outside), like uPVC or timber casement windows.
+ * frame, then the bars and panes of the glazing pattern (see glazingLayout).
+ * Opening casements get a sash border on the side `face` (the outside),
+ * like uPVC or timber casement windows.
  */
-function glazedFrame(x0: number, x1: number, y0: number, y1: number, z: number, n: number, face: number, transom = y1 - y0 > 1.05): Box[] {
+function glazedFrame(
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  z: number,
+  n: number,
+  face: number,
+  transom = y1 - y0 > 1.05,
+  pattern: GlazingPattern = "grid",
+): Box[] {
   const out: Box[] = [];
   const w = x1 - x0;
   const h = y1 - y0;
@@ -96,25 +231,22 @@ function glazedFrame(x0: number, x1: number, y0: number, y1: number, z: number, 
   bar(x1 - FW / 2, y0 + h / 2, FW, h);
   bar(cx, y1 - FW / 2, w, FW);
   bar(cx, y0 + FW / 2, w, FW);
-  const cw = w / n;
-  for (let i = 1; i < n; i++) bar(x0 + i * cw, y0 + h / 2, FW, h);
-  const yt = transom ? y1 - Math.min(0.42, h * 0.3) : y1;
-  if (transom) bar(cx, yt, w, FW);
+  const { cells, bars } = glazingLayout(pattern, x0, x1, y0, y1, n, transom);
+  for (const b of bars) {
+    if ("x" in b) bar(b.x, (b.from + b.to) / 2, FW, b.to - b.from);
+    else bar((b.from + b.to) / 2, b.y, b.to - b.from, FW);
+  }
   const sz = face * (FD / 2 + 0.006);
-  for (let i = 0; i < n; i++) {
-    const a = x0 + i * cw + (i ? FW / 2 : FW);
-    const b = x0 + (i + 1) * cw - (i < n - 1 ? FW / 2 : FW);
-    const lo = y0 + FW;
-    const hi = yt - (transom ? FW / 2 : FW);
-    // Glass in each cell, and in the top light above the transom.
+  for (const c of cells) {
+    // Glass inset by the outer frame's full width, or half a bar's.
+    const a = c.a + (c.a === x0 ? FW : FW / 2);
+    const b = c.b - (c.b === x1 ? FW : FW / 2);
+    const lo = c.lo + (c.lo === y0 ? FW : FW / 2);
+    const hi = c.hi - (c.hi === y1 ? FW : FW / 2);
+    if (b - a <= 0.02 || hi - lo <= 0.02) continue;
     out.push({ mat: "glass", p: [(a + b) / 2, (lo + hi) / 2, z], s: [b - a, hi - lo, 0.012] });
-    if (transom) {
-      const tlo = yt + FW / 2;
-      const thi = y1 - FW;
-      if (thi - tlo > 0.02) out.push({ mat: "glass", p: [(a + b) / 2, (tlo + thi) / 2, z], s: [b - a, thi - tlo, 0.012] });
-    }
     // Sash border standing just proud of the frame on the outside.
-    if (b - a > 0.15 && hi - lo > 0.15) {
+    if (c.sash && b - a > 0.15 && hi - lo > 0.15) {
       bar(a + SW / 2, (lo + hi) / 2, SW, hi - lo, 0.012, sz);
       bar(b - SW / 2, (lo + hi) / 2, SW, hi - lo, 0.012, sz);
       bar((a + b) / 2, hi - SW / 2, b - a, SW, 0.012, sz);
@@ -124,19 +256,28 @@ function glazedFrame(x0: number, x1: number, y0: number, y1: number, z: number, 
   return out;
 }
 
-/** External sill under a window and the window board inside. */
-function sills(x0: number, x1: number, y: number, wallT: number, out: number): Box[] {
+/**
+ * External sill under a window and the window board inside. A stone sill is
+ * deep and projects well past the wall; a uPVC one is a thin nose in the
+ * frame colour (the "sill" part's colour follows the style, see partSpec).
+ */
+function sills(x0: number, x1: number, y: number, wallT: number, out: number, style: SillStyle = "stone"): Box[] {
   if (!out) return [];
   const half = wallT / 2;
   const fOut = Math.abs(frameZ(wallT, out)) + FD / 2;
   const fIn = Math.abs(frameZ(wallT, out)) - FD / 2;
-  const dOut = half - fOut + 0.05;
   const dIn = half + fIn + 0.025;
   const w = x1 - x0;
-  return [
-    { mat: "sill", p: [(x0 + x1) / 2, y - 0.02, out * (fOut + dOut / 2)], s: [w + 0.12, 0.05, dOut] },
-    { mat: "joinery", p: [(x0 + x1) / 2, y - 0.008, out * (fIn - dIn / 2)], s: [w + 0.06, 0.025, dIn] },
-  ];
+  const cx = (x0 + x1) / 2;
+  const boxes: Box[] = [{ mat: "board", p: [cx, y - 0.008, out * (fIn - dIn / 2)], s: [w + 0.06, 0.025, dIn] }];
+  if (style === "stone") {
+    const dOut = half - fOut + 0.05;
+    boxes.unshift({ mat: "sill", p: [cx, y - 0.02, out * (fOut + dOut / 2)], s: [w + 0.12, 0.05, dOut] });
+  } else if (style === "upvc") {
+    const dOut = half - fOut + 0.035;
+    boxes.unshift({ mat: "sill", p: [cx, y - 0.012, out * (fOut + dOut / 2)], s: [w + 0.04, 0.024, dOut] });
+  }
+  return boxes;
 }
 
 /**
@@ -151,6 +292,25 @@ function leaf(hx: number, hz: number, len: number, toward: number, swing: number
   return place(body(len), [hx, 0, hz], rotTo(dx, dz));
 }
 
+/** Lever handles on both faces of a leaf `len` long and `t` thick, near its far edge. */
+function levers(len: number, t: number, y = 1.0): Box[] {
+  const b: Box[] = [];
+  for (const side of [1, -1]) {
+    b.push({ mat: "metal", p: [len - 0.07, y, side * (t / 2 + 0.03)], s: [0.025, 0.025, 0.06] });
+    b.push({ mat: "metal", p: [len - 0.12, y, side * (t / 2 + 0.06)], s: [0.12, 0.022, 0.022] });
+  }
+  return b;
+}
+
+/** Raised panels (x0, x1, y0, y1 in the leaf's frame) standing on the given faces of a leaf `t` thick. */
+function raised(rects: [number, number, number, number][], t: number, faces: number[], d = 0.008): Box[] {
+  const b: Box[] = [];
+  for (const side of faces)
+    for (const [x0, x1, y0, y1] of rects)
+      if (x1 - x0 > 0.04 && y1 - y0 > 0.04) b.push({ mat: "panel", p: [(x0 + x1) / 2, (y0 + y1) / 2, (side * (t + d)) / 2], s: [x1 - x0, y1 - y0, d] });
+  return b;
+}
+
 /** A flush or panelled leaf with lever handles on both faces near its far edge. */
 function plainLeaf(height: number, t = 0.04, handle = true) {
   return (len: number): Box[] => {
@@ -162,13 +322,136 @@ function plainLeaf(height: number, t = 0.04, handle = true) {
         [1.05, height - 0.15],
       ])
         if (len > 0.45) b.push({ mat: "panel", p: [len / 2, (y0 + y1) / 2, (side * t) / 2], s: [len - 0.24, y1 - y0, 0.008] });
-    if (handle)
-      for (const side of [1, -1]) {
-        b.push({ mat: "metal", p: [len - 0.07, 1.0, side * (t / 2 + 0.03)], s: [0.025, 0.025, 0.06] });
-        b.push({ mat: "metal", p: [len - 0.12, 1.0, side * (t / 2 + 0.06)], s: [0.12, 0.022, 0.022] });
-      }
+    if (handle) b.push(...levers(len, t));
     return b;
   };
+}
+
+/** Rows and columns of glass in a "glazed-15" door. */
+export const GLAZED_15 = { cols: 3, rows: 5 };
+
+/**
+ * A door leaf in the given style, in its own frame: x from the hinge along
+ * the leaf, y up from the floor, z through its thickness. `show` (+1 or -1)
+ * is the face that is seen first: outside for external doors, the swing
+ * side for internal ones; planks are ledged on the other face. A front door
+ * (`front`) gets a letter plate and knob instead of lever handles.
+ */
+export function doorLeaf(style: DoorStyle, height: number, t: number, show: number, front = false) {
+  const h = height;
+  return (len: number): Box[] => {
+    const b: Box[] = [];
+    const lb = (x: number, y: number, w: number, hh: number, mat: PartMat = "leaf", d = t) => b.push({ mat, p: [x, y, 0], s: [w, hh, d] });
+    /** Glass from x0 to x1 and y0 to y1 at the leaf's centre plane. */
+    const pane = (x0: number, x1: number, y0: number, y1: number, mat: PartMat = "glass") =>
+      b.push({ mat, p: [(x0 + x1) / 2, (y0 + y1) / 2, 0], s: [x1 - x0, y1 - y0, 0.012] });
+    let letterY = 0.78;
+    switch (style) {
+      case "glazed":
+        return glazedLeaf(h, t, !front)(len).concat(front ? frontFurniture(len, t, show, 0.08) : []);
+      case "panel":
+        b.push(...plainLeaf(h, t, false)(len));
+        break;
+      case "flush":
+        lb(len / 2, 0.012 + h / 2, len, h);
+        break;
+      case "glazed-15": {
+        // Stiles and rails round a 3 x 5 grid of small panes divided by glazing bars.
+        const st = Math.min(0.1, len / 7);
+        const top = 0.1;
+        const bot = 0.22;
+        const gb = 0.028;
+        lb(st / 2, h / 2, st, h);
+        lb(len - st / 2, h / 2, st, h);
+        lb(len / 2, h - top / 2, len - 2 * st, top);
+        lb(len / 2, bot / 2, len - 2 * st, bot);
+        const gx0 = st;
+        const gx1 = len - st;
+        const gy0 = bot;
+        const gy1 = h - top;
+        const cw = (gx1 - gx0) / GLAZED_15.cols;
+        const rh = (gy1 - gy0) / GLAZED_15.rows;
+        for (let i = 1; i < GLAZED_15.cols; i++) lb(gx0 + i * cw, (gy0 + gy1) / 2, gb, gy1 - gy0, "leaf", t * 0.7);
+        for (let j = 1; j < GLAZED_15.rows; j++) lb((gx0 + gx1) / 2, gy0 + j * rh, gx1 - gx0, gb, "leaf", t * 0.7);
+        for (let i = 0; i < GLAZED_15.cols; i++)
+          for (let j = 0; j < GLAZED_15.rows; j++)
+            pane(gx0 + i * cw + (i ? gb / 2 : 0), gx0 + (i + 1) * cw - (i < GLAZED_15.cols - 1 ? gb / 2 : 0), gy0 + j * rh + (j ? gb / 2 : 0), gy0 + (j + 1) * rh - (j < GLAZED_15.rows - 1 ? gb / 2 : 0));
+        break;
+      }
+      case "six-panel": {
+        // Two columns of raised panels: short at the top, tall in the middle, medium at the bottom.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const st = Math.min(0.11, len / 7);
+        const mid = Math.min(0.1, len / 8);
+        const pw = (len - 2 * st - mid) / 2;
+        const rows: [number, number][] = [
+          [0.06, 0.36],
+          [0.43, 0.76],
+          [0.81, 0.94],
+        ];
+        const rects: [number, number, number, number][] = [];
+        for (const [a, c] of rows)
+          for (const x of [st, st + pw + mid]) rects.push([x, x + pw, 0.012 + a * h, 0.012 + c * h]);
+        b.push(...raised(rects, t, [1, -1], 0.01));
+        break;
+      }
+      case "half-glazed":
+      case "half-glazed-2": {
+        // Obscure glass over a solid lower half with raised panels, as on uPVC and composite doors.
+        const two = style === "half-glazed-2";
+        const st = Math.min(0.11, len / 6);
+        const top = 0.11;
+        const gy0 = 0.012 + h * 0.47;
+        const gy1 = 0.012 + h - top;
+        lb(len / 2, (0.012 + gy0) / 2, len, gy0 - 0.012);
+        lb(st / 2, (gy0 + gy1) / 2, st, gy1 - gy0);
+        lb(len - st / 2, (gy0 + gy1) / 2, st, gy1 - gy0);
+        lb(len / 2, gy1 + top / 2, len, top);
+        const mu = 0.08;
+        if (two) {
+          lb(len / 2, (gy0 + gy1) / 2, mu, gy1 - gy0);
+          pane(st, len / 2 - mu / 2, gy0, gy1, "obscure");
+          pane(len / 2 + mu / 2, len - st, gy0, gy1, "obscure");
+        } else pane(st, len - st, gy0, gy1, "obscure");
+        const py0 = 0.16;
+        const py1 = gy0 - 0.1;
+        b.push(...raised(two ? [[st, len / 2 - mu / 2, py0, py1], [len / 2 + mu / 2, len - st, py0, py1]] : [[st, len - st, py0, py1]], t, [1, -1], 0.01));
+        letterY = gy0 - 0.14;
+        break;
+      }
+      case "ledged": {
+        // Vertical tongue-and-groove planks; three ledges on the back face.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const k = Math.max(3, Math.round(len / 0.11));
+        for (let j = 1; j < k; j++)
+          for (const side of [1, -1]) b.push({ mat: "groove", p: [(j * len) / k, 0.012 + h / 2, side * (t / 2 + 0.001)], s: [0.008, h - 0.01, 0.003] });
+        for (const y of [0.25, h / 2, h - 0.25]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024] });
+        break;
+      }
+      case "front": {
+        // The classic front door: four panels under a glazed top light.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        for (const [a, c] of [
+          [0.2, 0.7],
+          [0.85, h - 0.62],
+        ])
+          for (const x of [len / 4, (3 * len) / 4]) b.push({ mat: "panel", p: [x, (a + c) / 2, show * 0.028], s: [len / 2 - 0.1, c - a, 0.012] });
+        b.push({ mat: "glass", p: [len / 2, h - 0.33, 0], s: [len - 0.16, 0.42, t + 0.01] });
+        break;
+      }
+    }
+    b.push(...(front ? frontFurniture(len, t, show, letterY) : levers(len, t)));
+    return b;
+  };
+}
+
+/** Letter plate on the face `show` at height y, and a knob on each face near the far edge. */
+function frontFurniture(len: number, t: number, show: number, y: number): Box[] {
+  return [
+    { mat: "metal", p: [len / 2, y, show * (t / 2 + 0.007)], s: [0.28, 0.05, 0.012] },
+    { mat: "metal", p: [len - 0.1, 1.0, show * (t / 2 + 0.02)], s: [0.05, 0.05, 0.05] },
+    { mat: "metal", p: [len - 0.1, 1.0, -show * (t / 2 + 0.02)], s: [0.03, 0.03, 0.05] },
+  ];
 }
 
 /** A glazed leaf or panel: stiles, rails, a kick rail and glass. */
@@ -203,7 +486,7 @@ function doorFrame(w: number, h: number, z: number): Box[] {
  * Lining and architraves of an internal door: the lining covers the reveal
  * through the wall and the architrave trims both faces.
  */
-function doorLining(w: number, h: number, wallT: number, mat: PartMat = "joinery"): Box[] {
+function doorLining(w: number, h: number, wallT: number, mat: PartMat = "lining"): Box[] {
   const lt = 0.025;
   const aw = 0.065;
   const b: Box[] = [
@@ -241,17 +524,20 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
     case "bay":
       break;
     case "window": {
-      boxes.push(...glazedFrame(-w / 2, w / 2, y0, y1, zf, casements(w), out || 1));
-      boxes.push(...sills(-w / 2, w / 2, y0, wallT, out));
+      boxes.push(...glazedFrame(-w / 2, w / 2, y0, y1, zf, casements(w), out || 1, undefined, op.glazing));
+      boxes.push(...sills(-w / 2, w / 2, y0, wallT, out, op.sillStyle));
       break;
     }
     case "door": {
       const s = swingSide(op, out);
+      const ang = openAngle(op, 75);
+      const style = resolvedStyle(op, !!out) as DoorStyle;
       if (out) {
-        // External door (back door): frame near the outside, leaf opening inwards.
+        // External door (back door): frame near the outside, leaf opening inwards (or shut, in the frame).
         boxes.push(...doorFrame(w, y1, zf));
         const lw = w - 2 * FW;
-        boxes.push(...leaf(hinge * (lw / 2), zf + s * (FD / 2), lw, -hinge, s, OPEN, glazedLeaf(y1 - FW - 0.02, 0.05)));
+        const hz = ang ? zf + s * (FD / 2) : zf;
+        boxes.push(...leaf(hinge * (lw / 2), hz, lw, -hinge, s, ang, doorLeaf(style, y1 - FW - 0.02, 0.05, out * -hinge)));
       } else {
         boxes.push(...doorLining(w, y1, wallT));
         const lh = y1 - 0.03;
@@ -259,41 +545,46 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
         const hz = s * (wallT / 2 - 0.02);
         if (w > 1.25) {
           // Wide openings get a pair of leaves.
-          boxes.push(...leaf(-inner / 2, hz, inner / 2, 1, s, OPEN, plainLeaf(lh)));
-          boxes.push(...leaf(inner / 2, hz, inner / 2, -1, s, OPEN, plainLeaf(lh)));
+          boxes.push(...leaf(-inner / 2, hz, inner / 2, 1, s, ang, doorLeaf(style, lh, 0.04, s)));
+          boxes.push(...leaf(inner / 2, hz, inner / 2, -1, s, ang, doorLeaf(style, lh, 0.04, -s)));
         } else {
-          boxes.push(...leaf(hinge * (inner / 2), hz, inner, -hinge, s, OPEN, plainLeaf(lh)));
+          boxes.push(...leaf(hinge * (inner / 2), hz, inner, -hinge, s, ang, doorLeaf(style, lh, 0.04, s * -hinge)));
         }
       }
       break;
     }
     case "front": {
-      // Closed panelled front door with a glazed top, letterbox and knob.
+      // Front door, shut unless openDeg says otherwise, with a letter plate and knob.
       boxes.push(...doorFrame(w, y1, zf));
       const lw = w - 2 * FW;
       const lh = y1 - FW - 0.02;
       const f = out || 1;
-      boxes.push({ mat: "leaf", p: [0, 0.012 + lh / 2, zf], s: [lw, lh, 0.05] });
-      const rows: [number, number][] = [
-        [0.2, 0.7],
-        [0.85, lh - 0.62],
-      ];
-      for (const [a, b] of rows)
-        for (const c of [-1, 1])
-          boxes.push({ mat: "panel", p: [(c * lw) / 4, (a + b) / 2, zf + f * 0.028], s: [lw / 2 - 0.1, b - a, 0.012] });
-      boxes.push({ mat: "glass", p: [0, lh - 0.33, zf], s: [lw - 0.16, 0.42, 0.06] });
-      boxes.push({ mat: "metal", p: [0, 0.78, zf + f * 0.032], s: [0.28, 0.05, 0.012] });
-      boxes.push({ mat: "metal", p: [-hinge * (lw / 2 - 0.1), 1.0, zf + f * 0.045], s: [0.05, 0.05, 0.05] });
-      boxes.push({ mat: "metal", p: [-hinge * (lw / 2 - 0.1), 1.0, zf - f * 0.045], s: [0.03, 0.03, 0.05] });
+      const s = swingSide(op, out);
+      const ang = openAngle(op, 0);
+      const style = resolvedStyle(op, true) as DoorStyle;
+      boxes.push(...leaf(hinge * (lw / 2), ang ? zf + s * (FD / 2) : zf, lw, -hinge, s, ang, doorLeaf(style, lh, 0.05, f * -hinge, true)));
       break;
     }
     case "garage": {
-      // Panelled up-and-over door in a frame near the outside.
+      // Up-and-over door in a frame near the outside.
       boxes.push(...doorFrame(w, y1, zf));
       const f = out || 1;
       const lw = w - 2 * FW;
       const lh = y1 - FW;
       boxes.push({ mat: "leaf", p: [0, lh / 2, zf], s: [lw, lh, 0.04] });
+      if (resolvedStyle(op, true) === "up-over") {
+        // One leaf with 3 x 2 raised panels and a central T-handle.
+        const m = 0.1;
+        const g = 0.07;
+        const pw = (lw - 2 * m - 2 * g) / 3;
+        const ph = (lh - 2 * m - g) / 2;
+        for (let r = 0; r < 2; r++)
+          for (let c = 0; c < 3; c++)
+            boxes.push({ mat: "panel", p: [-lw / 2 + m + c * (pw + g) + pw / 2, m + r * (ph + g) + ph / 2, zf + f * 0.027], s: [pw, ph, 0.014] });
+        boxes.push({ mat: "metal", p: [0, lh * 0.6, zf + f * 0.04], s: [0.05, 0.09, 0.03] });
+        boxes.push({ mat: "metal", p: [0, lh * 0.6 - 0.03, zf + f * 0.055], s: [0.14, 0.025, 0.02] });
+        break;
+      }
       const cols = w > 2.8 ? 3 : 2;
       const rows = 3;
       const pw = lw / cols;
@@ -324,8 +615,9 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       const lw = (w - 2 * FW) / 2;
       const hz = zf + s * (FD / 2);
       const lh = y1 - FW - 0.02;
-      boxes.push(...leaf(-lw, hz, lw, 1, s, (80 * Math.PI) / 180, glazedLeaf(lh, 0.055)));
-      boxes.push(...leaf(lw, hz, lw, -1, s, (80 * Math.PI) / 180, glazedLeaf(lh, 0.055)));
+      const ang = openAngle(op, 80);
+      boxes.push(...leaf(-lw, ang ? hz : zf, lw, 1, s, ang, glazedLeaf(lh, 0.055)));
+      boxes.push(...leaf(lw, ang ? hz : zf, lw, -1, s, ang, glazedLeaf(lh, 0.055)));
       break;
     }
     case "archway":
@@ -462,7 +754,7 @@ export function bayParts(
     const cz = (p.z + q.z) / 2 + nz * inset;
     const ry = rotTo(ux, uz * out);
     // In this face's own frame +z points out of the bay when out = 1.
-    const frame = glazedFrame(-l / 2, l / 2, sill, head, 0, casements(l), out, head - sill > 1.05);
+    const frame = glazedFrame(-l / 2, l / 2, sill, head, 0, casements(l), out, head - sill > 1.05, pl.opening.glazing);
     boxes.push(...place(frame, [cx, 0, cz * out], ry));
   }
   // Corner posts where the faces meet.

@@ -118,7 +118,58 @@ export interface Opening {
   depth?: number;
   /** Head (top) height above the floor, metres (default 2.1 windows, 2.05 doors). */
   head?: number;
+  /** Doors, front doors and garage doors: how the leaf looks. Unset: the kind's usual look (see defaultStyle in lib/openings). */
+  style?: OpeningStyle;
+  /** Windows and bays: how the glazing is divided (default "grid"). */
+  glazing?: GlazingPattern;
+  /** Windows and bays: the sill outside (default "stone"). */
+  sillStyle?: SillStyle;
+  /** Windows: colour of the window board inside (default white). */
+  boardColor?: string;
+  /** Internal doors: colour of the lining and architraves (default white). */
+  liningColor?: string;
+  /** Frame colour, instead of the house's window and door frame colour (e.g. a white garage-door frame). */
+  frameColor?: string;
+  /** Swing and French doors: how far the leaves are drawn open in 3D, degrees (default 75, French 80; 0 = shut). */
+  openDeg?: number;
 }
+
+/** Looks for door leaves (doors and front doors). */
+export type DoorStyle = "panel" | "flush" | "glazed" | "glazed-15" | "six-panel" | "half-glazed" | "half-glazed-2" | "ledged" | "front";
+export const DOOR_STYLE_LABEL: Record<DoorStyle, string> = {
+  panel: "Two shallow panels",
+  flush: "Flush",
+  glazed: "Fully glazed",
+  "glazed-15": "Glazed, 15 panes (3 × 5)",
+  "six-panel": "Six-panel",
+  "half-glazed": "Half-glazed (obscure top, solid bottom)",
+  "half-glazed-2": "Half-glazed, two panes over two panels",
+  ledged: "Ledged planks",
+  front: "Panelled with a glazed top light",
+};
+/** Looks for garage doors. */
+export type GarageStyle = "panel-grid" | "up-over";
+export const GARAGE_STYLE_LABEL: Record<GarageStyle, string> = {
+  "panel-grid": "Panel grid (reads as a pair)",
+  "up-over": "Up-and-over, raised panels (3 × 2)",
+};
+export type OpeningStyle = DoorStyle | GarageStyle;
+
+/** How a window's glazing is divided. */
+export type GlazingPattern = "grid" | "fixed" | "fixed-top" | "casement-fixed-casement";
+export const GLAZING_LABEL: Record<GlazingPattern, string> = {
+  grid: "Casements (top lights on tall windows)",
+  fixed: "Single fixed pane",
+  "fixed-top": "Fixed pane under top light(s)",
+  "casement-fixed-casement": "Casement | fixed + top light | casement",
+};
+/** External window sill: a deep stone or concrete sill, a thin one in the frame colour (uPVC), or none. */
+export type SillStyle = "stone" | "upvc" | "none";
+export const SILL_STYLE_LABEL: Record<SillStyle, string> = {
+  stone: "Stone / concrete",
+  upvc: "Thin, frame colour (uPVC)",
+  none: "None",
+};
 
 export type OpeningKind = "door" | "window" | "bay" | "garage" | "gap" | "patio" | "front" | "french" | "bifold" | "archway";
 export const OPENING_KIND_LABEL: Record<OpeningKind, string> = {

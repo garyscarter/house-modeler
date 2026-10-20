@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, openingParts, type Box } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -30,7 +30,7 @@ describe("windows", () => {
     const sill = boxes.find((b) => b.mat === "sill")!;
     expect(sill.p[2] + sill.s[2] / 2).toBeGreaterThan(T / 2); // projects past the wall face
     expect(sill.p[1]).toBeCloseTo(0.88);
-    const board = boxes.find((b) => b.mat === "joinery")!;
+    const board = boxes.find((b) => b.mat === "board")!;
     expect(board.p[2] - board.s[2] / 2).toBeLessThan(-T / 2);
   });
 
@@ -79,7 +79,7 @@ describe("doors", () => {
   it("gives internal bi-folds a lining and no threshold, external ones a frame and threshold", () => {
     const mats = (out: 1 | 0) => openingParts(place("bifold", 2, {}, 2.1), T, out).boxes.map((b) => b.mat);
     expect(mats(0)).not.toContain("threshold");
-    expect(mats(0)).toContain("joinery");
+    expect(mats(0)).toContain("lining");
     expect(mats(1)).toContain("threshold");
   });
 
@@ -141,5 +141,138 @@ describe("boxQuads", () => {
       const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
       expect(cr[0] * f.n[0] + cr[1] * f.n[1] + cr[2] * f.n[2]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("door styles", () => {
+  const leafParts = (style: Opening["style"], out: 1 | 0 = 0, extra: Partial<Opening> = {}) => openingParts(place("door", 0.8, { style, ...extra }, 2.05), out ? T : 0.1, out).boxes;
+
+  it("keeps the old looks by default: panelled internal, glazed external, classic front, panel-grid garage", () => {
+    expect(defaultStyle("door", false)).toBe("panel");
+    expect(defaultStyle("door", true)).toBe("glazed");
+    expect(defaultStyle("front", true)).toBe("front");
+    expect(defaultStyle("garage", true)).toBe("panel-grid");
+    expect(defaultStyle("window", true)).toBeUndefined();
+    // A style the kind does not offer falls back to the default.
+    expect(resolvedStyle({ id: "g", kind: "garage", x: 0, y: 0, orientation: "h", widthM: 2.2, style: "six-panel" }, true)).toBe("panel-grid");
+    expect(styleOptions("window")).toEqual([]);
+    expect(styleOptions("door").map((o) => o.value)).toContain("glazed-15");
+  });
+
+  it("gives a glazed-15 door 15 panes in 3 columns and 5 rows", () => {
+    const panes = glass(leafParts("glazed-15"));
+    expect(panes).toHaveLength(15);
+    expect(new Set(panes.map((p) => p.p[0].toFixed(3))).size).toBe(3);
+    expect(new Set(panes.map((p) => p.p[1].toFixed(3))).size).toBe(5);
+  });
+
+  it("gives a six-panel door six raised panels on each face and no glass", () => {
+    const b = doorLeaf("six-panel", 2.0, 0.04, 1)(0.75);
+    expect(b.filter((x) => x.mat === "panel")).toHaveLength(12);
+    expect(glass(b)).toHaveLength(0);
+  });
+
+  it("glazes the top half of a half-glazed door with obscure glass", () => {
+    const b = doorLeaf("half-glazed", 2.0, 0.05, 1)(0.8);
+    const ob = b.filter((x) => x.mat === "obscure");
+    expect(ob).toHaveLength(1);
+    expect(ob[0].p[1] - ob[0].s[1] / 2).toBeGreaterThan(0.9);
+    expect(doorLeaf("half-glazed-2", 2.0, 0.05, 1)(0.8).filter((x) => x.mat === "obscure")).toHaveLength(2);
+  });
+
+  it("puts a ledged door's ledges on the face away from the show face", () => {
+    const b = doorLeaf("ledged", 2.0, 0.04, 1)(0.7);
+    const ledges = b.filter((x) => x.mat === "leaf" && x.s[1] === 0.15);
+    expect(ledges).toHaveLength(3);
+    for (const l of ledges) expect(l.p[2]).toBeLessThan(0);
+    expect(b.filter((x) => x.mat === "groove").length).toBeGreaterThan(4);
+  });
+
+  it("draws a door shut in its frame with openDeg 0", () => {
+    const shut = leafParts("half-glazed", 1, { openDeg: 0 }).find((x) => x.mat === "leaf")!;
+    // Shut: the leaf lies along the wall, across the opening.
+    expect(Math.abs(Math.sin(shut.ry ?? 0))).toBeLessThan(1e-9);
+    expect(shut.s[0]).toBeGreaterThan(0.6);
+    const open = leafParts("half-glazed", 1).find((x) => x.mat === "leaf")!;
+    expect(Math.abs(Math.sin(open.ry ?? 0))).toBeGreaterThan(0.9);
+  });
+
+  it("lines internal doors with the lining material", () => {
+    expect(leafParts("glazed-15").some((b) => b.mat === "lining")).toBe(true);
+  });
+
+  it("draws a front door shut with a letter plate on the outside", () => {
+    const b = openingParts(place("front", 0.9, { style: "half-glazed-2" }, 2.05), T, 1).boxes;
+    expect(b.filter((x) => x.mat === "obscure")).toHaveLength(2);
+    const plate = b.filter((x) => x.mat === "metal").find((x) => x.s[0] === 0.28)!;
+    expect(plate.p[2]).toBeGreaterThan(0);
+  });
+});
+
+describe("garage styles", () => {
+  it("makes an up-and-over door one leaf with 3 x 2 raised panels and a central handle", () => {
+    const b = openingParts(place("garage", 2.15, { style: "up-over" }, 2.0), T, 1).boxes;
+    expect(leaves(b)).toHaveLength(1);
+    const panels = b.filter((x) => x.mat === "panel");
+    expect(panels).toHaveLength(6);
+    expect(new Set(panels.map((p) => p.p[0].toFixed(3))).size).toBe(3);
+    expect(new Set(panels.map((p) => p.p[1].toFixed(3))).size).toBe(2);
+    for (const m of b.filter((x) => x.mat === "metal")) expect(m.p[0]).toBeCloseTo(0);
+  });
+
+  it("keeps the panel-grid look by default", () => {
+    expect(openingParts(place("garage", 2.4, {}, 2.0), T, 1).boxes.filter((x) => x.mat === "panel")).toHaveLength(6);
+  });
+});
+
+describe("glazing patterns", () => {
+  const win = (glazing: Opening["glazing"], w = 1.2) => openingParts(place("window", w, { glazing }, 2.1, 0.9), T, 1).boxes;
+
+  it("counts panes per pattern", () => {
+    expect(glass(win("grid"))).toHaveLength(4); // two casements, two top lights
+    expect(glass(win("fixed"))).toHaveLength(1);
+    expect(glass(win("fixed-top", 0.85))).toHaveLength(2);
+    expect(glass(win("fixed-top", 1.7))).toHaveLength(3);
+    expect(glass(win("casement-fixed-casement", 1.85))).toHaveLength(4);
+  });
+
+  it("puts the fixed pane under the top lights", () => {
+    const [low, high] = [...glass(win("fixed-top", 0.85))].sort((a, b) => a.p[1] - b.p[1]);
+    expect(low.s[1]).toBeGreaterThan(high.s[1] * 2);
+    expect(low.s[0]).toBeCloseTo(high.s[0]);
+  });
+
+  it("runs the side casements of casement-fixed-casement full height", () => {
+    const { cells } = glazingLayout("casement-fixed-casement", -0.9, 0.9, 1, 2.1, 3, true);
+    const sides = cells.filter((c) => c.a === -0.9 || c.b === 0.9);
+    expect(sides).toHaveLength(2);
+    for (const c of sides) {
+      expect(c.lo).toBe(1);
+      expect(c.hi).toBe(2.1);
+      expect(c.sash).toBe(true);
+    }
+    expect(cells.filter((c) => !c.sash)).toHaveLength(1);
+  });
+
+  it("adds a top light per 0.85 m or so", () => {
+    expect([0.6, 0.9, 1.7, 2.6].map(topLights)).toEqual([1, 1, 2, 3]);
+  });
+
+  it("uses the pattern on each bay face", () => {
+    const parts = bayParts(place("bay", 1.5, { glazing: "fixed-top" }), T, 1, "R", { sill: 0.75, plinth: -0.25, depth: 0.3 });
+    expect(glass(parts.boxes)).toHaveLength(6);
+  });
+});
+
+describe("sills", () => {
+  const win = (sillStyle?: Opening["sillStyle"]) => openingParts(place("window", 1.0, { sillStyle }, 2.1, 0.9), T, 1).boxes;
+  it("draws a thin uPVC sill, a deep stone one, or none, and always a board inside", () => {
+    const stone = win().find((b) => b.mat === "sill")!;
+    const upvc = win("upvc").find((b) => b.mat === "sill")!;
+    expect(upvc.s[1]).toBeLessThan(stone.s[1]);
+    expect(upvc.s[2]).toBeLessThan(stone.s[2]);
+    expect(upvc.p[2] + upvc.s[2] / 2).toBeGreaterThan(T / 2);
+    expect(win("none").some((b) => b.mat === "sill")).toBe(false);
+    for (const s of [undefined, "upvc", "none"] as const) expect(win(s).some((b) => b.mat === "board")).toBe(true);
   });
 });

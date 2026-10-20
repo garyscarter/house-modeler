@@ -72,21 +72,38 @@ function leafColour(op: Opening): string {
   return op.kind === "door" ? "#c9a26b" : "#b3202e";
 }
 
+/** Painted internal woodwork: linings, architraves and window boards unless an opening says otherwise. */
+const JOINERY_WHITE = "#f3f1ea";
+
 /** Material of a joinery part of an opening. */
 function partSpec(mat: PartMat, op: Opening | null, trim: string): MatSpec {
+  const frame = op?.frameColor ?? trim;
   switch (mat) {
     case "frame":
-      return { kind: "plain", color: trim, roughness: 0.5 };
+      return { kind: "plain", color: frame, roughness: 0.5 };
     case "joinery":
-      return { kind: "plain", color: "#f3f1ea", roughness: 0.6 };
+      return { kind: "plain", color: JOINERY_WHITE, roughness: 0.6 };
+    case "lining":
+      return { kind: "plain", color: op?.liningColor ?? JOINERY_WHITE, roughness: 0.6 };
+    case "board":
+      return { kind: "plain", color: op?.boardColor ?? JOINERY_WHITE, roughness: 0.6 };
     case "glass":
       return { kind: "glass" };
+    case "obscure":
+      // Patterned glass you cannot see through: pale, slightly glossy.
+      return { kind: "plain", color: "#c9d0d2", roughness: 0.25, metalness: 0.1 };
     case "sill":
-      return { kind: "plain", color: "#d6d2c8", roughness: 0.85 };
+      // Stone or concrete sills are pale; uPVC sills match the frame.
+      return op?.sillStyle === "upvc" ? { kind: "plain", color: frame, roughness: 0.5 } : { kind: "plain", color: "#d6d2c8", roughness: 0.85 };
     case "leaf":
       return { kind: "plain", color: op ? leafColour(op) : trim, roughness: 0.55 };
-    case "panel":
-      return { kind: "plain", color: shade(op ? leafColour(op) : trim, 1.14), roughness: 0.5 };
+    case "panel": {
+      // Raised panels catch the light: a lighter shade, or a slightly darker one on white doors.
+      const c = op ? leafColour(op) : trim;
+      return { kind: "plain", color: shade(c, new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l > 0.8 ? 0.95 : 1.14), roughness: 0.5 };
+    }
+    case "groove":
+      return { kind: "plain", color: shade(op ? leafColour(op) : trim, 0.55), roughness: 0.8 };
     case "metal":
       return op?.kind === "front" ? { kind: "plain", color: "#c8a24a", roughness: 0.35, metalness: 0.7 } : { kind: "plain", color: "#c9c6bf", roughness: 0.35, metalness: 0.7 };
     case "lead":

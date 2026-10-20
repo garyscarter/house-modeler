@@ -49,7 +49,17 @@ const op = (
   ...extra,
 });
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 15 };
+// Joinery from the photos.
+/** Downstairs internal doors: dark-stained mahogany with 15 small panes and dark linings (kitchen-2, galley-1, hall-front-1). */
+const MAHOGANY_DOOR: Partial<Opening> = { style: "glazed-15", color: "#3e2418", liningColor: "#3e2418" };
+/** Upstairs: white six-panel doors with white architraves (landing-1, bedroom-3-3). */
+const WHITE_DOOR: Partial<Opening> = { style: "six-panel", color: "#f2f0ea" };
+/** Brown uPVC windows have only a thin uPVC sill outside, no stone sill (front-2, rear-1). */
+const UPVC: Partial<Opening> = { sillStyle: "upvc" };
+/** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
+const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
+
+export const LISTING_PRESET ={ id: "listing-91770873", version: 15 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 15 };
 
 export function listing91770873(image: string): HouseModel {
@@ -152,22 +162,29 @@ export function listing91770873(image: string): HouseModel {
       // 657-780 with a 0.3 m pier between; rear-1 agrees once its perspective is fitted to the other
       // rear openings. The window is about 1.7 m wide and 1.15 m tall, its sill a tile course above the
       // worktop (kitchen-1, -4) and its head a little above the door's (rear-1).
-      op("door", 604, 22, "h", 0.85), // back door
-      op("window", 719, 22, "h", 1.7, { sill: 1.0, head: 2.15 }),
-      op("window", 910, 22, "h", 1.7, { sill: 1.0, head: 2.15 }), // level with the galley window (rear photos)
+      // The back door is dark brown uPVC, shut, obscure-glazed over a solid lower half (rear-1, galley-2).
+      op("door", 604, 22, "h", 0.85, { style: "half-glazed", color: "#3b2219", openDeg: 0 }), // back door
+      // Both rear windows are one large fixed pane under two top lights (rear-1, kitchen-1).
+      op("window", 719, 22, "h", 1.7, { sill: 1.0, head: 2.15, glazing: "fixed-top", ...TILE_BOARD }),
+      op("window", 910, 22, "h", 1.7, { sill: 1.0, head: 2.15, glazing: "fixed-top", ...TILE_BOARD }), // level with the galley window (rear photos)
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
       op("archway", 1170, 278, "h", 2.0), // open archway between the two living rooms, lined in dark stained timber (not bi-folds)
-      { ...op("bay", 1185, 515, "h", 2.4), depth: 0.3 }, // shallow canted bay on the front living room (photos)
-      op("door", 1045, 410, "v", 0.8), // hall -> front living room
-      op("door", 770, 345, "h", 0.8), // kitchen -> front hall
-      op("door", 950, 345, "h", 0.8), // kitchen -> stairs hall
-      op("door", 960, 515, "h", 0.8), // stairs hall -> front hall
-      op("front", 730, 575, "v", 0.9, { color: "#4f2f22" }), // front door (dark brown, glazed)
-      op("window", 830, 620, "h", 0.85),
-      op("window", 962, 620, "h", 0.9),
-      op("window", 1045, 570, "v", 0.8),
-      op("garage", 630, 515, "h", 2.4, { color: "#b3202e" }), // garage door
+      // Each bay face is a large fixed pane under a narrow top light (front-2).
+      { ...op("bay", 1185, 515, "h", 2.4), depth: 0.3, glazing: "fixed-top", ...UPVC }, // shallow canted bay on the front living room (photos)
+      op("door", 1045, 410, "v", 0.8, MAHOGANY_DOOR), // hall -> front living room
+      op("door", 770, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> front hall
+      op("door", 950, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> stairs hall
+      op("door", 960, 515, "h", 0.8, MAHOGANY_DOOR), // stairs hall -> front hall
+      // Two leaded obscure panes over two panels (hall-front-1, front-3).
+      op("front", 730, 575, "v", 0.9, { color: "#4f2f22", style: "half-glazed-2" }), // front door (dark brown, glazed)
+      // Hall windows: a fixed pane under a top-hung top light (front-2); the side one is barred (galley-1).
+      op("window", 830, 620, "h", 0.85, { glazing: "fixed-top", ...TILE_BOARD }),
+      op("window", 962, 620, "h", 0.9, { glazing: "fixed-top", ...TILE_BOARD }),
+      op("window", 1045, 570, "v", 0.8, { glazing: "fixed-top", ...TILE_BOARD }),
+      // A single up-and-over leaf with 3 x 2 raised panels in a white frame, 2.15 m wide: a cream nib about
+      // 0.5 m wide on its left (partly hidden by the porch pier in front-3) and a thin one on its right.
+      op("garage", 635, 515, "h", 2.15, { color: "#b3202e", style: "up-over", frameColor: "#f2efe6" }), // garage door
     ],
     { x: 865, y: 430 },
     // Covered porch in front of the garage door and front door.
@@ -223,16 +240,18 @@ export function listing91770873(image: string): HouseModel {
       rect("Stairs", 610, 1110, 690, 1215, undefined, { floorFinish: "carpet", color: "#bdae9f", wallPaint: "#f1eee8" }),
     ],
     [
-      op("door", 745, 1040, "h", 0.8),
-      op("door", 805, 1040, "h", 0.8),
-      op("door", 850, 1075, "v", 0.8),
-      op("door", 750, 1110, "h", 0.75),
+      op("door", 745, 1040, "h", 0.8, WHITE_DOOR),
+      op("door", 805, 1040, "h", 0.8, WHITE_DOOR),
+      op("door", 850, 1075, "v", 0.8, WHITE_DOOR),
+      op("door", 722, 1110, "h", 0.65, WHITE_DOOR),
       op("gap", 650, 1110, "h", 0.8), // stairs open onto the landing
-      op("window", 720, 795, "h", 1.0),
-      op("window", 930, 795, "h", 1.85),
-      op("window", 750, 1285, "h", 0.65, { sill: 1.2 }),
-      op("window", 972, 1285, "h", 0.95),
-      op("window", 610, 1080, "v", 0.6),
+      // Bedroom 1, the bathroom and bedroom 3: one pane under a top light; bedroom 2: side casements
+      // either side of a fixed centre pane under a top light (rear-1, front-2).
+      op("window", 720, 795, "h", 1.0, { glazing: "fixed-top", ...UPVC }),
+      op("window", 930, 795, "h", 1.85, { glazing: "casement-fixed-casement", ...UPVC }),
+      op("window", 750, 1285, "h", 0.65, { sill: 1.2, glazing: "fixed-top", ...UPVC }),
+      op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...UPVC }),
+      op("window", 610, 1080, "v", 0.6, UPVC),
     ],
     { x: 650, y: 1162 },
   );
@@ -313,9 +332,9 @@ export function listing91770873Proposed(image: string): HouseModel {
   const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { roofGroup: "extension" });
   first.rooms.push(newRoom);
   first.openings.push(
-    op("door", 610, 1075, "v", 0.8), // from the landing (assumed)
-    op("window", 470, 795, "h", 1.8), // north (assumed)
-    op("window", 470, 1285, "h", 1.8), // south (assumed)
+    op("door", 610, 1075, "v", 0.8, WHITE_DOOR), // from the landing (assumed)
+    op("window", 470, 795, "h", 1.8, UPVC), // north (assumed)
+    op("window", 470, 1285, "h", 1.8, UPVC), // south (assumed)
   );
   return house;
 }
