@@ -332,7 +332,20 @@ const block = (name: string, x0: number, y0: number, x1: number, y1: number, ext
   roof: "flat",
   ...extra,
 });
-const surface = (kind: SiteSurface["kind"], pts: [number, number][]): SiteSurface => ({ id: uid(), kind, polygon: w(pts) });
+const surface = (kind: SiteSurface["kind"], pts: [number, number][], slope?: SiteSurface["slope"]): SiteSurface => ({
+  id: uid(),
+  kind,
+  polygon: w(pts),
+  ...(slope ? { slope } : {}),
+});
+
+/**
+ * The drive rises gently from the pavement (ground level) to the garage door
+ * (front-3, front-street): no step at the door, only a thin threshold. The
+ * ground floor's finished level is 0.26 m above the ground, so the drive tops
+ * out 0.02 m under it at the garage door.
+ */
+const DRIVE_RISE = 0.24;
 
 /**
  * Plot, neighbours and orientation for the listing, measured from the
@@ -406,12 +419,30 @@ export function listingSite(): Site {
         [5.84, -12.05],
         [-4.44, -11.24],
       ]),
-      surface("drive", [
-        [-4.59, 1.16],
-        [-1.85, 1.16],
-        [-1.85, 5.5],
-        [-4.88, 5.5],
-      ]),
+      // Pavement to garage door (z 5.5 back to 1.16), rising DRIVE_RISE; the porch floor and
+      // the front door's landing (z about 1.2 to 2.6, x -1.85 edge) are the top of this ramp.
+      surface(
+        "drive",
+        [
+          [-4.59, 1.16],
+          [-1.85, 1.16],
+          [-1.85, 5.5],
+          [-4.88, 5.5],
+        ],
+        { toward: "back", rise: DRIVE_RISE },
+      ),
+      // Paving along the front of the hall, kerbed from the lawn (front-3). It carries on from the
+      // drive's east edge, so it starts at the drive's height there and falls a little away from the wall.
+      surface(
+        "path",
+        [
+          [-1.85, 2.6],
+          [2.47, 2.6],
+          [2.47, 3.5],
+          [-1.85, 3.5],
+        ],
+        { toward: "back", rise: 0.05, base: 0.11 }, // the drive is 0.11 m up at z 3.5 and 0.16 m at z 2.6
+      ),
       // The front hall projects to x = 2.47 (ground floor plan px 1045).
       surface("lawn", [
         [-1.85, 2.6],

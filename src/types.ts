@@ -357,10 +357,34 @@ export const SURFACE_LABEL: Record<SurfaceKind, string> = {
   road: "Road",
 };
 
+/** Which way a sloping surface climbs: back is away from the street (-y in plan), front towards it. */
+export type SlopeToward = "back" | "front" | "left" | "right";
+export const SLOPE_TOWARD_LABEL: Record<SlopeToward, string> = {
+  back: "the back of the plot",
+  front: "the street",
+  left: "the left",
+  right: "the right",
+};
+
+/**
+ * A planar ramp across a surface: heights are metres above the ground. The
+ * surface is `base` high at its lowest edge (along the direction of climb) and
+ * `base + rise` at its highest, so a drive that meets a door sill is a rise of
+ * a little under the step up to the floor. A zero rise with a base is a flat,
+ * raised surface.
+ */
+export interface SurfaceSlope {
+  toward: SlopeToward;
+  rise: number;
+  base?: number;
+}
+
 export interface SiteSurface {
   id: string;
   kind: SurfaceKind;
   polygon: WPt[];
+  /** Absent: flat at ground level. */
+  slope?: SurfaceSlope;
 }
 
 export interface Photo {
