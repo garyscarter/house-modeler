@@ -179,7 +179,7 @@ function along(g: THREE.BufferGeometry, p: V2, q: V2, y: number): THREE.BufferGe
   return g;
 }
 
-type Part = "timber" | "concrete" | "brick" | "coping" | "hedge";
+type Part = "timber" | "concrete" | "brick" | "coping" | "mortar" | "hedge";
 
 /** Close-board fence: posts every 1.83 m (a 6 ft panel), boards on a concrete gravel board. */
 function fence(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
@@ -198,19 +198,41 @@ function fence(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: numbe
   }
 }
 
-/** One-brick garden wall with piers about every 3 m and a coping. */
-function brickWall(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
+/** Brick size on edge across a one-brick wall: 102.5 mm high, 65 mm along the wall, 10 mm joints. */
+const EDGE_BRICK_H = 0.1025;
+const EDGE_BRICK_PITCH = 0.075;
+
+/**
+ * One-brick garden wall. The top is a grey coping, or a course of bricks on edge
+ * (slightly proud, vertical joints every 75 mm). Piers about every 3 m when asked.
+ */
+function brickWall(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number, top: "coping" | "brick" = "coping", withPiers = true) {
   const len = Math.hypot(q.x - p.x, q.y - p.y);
-  const body = Math.max(0.1, h - 0.06);
+  const onEdge = top === "brick" && h > EDGE_BRICK_H + 0.1;
+  const capH = onEdge ? EDGE_BRICK_H : 0.06;
+  const body = Math.max(0.1, h - capH);
   out.brick.push(along(metricBox(len, body, 0.215), p, q, GROUND_Y + body / 2));
-  out.coping.push(along(metricBox(len + 0.04, 0.06, 0.29), p, q, GROUND_Y + h - 0.03));
-  if (h > 0.6) {
+  if (onEdge) {
+    const n = Math.max(1, Math.round(len / EDGE_BRICK_PITCH));
+    const step = len / n;
+    const at = (d: number) => ({ x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len });
+    const y = GROUND_Y + body + EDGE_BRICK_H / 2;
+    out.mortar.push(along(metricBox(len, EDGE_BRICK_H - 0.004, 0.2), p, q, y));
+    for (let k = 0; k < n; k++) {
+      const a = at(k * step + 0.005);
+      const b = at((k + 1) * step - 0.005);
+      out.brick.push(along(metricBox(Math.hypot(b.x - a.x, b.y - a.y), EDGE_BRICK_H, 0.23), a, b, y));
+    }
+  } else {
+    out.coping.push(along(metricBox(len + 0.04, 0.06, 0.29), p, q, GROUND_Y + h - 0.03));
+  }
+  if (withPiers && h > 0.6) {
     const piers = Math.max(1, Math.round(len / 3));
     for (let k = 0; k <= piers; k++) {
       const d = (k * len) / piers;
       const c = { x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len };
       const c2 = { x: c.x + (q.x - p.x) / len / 1000, y: c.y + (q.y - p.y) / len / 1000 };
-      out.brick.push(along(metricBox(0.33, body, 0.33), c, c2, GROUND_Y + body / 2));
+      out.brick.push(along(metricBox(0.33, h - 0.06, 0.33), c, c2, GROUND_Y + (h - 0.06) / 2));
       out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + h - 0.02));
     }
   }
@@ -236,13 +258,14 @@ const PART_MATERIAL: Record<Part, () => THREE.Material> = {
   concrete: () => plainMaterial("#a19e96"),
   brick: () => surfaceMaterial("brick"),
   coping: () => plainMaterial("#bdb9b0"),
+  mortar: () => plainMaterial("#b4ac9c"),
   hedge: () => surfaceMaterial("hedge"),
 };
 
 /** Fences, walls and hedges along the plot boundary, stopping at buildings. Merged into one mesh per material. */
 function Boundary({ site: { boundary, boundaryEdges }, buildings }: { site: Site; buildings: V2[][] }) {
   const parts = useMemo(() => {
-    const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], hedge: [] };
+    const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], mortar: [], hedge: [] };
     const edges = edgesOf({ boundary, boundaryEdges });
     boundary.forEach((a, i) => {
       const e = edges[i];
@@ -252,7 +275,7 @@ function Boundary({ site: { boundary, boundaryEdges }, buildings }: { site: Site
         const p = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
         const q = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
         if (e.kind === "fence") fence(out, p, q, e.height);
-        else if (e.kind === "wall") brickWall(out, p, q, e.height);
+        else if (e.kind === "wall") brickWall(out, p, q, e.height, e.top ?? "coping", e.piers ?? true);
         else hedge(out, p, q, e.height);
       }
     });
