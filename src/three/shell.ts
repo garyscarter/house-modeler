@@ -12,7 +12,7 @@ import {
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
 import { bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
-import { interiorFinish } from "../lib/wallCovering";
+import { interiorFinish, outsideLook } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { type MatSpec, matKey } from "./textures";
 
@@ -140,9 +140,9 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   const batch = new Batcher();
   const bayFloors: BayFloor[] = [];
 
-  const outsideSpec = (roomId: string | null, color?: string): MatSpec => {
-    const room = roomId ? roomsById.get(roomId) : undefined;
-    return { kind: "ext", finish: room?.exteriorFinish ?? inp.wallFinish, color: color ?? room?.exteriorColor ?? inp.wallColor };
+  const outsideSpec = (roomId: string | null, color?: string, edge?: number): MatSpec => {
+    const look = outsideLook(roomId ? roomsById.get(roomId) : undefined, edge, { finish: inp.wallFinish, color: inp.wallColor });
+    return { kind: "ext", finish: look.finish, color: color ?? look.color };
   };
   const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null): MatSpec => {
     switch (slot.kind) {
@@ -151,7 +151,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
         return f.covering === "paint" ? { kind: "paint", color: f.color } : { kind: "cover", ...f };
       }
       case "outside":
-        return outsideSpec(slot.roomId, wall?.color);
+        return outsideSpec(slot.roomId, wall?.color, slot.edge);
       case "top":
         return { kind: "plain", color: "#cfcac0", roughness: 0.9 };
       case "part":

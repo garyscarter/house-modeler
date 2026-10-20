@@ -73,6 +73,14 @@ export interface WallOverride {
   paint?: string;
   /** Pattern colour of the covering. */
   accent?: string;
+  /** The same edge's outside face, if it is an outside wall: fields left out follow the room's outside finish. */
+  outside?: OutsideOverride;
+}
+
+/** One outside wall's own finish (for example a render panel in a brick room). */
+export interface OutsideOverride {
+  finish?: WallFinish;
+  color?: string;
 }
 
 export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "quarry" | "stone" | "carpet" | "vinyl" | "concrete";

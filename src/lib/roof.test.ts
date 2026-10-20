@@ -218,6 +218,19 @@ describe("flat roofs", () => {
     expect(fr.top).toBeGreaterThan(m.ceilingHeight + m.slabThickness);
   });
 
+  it("draws the porch ceiling as its own part, horizontal and facing down", () => {
+    const { ceiling } = roofParts(planRoofs(listing91770873("")), { gutters: false });
+    expect(ceiling.length).toBeGreaterThan(0);
+    for (let i = 0; i + 8 < ceiling.length; i += 9) {
+      const [a, b, c] = [0, 3, 6].map((o) => ceiling.slice(i + o, i + o + 3));
+      expect(a[1]).toBeCloseTo(b[1]);
+      expect(a[1]).toBeCloseTo(c[1]);
+      // Plan-view cross product: counter-clockwise seen from above means facing up, so it must not be.
+      const cross = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+      expect(cross).toBeLessThanOrEqual(1e-9);
+    }
+  });
+
   it("marks the porch canopy as open so it gets a ceiling", () => {
     const fr = planRoofs(listing91770873("")).flatRoofs[0];
     expect(fr.open).toHaveLength(1);
@@ -313,6 +326,7 @@ describe("chimneys and downpipes", () => {
     expect(on.tiles.uv.length / 2).toBe(on.tiles.pos.length / 3);
     expect(on.membrane.uv.length / 2).toBe(on.membrane.pos.length / 3);
     expect(on.trim.length).toBeGreaterThan(0);
+    expect(on.ceiling.length).toBeGreaterThan(0);
     expect(on.flashing.length).toBeGreaterThan(0);
     expect(on.gutters.length).toBeGreaterThan(0);
     expect(on.pipes.length).toBeGreaterThan(0);
@@ -328,6 +342,7 @@ describe("flat roof skirt", () => {
     tiles: { pos: [], uv: [] },
     gables: [],
     trim: [],
+    ceiling: [],
     membrane: { pos: [], uv: [] },
     edgeTrim: [],
     flashing: [],

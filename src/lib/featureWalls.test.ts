@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Opening, Room } from "../types";
 import { buildWalls, cutWall, roomWorldPolygon } from "./geometry";
-import { edgeLabel, edgeSpans, insertCorner, removeCorner, setWallOverride, spansByEdge } from "./featureWalls";
+import { edgeLabel, edgeSpans, insertCorner, isOutsideEdge, removeCorner, setOutsideOverride, setWallOverride, spansByEdge } from "./featureWalls";
 import { sideSpans, wallEnds, wallFaces, wallThickness } from "./walls";
-import { interiorFinish, wallLook } from "./wallCovering";
+import { interiorFinish, outsideLook, wallLook } from "./wallCovering";
 import { floor, rect } from "./testing";
 import { listing91770873 } from "./houses/listing91770873";
 
@@ -191,5 +191,72 @@ describe("the listing's feature walls", () => {
     expect(where("Kitchen (galley)")).toEqual(["brick to Garage"]);
     expect(where("Kitchen")).toEqual(["brick outside, rear", "brick to Garage"]);
     expect(where("Hallway (stairs)")).toEqual(["trail to Hallway (front)"]);
+  });
+});
+
+describe("outside finishes of single walls", () => {
+  const room: Room = rect("A", 0, 0, 300, 400, { wallFinishes: { 0: { covering: "brick" } } });
+
+  it("keeps the inside covering when the outside is set or cleared, and the other way round", () => {
+    const withOut = setOutsideOverride(room, 0, { finish: "render" });
+    expect(withOut).toEqual({ 0: { covering: "brick", outside: { finish: "render" } } });
+    expect(setWallOverride({ ...room, wallFinishes: withOut }, 0, { covering: "tiles" })).toEqual({ 0: { covering: "tiles", outside: { finish: "render" } } });
+    expect(setOutsideOverride({ ...room, wallFinishes: withOut }, 0, null)).toEqual({ 0: { covering: "brick" } });
+  });
+
+  it("drops an override left with nothing in it", () => {
+    const only = { ...room, wallFinishes: { 1: { outside: { finish: "render" as const } } } };
+    expect(setWallOverride(only, 1, null)).toEqual({ 1: { outside: { finish: "render" } } });
+    expect(setOutsideOverride(only, 1, null)).toBeUndefined();
+    expect(setOutsideOverride(room, 2, { color: "#ffffff" })).toEqual({ 0: { covering: "brick" }, 2: { outside: { color: "#ffffff" } } });
+  });
+
+  it("follows the corners when they are added or removed", () => {
+    const r = { ...room, wallFinishes: { 1: { outside: { finish: "render" as const } } } };
+    expect(insertCorner(r, 0, { x: 150, y: 0 }).wallFinishes).toEqual({ 2: { outside: { finish: "render" } } });
+    expect(insertCorner(r, 1, { x: 300, y: 200 }).wallFinishes).toEqual({ 1: { outside: { finish: "render" } }, 2: { outside: { finish: "render" } } });
+  });
+
+  it("tells outside walls from walls shared with another room", () => {
+    const f = floor([rect("Kitchen", 0, 0, 300, 400), rect("Living room", 300, 0, 600, 400)]);
+    expect(isOutsideEdge(f, f.rooms[0], 1)).toBe(false);
+    expect([0, 2, 3].map((i) => isOutsideEdge(f, f.rooms[0], i))).toEqual([true, true, true]);
+  });
+});
+
+describe("the listing's outside finishes", () => {
+  const ground = listing91770873("").floors[0];
+  const garage = ground.rooms.find((r) => r.name === "Garage")!;
+  const house = { finish: "render" as const, color: "#efe9d8" };
+
+  it("renders only the garage's front wall, where it stands back under the porch roof", () => {
+    expect(edgeLabel(ground, garage, 2)).toBe("outside, front");
+    const looks = garage.polygon.map((_, i) => outsideLook(garage, i, house).finish);
+    expect(looks).toEqual(["brick", "brick", "render", "brick"]);
+    expect(outsideLook(garage, 2, house).color).toBe(house.color);
+  });
+
+  it("tags the garage's front faces in the built shell with that edge, and nothing else", () => {
+    const rooms = ground.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(ground, r) }));
+    const walls = buildWalls(ground);
+    const thick = walls.map(wallThickness);
+    const ends = wallEnds(walls, thick);
+    const polyOf = (id: string) => (id === garage.id ? rooms.find((r) => r.id === id)!.poly : undefined);
+    const outside = walls
+      .flatMap((wall, i) => {
+        const { pieces, placements } = cutWall(wall, 2.4);
+        const spans = ([1, -1] as const).map((s) => spansByEdge(wall, sideSpans(wall, s, thick[i] / 2 + 0.08, rooms), polyOf));
+        return wallFaces({ wall, thickness: thick[i], ends: ends[i], spans: [spans[0], spans[1]], pieces, bands: [], placements, top: 2.4, baseY: 0, skirting: false }).quads;
+      })
+      .filter((q) => q.slot.kind === "outside" && q.slot.roomId === garage.id);
+    expect(outside.length).toBeGreaterThan(0);
+    const tagged = outside.filter((q) => q.slot.kind === "outside" && q.slot.edge === 2);
+    expect(tagged.length).toBeGreaterThan(0);
+    // Every tagged quad lies on the garage's front line.
+    const frontZ = roomWorldPolygon(ground, garage)[2].y;
+    expect(tagged.every((q) => q.v.every((v) => Math.abs(v[2] - frontZ) < 0.3))).toBe(true);
+    // Faces on the other sides carry their own edge numbers, never 2.
+    const others = outside.filter((q) => q.v.every((v) => Math.abs(v[2] - frontZ) > 0.5));
+    expect(others.every((q) => q.slot.kind === "outside" && q.slot.edge !== 2)).toBe(true);
   });
 });

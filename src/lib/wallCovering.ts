@@ -1,4 +1,4 @@
-import type { Room, WallCovering } from "../types";
+import type { Room, WallCovering, WallFinish } from "../types";
 
 /** Default colour of interior paint (warm white). */
 export const WARM_WHITE = "#f4f1ea";
@@ -101,4 +101,26 @@ export function interiorFinish(room: Room | undefined, wallColor: string | undef
   const covering = look.wallCovering ?? "paint";
   if (covering === "paint") return { covering, color: wallBase(look) };
   return { covering, color: wallBase(look), accent: wallAccent(look) };
+}
+
+/** What an outside wall face is made of: a finish and its colour. */
+export interface OutsideLook {
+  finish: WallFinish;
+  color: string;
+}
+
+/**
+ * The outside finish of one of a room's walls (polygon edge `edge`): the
+ * room's own (else the house's) with that wall's override on top. An override
+ * that changes the finish starts from the house colour rather than the room's,
+ * so a render panel in a brick room is not painted brick-red.
+ */
+export function outsideLook(room: Room | undefined, edge: number | undefined, house: OutsideLook): OutsideLook {
+  const finish = room?.exteriorFinish ?? house.finish;
+  const o = !room || edge === undefined || edge >= room.polygon.length ? undefined : room.wallFinishes?.[edge]?.outside;
+  const own = o?.finish !== undefined && o.finish !== finish;
+  return {
+    finish: o?.finish ?? finish,
+    color: o?.color ?? (own ? house.color : (room?.exteriorColor ?? house.color)),
+  };
 }
