@@ -14,3 +14,5 @@
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog-buttons .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .dialog-buttons .danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; }
+.dialog-buttons.stacked { flex-direction: column; align-items: stretch; }
+.dialog-buttons.stacked button { padding: 9px 12px; }

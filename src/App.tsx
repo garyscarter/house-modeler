@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
 import { Viewer } from "./three/Viewer";
 import { PlanEditor } from "./editor/PlanEditor";
@@ -7,7 +7,10 @@ import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
-import { Dialogs } from "./components/Dialogs";
+import { Dialogs, choose } from "./components/Dialogs";
+import { decideStartupPrompt, readRemembered, remember } from "./lib/startupPrompt";
+import { loadListing, updatePreset } from "./lib/presetActions";
+import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
 import { SitePanel } from "./components/SitePanel";
 import { ReportPanel } from "./components/ReportPanel";
 import { SiteEditor } from "./editor/SiteEditor";
@@ -47,6 +50,33 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
+
+  // Once saved work has loaded, offer the listing's plans (or an update to them), at most once per page load.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!hydrated || asked.current) return;
+    asked.current = true;
+    const prompt = decideStartupPrompt(useStore.getState().variants, PRESETS, LISTING_PRESET.id, readRemembered());
+    if (!prompt) return;
+    void (async () => {
+      if (prompt.kind === "load") {
+        const choices = prompt.withProposed ? ["Load As listed", "Load As listed and the proposed extension", "Not now"] : ["Load As listed", "Not now"];
+        const i = await choose("Load the plans for listing 91770873 to see the house in 3D?", choices);
+        if (i === null || i === choices.length - 1) return remember("load", prompt.version);
+        await loadListing("current");
+        if (i === 1) await loadListing("proposed");
+        useStore.getState().setUi({ activeVariant: "current", tab: "3d" });
+      } else {
+        const names = prompt.variants.map((k) => VARIANT_LABEL[k]).join(" and ");
+        const i = await choose(
+          `Newer plans for listing 91770873 are available. Update? This replaces any edits you made to the built-in ${names} layout${prompt.variants.length > 1 ? "s" : ""}; layouts you copied or made yourself are not touched. You can undo it.`,
+          ["Update", "Keep mine"],
+        );
+        if (i === 0) prompt.variants.forEach(updatePreset);
+        else remember("update", prompt.version);
+      }
+    })();
+  }, [hydrated]);
 
   // Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo. Text fields keep their own undo.
   useEffect(() => {

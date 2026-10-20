@@ -1,8 +1,8 @@
 import { ask } from "./Dialogs";
 import { useStore } from "../store";
 import { VARIANT_LABEL, type VariantKey } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "../lib/houses/listing91770873";
-import { listingFloorplan } from "../lib/houses/listingAssets";
+import { PRESETS } from "../lib/houses/listing91770873";
+import { loadListing, updatePreset } from "../lib/presetActions";
 
 const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "gap"]);
 const WINDOW_KINDS = new Set(["window", "bay"]);
@@ -13,7 +13,6 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
   const setUi = useStore((s) => s.setUi);
   const copyVariant = useStore((s) => s.copyVariant);
   const hasCurrent = useStore((s) => !!s.variants.current);
-  const setSite = useStore((s) => s.setSite);
 
   return (
     <div className="panel">
@@ -27,12 +26,7 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         <p className="note">
           A newer tracing of this built-in house is available.{" "}
           <button
-            onClick={() => {
-              const fresh = PRESETS[model.preset!.id].build(model.floors[0]?.image ?? placeholderImage());
-              // Keep the user's floorplan image if they set one at the same pixel size.
-              const keepImage = model.floors[0] && model.floors[0].imageW === fresh.floors[0].imageW;
-              setVariant(variant, keepImage ? fresh : PRESETS[model.preset!.id].build(placeholderImage()));
-            }}
+            onClick={() => updatePreset(variant)}
           >
             Update model
           </button>{" "}
@@ -73,17 +67,7 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         {!model && (
           <>
             <button
-              onClick={() => {
-                const build = variant === "current" ? listing91770873 : listing91770873Proposed;
-                // The listing's own floorplan sits behind the tracing; fall back to a placeholder offline.
-                void listingFloorplan()
-                  .catch(() => placeholderImage())
-                  .then((image) => {
-                    setVariant(variant, build(image));
-                    if (!useStore.getState().site) setSite(listingSite());
-                    setUi({ activeVariant: variant });
-                  });
-              }}
+              onClick={() => void loadListing(variant)}
             >
               {variant === "current" ? "Load listing 91770873" : "Load listing 91770873 with two-storey extension"}
             </button>

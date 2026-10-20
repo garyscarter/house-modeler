@@ -9,7 +9,8 @@ import "./Dialogs.css";
  */
 type Request =
   | { kind: "confirm"; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void }
-  | { kind: "prompt"; message: string; value: string; resolve: (v: string | null) => void };
+  | { kind: "prompt"; message: string; value: string; resolve: (v: string | null) => void }
+  | { kind: "choose"; message: string; choices: string[]; resolve: (v: number | null) => void };
 
 const useDialog = create<{ req: Request | null }>(() => ({ req: null }));
 
@@ -19,6 +20,12 @@ function cancelOpen() {
   if (!open) return;
   if (open.kind === "confirm") open.resolve(false);
   else open.resolve(null);
+}
+
+/** Offer several buttons (the first is the default); resolves with the index chosen, or null when dismissed. */
+export function choose(message: string, choices: string[]): Promise<number | null> {
+  cancelOpen();
+  return new Promise((resolve) => useDialog.setState({ req: { kind: "choose", message, choices, resolve } }));
 }
 
 /** Ask a yes/no question; resolves true when confirmed. */
@@ -51,7 +58,12 @@ export function Dialogs() {
   const close = (ok: boolean) => {
     useDialog.setState({ req: null });
     if (req.kind === "confirm") req.resolve(ok);
+    else if (req.kind === "choose") req.resolve(null);
     else req.resolve(ok ? text : null);
+  };
+  const pick = (i: number) => {
+    useDialog.setState({ req: null });
+    if (req.kind === "choose") req.resolve(i);
   };
   return (
     <div className="dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && close(false)}>
@@ -70,14 +82,24 @@ export function Dialogs() {
       >
         <p>{req.message}</p>
         {req.kind === "prompt" && <input id="dialog-text" ref={input} value={text} onChange={(e) => setText(e.target.value)} />}
-        <div className="dialog-buttons">
-          <button type="button" onClick={() => close(false)}>
-            Cancel
-          </button>
-          <button ref={okButton} type="submit" className={req.kind === "confirm" && req.danger ? "danger-fill" : "primary"}>
-            {req.kind === "confirm" ? req.ok : "OK"}
-          </button>
-        </div>
+        {req.kind === "choose" ? (
+          <div className="dialog-buttons stacked">
+            {req.choices.map((c, i) => (
+              <button key={c} ref={i === 0 ? okButton : undefined} type="button" className={i === 0 ? "primary" : undefined} onClick={() => pick(i)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="dialog-buttons">
+            <button type="button" onClick={() => close(false)}>
+              Cancel
+            </button>
+            <button ref={okButton} type="submit" className={req.kind === "confirm" && req.danger ? "danger-fill" : "primary"}>
+              {req.kind === "confirm" ? req.ok : "OK"}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
