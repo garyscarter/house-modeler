@@ -36,7 +36,9 @@ export type Symbol =
   | "dresser"
   | "fitted-wardrobe"
   | "shaker-wardrobe"
-  | "boiler";
+  | "boiler"
+  | "hood"
+  | "fireplace";
 
 export interface CatalogueItem {
   id: string;
@@ -55,6 +57,8 @@ export interface CatalogueItem {
 /** Kitchen carcass colour shared by the units so a run reads as one kitchen. */
 const UNIT = "#e0dccf";
 const WOOD = "#c9a26b";
+/** Worktop colour of kitchen units unless a fixture sets its own. */
+export const DEFAULT_WORKTOP = "#4a4d52";
 
 /** Doors across a fitted wardrobe of width `w` metres; the plan symbol and the 3D model both divide it this way. */
 export function wardrobeDoorCount(symbol: Symbol, w: number): number {
@@ -99,6 +103,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "coffee-table", name: "Coffee table", category: "Living", w: 1.00, d: 0.50, h: 0.45, color: WOOD, symbol: "table" },
   { id: "tv-unit", name: "TV unit", category: "Living", w: 1.20, d: 0.40, h: 0.5, color: WOOD, symbol: "box" },
   { id: "bookcase", name: "Bookcase", category: "Living", w: 0.80, d: 0.30, h: 1.8, color: WOOD, symbol: "shelves" },
+  { id: "fireplace", name: "Fireplace (gas fire)", category: "Living", w: 1.40, d: 0.50, h: 1.15, color: "#5a2a1c", symbol: "fireplace", note: "Carved timber surround, marble hearth and back panel, brass gas fire" },
   { id: "sideboard", name: "Sideboard", category: "Living", w: 1.60, d: 0.45, h: 0.8, color: WOOD, symbol: "cabinet" },
 
   // Dining
@@ -114,6 +119,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "hob", name: "Hob", category: "Kitchen", w: 0.60, d: 0.52, h: 0.03, color: "#2b2d31", symbol: "hob", mount: 0.9, note: "Sits on a worktop or base unit" },
   { id: "wall-unit", name: "Wall cabinet (600)", category: "Kitchen", w: 0.60, d: 0.33, h: 0.72, color: UNIT, symbol: "wall-cabinet", mount: 1.45 },
   { id: "wall-unit-1000", name: "Wall cabinet (1000)", category: "Kitchen", w: 1.00, d: 0.33, h: 0.72, color: UNIT, symbol: "wall-cabinet", mount: 1.45 },
+  { id: "cooker-hood", name: "Cooker hood (under a short cabinet)", category: "Kitchen", w: 0.60, d: 0.45, h: 0.72, color: UNIT, symbol: "hood", mount: 1.45, note: "Canopy hood with a short wall cabinet above, in line with the wall cabinets" },
   { id: "oven-housing", name: "Oven housing (tall)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.1, color: UNIT, symbol: "oven", note: "Built-in single or double oven" },
   { id: "larder", name: "Tall larder unit", category: "Kitchen", w: 0.60, d: 0.60, h: 2.1, color: UNIT, symbol: "tall" },
   { id: "range-cooker", name: "Range cooker", category: "Kitchen", w: 1.00, d: 0.60, h: 0.92, color: "#2f3a45", symbol: "range" },
@@ -153,6 +159,11 @@ export function burners(widthM: number): [number, number][] {
         [-0.2, 0.18],
         [0.2, 0.18],
       ];
+}
+
+/** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */
+export function hasWorktop(item: CatalogueItem): boolean {
+  return item.category === "Kitchen" && (item.symbol === "worktop" || item.symbol === "sink" || item.symbol === "island" || item.symbol === "cabinet");
 }
 
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];

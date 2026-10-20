@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { byId } from "../catalogue";
 import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
-import { fixtureBox, rectCorners } from "../planMath";
+import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
 import { planRoofs } from "../roof";
 import { surfaceHeightAt } from "../surfaceSlope";
 import { listing91770873, listingSite } from "./listing91770873";
@@ -27,7 +27,7 @@ describe("the built-in listing", () => {
   it("folds the front bedroom's cupboard into the room, door still in a wall", () => {
     expect(first.rooms.some((r) => r.name === "Cupboard")).toBe(false);
     const bedroom = first.rooms.find((r) => r.name === "Bedroom 3")!;
-    expect(bedroom.polygon).toHaveLength(6);
+    expect(bedroom.polygon).toHaveLength(8); // six corners plus the chimney breast's notch
     expect(bedroom.dims).toEqual({ w: 3.28, h: 3.36 });
     const door = first.openings.find((o) => o.x === 850 && o.y === 1075)!;
     const wall = buildWalls(first).find((w) => w.openings.some((p) => p.opening === door))!;
@@ -51,6 +51,87 @@ describe("the built-in listing", () => {
       expect([Math.sin(r), -Math.cos(r)].map((v) => Math.round(v) + 0)).toEqual([backs.x, backs.y]);
       expect(b.h).toBe(house.ceilingHeight);
     }
+  });
+});
+
+describe("the chimney breasts", () => {
+  const breastFace = (f: typeof ground, x: number, y0: number, y1: number) =>
+    buildWalls(f).filter((w) => Math.abs(w.a.x - w.b.x) < 1e-6 && Math.abs(w.a.x - toWorld(f, { x, y: 0 }).x) < 1e-6 && Math.abs(w.a.y - toWorld(f, { x, y: y0 }).y) < 1e-6 && Math.abs(w.b.y - toWorld(f, { x, y: y1 }).y) < 1e-6);
+  const partyX = (f: typeof ground, x: number) => buildWalls(f).filter((w) => Math.abs(w.a.x - w.b.x) < 1e-6 && Math.abs(w.a.x - toWorld(f, { x, y: 0 }).x) < 1e-6);
+
+  it("stand clear of the party wall as walls of their own, the party wall staying on its line", () => {
+    // A face nearer the party wall than buildWalls' merge distance would drag the party wall off its line.
+    expect(breastFace(ground, 1262, 106, 201)).toHaveLength(1);
+    expect(breastFace(first, 1056, 1040, 1103)).toHaveLength(1);
+    expect(partyX(ground, 1290).length).toBeGreaterThanOrEqual(2);
+    expect(partyX(first, 1075).length).toBeGreaterThanOrEqual(2);
+    // The party wall is closed behind each breast, so the house shows no recess from outside.
+    expect(breastFace(ground, 1295.5, 106, 201)).toHaveLength(1);
+    expect(breastFace(first, 1080.5, 1040, 1103)).toHaveLength(1);
+  });
+
+  it("carry the rear living room's gold paper over the breast and both alcoves, and Bedroom 3's mauve only on the party wall and breast", () => {
+    const living = ground.rooms.find((r) => r.name === "Living Room (rear)")!;
+    expect(Object.keys(living.wallFinishes ?? {}).map(Number)).toEqual([1, 2, 3, 4, 5]);
+    // Papered: every edge on the party wall or round the breast (both ends at or east of its face).
+    for (let i = 0; i < living.polygon.length; i++) {
+      const a = living.polygon[i];
+      const b = living.polygon[(i + 1) % living.polygon.length];
+      expect(living.wallFinishes?.[i]?.covering, `edge ${i}`).toBe(Math.min(a.x, b.x) >= 1262 ? "rose" : undefined);
+    }
+    const bedroom = first.rooms.find((r) => r.name === "Bedroom 3")!;
+    expect(bedroom.wallPaint).toBe("#e3dce0");
+    for (let i = 0; i < bedroom.polygon.length; i++) {
+      const a = bedroom.polygon[i];
+      const b = bedroom.polygon[(i + 1) % bedroom.polygon.length];
+      const east = Math.min(a.x, b.x) >= 1056;
+      expect(bedroom.wallFinishes?.[i]?.paint, `edge ${i}`).toBe(east ? "#a68b97" : undefined);
+    }
+  });
+
+  it("puts the fireplace against the rear living room's breast, facing into the room", () => {
+    const fp = (ground.fixtures ?? []).find((f) => f.type === "fireplace")!;
+    const b = fixtureBox(fp, byId("fireplace")!);
+    // rot 90 turns the back to the east; the back lies on the breast's face (centre line less half a 0.25 m wall).
+    expect(fp.rot).toBe(90);
+    expect(fp.x + (b.d * ground.pxPerM) / 2).toBeCloseTo(1262 - 0.125 * ground.pxPerM, 0);
+    expect(fp.y).toBeGreaterThan(106);
+    expect(fp.y).toBeLessThan(201);
+  });
+});
+
+describe("the kitchen", () => {
+  const fixtures = ground.fixtures ?? [];
+  const solids = fixtureSolids(fixtures, ground.pxPerM, byId);
+
+  it("fits every unit inside the kitchen or galley without overlaps", () => {
+    expect(overlappingIds(solids, 0.5).size).toBe(0);
+    const kitchens = ground.rooms.filter((r) => r.name.startsWith("Kitchen")).map((r) => roomWorldPolygon(ground, r));
+    for (const s of solids.filter((s) => fixtures.find((f) => f.id === s.id)!.type !== "fireplace"))
+      for (const c of s.corners) expect(kitchens.some((poly) => pointInPolygon(toWorld(ground, c), poly)), `${s.id} ${c.x},${c.y}`).toBe(true);
+  });
+
+  it("keeps the floor clear in front of the back door and under the doors' swings", () => {
+    const low = solids.filter((s) => s.z0 < 1);
+    for (const o of ground.openings.filter((o) => o.kind === "door" || o.kind === "front")) {
+      // The square the leaf sweeps, on both sides of the wall: the opening less a 50 mm frame each side.
+      const half = ((o.widthM - 0.1) * ground.pxPerM) / 2;
+      const sweep = o.orientation === "h" ? rectCorners({ x: o.x, y: o.y }, 2 * half, 4 * half, 0) : rectCorners({ x: o.x, y: o.y }, 4 * half, 2 * half, 0);
+      for (const s of low) expect(convexOverlap(sweep, s.corners, 0.5), `${o.x},${o.y}`).toBe(false);
+    }
+  });
+
+  it("runs the sink under the galley window and opens the hatch where the returned units end", () => {
+    const sink = fixtures.find((f) => f.type === "sink-unit")!;
+    const win = ground.openings.find((o) => o.kind === "window" && o.y === 22 && Math.abs(o.x - sink.x) < 10);
+    expect(win).toBeDefined();
+    const hatch = ground.openings.find((o) => o.kind === "window" && o.x === 975)!;
+    expect(hatch).toMatchObject({ sill: 1.0, head: 1.45 });
+    const ret = fixtures.find((f) => f.rot === 90 && f.type === "worktop-run")!;
+    const retEnd = ret.y + ((ret.w ?? 0) * ground.pxPerM) / 2;
+    // In kitchen-1 the hatch's glazed half starts about where the return ends, at the wall.
+    const north = hatch.y - (hatch.widthM * ground.pxPerM) / 2;
+    expect(Math.abs(north - retEnd)).toBeLessThan(0.3 * ground.pxPerM);
   });
 });
 

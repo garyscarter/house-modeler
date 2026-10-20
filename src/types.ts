@@ -159,6 +159,8 @@ export interface Fixture {
   d?: number;
   h?: number;
   color?: string;
+  /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
+  worktop?: string;
   /** Optional label shown on the plan. */
   label?: string;
 }

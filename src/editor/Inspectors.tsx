@@ -3,7 +3,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
 import { FLOOR_FINISH_LABEL, OPENING_KIND_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type StairsDir } from "../types";
-import type { CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, hasWorktop, type CatalogueItem } from "../lib/catalogue";
 import { useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -580,6 +580,19 @@ export function FixtureInspector({
           )}
         </span>
       </label>
+      {hasWorktop(item) && (
+        <label>
+          Worktop colour
+          <span className="colour-pick">
+            <input type="color" value={fixture.worktop ?? DEFAULT_WORKTOP} onChange={(e) => onChange({ worktop: e.target.value })} />
+            {fixture.worktop && (
+              <button className="link" onClick={() => onChange({ worktop: undefined })}>
+                Reset
+              </button>
+            )}
+          </span>
+        </label>
+      )}
       <label>
         Rotation {rot}°
         <input type="range" min={0} max={345} step={15} value={Math.round(rot / 15) * 15} onChange={(e) => onChange({ rot: parseInt(e.target.value) })} />

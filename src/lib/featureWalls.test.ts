@@ -187,7 +187,9 @@ describe("the listing's feature walls", () => {
   };
 
   it("sit where the photos put them", () => {
-    expect(where("Living Room (rear)")).toEqual(["rose outside, right"]);
+    // The party wall's two alcoves and the chimney breast between them: its north side (facing
+    // south), its face (facing the party wall's way) and its south side.
+    expect(where("Living Room (rear)")).toEqual(["rose outside, right", "rose outside, front", "rose outside, right", "rose outside, rear", "rose outside, right"]);
     expect(where("Kitchen (galley)")).toEqual(["brick to Garage"]);
     expect(where("Kitchen")).toEqual(["brick outside, rear", "brick to Garage"]);
     expect(where("Hallway (stairs)")).toEqual(["trail to Hallway (front)"]);

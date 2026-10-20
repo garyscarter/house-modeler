@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { burners, byId, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 
 /** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
@@ -16,7 +16,7 @@ export function Fixtures({ floor }: { floor: Floor }) {
         const b = fixtureBox(f, item);
         return (
           <group key={f.id} position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
-            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} />
+            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} worktop={f.worktop ?? WORKTOP} />
           </group>
         );
       })}
@@ -66,13 +66,15 @@ const WHITE = "#f5f5f5";
 const CHROME = "#b8bcc2";
 const STEEL = "#c9ccd0";
 const KNOB = "#ece8df";
-const WORKTOP = "#4a4d52";
+const WORKTOP = DEFAULT_WORKTOP;
 const PLINTH = "#3f4247";
 const DARK = "#1f2125";
 const GLASS = "#bfe0ee";
+const MARBLE = "#ece6da";
+const BRASS = "#c8a24a";
 
-const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color }: { symbol: Symbol; w: number; d: number; h: number; color: string }) {
-  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color), [symbol, w, d, h, color]);
+const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop }: { symbol: Symbol; w: number; d: number; h: number; color: string; worktop: string }) {
+  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color, worktop), [symbol, w, d, h, color, worktop]);
   return (
     <group>
       {parts.map((pt, i) => (
@@ -95,7 +97,7 @@ const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color }: { symb
  * The parts of a fixture in its local frame: origin at the centre of its
  * footprint on its base, y up, back towards -z (the top of the plan).
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string): Part[] {
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -111,7 +113,7 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     }
   };
   /** A kitchen base carcass of height top, with plinth and worktop. Returns the front face z. */
-  const base = (top: number, depth = d, zc = 0, worktop = WORKTOP) => {
+  const base = (top: number, depth = d, zc = 0, worktop = worktopColor) => {
     box(0, 0.05, zc - 0.03, w - 0.02, 0.1, depth - 0.08, PLINTH);
     box(0, (0.1 + top - 0.04) / 2, zc - 0.01, w, top - 0.14, depth - 0.02, color, "satin");
     box(0, top - 0.02, zc, w, 0.04, depth, worktop, "satin");
@@ -258,7 +260,7 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       const over = Math.min(0.3, d * 0.35);
       box(0, 0.05, over / 2 - 0.02, w - 0.04, 0.1, d - over - 0.08, PLINTH);
       box(0, (0.1 + h - 0.04) / 2, over / 2, w, h - 0.14, d - over, color, "satin");
-      box(0, h - 0.02, 0, w + 0.04, 0.04, d, WORKTOP, "satin");
+      box(0, h - 0.02, 0, w + 0.04, 0.04, d, worktopColor, "satin");
       doors(0.12, h - 0.06, d / 2);
       break;
     }
@@ -414,6 +416,51 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
         const right = i < lone || (i - lone) % 2 === 0;
         cyl(x + (right ? 1 : -1) * (dw / 2 - 0.045), knobY, front + 0.012, 0.032, 0.024, KNOB, "satin", "z");
       }
+      break;
+    }
+    case "hood": {
+      // A slim canopy hood across the bottom, under a short wall cabinet set back to the wall-cabinet depth.
+      const cd = Math.min(d, 0.33);
+      const cy0 = Math.min(0.26, h * 0.4);
+      box(0, (cy0 + h) / 2, -d / 2 + cd / 2, w, h - cy0, cd, color, "satin");
+      doors(cy0 + 0.01, h - 0.01, -d / 2 + cd, 0.6, false);
+      box(0, 0.06 + (cy0 - 0.06) / 2, 0, w, cy0 - 0.06, d, "#26282c", "satin");
+      box(0, 0.055, 0.02, w - 0.06, 0.012, d - 0.08, "#8e9399", "metal");
+      box(0, cy0 - 0.03, d / 2 + 0.003, w - 0.02, 0.012, 0.006, "#4b4f55", "satin");
+      break;
+    }
+    case "fireplace": {
+      // Hearth slab across the full footprint; a carved surround (legs, frieze and mantel shelf) against
+      // the wall framing a marble back panel, with a brass-framed gas fire at its foot.
+      const hearth = 0.04;
+      const sw = w * 0.9;
+      const sd = Math.min(0.14, d * 0.4);
+      const lw = Math.min(0.17, sw * 0.14);
+      const zs = -d / 2 + sd / 2;
+      const front = -d / 2 + sd;
+      const frieze = Math.min(0.16, h * 0.14);
+      const shelf = 0.05;
+      const legTop = h - shelf - frieze;
+      const carve = shade(color, 1.3);
+      box(0, hearth / 2, 0, w, hearth, d, MARBLE, "gloss");
+      box(0, (hearth + legTop) / 2, -d / 2 + 0.015, sw - lw * 2, legTop - hearth, 0.03, MARBLE, "gloss");
+      for (const sx of [-1, 1]) {
+        const x = sx * (sw / 2 - lw / 2);
+        box(x, (hearth + legTop) / 2, zs, lw, legTop - hearth, sd, color, "satin");
+        box(x, hearth + (legTop - hearth) * 0.55, front + 0.006, lw * 0.5, (legTop - hearth) * 0.6, 0.012, carve, "satin");
+        box(x, legTop - 0.05, front + 0.012, lw * 0.8, 0.08, 0.024, carve, "satin");
+      }
+      box(0, legTop + frieze / 2, zs, sw, frieze, sd, color, "satin");
+      box(0, legTop + frieze / 2, front + 0.006, sw * 0.42, frieze * 0.5, 0.012, carve, "satin");
+      box(0, h - shelf / 2, -d / 2 + (sd + 0.06) / 2, sw + 0.1, shelf, sd + 0.06, color, "satin");
+      // Gas fire: brass frame, black firebox with coals, and a dark fret along the bottom.
+      const fw = Math.min(0.5, sw - lw * 2 - 0.1);
+      const fh = Math.min(0.58, legTop - hearth - 0.12);
+      const fz = -d / 2 + 0.06;
+      box(0, hearth + fh / 2, fz, fw, fh, 0.08, BRASS, "metal");
+      box(0, hearth + fh / 2 + 0.02, fz + 0.041, fw - 0.09, fh - 0.15, 0.004, "#141518", "gloss");
+      box(0, hearth + 0.17, fz + 0.045, fw - 0.13, 0.09, 0.02, "#3b3734");
+      box(0, hearth + 0.05, fz + 0.06, fw - 0.02, 0.06, 0.04, "#1d1e21", "metal");
       break;
     }
     case "boiler":

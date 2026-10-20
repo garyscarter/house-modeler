@@ -17,7 +17,8 @@ const PLACES: Record<string, Place> = {
   "kitchen-2": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining area towards the hall doors." },
   "kitchen-3": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining table with the brick wall and rear windows." },
   "kitchen-4": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen run along the rear windows." },
-  "galley-1": { floor: "Ground Floor", room: "Kitchen (galley)", description: "Back corridor with quarry tiles towards the back door." },
+  // Named "galley" by the listing, but it is the front hall: the glazed door across the corridor to the kitchen on the left.
+  "galley-1": { floor: "Ground Floor", room: "Hallway (front)", description: "Front hall with quarry tiles looking east to the barred side window, past the glazed corridor door and the boxed soil pipes." },
   "galley-2": { floor: "Ground Floor", room: "Kitchen (galley)", description: "Galley kitchen with cooker and fridge." },
   "living-rear-1": { floor: "Ground Floor", room: "Living Room (rear)", description: "Rear living room fireplace and the opening to the front room." },
   "living-rear-2": { floor: "Ground Floor", room: "Living Room (rear)", description: "Rear living room towards the sliding patio doors." },
