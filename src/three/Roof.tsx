@@ -18,6 +18,8 @@ export function triangles(pos: number[], uv?: number[]): THREE.BufferGeometry {
 
 /** uPVC white for fascias, soffits and rainwater goods. */
 const WHITE_TRIM = "#f2f1ec";
+/** Light cream of the ceiling under a porch or canopy roof (it reads cream-white in the front photos). */
+const CEILING = "#efe8d6";
 /** Length of one ridge or hip tile. */
 const CAP_LEN = 0.45;
 const CAP_R = 0.11;
@@ -53,6 +55,7 @@ interface RoofGeometry {
   tiles: THREE.BufferGeometry;
   gables: THREE.BufferGeometry;
   trim: THREE.BufferGeometry;
+  ceiling: THREE.BufferGeometry;
   membrane: THREE.BufferGeometry;
   edgeTrim: THREE.BufferGeometry;
   flashing: THREE.BufferGeometry;
@@ -130,6 +133,7 @@ function buildGeometry(p: RoofParts): RoofGeometry {
     tiles: triangles(p.tiles.pos, p.tiles.uv),
     gables: triangles(p.gables),
     trim: triangles(p.trim),
+    ceiling: triangles(p.ceiling),
     membrane: triangles(p.membrane.pos, p.membrane.uv),
     edgeTrim: triangles(p.edgeTrim),
     flashing: triangles(p.flashing),
@@ -176,6 +180,7 @@ export function Roof({ model }: { model: HouseModel }) {
       caps: new THREE.MeshStandardMaterial({ color: shade(ext.roofColor, 0.9), roughness: 0.8 }),
       gable: new THREE.MeshStandardMaterial({ color: ext.wallColor, roughness: 0.9, side: THREE.DoubleSide }),
       trim: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.55, side: THREE.DoubleSide }),
+      ceiling: new THREE.MeshStandardMaterial({ color: CEILING, roughness: 0.9, side: THREE.DoubleSide }),
       rainwater: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.4, side: THREE.DoubleSide }),
       membrane: new THREE.MeshStandardMaterial({ color: "#55585d", map: membraneTexture(), roughness: 0.95 }),
       edgeTrim: new THREE.MeshStandardMaterial({ color: "#2f3236", roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide }),
@@ -195,6 +200,7 @@ export function Roof({ model }: { model: HouseModel }) {
       {solid(geo.caps, mats.caps, "caps")}
       {solid(geo.gables, mats.gable, "gables")}
       {solid(geo.trim, mats.trim, "trim")}
+      {solid(geo.ceiling, mats.ceiling, "ceiling")}
       {solid(geo.gutters, mats.rainwater, "gutters")}
       {solid(geo.pipes, mats.rainwater, "pipes")}
       {solid(geo.membrane, mats.membrane, "membrane")}

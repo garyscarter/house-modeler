@@ -29,8 +29,10 @@ export interface RoofParts {
   tiles: Soup;
   /** Gable ends and built-up walls, in the wall colour. */
   gables: number[];
-  /** Fascias, soffits, bargeboards and porch ceilings, in the fascia colour. */
+  /** Fascias, soffits and bargeboards, in the fascia colour. */
   trim: number[];
+  /** Ceilings under porch and canopy roofs, painted light (front photos) rather than in the fascia colour. */
+  ceiling: number[];
   /** Flat roof membrane. */
   membrane: Soup;
   /** Flat roof edge trims with their upstand. */
@@ -77,6 +79,7 @@ export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: Flat
     tiles: { pos: [], uv: [] },
     gables: [],
     trim: [],
+    ceiling: [],
     membrane: { pos: [], uv: [] },
     edgeTrim: [],
     flashing: [],
@@ -175,7 +178,7 @@ function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = []
   for (const r of fr.rects) membrane(r.x0, r.z0, r.x1, r.z1);
   for (const r of fr.open)
     pushPoly(
-      parts.trim,
+      parts.ceiling,
       [
         [r.x0, ySoffit, r.z0],
         [r.x1, ySoffit, r.z0],
@@ -262,7 +265,7 @@ function leanToParts(l: LeanTo, parts: RoofParts, gutters: boolean) {
   // Porch ceiling following the roof.
   const ca = l.startFlush ? ua : ua + INSET + BOARD;
   const cb = l.endFlush ? ub : ub - INSET - BOARD;
-  poly(parts.trim, [P(ca, lo(dw), dw), P(cb, lo(dw), dw), P(cb, lo(dfi), dfi), P(ca, lo(dfi), dfi)], down);
+  poly(parts.ceiling, [P(ca, lo(dw), dw), P(cb, lo(dw), dw), P(cb, lo(dfi), dfi), P(ca, lo(dfi), dfi)], down);
   // Beam over the posts along the open edge.
   const beam = { pos: [] as number[], uv: [] as number[] };
   const [b0, b1] = [P(l.u0, l.postTop, l.depth - 0.07), P(l.u1, lo(l.depth), l.depth + 0.07)];

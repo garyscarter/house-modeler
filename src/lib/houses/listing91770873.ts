@@ -97,7 +97,15 @@ export function listing91770873(image: string): HouseModel {
         wallAccent: "#c8364a",
         wallFinishes: { 0: { covering: "brick", paint: "#c06a4a", accent: "#ddcca6" }, 3: { covering: "brick", paint: "#cf9670", accent: "#d6b46e" } },
       }),
-      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, { exteriorColor: BRICK, exteriorFinish: "brick", floorFinish: "concrete" }),
+      // Brick, except the front wall (edge 2) set back under the porch roof: cream render round the garage door
+      // (front-3, front-2). The brick pier at the porch's front-left corner and the hall's side wall by the
+      // front door stay brick.
+      rect("Garage", 530, 160, 730, 515, { w: 2.69, h: 4.91 }, {
+        exteriorColor: BRICK,
+        exteriorFinish: "brick",
+        floorFinish: "concrete",
+        wallFinishes: { 2: { outside: { finish: "render", color: RENDER } } },
+      }),
       // Cream and grey-beige stripes in both rooms; the rear room's chimney-breast wall on the party
       // wall (edge 1) has a cream paper with large gold flowers and grey leaves (living-rear-1, -3).
       rect("Living Room (rear)", 975, 22, 1290, 278, { w: 4.45, h: 3.32 }, {

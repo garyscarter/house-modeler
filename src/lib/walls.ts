@@ -172,12 +172,12 @@ export function spanOf(spans: Span[], t: number): Span | undefined {
 
 /**
  * What a face shows: the paint of the room it faces, the outside finish of
- * the room behind it (null = the house default), the cut top of a wall, or a
+ * the room behind it (null = the house default) and the edge of that room it lies along, the cut top of a wall, or a
  * joinery part (frames, glass, sills; see openings.ts).
  */
 export type FaceSlot =
   | { kind: "inside"; roomId: string; edge?: number }
-  | { kind: "outside"; roomId: string | null }
+  | { kind: "outside"; roomId: string | null; edge?: number }
   | { kind: "top" }
   | { kind: "part"; mat: PartMat };
 
@@ -234,7 +234,9 @@ export function wallFaces(inp: WallFaceInput): { quads: FaceQuad[]; skirting: Sk
   /** Slot for side 0 (+n) or 1 (-n) at t. */
   const slotAt = (side: 0 | 1, t: number): FaceSlot => {
     const own = spanOf(spans[side], clampT(t));
-    return own?.roomId ? { kind: "inside", roomId: own.roomId, edge: own.edge } : { kind: "outside", roomId: spanAt(spans[1 - side], clampT(t)) };
+    if (own?.roomId) return { kind: "inside", roomId: own.roomId, edge: own.edge };
+    const behind = spanOf(spans[1 - side], clampT(t));
+    return { kind: "outside", roomId: behind?.roomId ?? null, edge: behind?.edge };
   };
   const push = (v: [V3, V3, V3, V3], nn: V3, uv: [number, number][], slot: FaceSlot) => {
     const e1 = [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]];

@@ -1,4 +1,4 @@
-import type { Floor, Pt, Room, WallOverride } from "../types";
+import type { Floor, OutsideOverride, Pt, Room, WallOverride } from "../types";
 import { polygonArea, roomWorldPolygon, type V2 } from "./geometry";
 import { worldToBearing } from "./sun";
 import type { Span } from "./walls";
@@ -130,10 +130,42 @@ export function removeCorner(room: Room, i: number): Pick<Room, "polygon" | "wal
   return { polygon, wallFinishes: tidy(moved, polygon.length) };
 }
 
-/** Set or clear (null) one wall's override. */
+/** Set or clear (null) one wall's inside override, keeping any outside finish it has. */
 export function setWallOverride(room: Room, edge: number, o: WallOverride | null): Room["wallFinishes"] {
   const rest = entriesOf(room).filter(([j]) => j !== edge);
-  return tidy(o ? [...rest, [edge, o]] : rest, room.polygon.length);
+  const outside = room.wallFinishes?.[edge]?.outside;
+  const next = o ? { ...o, ...(outside && !o.outside ? { outside } : {}) } : outside ? { outside } : null;
+  return tidy(next ? [...rest, [edge, next]] : rest, room.polygon.length);
+}
+
+/** Set or clear (null) one wall's outside finish, keeping any inside covering it has. */
+export function setOutsideOverride(room: Room, edge: number, out: OutsideOverride | null): Room["wallFinishes"] {
+  const rest = entriesOf(room).filter(([j]) => j !== edge);
+  const { outside: _drop, ...inside } = room.wallFinishes?.[edge] ?? {};
+  const next: WallOverride = out ? { ...inside, outside: out } : inside;
+  return tidy(Object.keys(next).length ? [...rest, [edge, next]] : rest, room.polygon.length);
+}
+
+/**
+ * The room (other than `room`) that shares edge i of its polygon, if any, with
+ * how much of the edge it runs along; a wall nothing else shares is an outside wall.
+ */
+function sharedWith(floor: Floor, room: Room, i: number): { room: Room; run: number } | null {
+  const poly = roomWorldPolygon(floor, room);
+  const a = poly[i];
+  const b = poly[(i + 1) % poly.length];
+  let best: { room: Room; run: number } | null = null;
+  for (const other of floor.rooms) {
+    if (other.id === room.id) continue;
+    const run = edgeSpans({ a, b }, roomWorldPolygon(floor, other)).reduce((s, e) => s + e.t1 - e.t0, 0);
+    if (run > 0.2 && (!best || run > best.run)) best = { room: other, run };
+  }
+  return best;
+}
+
+/** True when edge i of the room faces the outdoors (no other room of the floor shares it). */
+export function isOutsideEdge(floor: Floor, room: Room, i: number): boolean {
+  return !sharedWith(floor, room, i);
 }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
@@ -151,13 +183,8 @@ export function edgeLabel(floor: Floor, room: Room, i: number, frontBearing?: nu
   const b = poly[(i + 1) % poly.length];
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   if (len < 1e-9) return "";
-  let best: { name: string; run: number } | null = null;
-  for (const other of floor.rooms) {
-    if (other.id === room.id) continue;
-    const run = edgeSpans({ a, b }, roomWorldPolygon(floor, other)).reduce((s, e) => s + e.t1 - e.t0, 0);
-    if (run > 0.2 && (!best || run > best.run)) best = { name: other.name, run };
-  }
-  if (best) return `to ${best.name}`;
+  const shared = sharedWith(floor, room, i);
+  if (shared) return `to ${shared.room.name}`;
   // Outward normal: the polygon's winding says which side of the edge is inside.
   const sign = polygonArea(poly) >= 0 ? 1 : -1;
   const out = { x: ((b.y - a.y) / len) * sign, z: (-(b.x - a.x) / len) * sign };

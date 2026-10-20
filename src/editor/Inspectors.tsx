@@ -276,7 +276,7 @@ export function RoomInspector({
           </span>
         </label>
       )}
-      <FeatureWalls floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
+      <FeatureWalls variant={variant} floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
       <label>
         Floor texture from photo
         <select value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>
