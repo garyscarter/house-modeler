@@ -217,6 +217,44 @@ export interface Downpipe {
   path: P3[];
 }
 
+/**
+ * A downpipe from a gutter whose centre line is `gutterOut` out from the wall
+ * line, at rim height `yg`: the outlet, then a swan neck under the soffit at
+ * `ys` back to the wall. `at(d, h)` places a point d out from the wall line at
+ * height h.
+ */
+function swanNeck(at: (d: number, h: number) => P3, gutterOut: number, yg: number, ys: number): Downpipe {
+  const dp = PIPE_R + 0.02;
+  const outlet = at(gutterOut, yg - GUTTER_R);
+  if (Math.abs(gutterOut - dp) < 0.05) return { path: [outlet] };
+  return { path: [outlet, at(gutterOut, ys - 0.06), at(dp, ys - 0.06 - 0.8 * Math.abs(gutterOut - dp))] };
+}
+
+/** A downpipe placed at a point further than this from every guttered wall is dropped. */
+export const DOWNPIPE_REACH = 1;
+
+/**
+ * Where a downpipe at world (x, z) goes on a pitched roof block: the guttered
+ * wall it is nearest whose run covers it, a long side ("lo" / "hi": the low
+ * or high v side) or a hip end ("start" / "end"), with the distance along that
+ * wall in the block's local frame (u along the ridge, v across) and the
+ * distance from the wall line. Null when no such wall is within
+ * DOWNPIPE_REACH (gable and party-wall ends have no gutter).
+ */
+export function downpipeSpot(b: RoofBlock, x: number, z: number): { side: "lo" | "hi" | "start" | "end"; along: number; dist: number } | null {
+  const f = frame(b);
+  const [u, v] = f.L(x, z);
+  const tol = 0.05;
+  const found: { side: "lo" | "hi" | "start" | "end"; along: number; dist: number }[] = [];
+  if (u > f.U0 - tol && u < f.U1 + tol) found.push({ side: "lo", along: u, dist: Math.abs(v - f.V0) }, { side: "hi", along: u, dist: Math.abs(v - f.V1) });
+  if (v > f.V0 - tol && v < f.V1 + tol) {
+    if (b.start === "hip") found.push({ side: "start", along: v, dist: Math.abs(u - f.U0) });
+    if (b.end === "hip") found.push({ side: "end", along: v, dist: Math.abs(u - f.U1) });
+  }
+  const best = found.sort((p, q) => p.dist - q.dist)[0];
+  return best && best.dist <= DOWNPIPE_REACH ? best : null;
+}
+
 /** Eaves and verge detailing for a pitched roof block. */
 export interface RoofTrim {
   /** Fascias, soffits, bargeboards and box ends, drawn in the fascia colour. */
@@ -232,9 +270,11 @@ export interface RoofTrim {
  * Fascia boards, soffits and gutters along the eaves; bargeboards and the
  * verge soffit on gable ends; box ends where the eaves box stops; ridge and
  * hip lines. A flush (party wall) end gets none of these, only a closure so
- * the eaves box is not open to view.
+ * the eaves box is not open to view. Downpipes go at a wall corner of each
+ * long side, or, given `spots` (world x, z), at those points instead, each on
+ * the guttered wall it is nearest (see downpipeSpot).
  */
-export function roofTrim(b: RoofBlock): RoofTrim {
+export function roofTrim(b: RoofBlock, spots?: [number, number][]): RoofTrim {
   const f = frame(b);
   const { W, t, U0, U1, V0, V1, EU0, EU1, EV0, EV1, vm, ridgeY, eavesY, RU0, RU1 } = f;
   const trim: number[] = [];
@@ -284,13 +324,29 @@ export function roofTrim(b: RoofBlock): RoofTrim {
     gutters.push([W(ga, yg, vg), W(gb, yg, vg)]);
 
     // Downpipes at a wall corner, preferring an end away from the party wall; long runs get one at each end.
+    if (spots) continue;
     const ends: ("start" | "end")[] = U1 - U0 > 9 ? ["start", "end"] : [flushS && !flushE ? "end" : "start"];
     for (const e of ends) {
       const up = e === "start" ? U0 + 0.15 : U1 - 0.15;
-      const vp = V + s * (PIPE_R + 0.02);
-      const outlet: L3 = [up, yg - GUTTER_R, vg];
-      const path: L3[] = Math.abs(vg - vp) < 0.05 ? [outlet] : [outlet, [up, ys - 0.06, vg], [up, ys - 0.06 - 0.8 * Math.abs(vg - vp), vp]];
-      downpipes.push({ path: path.map((p) => W(...p)) });
+      downpipes.push(swanNeck((d, h) => W(up, h, V + s * d), s * (vg - V), yg, ys));
+    }
+  }
+
+  // Downpipes at the given spots, on the long side or hip end each is nearest.
+  for (const [x, z] of spots ?? []) {
+    const at = downpipeSpot(b, x, z);
+    if (!at) continue;
+    const along = (lo: number, hi: number) => Math.min(Math.max(at.along, lo + 0.12), hi - 0.12);
+    const yg = eavesY - 0.03;
+    if (at.side === "lo" || at.side === "hi") {
+      const { V, s, vfo } = sides[at.side === "lo" ? 0 : 1];
+      const up = along(U0, U1);
+      downpipes.push(swanNeck((d, h) => W(up, h, V + s * d), s * (vfo - V) + GUTTER_R, yg, ys));
+    } else {
+      const sign = at.side === "start" ? -1 : 1;
+      const [U, EU] = at.side === "start" ? [U0, EU0] : [U1, EU1];
+      const vp = along(V0, V1);
+      downpipes.push(swanNeck((d, h) => W(U + sign * d, h, vp), sign * (EU - sign * INSET - U) + GUTTER_R, yg, ys));
     }
   }
 

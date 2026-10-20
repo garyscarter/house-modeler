@@ -7,8 +7,8 @@ import { COST_LINES, diffModels, estimateCosts } from "./report";
 import { areaOf, insertBoundaryVertex } from "./site";
 import { rectPoly } from "./site";
 
-/** Boundary corner between the front garden wall (edge 4) and the drive opening (edge 5). */
-const DRIVE_CORNER = 5;
+/** Boundary corner between the front garden wall (edge 5) and the drive opening (edge 6). */
+const DRIVE_CORNER = 6;
 
 /** Proposed as a copy of As listed, with the drive opening widened 1.2 m towards the bay and the drive paved to match. */
 function widenedDrive(): { current: Site; proposed: Site } {
@@ -25,8 +25,8 @@ describe("boundary pieces", () => {
   it("sees an unchanged plot as unchanged, even with an extra corner on a straight edge", () => {
     const a = listingSite();
     expect(changedPieces(a, structuredClone(a))).toEqual([]);
-    const mid = { x: (a.boundary[4].x + a.boundary[5].x) / 2, y: a.boundary[4].y };
-    expect(changedPieces(a, insertBoundaryVertex(a, 4, mid))).toEqual([]);
+    const mid = { x: (a.boundary[5].x + a.boundary[6].x) / 2, y: a.boundary[5].y };
+    expect(changedPieces(a, insertBoundaryVertex(a, 5, mid))).toEqual([]);
   });
 
   it("finds the stretch of front wall that became drive opening", () => {

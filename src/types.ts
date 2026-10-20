@@ -295,6 +295,27 @@ export interface Exterior {
    * roof behind stays flat. A common way to dress a single-storey extension.
    */
   flatRoofSkirt?: FlatRoofSkirt;
+  /**
+   * Where the rainwater downpipes come down, as points beside the walls in
+   * world metres (x to the right, y towards the front, like chimneys). Each
+   * goes on the nearest wall under a pitched roof's eaves gutter (a long side
+   * or a hip end), or under a plain flat-roof edge, within a metre. Unset: the
+   * pitched roofs get one at a corner of each eaves automatically. Downpipes
+   * of a flat roof skirt and of lean-tos stay automatic either way.
+   */
+  downpipes?: WallSpot[];
+  /**
+   * Soil and vent stacks up an outside wall: each stands against the nearest
+   * two-storey wall face and rises from the roof or ground below, through the
+   * eaves above, to a vent terminal just clear of the tiles.
+   */
+  soilPipes?: WallSpot[];
+}
+
+/** A point beside an outside wall, world metres: x to the right, y towards the front. */
+export interface WallSpot {
+  x: number;
+  y: number;
 }
 
 export type PlanSide = "front" | "rear" | "left" | "right";

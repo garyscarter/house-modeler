@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { HouseModel } from "../types";
 import { GUTTER_R, PIPE_R, exteriorOf, planRoofs, type P3 } from "../lib/roof";
-import { roofParts, type RoofParts } from "../lib/roofParts";
+import { SOIL_R, roofParts, type RoofParts } from "../lib/roofParts";
 import { useStore } from "../store";
 import { brickTexture, membraneTexture, tileTextures } from "./roofTextures";
 
@@ -64,6 +64,8 @@ interface RoofGeometry {
   caps: THREE.BufferGeometry | null;
   gutters: THREE.BufferGeometry | null;
   pipes: THREE.BufferGeometry | null;
+  soil: THREE.BufferGeometry | null;
+  vents: THREE.BufferGeometry | null;
   pots: THREE.BufferGeometry | null;
 }
 
@@ -118,6 +120,23 @@ function buildGeometry(p: RoofParts): RoofGeometry {
   pipe.dispose();
   ball.dispose();
 
+  // Soil and vent stacks, each capped with a pale grey vent terminal: a short wider barrel under a domed top.
+  const stack = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
+  const soil = instances(
+    stack,
+    p.soil.map(([a, b]) => along(a, b, SOIL_R).clone()),
+  );
+  stack.dispose();
+  const ventUnit = mergeGeometries([
+    new THREE.CylinderGeometry(0.075, 0.075, 0.16, 10).translate(0, 0.08, 0),
+    new THREE.SphereGeometry(0.075, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.16, 0),
+  ]);
+  const vents = instances(
+    ventUnit,
+    p.vents.map((at) => new THREE.Matrix4().makeTranslation(at[0], at[1], at[2])),
+  );
+  ventUnit.dispose();
+
   // Clay chimney pots, slightly tapered, with a rolled rim.
   const potUnit = mergeGeometries([
     new THREE.CylinderGeometry(0.085, 0.11, 0.55, 12).translate(0, 0.275, 0),
@@ -142,6 +161,8 @@ function buildGeometry(p: RoofParts): RoofGeometry {
     caps,
     gutters,
     pipes,
+    soil,
+    vents,
     pots,
   };
 }
@@ -162,7 +183,10 @@ export function Roof({ model }: { model: HouseModel }) {
   const ext = exteriorOf(model);
   const low = useStore((s) => s.settings.quality === "low");
   const plan = useMemo(() => planRoofs(model), [model]);
-  const geo = useMemo(() => buildGeometry(roofParts(plan, { gutters: ext.gutters, skirt: ext.flatRoofSkirt })), [plan, ext.gutters, ext.flatRoofSkirt]);
+  const geo = useMemo(
+    () => buildGeometry(roofParts(plan, { gutters: ext.gutters, skirt: ext.flatRoofSkirt, downpipes: ext.downpipes, soilPipes: ext.soilPipes })),
+    [plan, ext.gutters, ext.flatRoofSkirt, ext.downpipes, ext.soilPipes],
+  );
   useEffect(() => () => Object.values(geo).forEach((g) => g?.dispose()), [geo]);
 
   const fascia = ext.fascia === "trim" ? ext.trimColor : WHITE_TRIM;
@@ -188,6 +212,7 @@ export function Roof({ model }: { model: HouseModel }) {
       brick: new THREE.MeshStandardMaterial({ map: brickTexture(), roughness: 0.9 }),
       cement: new THREE.MeshStandardMaterial({ color: "#a9a59c", roughness: 1 }),
       pot: new THREE.MeshStandardMaterial({ color: "#b5603f", roughness: 0.85 }),
+      vent: new THREE.MeshStandardMaterial({ color: "#c9cbcc", roughness: 0.6 }),
     };
   }, [ext.tileStyle, ext.roofColor, ext.wallColor, fascia, low]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
@@ -203,6 +228,8 @@ export function Roof({ model }: { model: HouseModel }) {
       {solid(geo.ceiling, mats.ceiling, "ceiling")}
       {solid(geo.gutters, mats.rainwater, "gutters")}
       {solid(geo.pipes, mats.rainwater, "pipes")}
+      {solid(geo.soil, mats.rainwater, "soil")}
+      {solid(geo.vents, mats.vent, "vents")}
       {solid(geo.membrane, mats.membrane, "membrane")}
       {solid(geo.edgeTrim, mats.edgeTrim, "edge")}
       {solid(geo.flashing, mats.flashing, "flashing", false)}

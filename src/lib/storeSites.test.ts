@@ -18,13 +18,13 @@ describe("store: a plot per layout", () => {
     expect(st().sites.proposed).not.toBe(st().sites.current);
 
     st().setUi({ activeVariant: "proposed" });
-    st().updateSite((s) => ({ ...s, boundary: s.boundary.map((p, i) => (i === 5 ? { ...p, x: p.x + 1.2 } : p)) }));
-    expect(siteOf(st().sites, "proposed")!.boundary[5].x).toBeCloseTo(-0.65);
-    expect(siteOf(st().sites, "current")!.boundary[5].x).toBeCloseTo(-1.85);
+    st().updateSite((s) => ({ ...s, boundary: s.boundary.map((p, i) => (i === 6 ? { ...p, x: p.x + 1.2 } : p)) }));
+    expect(siteOf(st().sites, "proposed")!.boundary[6].x).toBeCloseTo(-0.65);
+    expect(siteOf(st().sites, "current")!.boundary[6].x).toBeCloseTo(-1.85);
 
     // Reset to a copy of As listed brings Proposed's plot back too.
     st().copyVariant("current", "proposed");
-    expect(siteOf(st().sites, "proposed")!.boundary[5].x).toBeCloseTo(-1.85);
+    expect(siteOf(st().sites, "proposed")!.boundary[6].x).toBeCloseTo(-1.85);
   });
 
   it("lets Proposed borrow As listed's plot and copies it on the first edit", () => {

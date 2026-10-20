@@ -69,8 +69,8 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 15 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 15 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 16 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 16 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -201,8 +201,10 @@ export function listing91770873(image: string): HouseModel {
       op("patio", 1145, 22, "h", 2.9), // sliding patio doors to the garden
       op("gap", 730, 91, "v", 1.8), // galley open to kitchen
       op("archway", 1170, 278, "h", 2.0), // open archway between the two living rooms, lined in dark stained timber (not bi-folds)
-      // Each bay face is a large fixed pane under a narrow top light (front-2).
-      { ...op("bay", 1185, 515, "h", 2.4), depth: 0.3, glazing: "fixed-top", ...UPVC }, // shallow canted bay on the front living room (photos)
+      // Shallow canted bay on the front living room, about 1.6 m wide at the wall with plain render either side:
+      // about 0.7 m to the party wall and 0.9 m to the hall (front-1, front-2 fitted to the first-floor windows;
+      // living-front-2 inside). Each face is a large fixed pane under a narrow top light (front-2).
+      { ...op("bay", 1177, 515, "h", 1.6), depth: 0.3, glazing: "fixed-top", ...UPVC },
       op("door", 1045, 410, "v", 0.8, MAHOGANY_DOOR), // hall -> front living room
       op("door", 770, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> front hall
       op("door", 950, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> stairs hall
@@ -380,7 +382,8 @@ export function listing91770873(image: string): HouseModel {
       roofStyle: "hip",
       partyWall: "right",
       ridgeAxis: "x",
-      pitchDeg: 35,
+      // A shallow roof: the front-street camera, fitted to the walls, puts the ridge where a 28 degree pitch does.
+      pitchDeg: 28,
       roofColor: "#6e4a3c",
       wallColor: RENDER,
       wallFinish: "render",
@@ -389,8 +392,9 @@ export function listing91770873(image: string): HouseModel {
       fascia: "trim",
       tileStyle: "concrete",
       // One brick stack on the party wall near the ridge, shared with No. 26
-      // (chimney breasts are drawn on that wall on both floors of the plan).
-      chimneys: [{ id: "party-stack", x: 5.82, y: -2.4, w: 0.9, d: 0.6, height: 0.9, pots: 2 }],
+      // (chimney breasts are drawn on that wall on both floors of the plan):
+      // flat-topped with no pots, carrying TV aerials, about 1.1 m wide (front-street, front-1, rear-1).
+      chimneys: [{ id: "party-stack", x: 5.75, y: -2.4, w: 1.1, d: 0.6, height: 0.9, pots: 0 }],
       // The single-storey part has a flat roof dressed with a tiled skirt across the
       // front, over the porch, garage and hall, hipped at both ends (front-street,
       // front-2). It rises about 0.9 m, right up to the two-storey wall over the hall
@@ -399,6 +403,17 @@ export function listing91770873(image: string): HouseModel {
       // a short way down the garage side (length assumed), since the rear photos show
       // nothing rising above the plain flat edge at the back (rear-1, rear-4).
       flatRoofSkirt: { sides: ["front"], depth: 1.8, pitchDeg: 30, returns: 2.0 },
+      // Downpipes where the photos show them: the front gutter's on the west side wall at the front corner,
+      // beside the soil stack (front-3); the rear gutter's between the patio doors and the kitchen window,
+      // nothing at the west rear corner (rear-1, rear-4); and a small one off the single-storey's flat roof
+      // at its west rear corner by the back door (rear-1).
+      downpipes: [
+        { x: -0.75, y: 1.05 },
+        { x: 1.95, y: -5.8 },
+        { x: -4.45, y: -5.8 },
+      ],
+      // The bathroom's soil and vent stack, up the west side wall near the front corner, through the eaves (front-3).
+      soilPipes: [{ x: -0.8, y: 0.75 }],
     },
     preset: LISTING_PRESET,
     // Giraffe360 floorplan, IPMS 3C, garage included (the EPC gives 114 m²).
@@ -510,18 +525,19 @@ export function listingSite(): Site {
       // conservatory (rear-3), then the house's party wall.
       [5.81, -9.41], // 2
       [5.78, -5.59], // 3
-      [5.67, 5.5], // 4 front-east
-      [-1.85, 5.5], // 5 drive, east edge
-      [-4.88, 5.5], // 6 front-west
+      [5.71, 1.16], // 4 house front (the front of the bay wall)
+      [5.67, 5.5], // 5 front-east
+      [-1.85, 5.5], // 6 drive, east edge
+      [-4.88, 5.5], // 7 front-west
       // West side: brick wall up the drive to the garage-front pier, the
       // garage wall itself, a brick wall with a block panel and bin store
       // at the back of the house (rear-1, rear-2, rear-4), then hedge.
       // The wall ends under the porch pillar (canopy corner at x -4.589,
       // z 2.60), centred so its street face is flush with the pillar's.
-      [-4.626, 2.6], // 7 wall meets the pillar
-      [-4.59, 1.2], // 8
-      [-4.59, -5.59], // 9
-      [-4.55, -7.0], // 10
+      [-4.626, 2.6], // 8 wall meets the pillar
+      [-4.59, 1.2], // 9
+      [-4.59, -5.59], // 10
+      [-4.55, -7.0], // 11
     ]),
     // Edge i runs from boundary[i] to boundary[i + 1].
     boundaryEdges: [
@@ -529,17 +545,19 @@ export function listingSite(): Site {
       { kind: "fence", height: 1.8 }, // 1 east, back garden: not visible
       { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside No. 26's conservatory
       { kind: "fence", height: 1.8 }, // 3 east, along the party wall (hidden)
-      { kind: "wall", height: 0.9, top: "brick", piers: false }, // 4 front garden wall
-      { kind: "open", height: 0 }, // 5 drive opening
-      { kind: "wall", height: 1, top: "brick", piers: false }, // 6 west side of the drive
-      { kind: "fence", height: 1.8 }, // 7 west, beside the pillar (hidden)
-      { kind: "fence", height: 1.8 }, // 8 west, along the garage wall (hidden)
-      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 9 west, rear corner of the house
-      { kind: "hedge", height: 2 }, // 10 west, back garden
+      // A low brick wall like the front one, from the house front to the pavement (owner; front-garden).
+      { kind: "wall", height: 0.95, top: "brick", piers: false }, // 4 east, front garden
+      { kind: "wall", height: 0.9, top: "brick", piers: false }, // 5 front garden wall
+      { kind: "open", height: 0 }, // 6 drive opening
+      { kind: "wall", height: 1, top: "brick", piers: false }, // 7 west side of the drive
+      { kind: "fence", height: 1.8 }, // 8 west, beside the pillar (hidden)
+      { kind: "fence", height: 1.8 }, // 9 west, along the garage wall (hidden)
+      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 10 west, rear corner of the house
+      { kind: "hedge", height: 2 }, // 11 west, back garden
     ],
     neighbours: [
-      // Pale render with a brick band, sharing our roof covering.
-      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
+      // Pale render with a brick band, sharing our roof covering and its 28 degree pitch.
+      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 28, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
       // A white uPVC conservatory (rear photos).
       block("No. 26 conservatory", 5.82, -9.41, 8.64, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
       block("No. 26 side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),

@@ -9,12 +9,13 @@ import {
   planRoofs,
   roofGeometry,
   roofHeightAt,
+  downpipeSpot,
   roofTrim,
   setDown,
   type RoofBlock,
 } from "./roof";
 import { EXT_WALL_T } from "./geometry";
-import { footAt, roofParts, skirtEnd, skirtParts, skirtRun, skirtedEdges, type RoofParts } from "./roofParts";
+import { SOIL_R, assignDownpipes, footAt, roofParts, skirtEnd, skirtParts, skirtRun, skirtedEdges, soilStack, type RoofParts } from "./roofParts";
 import type { FlatRoofSkirt, HouseModel } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
 
@@ -336,6 +337,102 @@ describe("chimneys and downpipes", () => {
   });
 });
 
+describe("downpipes where the model puts them", () => {
+  // Hipped at x = 0, flush (party wall) at x = 8; walls 0.2 thick, so outer faces at x = -0.1, z = -0.1 and 6.1.
+  const hip: RoofBlock = { ...base, x1: 8, start: "hip", end: "flush" };
+  const feet = (t: ReturnType<typeof roofTrim>) => t.downpipes.map((d) => d.path[d.path.length - 1]);
+
+  it("finds the nearest guttered wall: a long side, or a hipped end, but not a gable or party-wall end", () => {
+    expect(downpipeSpot(hip, 3, -0.3)).toMatchObject({ side: "lo", along: 3 });
+    expect(downpipeSpot(hip, 3, 6.3)).toMatchObject({ side: "hi", along: 3 });
+    expect(downpipeSpot(hip, -0.3, 5.5)).toMatchObject({ side: "start", along: 5.5 });
+    // Off the flush end, and off a gable end, there is no gutter to hang it from.
+    expect(downpipeSpot(hip, 8.3, 3)).toBeNull();
+    expect(downpipeSpot(base, -0.3, 3)).toBeNull();
+    // Too far from any wall.
+    expect(downpipeSpot(hip, 3, 3)).toBeNull();
+    expect(downpipeSpot(hip, 3, -2)).toBeNull();
+  });
+
+  it("puts one downpipe at each given spot instead of the automatic corner ones", () => {
+    const t = roofTrim(hip, [
+      [3, -0.3],
+      [-0.3, 5.5],
+    ]);
+    expect(t.downpipes).toHaveLength(2);
+    const [side, end] = feet(t);
+    // Against the wall face, the swan neck ending a pipe radius and a little off it.
+    expect(side[0]).toBeCloseTo(3);
+    expect(side[2]).toBeCloseTo(-0.1 - 0.054, 3);
+    expect(end[0]).toBeCloseTo(-0.1 - 0.054, 3);
+    expect(end[2]).toBeCloseTo(5.5);
+    // Every outlet hangs from its gutter, out past the wall under the eaves.
+    for (const d of t.downpipes) expect(d.path[0][1]).toBeGreaterThan(hip.y - 0.4);
+    // Kept clear of the corner when the spot is past it.
+    expect(feet(roofTrim(hip, [[-0.05, -0.3]]))[0][0]).toBeCloseTo(0.02, 6);
+    // An empty list means none at all; no list keeps the automatic ones.
+    expect(roofTrim(hip, []).downpipes).toHaveLength(0);
+    expect(roofTrim(hip).downpipes).toHaveLength(2);
+  });
+
+  it("places the listing's: front on the west side wall, rear by the patio doors, and one off the flat roof", () => {
+    const m = listing91770873("");
+    const ext = exteriorOf(m);
+    const plan = planRoofs(m);
+    const main = plan.blocks[0];
+    const placed = assignDownpipes(plan, ext.downpipes!, ext.flatRoofSkirt);
+    expect(placed.blocks[0]).toHaveLength(2);
+    expect(placed.flats).toHaveLength(1);
+    const parts = roofParts(plan, { gutters: true, skirt: ext.flatRoofSkirt, downpipes: ext.downpipes });
+    const drops = parts.pipes.filter(([a, b]) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[2] - b[2]) < 1e-9 && a[1] - b[1] > 0.5).map(([a, b]) => ({ x: a[0], z: a[2], foot: b[1] }));
+    const west = main.x0 - EXT_WALL_T / 2;
+    const rear = main.z0 - EXT_WALL_T / 2;
+    // Rear: between the patio doors and the kitchen window, to the ground; nothing at the two-storey's west rear corner.
+    expect(drops.some((d) => Math.abs(d.x - 1.95) < 0.01 && d.z < rear && d.foot === plan.groundY)).toBe(true);
+    expect(drops.some((d) => Math.abs(d.x - west) < 0.5 && d.z < rear)).toBe(false);
+    // Front: on the hipped west end by the front corner, onto the single-storey roof.
+    expect(drops.some((d) => d.x < west && Math.abs(d.z - 1.05) < 0.01 && d.foot === plan.flatRoofs[0].top)).toBe(true);
+    // The single-storey's west rear corner, to the ground.
+    expect(drops.some((d) => d.x < -4.3 && d.z < rear && d.foot === plan.groundY)).toBe(true);
+  });
+
+  it("drops spots on a skirted flat-roof edge or far from any wall, and keeps the skirt's own downpipes", () => {
+    const m = listing91770873("");
+    const ext = exteriorOf(m);
+    const plan = planRoofs(m);
+    const front = (620 - 430) / 73 + EXT_WALL_T / 2 + 0.1;
+    const placed = assignDownpipes(plan, [{ x: 0.5, y: front }, { x: 2, y: -2 }], ext.flatRoofSkirt);
+    expect(placed.blocks.flat()).toHaveLength(0);
+    expect(placed.flats).toHaveLength(0);
+    const auto = roofParts(plan, { gutters: true, skirt: ext.flatRoofSkirt });
+    const none = roofParts(plan, { gutters: true, skirt: ext.flatRoofSkirt, downpipes: [] });
+    // Only the main roof's automatic pair goes; the skirt's stay.
+    expect(none.pipes.length).toBeGreaterThan(0);
+    expect(none.pipes.length).toBeLessThan(auto.pipes.length);
+  });
+
+  it("stands a soil stack against the nearest wall, from the roof below up through the eaves", () => {
+    const m = listing91770873("");
+    const plan = planRoofs(m);
+    const main = plan.blocks[0];
+    const s = soilStack(plan, -0.8, 0.75)!;
+    const [lo, hi] = s.line;
+    expect(lo[0]).toBeCloseTo(main.x0 - EXT_WALL_T / 2 - SOIL_R - 0.03, 6);
+    expect(lo[2]).toBeCloseTo(0.75);
+    expect(lo[1]).toBeCloseTo(plan.flatRoofs[0].top);
+    // Its top clears the tiles above it, and the vent terminal sits on it.
+    expect(hi[1]).toBeGreaterThan(roofHeightAt(main, hi[0], hi[2])!);
+    expect(hi[1]).toBeLessThan(roofHeightAt(main, hi[0], hi[2])! + 0.5);
+    expect(s.vent).toEqual(hi);
+    // Not against the party wall, and nothing when no wall is near.
+    expect(soilStack(plan, main.x1 + 0.3, -2)).toBeNull();
+    expect(soilStack(plan, 2, -2)).toBeNull();
+    const parts = roofParts(plan, { gutters: false, soilPipes: [{ x: -0.8, y: 0.75 }] });
+    expect(parts.soil).toHaveLength(1);
+    expect(parts.vents).toHaveLength(1);
+  });
+});
+
 describe("flat roof skirt", () => {
   const W = EXT_WALL_T / 2 + FLAT_OVERHANG;
   const blank = (): RoofParts => ({
@@ -351,6 +448,8 @@ describe("flat roof skirt", () => {
     caps: [],
     gutters: [],
     pipes: [],
+    soil: [],
+    vents: [],
     pots: [],
   });
   const verts = (pos: number[]) => Array.from({ length: pos.length / 3 }, (_, i) => pos.slice(i * 3, i * 3 + 3));

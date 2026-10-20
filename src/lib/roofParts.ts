@@ -1,14 +1,17 @@
 import { EXT_WALL_T } from "./geometry";
-import type { FlatRoofSkirt, PlanSide } from "../types";
+import type { FlatRoofSkirt, PlanSide, WallSpot } from "../types";
 import {
+  DOWNPIPE_REACH,
   FLAT_OVERHANG,
   GUTTER_R,
   LEAN_DEPTH,
   PIPE_R,
   leanToHeightAt,
   leanToSurface,
+  downpipeSpot,
   pushPoly,
   roofGeometry,
+  roofHeightAt,
   roofTrim,
   type FlatEdge,
   type FlatRoof,
@@ -48,6 +51,9 @@ export interface RoofParts {
   gutters: [P3, P3][];
   /** Downpipe segments, swan necks included. */
   pipes: [P3, P3][];
+  /** Soil and vent stacks (wider than downpipes), and the base of each one's vent terminal. */
+  soil: [P3, P3][];
+  vents: P3[];
   /** Chimney pot bases (centre of the bottom). */
   pots: P3[];
 }
@@ -74,7 +80,10 @@ function pushPlainBox(out: number[], x0: number, y0: number, z0: number, x1: num
 }
 
 /** Assemble the triangle soups for a planned roof. */
-export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: FlatRoofSkirt }): RoofParts {
+export function roofParts(
+  plan: RoofPlan,
+  opts: { gutters: boolean; skirt?: FlatRoofSkirt; downpipes?: WallSpot[]; soilPipes?: WallSpot[] },
+): RoofParts {
   const parts: RoofParts = {
     tiles: { pos: [], uv: [] },
     gables: [],
@@ -88,26 +97,36 @@ export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: Flat
     caps: [],
     gutters: [],
     pipes: [],
+    soil: [],
+    vents: [],
     pots: [],
   };
+  const placed = opts.downpipes ? assignDownpipes(plan, opts.downpipes, opts.skirt) : null;
+  const drop = (path: P3[]) => {
+    for (let i = 0; i + 1 < path.length; i++) parts.pipes.push([path[i], path[i + 1]]);
+    const head = path[path.length - 1];
+    parts.pipes.push([head, [head[0], footAt(plan, head[0], head[2], head[1]), head[2]]]);
+  };
 
-  for (const b of plan.blocks) {
+  plan.blocks.forEach((b, bi) => {
     const m = roofGeometry(b);
     parts.tiles.pos.push(...m.slopes);
     parts.tiles.uv.push(...m.slopeUVs);
     parts.gables.push(...m.gables);
-    const tr = roofTrim(b);
+    const tr = roofTrim(b, placed?.blocks[bi]);
     parts.trim.push(...tr.trim);
     parts.caps.push(...tr.caps.map((line) => ({ line, pitchDeg: b.pitchDeg })));
     if (opts.gutters) {
       parts.gutters.push(...tr.gutters);
-      for (const dp of tr.downpipes) {
-        for (let i = 0; i + 1 < dp.path.length; i++) parts.pipes.push([dp.path[i], dp.path[i + 1]]);
-        const head = dp.path[dp.path.length - 1];
-        const foot = footAt(plan, head[0], head[2], head[1]);
-        parts.pipes.push([head, [head[0], foot, head[2]]]);
-      }
+      for (const dp of tr.downpipes) drop(dp.path);
     }
+  });
+  if (opts.gutters) for (const f of placed?.flats ?? []) drop(flatDownpipe(f.roof, f.edge, f.along));
+  for (const sp of opts.soilPipes ?? []) {
+    const stack = soilStack(plan, sp.x, sp.y);
+    if (!stack) continue;
+    parts.soil.push(stack.line);
+    parts.vents.push(stack.vent);
   }
 
   for (const fr of plan.flatRoofs) {
@@ -134,6 +153,90 @@ export function roofParts(plan: RoofPlan, opts: { gutters: boolean; skirt?: Flat
     }
   }
   return parts;
+}
+
+/**
+ * Which roof each downpipe spot (world x, y = z) goes on: the nearest
+ * guttered wall of a pitched roof (see downpipeSpot), or the nearest plain
+ * eaves edge of a flat roof, where no skirt covers it, within DOWNPIPE_REACH.
+ * Spots near neither are dropped.
+ */
+export function assignDownpipes(
+  plan: RoofPlan,
+  spots: WallSpot[],
+  skirt?: FlatRoofSkirt,
+): { blocks: [number, number][][]; flats: { roof: FlatRoof; edge: FlatEdge; along: number }[] } {
+  const blocks: [number, number][][] = plan.blocks.map(() => []);
+  const flats: { roof: FlatRoof; edge: FlatEdge; along: number }[] = [];
+  const tol = 0.05;
+  for (const { x, y: z } of spots) {
+    let best: { dist: number; put: () => void } | null = null;
+    plan.blocks.forEach((b, i) => {
+      const at = downpipeSpot(b, x, z);
+      if (at && (!best || at.dist < best.dist)) best = { dist: at.dist, put: () => blocks[i].push([x, z]) };
+    });
+    for (const fr of plan.flatRoofs) {
+      const skirted = skirtedEdges(fr, skirt);
+      for (const e of fr.edges) {
+        if (e.kind !== "eaves") continue;
+        const [along, across] = e.axis === "x" ? [x, z] : [z, x];
+        if (along < e.a - tol || along > e.b + tol) continue;
+        if (skirted.some((k) => k.src === e && along > k.a - tol && along < k.b + tol)) continue;
+        const dist = Math.abs(across - e.at);
+        if (dist <= DOWNPIPE_REACH && (!best || dist < best.dist)) best = { dist, put: () => flats.push({ roof: fr, edge: e, along }) };
+      }
+    }
+    (best as { put: () => void } | null)?.put();
+  }
+  return { blocks, flats };
+}
+
+/**
+ * A downpipe off a plain flat-roof edge: an outlet through the fascia at
+ * membrane level, down the outside of the fascia and a swan neck under the
+ * soffit back to the wall. The path stops there; the caller runs it down.
+ */
+export function flatDownpipe(fr: FlatRoof, e: FlatEdge, along: number): P3[] {
+  const half = EXT_WALL_T / 2;
+  const W = half + FLAT_OVERHANG;
+  const P = (al: number, y: number, ac: number): P3 => (e.axis === "x" ? [al, y, e.at + e.out * ac] : [e.at + e.out * ac, y, al]);
+  const a = Math.min(Math.max(along, e.a + 0.12), e.b - 0.12);
+  const out = W + PIPE_R + 0.01;
+  const dp = half + PIPE_R + 0.02;
+  const yOut = fr.top - 0.04;
+  const ySoffit = fr.y - 0.04;
+  return [P(a, yOut, W - 0.08), P(a, yOut, out), P(a, ySoffit - 0.06, out), P(a, ySoffit - 0.06 - 0.8 * (out - dp), dp)];
+}
+
+/** Radius of a 110 mm soil and vent pipe. */
+export const SOIL_R = 0.055;
+
+/**
+ * A soil and vent stack beside the nearest exposed outer wall face of a
+ * pitched roof block (not a party wall), within DOWNPIPE_REACH of the spot:
+ * from the roof or ground below up through the eaves to just clear of the
+ * tiles over it, where its vent terminal sits. Null when no wall is near.
+ */
+export function soilStack(plan: RoofPlan, x: number, z: number): { line: [P3, P3]; vent: P3 } | null {
+  let best: { dist: number; px: number; pz: number; b: (typeof plan.blocks)[number] } | null = null;
+  for (const b of plan.blocks) {
+    const half = (b.wallT ?? EXT_WALL_T) / 2;
+    const off = half + SOIL_R + 0.03;
+    const flushAt = (axis: "x" | "z", end: "start" | "end") => b.axis === axis && b[end] === "flush";
+    const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo + 0.1), hi - 0.1);
+    const faces = [
+      { open: !flushAt("x", "start"), dist: Math.abs(x - (b.x0 - half)), on: z > b.z0 - half && z < b.z1 + half, px: b.x0 - off, pz: clamp(z, b.z0 - half, b.z1 + half) },
+      { open: !flushAt("x", "end"), dist: Math.abs(x - (b.x1 + half)), on: z > b.z0 - half && z < b.z1 + half, px: b.x1 + off, pz: clamp(z, b.z0 - half, b.z1 + half) },
+      { open: !flushAt("z", "start"), dist: Math.abs(z - (b.z0 - half)), on: x > b.x0 - half && x < b.x1 + half, px: clamp(x, b.x0 - half, b.x1 + half), pz: b.z0 - off },
+      { open: !flushAt("z", "end"), dist: Math.abs(z - (b.z1 + half)), on: x > b.x0 - half && x < b.x1 + half, px: clamp(x, b.x0 - half, b.x1 + half), pz: b.z1 + off },
+    ];
+    for (const f of faces) if (f.open && f.on && f.dist <= DOWNPIPE_REACH && (!best || f.dist < best.dist)) best = { dist: f.dist, px: f.px, pz: f.pz, b };
+  }
+  if (!best) return null;
+  const { px, pz, b } = best;
+  const tiles = roofHeightAt(b, px, pz) ?? roofGeometry(b).eavesY;
+  const top = tiles + 0.15;
+  return { line: [[px, footAt(plan, px, pz, b.y), pz], [px, top, pz]], vent: [px, top, pz] };
 }
 
 /** Where a downpipe at (x, z) coming down from `from` ends: on the highest flat or lean-to roof below it, else the ground. */

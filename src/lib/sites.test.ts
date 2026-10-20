@@ -21,11 +21,11 @@ describe("each layout's plot", () => {
   it("copies on the first edit to Proposed, leaving As listed's plot alone", () => {
     const current = listingSite();
     const sites: Sites = { current };
-    const next = updateSiteOf(sites, "proposed", (s) => ({ ...s, boundary: s.boundary.map((p, i) => (i === 5 ? { ...p, x: p.x + 1.2 } : p)) }));
+    const next = updateSiteOf(sites, "proposed", (s) => ({ ...s, boundary: s.boundary.map((p, i) => (i === 6 ? { ...p, x: p.x + 1.2 } : p)) }));
     expect(hasOwnSite(next, "proposed")).toBe(true);
     expect(next.current).toBe(current);
-    expect(current.boundary[5].x).toBeCloseTo(-1.85);
-    expect(next.proposed!.boundary[5].x).toBeCloseTo(-0.65);
+    expect(current.boundary[6].x).toBeCloseTo(-1.85);
+    expect(next.proposed!.boundary[6].x).toBeCloseTo(-0.65);
     // The copy shares nothing with As listed's, so a later in-place change can't leak across.
     expect(next.proposed!.surfaces[0]).not.toBe(current.surfaces[0]);
     // A second edit works on Proposed's own plot.
