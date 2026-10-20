@@ -226,7 +226,7 @@ export function listing91770873(image: string): HouseModel {
       op("door", 745, 1040, "h", 0.8),
       op("door", 805, 1040, "h", 0.8),
       op("door", 850, 1075, "v", 0.8),
-      op("door", 750, 1110, "h", 0.75),
+      op("door", 722, 1110, "h", 0.65), // west of the shower (floorplan)
       op("gap", 650, 1110, "h", 0.8), // stairs open onto the landing
       op("window", 720, 795, "h", 1.0),
       op("window", 930, 795, "h", 1.85),
@@ -252,7 +252,7 @@ export function listing91770873(image: string): HouseModel {
     // Bathroom: rectangular shower with a sliding door in the north-east corner (door side to the west),
     // gloss white vanity and mirror cabinet on the east wall, WC in the west alcove and a chrome ladder rail
     // on the wall beside it (bathroom-1, bathroom-2, bathroom-wc).
-    { id: uid(), type: "shower", x: 777, y: 1150, rot: 90, w: 1.0, d: 0.8, color: "#cfe3ec" },
+    { id: uid(), type: "shower", x: 777, y: 1153, rot: 90, w: 1.0, d: 0.7, color: "#cfe3ec" },
     { id: uid(), type: "vanity", x: 790, y: 1225, rot: 90, w: 0.65, d: 0.45, color: "#f6f6f4" },
     { id: uid(), type: "wall-unit", x: 801, y: 1225, rot: 90, w: 0.65, d: 0.15, h: 0.6, color: "#eef1f2", label: "Mirror cabinet" },
     { id: uid(), type: "toilet", x: 639, y: 1250, rot: 270 },
