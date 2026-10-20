@@ -27,6 +27,13 @@ Measured from the OS-based map in the drainage and water search (north-up), scal
 - Front faces a compass bearing of about 162° (south-south-east); the garden faces about 342°. The floorplan's own compass says about 171°.
 - Plot about 10.6 m wide and 16.7–17.6 m deep (the rear boundary is skewed). The house fills the plot's width: the garage wall is on the west boundary, the party wall on the east.
 - Rear garden about 5.8–6.6 m deep; front garden about 2.6 m in front of the hall and 4.3 m in front of the bay.
+- The west side of the drive is a brick wall, not a fence: the same red brick and coping as the front garden wall, about 1 m high at the pavement, running back to the brick pier at the garage's front-left corner (front-1, front-2, front-3). It appears to step up slightly toward the pier; the model uses a plain 1 m wall. Behind the pier the boundary is a timber fence again (front-3). The model splits the west edge at about 4.3 m back from the pavement line.
+- Other boundaries (all from the photos; positions along each edge are estimates):
+  - Front: brick wall with coping, about 0.9 m, across the front garden (front-1, front-2, front-garden); open drive. Unchanged.
+  - East, back garden: a brick wall with a pierced decorative block panel, about 1.4 m, beside No. 26's conservatory (rear-3), modelled from the house's rear corner to the conservatory's far end. The panel itself cannot be drawn (plain wall). Further back the boundary is not visible in any photo (fence kept).
+  - East, along the party wall and front garden: not visible (fence kept).
+  - West, at the back of the house: a brick wall about 1.3 m with a decorative block panel along the top and a grey bin store against it (rear-1, rear-2, rear-4), then a dense hedge and shrubs, about 2 m, on a low brick kerb along the patio and lawn (rear-garden). The panel and bin store are not drawn.
+  - Rear: not visible in any photo (fence kept).
 - West neighbour's wall is about 1.8 m beyond our garage wall.
 - No. 26: main block mirrors ours (about 6.4 m wide), a single-storey conservatory about 2.8 × 3.8 m on the shared boundary at the rear, and a set-back side extension.
 - A building backs onto the rear-left corner of the garden.

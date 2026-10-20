@@ -350,19 +350,34 @@ export function listingSite(): Site {
     latitude: 51.44,
     longitude: -2.62,
     boundary: w([
-      [-4.44, -11.24],
-      [5.84, -12.05],
-      [5.67, 5.5],
-      [-1.85, 5.5],
-      [-4.88, 5.5],
+      [-4.44, -11.24], // 0 rear-west
+      [5.84, -12.05], // 1 rear-east
+      // East side: brick wall with a pierced block panel beside No. 26's
+      // conservatory (rear-3), then the house's party wall.
+      [5.81, -9.41], // 2
+      [5.78, -5.59], // 3
+      [5.67, 5.5], // 4 front-east
+      [-1.85, 5.5], // 5 drive, east edge
+      [-4.88, 5.5], // 6 front-west
+      // West side: brick wall up the drive to the garage-front pier, the
+      // garage wall itself, a brick wall with a block panel and bin store
+      // at the back of the house (rear-1, rear-2, rear-4), then hedge.
+      [-4.77, 1.2], // 7
+      [-4.59, -5.59], // 8
+      [-4.55, -7.0], // 9
     ]),
-    // Low brick wall with coping along the front garden; the drive is open.
+    // Edge i runs from boundary[i] to boundary[i + 1].
     boundaryEdges: [
-      { kind: "fence", height: 1.8 },
-      { kind: "fence", height: 1.8 },
-      { kind: "wall", height: 0.9 },
-      { kind: "open", height: 0 },
-      { kind: "fence", height: 1.8 },
+      { kind: "fence", height: 1.8 }, // 0 rear: not visible in any photo
+      { kind: "fence", height: 1.8 }, // 1 east, back garden: not visible
+      { kind: "wall", height: 1.4 }, // 2 east, beside No. 26's conservatory
+      { kind: "fence", height: 1.8 }, // 3 east, along the party wall (hidden)
+      { kind: "wall", height: 0.9 }, // 4 front garden wall
+      { kind: "open", height: 0 }, // 5 drive opening
+      { kind: "wall", height: 1 }, // 6 west side of the drive
+      { kind: "fence", height: 1.8 }, // 7 west, along the garage wall (hidden)
+      { kind: "wall", height: 1.3 }, // 8 west, rear corner of the house
+      { kind: "hedge", height: 2 }, // 9 west, back garden
     ],
     neighbours: [
       // Pale render with a brick band, sharing our roof covering.
