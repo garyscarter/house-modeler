@@ -1,6 +1,7 @@
-import type { Floor, HouseModel, Opening, OpeningKind, Room } from "../types";
+import type { Floor, HouseModel, Opening, OpeningKind, Room, Site } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { M2_TO_FT2 } from "./planMath";
+import { diffSites } from "./siteDiff";
 
 /**
  * The report: floor areas, the list of changes from As listed to Proposed,
@@ -175,7 +176,7 @@ export function areaReport(current?: HouseModel, proposed?: HouseModel): AreaRep
 // Changes
 
 export type Unit = "m²" | "m" | "each";
-export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening";
+export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Site";
 export type CostLineId =
   | "newFloorArea"
   | "removeWall"
@@ -184,7 +185,9 @@ export type CostLineId =
   | "newWindow"
   | "newDoor"
   | "alterOpening"
-  | "blockOpening";
+  | "blockOpening"
+  | "removeGardenWall"
+  | "newPaving";
 
 export interface Change {
   key: string;
@@ -350,8 +353,11 @@ export function pairOpenings(fa: Floor | undefined, fb: Floor | undefined): { a?
   return pairs;
 }
 
-/** Everything that differs between As listed (`a`) and Proposed (`b`), floor by floor. */
-export function diffModels(a: HouseModel, b: HouseModel): Change[] {
+/**
+ * Everything that differs between As listed (`a`) and Proposed (`b`), floor
+ * by floor, then (given each layout's plot) the plot under "Site".
+ */
+export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?: Site }): Change[] {
   const out: Change[] = [];
   for (const { level, a: fa, b: fb } of pairFloors(a, b)) {
     const floorName = (fb ?? fa)!.name;
@@ -510,6 +516,7 @@ export function diffModels(a: HouseModel, b: HouseModel): Change[] {
       }
     }
   }
+  if (sites) out.push(...diffSites(sites.a, sites.b));
   return out;
 }
 
@@ -533,6 +540,8 @@ export const COST_LINES: CostLineDef[] = [
   { id: "newDoor", label: "New door", unit: "each", example: 600 },
   { id: "alterOpening", label: "Widen, move or form an opening", unit: "each", example: 1500 },
   { id: "blockOpening", label: "Block up an opening", unit: "each", example: 500 },
+  { id: "removeGardenWall", label: "Remove garden wall", unit: "m", example: 100 },
+  { id: "newPaving", label: "New paving", unit: "m²", example: 80 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */

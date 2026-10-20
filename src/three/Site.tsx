@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
 import { useStore } from "../store";
+import { useViewedSite } from "./viewedVariant";
 import { roofGeometry, type RoofEnd } from "../lib/roof";
 import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
 import { clipSegmentOutside, edgesOf } from "../lib/site";
@@ -21,7 +22,7 @@ export const GROUND_Y = -0.26;
  * buildings. `model` is the house this viewer shows; fences stop at its walls.
  */
 export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model?: HouseModel }) {
-  const site = useStore((s) => s.site);
+  const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
   const active = useStore((s) => s.variants[s.activeVariant]);
   if (!site || !showSite) {

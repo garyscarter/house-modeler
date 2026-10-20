@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useStore } from "../store";
+import { useViewedSite } from "./viewedVariant";
 import { solarPosition, sunTimes, sunVector, type SunPosition, type SunTimes } from "../lib/sun";
 
 /** The sun study uses this year's calendar (it only shifts the BST dates). */
@@ -15,11 +16,12 @@ export interface SunInfo {
   frontBearing: number;
 }
 
-/** Sun position for the site and the sun study's date and time, or null without a site. */
+/** Sun position for the viewed layout's site and the sun study's date and time, or null without a site. */
 export function useSunInfo(): SunInfo | null {
-  const lat = useStore((s) => s.site?.latitude);
-  const lon = useStore((s) => s.site?.longitude);
-  const front = useStore((s) => s.site?.frontBearing);
+  const site = useViewedSite();
+  const lat = site?.latitude;
+  const lon = site?.longitude;
+  const front = site?.frontBearing;
   const { enabled, dayOfYear, hour } = useStore((s) => s.sun);
   return useMemo(() => {
     if (lat === undefined || lon === undefined || front === undefined) return null;

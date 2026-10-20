@@ -14,7 +14,7 @@ export function ViewControls({ model, both }: { model: HouseModel | undefined; b
   const maxLevel = useStore((s) => s.maxLevel);
   const showExterior = useStore((s) => s.showExterior);
   const showSite = useStore((s) => s.showSite);
-  const site = useStore((s) => s.site);
+  const site = useStore((s) => !!(s.sites.current || s.sites.proposed));
   const activeVariant = useStore((s) => s.activeVariant);
   const setUi = useStore((s) => s.setUi);
   const updateModel = useStore((s) => s.updateModel);

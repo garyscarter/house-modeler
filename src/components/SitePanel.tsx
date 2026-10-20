@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ask } from "./Dialogs";
-import { SITE_EDIT_ID, useStore } from "../store";
+import { SITE_EDIT_ID, useSite, useStore } from "../store";
+import { SiteVariantNote } from "./SiteVariantNote";
 import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { compassPoint } from "../lib/sun";
@@ -17,7 +18,7 @@ const num = (v: string, fallback: number) => {
 
 /** Plot, orientation, location, neighbours and garden surfaces. */
 export function SitePanel() {
-  const site = useStore((s) => s.site);
+  const site = useSite();
   const setSite = useStore((s) => s.setSite);
   const updateSite = useStore((s) => s.updateSite);
   const model = useStore((s) => s.variants[s.activeVariant]);
@@ -32,6 +33,7 @@ export function SitePanel() {
   return (
     <div className="panel site-panel">
       <h3>Site</h3>
+      <SiteVariantNote />
       {!site ? (
         <>
           <p className="muted small">

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "../store";
+import { useSite, useStore } from "../store";
+import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { bbox, polygonCentroid } from "../lib/geometry";
@@ -46,7 +47,7 @@ const NICE = [0.5, 1, 2, 5, 10, 20, 50, 100];
 
 /** Top-down editor for the plot boundary, garden surfaces and neighbouring buildings, in world metres. */
 export function SiteEditor() {
-  const site = useStore((s) => s.site);
+  const site = useSite();
   const model = useStore((s) => s.variants[s.activeVariant]);
   if (!site) return <NoSite model={model} />;
   return <SitePlan site={site} model={model} />;
@@ -660,6 +661,7 @@ function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClea
   return (
     <div className="site-side inspector">
       <h4>Site plan</h4>
+      <SiteVariantNote />
       <p className="muted small">
         Tap a boundary edge to set its fence, wall or hedge; tap a surface or building to edit it. Corners snap to the house and to each
         other.

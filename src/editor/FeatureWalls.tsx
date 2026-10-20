@@ -3,7 +3,7 @@ import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, type Floor, t
 import { ACCENT_LABEL, BASE_LABEL, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
-import { useStore } from "../store";
+import { useSite, useStore } from "../store";
 
 /**
  * The room's walls, one row per polygon edge, each of which can take its own
@@ -23,7 +23,7 @@ export function FeatureWalls({
   onChange: (p: Partial<Room>) => void;
   onHighlight?: (edge: number | null) => void;
 }) {
-  const frontBearing = useStore((s) => s.site?.frontBearing);
+  const frontBearing = useSite(variant)?.frontBearing;
   const exterior = useStore((s) => s.variants[variant]?.exterior);
   const house = { finish: exterior?.wallFinish ?? "render", color: exterior?.wallColor ?? DEFAULT_EXTERIOR.wallColor };
   // Tapped on a touch screen, where there is no hover: stays lit until tapped again.

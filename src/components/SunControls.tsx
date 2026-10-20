@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { compassPoint, dayOfYear, daysInYear, formatClock, formatDay, sunTimes, ukZone } from "../lib/sun";
 import { SUN_YEAR, useSunInfo } from "../three/useSun";
+import { useViewedSite, useViewedVariant } from "../three/viewedVariant";
 import { useSiteView } from "../three/siteView";
 import { SUN_HOURS_GRADIENT, SUN_HOURS_MAX, shareWithSun, useSunHours } from "../three/SunHours";
 import "./SunControls.css";
@@ -24,7 +25,7 @@ const quarter = (h: number, round: (x: number) => number) => round(h * 4) / 4;
  * when a site gives the house a location and orientation.
  */
 export function SunControls() {
-  const site = useStore((s) => s.site);
+  const site = useViewedSite();
   const sun = useStore((s) => s.sun);
   const setSun = useStore((s) => s.setSun);
   const info = useSunInfo();
@@ -175,8 +176,9 @@ export function SunControls() {
 }
 
 function SunHoursLegend() {
-  const site = useStore((s) => s.site);
-  const model = useStore((s) => s.variants[s.activeVariant]);
+  const site = useViewedSite();
+  const viewed = useViewedVariant();
+  const model = useStore((s) => s.variants[viewed]);
   const day = useStore((s) => s.sun.dayOfYear);
   const grid = useSunHours(site, model);
   if (!grid) return <p className="sun-hint">No direct sun on this day.</p>;

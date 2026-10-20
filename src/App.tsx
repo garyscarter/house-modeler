@@ -212,6 +212,7 @@ export default function App() {
               title={VARIANT_LABEL[activeVariant]}
               maxLevel={maxLevel}
               showExterior={showExterior}
+              variant={activeVariant}
             />
           )}
           {model && tab === "3d" && viewMode === "side-by-side" && both && (
@@ -220,6 +221,7 @@ export default function App() {
                 <Viewer
                   key={k}
                   captureId={k}
+                  variant={k}
                   model={variants[k]!}
                   photos={photos}
                   showLabels={showLabels}
@@ -240,6 +242,8 @@ export default function App() {
             <Viewer
               model={model}
               ghost={otherModel}
+              variant={activeVariant}
+              ghostVariant={other}
               photos={photos}
               showLabels={showLabels}
               showCeilings={showCeilings}
