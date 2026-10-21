@@ -10,6 +10,7 @@ import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometr
 import { clipSegmentOutside, edgesOf } from "../lib/site";
 import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
 import { surfaceLook } from "../lib/surfaceFinish";
+import { boundaryWallSegments, wallAt, type WallSegment } from "../lib/wallSteps";
 import { triangles } from "./Roof";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { useSiteView } from "./siteView";
@@ -241,85 +242,201 @@ function along(g: THREE.BufferGeometry, p: V2, q: V2, y: number): THREE.BufferGe
 
 type Part = "timber" | "concrete" | "brick" | "coping" | "mortar" | "hedge";
 
-/** Close-board fence: posts every 1.83 m (a 6 ft panel), boards on a concrete gravel board. */
-function fence(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
-  const len = Math.hypot(q.x - p.x, q.y - p.y);
-  const spans = Math.max(1, Math.ceil(len / 1.83));
-  const step = len / spans;
-  const at = (d: number) => ({ x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len });
-  for (let k = 0; k <= spans; k++) {
-    const c = at(k * step);
-    out.timber.push(along(metricBox(0.1, h + 0.05, 0.1), c, at(k * step + 1e-3), GROUND_Y + (h + 0.05) / 2));
+/** Plan point d metres along a→b (length len). */
+const at = (a: V2, b: V2, len: number, d: number): V2 => ({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
+
+/** Height of a run's top or base at distance d (a level run gives the same at both ends). */
+function runAt(s: WallSegment, d: number, key: "top" | "base"): number {
+  const t = s.end - s.start > 1e-9 ? (d - s.start) / (s.end - s.start) : 0;
+  return key === "top" ? s.top + (s.topEnd - s.top) * t : s.base + (s.baseEnd - s.base) * t;
+}
+
+/** The runs of `segs` that lie between d0 and d1, cut to fit. */
+function runsBetween(segs: WallSegment[], d0: number, d1: number): WallSegment[] {
+  return segs.flatMap((s) => {
+    const start = Math.max(s.start, d0);
+    const end = Math.min(s.end, d1);
+    if (end - start < 1e-4) return [];
+    return [{ start, end, base: runAt(s, start, "base"), top: runAt(s, start, "top"), baseEnd: runAt(s, end, "base"), topEnd: runAt(s, end, "top") }];
+  });
+}
+
+/**
+ * A straight block along a→b (plan, length len) from `d0` to `d1` metres along
+ * it, `width` across, whose bottom runs from y0 to y0e and top from y1 to y1e
+ * (world heights). UVs are in metres, with v following height on the sides and
+ * ends so a brick texture's courses stay level along a raked wall.
+ */
+function slab(a: V2, b: V2, len: number, d0: number, d1: number, width: number, y0: number, y0e: number, y1: number, y1e: number): THREE.BufferGeometry {
+  const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+  const n = { x: -u.y * (width / 2), y: u.x * (width / 2) };
+  const P = (d: number, side: number, y: number) => [a.x + u.x * d + n.x * side, y, a.y + u.y * d + n.y * side];
+  const mid = P((d0 + d1) / 2, 0, (y0 + y0e + y1 + y1e) / 4);
+  const pos: number[] = [];
+  const uv: number[] = [];
+  // A quad wound to face away from the block's middle, with a uv per corner.
+  const quad = (q: number[][], t: number[][]) => {
+    const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]];
+    const e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
+    const nn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const f = q.reduce((s, v) => [s[0] + v[0] / 4, s[1] + v[1] / 4, s[2] + v[2] / 4], [0, 0, 0]);
+    const outward = nn[0] * (f[0] - mid[0]) + nn[1] * (f[1] - mid[1]) + nn[2] * (f[2] - mid[2]) >= 0;
+    for (const k of outward ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]) {
+      pos.push(...q[k]);
+      uv.push(...t[k]);
+    }
+  };
+  const L = d1 - d0;
+  for (const side of [-1, 1]) {
+    quad([P(d0, side, y0), P(d1, side, y0e), P(d1, side, y1e), P(d0, side, y1)], [[0, y0], [L, y0e], [L, y1e], [0, y1]]); // prettier-ignore
   }
-  out.concrete.push(along(metricBox(len, 0.15, 0.05), p, q, GROUND_Y + 0.075));
-  const ph = Math.max(0.2, h - 0.17);
-  for (let k = 0; k < spans; k++) {
-    out.timber.push(along(metricBox(step - 0.1, ph, 0.025), at(k * step), at((k + 1) * step), GROUND_Y + 0.17 + ph / 2));
+  for (const [ya, yb] of [[y1, y1e], [y0, y0e]]) { // prettier-ignore
+    quad([P(d0, -1, ya), P(d1, -1, yb), P(d1, 1, yb), P(d0, 1, ya)], [[0, 0], [L, 0], [L, width], [0, width]]); // prettier-ignore
+  }
+  for (const [d, ya, yb] of [[d0, y0, y1], [d1, y0e, y1e]]) { // prettier-ignore
+    quad([P(d, -1, ya), P(d, 1, ya), P(d, 1, yb), P(d, -1, yb)], [[0, ya], [width, ya], [width, yb], [0, yb]]); // prettier-ignore
+  }
+  return triangles(pos, uv);
+}
+
+/**
+ * Close-board fence over the runs of one stretch of boundary a→b: posts every
+ * 1.83 m (a 6 ft panel) or less, boards on a concrete gravel board. A stepped
+ * fence steps at a post; a raked one steps a little at every post.
+ */
+function fence(out: Record<Part, THREE.BufferGeometry[]>, a: V2, b: V2, len: number, runs: WallSegment[]) {
+  const spansOf = (r: WallSegment) => Math.max(1, Math.ceil((r.end - r.start) / 1.83));
+  // Posts first; where two runs meet at a step, one post as tall as the higher run.
+  const posts = new Map<string, { d: number; base: number; top: number }>();
+  for (const r of runs) {
+    const spans = spansOf(r);
+    for (let k = 0; k <= spans; k++) {
+      const d = r.start + (k * (r.end - r.start)) / spans;
+      const key = d.toFixed(3);
+      const base = runAt(r, d, "base");
+      const top = runAt(r, d, "top");
+      const prev = posts.get(key);
+      posts.set(key, prev ? { d, base: Math.min(prev.base, base), top: Math.max(prev.top, top) } : { d, base, top });
+    }
+  }
+  for (const { d, base, top } of posts.values()) {
+    const h = top - base;
+    out.timber.push(along(metricBox(0.1, h + 0.05, 0.1), at(a, b, len, d), at(a, b, len, d + 1e-3), GROUND_Y + base + (h + 0.05) / 2));
+  }
+  for (const r of runs) {
+    const rl = r.end - r.start;
+    const spans = spansOf(r);
+    const step = rl / spans;
+    const level = Math.abs(r.top - r.topEnd) < 1e-6 && Math.abs(r.base - r.baseEnd) < 1e-6;
+    if (level) out.concrete.push(along(metricBox(rl, 0.15, 0.05), at(a, b, len, r.start), at(a, b, len, r.end), GROUND_Y + r.base + 0.075));
+    for (let k = 0; k < spans; k++) {
+      const s0 = r.start + k * step;
+      const s1 = s0 + step;
+      const base = Math.min(runAt(r, s0, "base"), runAt(r, s1, "base"));
+      const top = runAt(r, (s0 + s1) / 2, "top");
+      // A raked run steps its gravel board and panels at every post.
+      if (!level) out.concrete.push(along(metricBox(step, 0.15, 0.05), at(a, b, len, s0), at(a, b, len, s1), GROUND_Y + base + 0.075));
+      const ph = Math.max(0.2, top - base - 0.17);
+      out.timber.push(along(metricBox(step - 0.1, ph, 0.025), at(a, b, len, s0), at(a, b, len, s1), GROUND_Y + base + 0.17 + ph / 2));
+    }
   }
 }
 
 /** Brick size on edge across a one-brick wall: 102.5 mm high, 65 mm along the wall, 10 mm joints. */
 const EDGE_BRICK_H = 0.1025;
 const EDGE_BRICK_PITCH = 0.075;
+/** A brick pier's width. */
+const PIER = 0.33;
+
+/** A brick pier with a coping cap centred at plan point c, square to direction `dir`, from `base` up to `top`. */
+function pier(out: Record<Part, THREE.BufferGeometry[]>, c: V2, dir: V2, base: number, top: number) {
+  const c2 = { x: c.x + dir.x / 1000, y: c.y + dir.y / 1000 };
+  const h = top - base;
+  out.brick.push(along(metricBox(PIER, h - 0.06, PIER), c, c2, GROUND_Y + base + (h - 0.06) / 2));
+  out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + top - 0.02));
+}
 
 /**
- * One-brick garden wall. The top is a grey coping, or a course of bricks on edge
- * (slightly proud, vertical joints every 75 mm). Piers about every 3 m when asked.
+ * One-brick garden wall over the runs of one stretch of boundary a→b (length
+ * len), `h` its nominal height. The top is a grey coping, or a course of bricks
+ * on edge (slightly proud, vertical joints every 75 mm). Each run is built on
+ * its own, so at a step the higher run's end closes the face. Piers about every
+ * 3 m when asked.
  */
-function brickWall(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number, top: "coping" | "brick" = "coping", withPiers = true) {
-  const len = Math.hypot(q.x - p.x, q.y - p.y);
+function brickWall(out: Record<Part, THREE.BufferGeometry[]>, a: V2, b: V2, len: number, runs: WallSegment[], h: number, top: "coping" | "brick" = "coping", withPiers = true) {
+  if (!runs.length) return;
   const onEdge = top === "brick" && h > EDGE_BRICK_H + 0.1;
   const capH = onEdge ? EDGE_BRICK_H : 0.06;
-  const body = Math.max(0.1, h - capH);
-  out.brick.push(along(metricBox(len, body, 0.215), p, q, GROUND_Y + body / 2));
-  if (onEdge) {
-    const n = Math.max(1, Math.round(len / EDGE_BRICK_PITCH));
-    const step = len / n;
-    const at = (d: number) => ({ x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len });
-    const y = GROUND_Y + body + EDGE_BRICK_H / 2;
-    out.mortar.push(along(metricBox(len, EDGE_BRICK_H - 0.004, 0.2), p, q, y));
-    for (let k = 0; k < n; k++) {
-      const a = at(k * step + 0.005);
-      const b = at((k + 1) * step - 0.005);
-      out.brick.push(along(metricBox(Math.hypot(b.x - a.x, b.y - a.y), EDGE_BRICK_H, 0.23), a, b, y));
+  for (const r of runs) {
+    const rl = r.end - r.start;
+    const p = at(a, b, len, r.start);
+    const q = at(a, b, len, r.end);
+    const level = Math.abs(r.top - r.topEnd) < 1e-6 && Math.abs(r.base - r.baseEnd) < 1e-6;
+    const body = Math.max(0.1, r.top - r.base - capH);
+    if (level) out.brick.push(along(metricBox(rl, body, 0.215), p, q, GROUND_Y + r.base + body / 2));
+    else out.brick.push(slab(a, b, len, r.start, r.end, 0.215, GROUND_Y + r.base, GROUND_Y + r.baseEnd, GROUND_Y + r.top - capH, GROUND_Y + r.topEnd - capH));
+    if (onEdge) {
+      // Where a run meets the next at a step, its end brick is flush with the step and hides the bedding.
+      const stepAtStart = r !== runs[0];
+      const stepAtEnd = r !== runs[runs.length - 1];
+      const m0 = r.start + (stepAtStart ? 0.005 : 0);
+      const m1 = r.end - (stepAtEnd ? 0.005 : 0);
+      if (level) out.mortar.push(along(metricBox(m1 - m0, EDGE_BRICK_H - 0.004, 0.2), at(a, b, len, m0), at(a, b, len, m1), GROUND_Y + r.top - EDGE_BRICK_H / 2));
+      else out.mortar.push(slab(a, b, len, m0, m1, 0.2, GROUND_Y + runAt(r, m0, "top") - capH, GROUND_Y + runAt(r, m1, "top") - capH, GROUND_Y + runAt(r, m0, "top") - 0.004, GROUND_Y + runAt(r, m1, "top") - 0.004));
+      const n = Math.max(1, Math.round(rl / EDGE_BRICK_PITCH));
+      const step = rl / n;
+      for (let k = 0; k < n; k++) {
+        const d0 = r.start + k * step + (k === 0 && stepAtStart ? 0 : 0.005);
+        const d1 = r.start + (k + 1) * step - (k === n - 1 && stepAtEnd ? 0 : 0.005);
+        const y = GROUND_Y + runAt(r, (d0 + d1) / 2, "top") - EDGE_BRICK_H / 2;
+        out.brick.push(along(metricBox(d1 - d0, EDGE_BRICK_H, 0.23), at(a, b, len, d0), at(a, b, len, d1), y));
+      }
+    } else if (level) {
+      out.coping.push(along(metricBox(rl + 0.04, 0.06, 0.29), p, q, GROUND_Y + r.top - 0.03));
+    } else {
+      // The coping overhangs each end by 2 cm, carrying on the rake.
+      const g = ((r.topEnd - r.top) / rl) * 0.02;
+      out.coping.push(slab(a, b, len, r.start - 0.02, r.end + 0.02, 0.29, GROUND_Y + r.top - 0.06 - g, GROUND_Y + r.topEnd - 0.06 + g, GROUND_Y + r.top - g, GROUND_Y + r.topEnd + g));
     }
-  } else {
-    out.coping.push(along(metricBox(len + 0.04, 0.06, 0.29), p, q, GROUND_Y + h - 0.03));
   }
   if (withPiers && h > 0.6) {
-    const piers = Math.max(1, Math.round(len / 3));
+    const d0 = runs[0].start;
+    const d1 = runs[runs.length - 1].end;
+    const piers = Math.max(1, Math.round((d1 - d0) / 3));
+    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
     for (let k = 0; k <= piers; k++) {
-      const d = (k * len) / piers;
-      const c = { x: p.x + ((q.x - p.x) * d) / len, y: p.y + ((q.y - p.y) * d) / len };
-      const c2 = { x: c.x + (q.x - p.x) / len / 1000, y: c.y + (q.y - p.y) / len / 1000 };
-      out.brick.push(along(metricBox(0.33, h - 0.06, 0.33), c, c2, GROUND_Y + (h - 0.06) / 2));
-      out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + h - 0.02));
+      const d = d0 + (k * (d1 - d0)) / piers;
+      const w = wallAt(runs, d);
+      if (w) pier(out, at(a, b, len, d), dir, w.base, w.top);
     }
   }
 }
 
 /**
  * Brick piers at the ends of an opening (boundary edge i), flush with the cut
- * ends of the brick walls beside it, as tall as those walls.
+ * ends of the brick walls beside it, standing on the ground there and as tall
+ * as those walls are at their ends.
  */
-function openingPiers(out: Record<Part, THREE.BufferGeometry[]>, boundary: V2[], edges: BoundaryEdge[], i: number) {
+function openingPiers(out: Record<Part, THREE.BufferGeometry[]>, boundary: V2[], edges: BoundaryEdge[], i: number, surfaces: SiteSurface[]) {
   const n = boundary.length;
-  const PIER = 0.33;
-  const cap = (corner: V2, away: V2, wall: BoundaryEdge | undefined) => {
+  // Wall edge w, cut at its start or at its end.
+  const cap = (w: number, atStart: boolean) => {
+    const wall = edges[w];
     if (!wall || wall.kind !== "wall" || wall.height <= 0.6) return;
-    const len = Math.hypot(away.x - corner.x, away.y - corner.y);
+    const a = boundary[w];
+    const b = boundary[(w + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (len < PIER) return;
     // Centre the pier half its width back along the wall, so its face is flush with the cut end.
-    const dx = (away.x - corner.x) / len;
-    const dy = (away.y - corner.y) / len;
-    const c = { x: corner.x + (dx * PIER) / 2, y: corner.y + (dy * PIER) / 2 };
-    const c2 = { x: c.x + dx / 1000, y: c.y + dy / 1000 };
-    const h = wall.height;
-    out.brick.push(along(metricBox(PIER, h - 0.06, PIER), c, c2, GROUND_Y + (h - 0.06) / 2));
-    out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + h - 0.02));
+    const d = atStart ? PIER / 2 : len - PIER / 2;
+    const runs = boundaryWallSegments(boundary, wall, w, surfaces);
+    const under = [d - PIER / 2, d, d + PIER / 2].flatMap((x) => wallAt(runs, x) ?? []);
+    if (!under.length) return;
+    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    pier(out, at(a, b, len, d), dir, Math.min(...under.map((x) => x.base)), Math.max(...under.map((x) => x.top)));
   };
-  cap(boundary[i], boundary[(i - 1 + n) % n], edges[(i - 1 + n) % n]);
-  cap(boundary[(i + 1) % n], boundary[(i + 2) % n], edges[(i + 1) % n]);
+  cap((i - 1 + n) % n, false);
+  cap((i + 1) % n, true);
 }
 
 /** Hedge as overlapping clipped blocks of slightly varying size, so the top isn't ruler-straight. */
@@ -346,31 +463,34 @@ const PART_MATERIAL: Record<Part, () => THREE.Material> = {
   hedge: () => surfaceMaterial("hedge"),
 };
 
-/** Fences, walls and hedges along the plot boundary, stopping at buildings. Merged into one mesh per material. */
-function Boundary({ site: { boundary, boundaryEdges }, buildings }: { site: Site; buildings: V2[][] }) {
+/** Fences, walls and hedges along the plot boundary, stopping at buildings and stepping or raking with sloping ground. Merged into one mesh per material. */
+function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { site: Site; buildings: V2[][] }) {
   const parts = useMemo(() => {
     const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], mortar: [], hedge: [] };
     const edges = edgesOf({ boundary, boundaryEdges });
     boundary.forEach((a, i) => {
       const e = edges[i];
       const b = boundary[(i + 1) % boundary.length];
-      if (e?.kind === "open" && e.endFinish === "pier") openingPiers(out, boundary, edges, i);
+      if (e?.kind === "open" && e.endFinish === "pier") openingPiers(out, boundary, edges, i, surfaces);
       if (!e || e.kind === "open" || e.height <= 0.05) return;
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const segs = e.kind === "hedge" ? [] : boundaryWallSegments(boundary, e, i, surfaces);
       for (const [t0, t1] of clipSegmentOutside(a, b, buildings, 0.12)) {
-        const p = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
-        const q = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
-        if (e.kind === "fence") fence(out, p, q, e.height);
-        else if (e.kind === "wall") brickWall(out, p, q, e.height, e.top ?? "coping", e.piers ?? true);
-        else hedge(out, p, q, e.height);
+        if (e.kind === "fence") fence(out, a, b, len, runsBetween(segs, t0 * len, t1 * len));
+        else if (e.kind === "wall") brickWall(out, a, b, len, runsBetween(segs, t0 * len, t1 * len), e.height, e.top ?? "coping", e.piers ?? true);
+        else hedge(out, at(a, b, 1, t0), at(a, b, 1, t1), e.height);
       }
     });
     return (Object.keys(out) as Part[]).flatMap((k) => {
       if (!out[k].length) return [];
-      const merged = mergeGeometries(out[k]);
-      out[k].forEach((g) => g.dispose());
+      // Raked runs are unindexed; merging needs all one or the other.
+      const mixed = out[k].some((g) => !g.index);
+      const list = mixed ? out[k].map((g) => (g.index ? g.toNonIndexed() : g)) : out[k];
+      const merged = mergeGeometries(list);
+      new Set([...out[k], ...list]).forEach((g) => g.dispose());
       return merged ? [{ part: k, geom: merged }] : [];
     });
-  }, [boundary, boundaryEdges, buildings]);
+  }, [boundary, boundaryEdges, surfaces, buildings]);
   useDisposeAll(useMemo(() => parts.map((p) => p.geom), [parts]));
   return (
     <group>

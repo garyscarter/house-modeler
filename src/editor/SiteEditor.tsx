@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSite, useStore } from "../store";
 import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
-import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WPt } from "../types";
+import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
-import { bbox, polygonCentroid } from "../lib/geometry";
+import { bbox, polygonArea, polygonCentroid } from "../lib/geometry";
+import { boundaryWallSegments, groundAlong, resolveFollow } from "../lib/wallSteps";
 import { bearingToWorld } from "../lib/sun";
 import {
   areaOf,
@@ -617,6 +618,7 @@ function Inspector({
                 </label>
               </>
             )}
+            {(edges[i].kind === "wall" || edges[i].kind === "fence") && <FollowGround site={site} edge={i} setEdge={setEdge} />}
           </>
         )}
         <div className="row">{vertexButton}</div>
@@ -795,6 +797,69 @@ function Clearances({ clearances }: { clearances: ReturnType<typeof sideClearanc
           ))}
         </tbody>
       </table>
+    </>
+  );
+}
+
+const FOLLOW_LABEL: Record<WallFollow, string> = { level: "Level top", step: "Stepped in brick courses", rake: "Sloping with the ground" };
+
+/**
+ * How a wall's or fence's top meets sloping ground beside it: automatic (a wall
+ * steps beside sloping ground, otherwise level), level, stepped or raked, and
+ * for steps, how long each level run is.
+ */
+function FollowGround({ site, edge, setEdge }: { site: Site; edge: number; setEdge: (p: Partial<BoundaryEdge>) => void }) {
+  const e = edgesOf(site)[edge];
+  const [draft, setDraft] = useState<string | null>(null);
+  const n = site.boundary.length;
+  const ground = useMemo(
+    () => groundAlong(site.boundary[edge], site.boundary[(edge + 1) % n], site.surfaces, polygonArea(site.boundary)),
+    [site.boundary, site.surfaces, edge, n],
+  );
+  const auto = resolveFollow({ kind: e.kind }, ground);
+  const follow = resolveFollow(e, ground);
+  const hs = ground.map((g) => g.plot);
+  const climb = hs.length ? Math.max(...hs) - Math.min(...hs) : 0;
+  const steps = follow === "step" ? boundaryWallSegments(site.boundary, e, edge, site.surfaces).length - 1 : 0;
+  return (
+    <>
+      <label>
+        Top along the ground
+        <select value={e.follow ?? "auto"} onChange={(ev) => setEdge({ follow: ev.target.value === "auto" ? undefined : (ev.target.value as WallFollow) })}>
+          <option value="auto">Automatic ({FOLLOW_LABEL[auto].toLowerCase()})</option>
+          {(Object.keys(FOLLOW_LABEL) as WallFollow[]).map((k) => (
+            <option key={k} value={k}>
+              {FOLLOW_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {follow === "step" && (
+        <label>
+          Steps every (m)
+          <input
+            type="number"
+            step={0.05}
+            min={0.9}
+            placeholder="auto"
+            value={draft ?? (e.stepEvery !== undefined ? String(e.stepEvery) : "")}
+            onChange={(ev) => {
+              setDraft(ev.target.value);
+              const v = parseFloat(ev.target.value);
+              setEdge({ stepEvery: Number.isFinite(v) && v > 0 ? v : undefined });
+            }}
+            onBlur={() => setDraft(null)}
+          />
+        </label>
+      )}
+      <p className="muted small">
+        {climb < 0.01
+          ? "The ground beside it is level."
+          : `The ground beside it climbs ${Math.round(climb * 1000)} mm.` +
+            (follow === "step"
+              ? ` ${steps === 0 ? "No step needed" : `${steps} step${steps > 1 ? "s" : ""} up`}. Leave "steps every" blank to step each time the ground climbs a 75 mm course, at least 0.9 m apart.`
+              : "")}
+      </p>
     </>
   );
 }
