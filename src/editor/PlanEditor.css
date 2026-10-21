@@ -58,5 +58,9 @@
   .plan-editor .plan-toolbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .plan-editor .plan-toolbar button { flex: none; }
   .plan-editor .plan-toolbar .hint.right { display: none; }
+  .plan-editor .plan-toolbar .plan-image-ctl { order: -1; }
   .plan-hint { font-size: 11px; }
 }
+
+.plan-editor .plan-image-ctl { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.plan-editor .plan-image-ctl input[type="range"] { width: 90px; margin: 0; }

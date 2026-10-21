@@ -87,6 +87,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const updateRoom = useStore((s) => s.updateRoom);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
+  const planImage = useStore((s) => s.planImage);
   const [tool, setTool] = useState<Tool>(floor.rooms.length ? "select" : "rect");
   const [calib, setCalib] = useState<Pt[]>([]);
   const [draft, setDraft] = useState<Pt[]>([]);
@@ -528,6 +529,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       : null;
   const halo = { paintOrder: "stroke" as const, stroke: "#fff", strokeWidth: px * 3, strokeLinejoin: "round" as const };
 
+  const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
+
   return (
     <div className="plan-editor">
       <div className="toolbar plan-toolbar">
@@ -537,6 +540,28 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           </button>
         ))}
         {tool === "room" && draft.length >= 3 && <button onClick={finishRoom}>Finish room</button>}
+        <span className="plan-image-ctl">
+          <button
+            className={planImage.show ? "active" : ""}
+            aria-pressed={planImage.show}
+            title="Show or hide the floorplan image behind the plan"
+            onClick={() => setUi({ planImage: { ...planImage, show: !planImage.show } })}
+          >
+            Image
+          </button>
+          {planImage.show && (
+            <input
+              type="range"
+              min={10}
+              max={100}
+              step={5}
+              value={Math.round(imgOpacity * 100)}
+              aria-label="Floorplan image opacity"
+              title={`Image opacity ${Math.round(imgOpacity * 100)}%`}
+              onChange={(e) => setUi({ planImage: { ...planImage, opacity: Number(e.target.value) / 100 } })}
+            />
+          )}
+        </span>
         <span className="hint right">Scale {ppm.toFixed(1)} px/m</span>
       </div>
       <div className="plan-hint">
@@ -569,7 +594,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             onClick={onClickCanvas}
             className={`tool-${tool}`}
           >
-            <image href={floor.image} x={0} y={0} width={floor.imageW} height={floor.imageH} opacity={0.9} />
+            {planImage.show && <image href={floor.image} x={0} y={0} width={floor.imageW} height={floor.imageH} opacity={imgOpacity} />}
             <defs>
               <pattern id="canopy-hatch" patternUnits="userSpaceOnUse" width={px * 8} height={px * 8} patternTransform="rotate(45)">
                 <rect width={px * 8} height={px * 8} fill="#67e8f9" fillOpacity={0.16} />
