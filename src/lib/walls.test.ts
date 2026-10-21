@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EXT_WALL_T, WALL_T, buildWalls, cutWall, roomWorldPolygon, type WallSeg } from "./geometry";
-import { outwardSign, sideSpans, wallEnds, wallFaces, wallThickness, type FaceQuad } from "./walls";
+import { EXT_WALL_T, WALL_T, buildWalls, coveredIntervals, cutWall, roomWorldPolygon, type WallSeg } from "./geometry";
+import { bandIntervals, footprintOverlaps, outwardSign, sideSpans, wallBands, wallEnds, wallFaces, wallThickness, type FaceQuad } from "./walls";
 import { floor, rect } from "./testing";
 
 /** Two 3 m x 4 m rooms side by side, 1 px = 1 cm. */
@@ -145,5 +145,115 @@ describe("outwardSign", () => {
     expect(outwardSign({ centre: { x: 1.5, y: 4 }, dir: { x: 1, y: 0 } }, rooms)).toBe(1);
     expect(outwardSign({ centre: { x: 1.5, y: 0 }, dir: { x: 1, y: 0 } }, rooms)).toBe(-1);
     expect(outwardSign({ centre: { x: 1.5, y: 2 }, dir: { x: 1, y: 0 } }, rooms)).toBe(0);
+  });
+});
+
+/** Walls of a floor with their rendered thickness, as the floor below sees them. */
+const standing = (f: ReturnType<typeof floor>) => buildWalls(f).map((wall) => ({ wall, thickness: wallThickness(wall) }));
+const polysOf = (f: ReturnType<typeof floor>) => f.rooms.map((r) => roomWorldPolygon(f, r));
+const spansOf = (f: ReturnType<typeof floor>, w: WallSeg): [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>] => {
+  const probe = wallThickness(w) / 2 + 0.08;
+  return [sideSpans(w, 1, probe, roomsOf(f)), sideSpans(w, -1, probe, roomsOf(f))];
+};
+/** A room with a chimney-breast notch `depth` px deep in its east side (x 600), y 200-300. */
+const notched = (name: string, depth: number) => ({
+  id: name,
+  name,
+  polygon: [
+    { x: 0, y: 0 },
+    { x: 600, y: 0 },
+    { x: 600, y: 200 },
+    { x: 600 - depth, y: 200 },
+    { x: 600 - depth, y: 300 },
+    { x: 600, y: 300 },
+    { x: 600, y: 500 },
+    { x: 0, y: 500 },
+  ],
+});
+/** The back of the breast: a 0.1 m wall flush with the party wall's outer face (6 + 0.125 m). */
+const breastBack = { id: "back", a: { x: 607.5, y: 200 }, b: { x: 607.5, y: 300 } };
+
+describe("bandIntervals", () => {
+  // A 6 m two-storey block (x 4-10) with a 4 m single-storey wing to its west
+  // (x 0-4) under a flat roof, both 5 m deep; the rear wall runs along y = 0.
+  const ground = floor([rect("Wing", 0, 0, 400, 500), rect("Main", 400, 0, 1000, 500)]);
+  const upper = floor([rect("Bed", 400, 0, 1000, 500)], [], { level: 1 });
+  const rear = buildWalls(ground).find((w) => isAt(w, 0, 0, 10, 0))!;
+
+  it("runs the band between storeys out to the outer face of the storey above, where a lower roof meets it", () => {
+    // The flat roof's fascia stops at the face of the taller wall (x 4 - 0.125),
+    // so the band must start there, not at the upper room's outline (x 4).
+    expect(coveredIntervals(rear, polysOf(upper))[0][0]).toBeGreaterThan(4 - 0.01);
+    const iv = bandIntervals(rear, EXT_WALL_T, polysOf(upper), standing(upper));
+    expect(iv).toHaveLength(1);
+    expect(iv[0][0]).toBeCloseTo(4 - EXT_WALL_T / 2, 6);
+    expect(iv[0][1]).toBeCloseTo(10, 6);
+  });
+
+  it("leaves the band off where nothing stands above", () => {
+    const side = buildWalls(ground).find((w) => isAt(w, 0, 0, 0, 5))!;
+    expect(bandIntervals(side, EXT_WALL_T, polysOf(upper), standing(upper))).toEqual([]);
+    expect(bandIntervals(rear, EXT_WALL_T, [], [])).toEqual([]);
+  });
+
+  it("carries the band on under a chimney-breast notch upstairs", () => {
+    // Downstairs the party wall runs straight through; upstairs the room steps in round the breast.
+    const up = floor([notched("Bed", 30)], [], { level: 1, walls: [breastBack] });
+    const down = floor([rect("Living", 0, 0, 600, 500)]);
+    const party = buildWalls(down).find((w) => isAt(w, 6, 0, 6, 5))!;
+    // The rooms alone leave a gap behind the breast, open to the room below.
+    expect(coveredIntervals(party, polysOf(up)).length).toBeGreaterThan(1);
+    const iv = bandIntervals(party, EXT_WALL_T, polysOf(up), standing(up));
+    expect(iv).toHaveLength(1);
+    expect(iv[0][0]).toBeCloseTo(0, 6);
+    expect(iv[0][1]).toBeCloseTo(5, 6);
+  });
+});
+
+describe("footprintOverlaps", () => {
+  const wall = { a: { x: 0, y: 0 }, b: { x: 10, y: 0 } };
+  it("covers a wall where another stands on it, along it or across it", () => {
+    // In line, a little off its centre line: its own length.
+    const along = footprintOverlaps(wall, 0.25, [{ wall: { a: { x: 2, y: 0.04 }, b: { x: 5, y: 0.04 } }, thickness: 0.25 }]);
+    expect(along).toHaveLength(1);
+    expect(along[0][0]).toBeCloseTo(2, 9);
+    expect(along[0][1]).toBeCloseTo(5, 9);
+    // Across it: its thickness.
+    const across = footprintOverlaps(wall, 0.25, [{ wall: { a: { x: 4, y: 0 }, b: { x: 4, y: 3 } }, thickness: 0.25 }]);
+    expect(across).toHaveLength(1);
+    expect(across[0][0]).toBeCloseTo(3.875, 9);
+    expect(across[0][1]).toBeCloseTo(4.125, 9);
+  });
+  it("ignores walls that only touch its face or stand clear of it", () => {
+    expect(footprintOverlaps(wall, 0.25, [{ wall: { a: { x: 2, y: 0.25 }, b: { x: 5, y: 0.25 } }, thickness: 0.25 }])).toEqual([]);
+    expect(footprintOverlaps(wall, 0.25, [{ wall: { a: { x: 2, y: 2 }, b: { x: 5, y: 2 } }, thickness: 0.25 }])).toEqual([]);
+  });
+});
+
+describe("wallBands", () => {
+  const upper = floor([rect("Bed", 0, 0, 600, 500)], [], { level: 1 });
+  const opts = (plinthY: number | null) => ({ ceiling: 2.4, slab: 0.25, upperPolys: polysOf(upper), upperWalls: standing(upper), plinthY });
+
+  it("gives a free-standing wall with outside behind it a band and a plinth, as an external wall", () => {
+    // Downstairs the notch is closed by the back of the breast; upstairs the room runs through.
+    const ground = floor([notched("Living", 40)], [], { walls: [breastBack] });
+    const back = buildWalls(ground).find((w) => !w.exterior && Math.abs(w.a.x - 6.075) < 1e-6)!;
+    const bands = wallBands(back, wallThickness(back), spansOf(ground, back), opts(-0.3));
+    expect(bands.map((b) => [b.y0, b.y1])).toEqual([
+      [2.4, 2.65],
+      [-0.3, 0],
+    ]);
+    expect(Math.hypot(bands[0].b.x - bands[0].a.x, bands[0].b.y - bands[0].a.y)).toBeCloseTo(1, 6);
+  });
+
+  it("gives internal partitions and walls of a set height none", () => {
+    const ground = floor([rect("A", 0, 0, 300, 500), rect("B", 300, 0, 600, 500)], [], {
+      walls: [{ id: "dwarf", a: { x: 0, y: 700 }, b: { x: 600, y: 700 }, height: 1 }],
+    });
+    const walls = buildWalls(ground);
+    const partition = walls.find((w) => isAt(w, 3, 0, 3, 5))!;
+    expect(wallBands(partition, WALL_T, spansOf(ground, partition), opts(-0.3))).toEqual([]);
+    const dwarf = walls.find((w) => w.height === 1)!;
+    expect(wallBands(dwarf, WALL_T, spansOf(ground, dwarf), opts(-0.3))).toEqual([]);
   });
 });

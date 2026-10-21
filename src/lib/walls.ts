@@ -1,5 +1,5 @@
 import type { PartMat } from "./openings";
-import { EXT_WALL_T, WALL_T, pointInPolygon, type OpeningPlacement, type V2, type WallPiece, type WallSeg } from "./geometry";
+import { EXT_WALL_T, WALL_T, coveredIntervals, pointInPolygon, type OpeningPlacement, type V2, type WallPiece, type WallSeg } from "./geometry";
 
 /**
  * Face-level wall geometry for the 3D view. Walls are built from quads rather
@@ -355,6 +355,115 @@ export function wallFaces(inp: WallFaceInput): { quads: FaceQuad[]; skirting: Sk
     if (pl.y0 > 0.01) flat(ta, tb, pl.y0, true, slots);
   }
   return { quads, skirting };
+}
+
+/**
+ * Stretches (t along the wall) where another wall's footprint overlaps this
+ * wall's footprint, both taken as rectangles their thickness wide between
+ * their end points. Used for the walls of the floor above: a wall standing
+ * on this one, along it or across it, covers it out to its outer face, which
+ * lies half its thickness beyond the room outlines.
+ */
+export function footprintOverlaps(wall: { a: V2; b: V2 }, thickness: number, others: { wall: { a: V2; b: V2 }; thickness: number }[]): [number, number][] {
+  const { len, dir, n } = frame(wall);
+  if (len < 1e-6) return [];
+  const h = thickness / 2;
+  const EPS = 1e-3;
+  const out: [number, number][] = [];
+  for (const o of others) {
+    const f = frame(o.wall);
+    if (f.len < 1e-6) continue;
+    const oh = o.thickness / 2;
+    // The other footprint's corners in this wall's frame (t along, s across).
+    const local = (p: V2): V2 => ({ x: (p.x - wall.a.x) * dir.x + (p.y - wall.a.y) * dir.y, y: (p.x - wall.a.x) * n.x + (p.y - wall.a.y) * n.y });
+    const at = (base: V2, off: number): V2 => local({ x: base.x + f.n.x * off, y: base.y + f.n.y * off });
+    let poly: V2[] = [at(o.wall.a, -oh), at(o.wall.b, -oh), at(o.wall.b, oh), at(o.wall.a, oh)];
+    // Clip to this wall's strip, |s| <= h.
+    poly = clipHalfPlane(poly, (p) => h - p.y);
+    poly = clipHalfPlane(poly, (p) => h + p.y);
+    if (poly.length < 3) continue;
+    const ss = poly.map((p) => p.y);
+    if (Math.max(...ss) - Math.min(...ss) < EPS) continue;
+    const t0 = Math.max(0, Math.min(...poly.map((p) => p.x)));
+    const t1 = Math.min(len, Math.max(...poly.map((p) => p.x)));
+    if (t1 - t0 > EPS) out.push([t0, t1]);
+  }
+  return mergeIntervals(out);
+}
+
+/** Keep the part of a convex polygon where `inside(p) >= 0` (Sutherland-Hodgman, one edge). */
+function clipHalfPlane(poly: V2[], inside: (p: V2) => number): V2[] {
+  const out: V2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    const dp = inside(p);
+    const dq = inside(q);
+    if (dp >= 0) out.push(p);
+    if ((dp >= 0) !== (dq >= 0)) {
+      const k = dp / (dp - dq);
+      out.push({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
+    }
+  }
+  return out;
+}
+
+/** Sort and join overlapping or touching intervals. */
+export function mergeIntervals(iv: [number, number][], gap = 1e-6): [number, number][] {
+  const sorted = [...iv].sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [];
+  for (const [a, b] of sorted) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1] + gap) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+/**
+ * Where a wall carries on up through the floor slab to the floor above (the
+ * band between storeys): under the rooms above, and under the walls above out
+ * to their outer faces. Room outlines run along wall centre lines, so the
+ * rooms alone stop the band half a wall short of the corner of an upper
+ * storey, leaving a slot beside a lower roof that stops at the wall's face;
+ * and a wall closing a chimney-breast notch upstairs stands on this wall
+ * with no room above it at all.
+ */
+export function bandIntervals(
+  wall: { a: V2; b: V2 },
+  thickness: number,
+  upperPolys: V2[][],
+  upperWalls: { wall: { a: V2; b: V2 }; thickness: number }[],
+): [number, number][] {
+  return mergeIntervals([...coveredIntervals(wall, upperPolys), ...footprintOverlaps(wall, thickness, upperWalls)], 0.01);
+}
+
+/**
+ * The extra pieces a wall carries beyond its storey: external walls, and
+ * free-standing ones with outside on a side (such as the back of a chimney
+ * breast closing a notch in the party wall), run up through the slab where
+ * there is a floor above (see bandIntervals), so the outside face is
+ * continuous between storeys, and down to the ground on the lowest floor.
+ * Walls of a set height (garden walls, dwarf walls) carry neither.
+ */
+export function wallBands(
+  wall: WallSeg,
+  thickness: number,
+  spans: [Span[], Span[]],
+  opts: { ceiling: number; slab: number; upperPolys: V2[][]; upperWalls: { wall: { a: V2; b: V2 }; thickness: number }[]; plinthY: number | null },
+): WallPiece[] {
+  if (wall.height !== undefined) return [];
+  if (!wall.exterior && !spans.some((side) => side.some((s) => s.roomId === null))) return [];
+  const { len, dir } = frame(wall);
+  const at = (t: number): V2 => ({ x: wall.a.x + dir.x * t, y: wall.a.y + dir.y * t });
+  const out: WallPiece[] = bandIntervals(wall, thickness, opts.upperPolys, opts.upperWalls).map(([t0, t1]) => ({
+    a: t0 < 1e-6 ? wall.a : at(t0),
+    b: t1 > len - 1e-6 ? wall.b : at(t1),
+    y0: opts.ceiling,
+    y1: opts.ceiling + opts.slab,
+  }));
+  if (opts.plinthY !== null) out.push({ a: wall.a, b: wall.b, y0: opts.plinthY, y1: 0 });
+  return out;
 }
 
 /**
