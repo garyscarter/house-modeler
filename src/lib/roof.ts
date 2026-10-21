@@ -25,6 +25,12 @@ export interface RoofBlock {
   wallT?: number;
   /** Lift the roof surface this far clear of the walls' outer top edge, so the two never coincide. Default 0. */
   clearance?: number;
+  /**
+   * How far the slopes run on past a flush start and end, under the roof
+   * they meet (an extension's roof tucked in under the main roof's hip or
+   * behind its gable). The walls, fascias and gutters still stop at the end.
+   */
+  tuck?: [number, number];
 }
 
 export type P3 = [number, number, number];
@@ -84,8 +90,8 @@ function frame(b: RoofBlock): Frame {
   const V0 = v0 - half;
   const V1 = v1 + half;
   const hs = (V1 - V0) / 2;
-  const EU0 = b.start === "flush" ? U0 : U0 - o;
-  const EU1 = b.end === "flush" ? U1 : U1 + o;
+  const EU0 = b.start === "flush" ? U0 - (b.tuck?.[0] ?? 0) : U0 - o;
+  const EU1 = b.end === "flush" ? U1 + (b.tuck?.[1] ?? 0) : U1 + o;
   let RU0 = b.start === "hip" ? U0 + hs : EU0;
   let RU1 = b.end === "hip" ? U1 - hs : EU1;
   if (RU0 > RU1) RU0 = RU1 = (RU0 + RU1) / 2;
@@ -170,8 +176,9 @@ export function roofGeometry(b: RoofBlock): RoofMesh {
       pushPoly(gables, [W(U, b.y, V0), W(U, b.y, V1), W(U, f.y, V1), W(U, ridgeY, vm), W(U, f.y, V0)], W(sign, 0, 0));
     }
   };
-  endFace(b.start, U0, EU0, r0, -1);
-  endFace(b.end, U1, EU1, r1, 1);
+  // A tucked flush end closes where its slopes stop, inside the roof it runs under.
+  endFace(b.start, b.start === "flush" ? EU0 : U0, EU0, r0, -1);
+  endFace(b.end, b.end === "flush" ? EU1 : U1, EU1, r1, 1);
 
   const eaves: [number, number][] = [
     [EU0, EV0],
@@ -390,6 +397,317 @@ export function roofTrim(b: RoofBlock, spots?: [number, number][]): RoofTrim {
   return { trim, gutters, downpipes, caps };
 }
 
+// ---------------------------------------------------------------------------
+// Where pitched roofs meet
+
+/** A half-space: the points p with n . p + d < 0. */
+export interface Half {
+  n: P3;
+  d: number;
+}
+
+const dot3 = (n: P3, p: P3) => n[0] * p[0] + n[1] * p[1] + n[2] * p[2];
+const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+/** Twice the area of a planar polygon. */
+function polyArea(pts: P3[]): number {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const [a, b, c] = [pts[0], pts[i], pts[i + 1]];
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    x += u[1] * v[2] - u[2] * v[1];
+    y += u[2] * v[0] - u[0] * v[2];
+    z += u[0] * v[1] - u[1] * v[0];
+  }
+  return Math.hypot(x, y, z);
+}
+
+interface Piece {
+  pts: P3[];
+  uv?: [number, number][];
+}
+
+/** The part of a convex polygon inside (n . p + d <= 0) or outside a half-space, its uvs carried along; vertex order is kept. */
+function clipPiece(p: Piece, h: Half, inside: boolean): Piece {
+  const side = (q: P3) => (dot3(h.n, q) + h.d) * (inside ? 1 : -1);
+  const pts: P3[] = [];
+  const uv: [number, number][] = [];
+  const n = p.pts.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const [a, b] = [p.pts[i], p.pts[j]];
+    const [sa, sb] = [side(a), side(b)];
+    if (sa <= 0) {
+      pts.push(a);
+      if (p.uv) uv.push(p.uv[i]);
+    }
+    if ((sa < 0 && sb > 0) || (sa > 0 && sb < 0)) {
+      const t = sa / (sa - sb);
+      pts.push(lerp3(a, b, t));
+      if (p.uv) uv.push([p.uv[i][0] + (p.uv[j][0] - p.uv[i][0]) * t, p.uv[i][1] + (p.uv[j][1] - p.uv[i][1]) * t]);
+    }
+  }
+  return { pts, uv: p.uv ? uv : undefined };
+}
+
+/** Convex pieces of a convex polygon outside a convex region (where every half-space holds); none overlap. */
+export function subtractRegion(p: Piece, region: Half[]): Piece[] {
+  const out: Piece[] = [];
+  let rest = p;
+  for (const h of region) {
+    const outside = clipPiece(rest, h, false);
+    if (outside.pts.length >= 3 && polyArea(outside.pts) > 1e-8) out.push(outside);
+    rest = clipPiece(rest, h, true);
+    if (rest.pts.length < 3 || polyArea(rest.pts) <= 1e-8) return out;
+  }
+  return out;
+}
+
+/** The parts of segment a-b outside a convex region, dropping slivers shorter than 5 mm. */
+export function subtractSegment(a: P3, b: P3, region: Half[]): [P3, P3][] {
+  let t0 = 0;
+  let t1 = 1;
+  for (const h of region) {
+    const sa = dot3(h.n, a) + h.d;
+    const sb = dot3(h.n, b) + h.d;
+    if (Math.abs(sb - sa) < 1e-12) {
+      if (sa >= 0) return [[a, b]];
+      continue;
+    }
+    const t = sa / (sa - sb);
+    if (sb > sa) t1 = Math.min(t1, t);
+    else t0 = Math.max(t0, t);
+  }
+  if (t1 <= t0) return [[a, b]];
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const out: [P3, P3][] = [];
+  if (t0 * len > 5e-3) out.push([a, lerp3(a, b, t0)]);
+  if ((1 - t1) * len > 5e-3) out.push([lerp3(a, b, t1), b]);
+  return out;
+}
+
+/** Cut a triangle soup (with optional uv pairs) by a convex region, keeping what lies outside it. */
+function subtractSoup(pos: number[], uv: number[] | undefined, region: Half[]): { pos: number[]; uv: number[] } {
+  const out = { pos: [] as number[], uv: [] as number[] };
+  for (let i = 0, k = 0; i + 8 < pos.length; i += 9, k += 6) {
+    const pts: P3[] = [
+      [pos[i], pos[i + 1], pos[i + 2]],
+      [pos[i + 3], pos[i + 4], pos[i + 5]],
+      [pos[i + 6], pos[i + 7], pos[i + 8]],
+    ];
+    const tri: Piece = {
+      pts,
+      uv: uv && [
+        [uv[k], uv[k + 1]],
+        [uv[k + 2], uv[k + 3]],
+        [uv[k + 4], uv[k + 5]],
+      ],
+    };
+    for (const piece of subtractRegion(tri, region)) {
+      for (let j = 1; j + 1 < piece.pts.length; j++) {
+        out.pos.push(...piece.pts[0], ...piece.pts[j], ...piece.pts[j + 1]);
+        if (piece.uv) out.uv.push(...piece.uv[0], ...piece.uv[j], ...piece.uv[j + 1]);
+      }
+    }
+  }
+  return out;
+}
+
+/** Which outline of a block a region follows: its tiles, its walls' outer faces, its fascias, or its gutters. */
+type Outline = "tiles" | "walls" | "fascias" | "gutters";
+
+/**
+ * The space a pitched roof block takes up, for cutting away what another roof
+ * has inside it: within an outline in plan, and (unless `plan` only) under its
+ * tiles. `grow` widens the outline and lifts the tiles a little, so that whatever
+ * lies exactly on them counts as inside (negative: only what is clearly inside).
+ * Under a gable's verge is not inside: the verge overhangs open air.
+ */
+export function blockRegion(b: RoofBlock, outline: Outline, grow: number, plan = false): Half[] {
+  const f = frame(b);
+  const { t, U0, U1, V0, V1, EU0, EU1, EV0, EV1 } = f;
+  const hip0 = b.start === "hip";
+  const hip1 = b.end === "hip";
+  let [u0, u1, v0, v1] = [U0, U1, V0, V1];
+  if (outline === "tiles") [u0, u1, v0, v1] = [b.start === "gable" ? U0 : EU0, b.end === "gable" ? U1 : EU1, EV0, EV1];
+  else if (outline !== "walls") {
+    const r = outline === "gutters" ? GUTTER_R : 0;
+    u0 = hip0 ? EU0 + INSET - r : b.start === "flush" ? EU0 : U0;
+    u1 = hip1 ? EU1 - INSET + r : b.end === "flush" ? EU1 : U1;
+    v0 = EV0 + INSET - r;
+    v1 = EV1 - INSET + r;
+  }
+  // Local (u, y, v) normal to world.
+  const N = (nu: number, ny: number, nv: number): P3 => (b.axis === "x" ? [nu, ny, nv] : [nv, ny, nu]);
+  const out: Half[] = [
+    { n: N(-1, 0, 0), d: u0 - grow },
+    { n: N(1, 0, 0), d: -u1 - grow },
+    { n: N(0, 0, -1), d: v0 - grow },
+    { n: N(0, 0, 1), d: -v1 - grow },
+  ];
+  if (plan) return out;
+  // Under each slope plane, y < c + a u + e v (the roof surface is the lowest of them).
+  const under = (a: number, e: number, c: number): Half => ({ n: N(-a, 1, -e), d: -c - grow });
+  out.push(under(0, t, f.y - V0 * t), under(0, -t, f.y + V1 * t));
+  if (hip0) out.push(under(t, 0, f.y - U0 * t));
+  if (hip1) out.push(under(-t, 0, f.y + U1 * t));
+  return out;
+}
+
+/** Depth of the slab under a verge's tiles that tiles of another roof coinciding with them fall in. */
+const VERGE_SLAB = 0.01;
+
+/**
+ * Thin slabs just under a block's verge tiles, one per half of each gable
+ * end: another roof's tiles lying in one (an extension's slope carrying on
+ * the same plane under the verge) duplicate the verge's and are cut away,
+ * while lower ones, which the verge overhangs, stay.
+ */
+function vergeSlabs(b: RoofBlock, grow: number): Half[][] {
+  const f = frame(b);
+  const { t, U0, U1, V0, V1, EU0, EU1, EV0, EV1, vm } = f;
+  const N = (nu: number, ny: number, nv: number): P3 => (b.axis === "x" ? [nu, ny, nv] : [nv, ny, nu]);
+  const out: Half[][] = [];
+  for (const [kind, ua, ub] of [
+    [b.start, EU0, U0],
+    [b.end, U1, EU1],
+  ] as const) {
+    if (kind !== "gable") continue;
+    for (const [va, vb, e, c] of [
+      [EV0, vm, t, f.y - V0 * t],
+      [vm, EV1, -t, f.y + V1 * t],
+    ]) {
+      out.push([
+        { n: N(-1, 0, 0), d: ua - grow },
+        { n: N(1, 0, 0), d: -ub - grow },
+        { n: N(0, 0, -1), d: va - grow },
+        { n: N(0, 0, 1), d: -vb - grow },
+        // Under the slope plane y = c + e v (lifted by grow), and above it less the slab depth.
+        { n: N(0, 1, -e), d: -c - grow },
+        { n: N(0, -1, e), d: c - VERGE_SLAB },
+      ]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Half-spaces splitting a block at the wall lines of its tucked ends: `within`
+ * keeps between them, and each of `beyond` is the part past one tucked end.
+ */
+function tuckHalves(b: RoofBlock): { within: Half[]; beyond: Half[] } {
+  const f = frame(b);
+  const N = (nu: number): P3 => (b.axis === "x" ? [nu, 0, 0] : [0, 0, nu]);
+  const within: Half[] = [];
+  const beyond: Half[] = [];
+  if (b.start === "flush" && (b.tuck?.[0] ?? 0) > 0) {
+    within.push({ n: N(-1), d: f.U0 });
+    beyond.push({ n: N(1), d: -f.U0 });
+  }
+  if (b.end === "flush" && (b.tuck?.[1] ?? 0) > 0) {
+    within.push({ n: N(1), d: -f.U1 });
+    beyond.push({ n: N(-1), d: f.U1 });
+  }
+  return { within, beyond };
+}
+
+/**
+ * The regions of block `o`'s tiles that cut block `b`'s slopes: its own tiles
+ * and verge slabs. Where `o` is tucked in under `b`, the part past its end
+ * wall counts only inside `b`'s walls: out under `b`'s eaves, `b` is the roof.
+ */
+function tileRegions(o: RoofBlock, b: RoofBlock, oUnderB: boolean, grow: number): Half[][] {
+  const tiles = blockRegion(o, "tiles", grow);
+  const { within, beyond } = tuckHalves(o);
+  if (!beyond.length) return [tiles, ...vergeSlabs(o, grow)];
+  const walls = oUnderB ? blockRegion(b, "walls", 0, true) : null;
+  return [[...tiles, ...within], ...(walls ? beyond.map((h) => [...tiles, h, ...walls]) : []), ...vergeSlabs(o, grow)];
+}
+
+/** Whether two blocks' eaves overlap in plan. */
+function eavesOverlap(a: RoofBlock, b: RoofBlock): boolean {
+  const box = (k: RoofBlock) => {
+    const f = frame(k);
+    const p = f.W(f.EU0, 0, f.EV0);
+    const q = f.W(f.EU1, 0, f.EV1);
+    return [Math.min(p[0], q[0]), Math.max(p[0], q[0]), Math.min(p[2], q[2]), Math.max(p[2], q[2])];
+  };
+  const [ax0, ax1, az0, az1] = box(a);
+  const [bx0, bx1, bz0, bz1] = box(b);
+  return Math.min(ax1, bx1) > Math.max(ax0, bx0) && Math.min(az1, bz1) > Math.max(az0, bz0);
+}
+
+/** One pitched roof block's drawing, cut where other roofs cover it. */
+export interface JoinedRoof {
+  slopes: number[];
+  slopeUVs: number[];
+  gables: number[];
+  trim: number[];
+  gutters: [P3, P3][];
+  downpipes: Downpipe[];
+  caps: [P3, P3][];
+}
+
+const JOIN_EPS = 0.002;
+/** An earlier roof's ridge or hip line this close under a later roof's slope lies in it. */
+const CAP_SLAB = 0.005;
+
+/**
+ * Block `i`'s slopes and detailing with whatever lies inside the other
+ * blocks taken away, so roofs that meet (an extension's roof run in under
+ * the main roof's hip) show one surface with valleys where they cross,
+ * and nothing hangs inside the rooms under the other roof. Earlier blocks
+ * take precedence: where two slopes coincide (an extension's rear slope
+ * carrying on the main rear slope), the earlier one is kept. An earlier
+ * block keeps its fascias and soffits up to a later one's walls, and a
+ * later one's stop at the earlier one's fascias, so the eaves boxes meet
+ * at the inside corner; gutters meet where their centre lines cross. Ridge
+ * and hip lines lying on another roof's slope are dropped, and so are
+ * downpipes whose outlet is in a gutter that was cut away.
+ */
+export function joinRoofs(blocks: RoofBlock[], i: number, spots?: [number, number][]): JoinedRoof {
+  const b = blocks[i];
+  const m = roofGeometry(b);
+  const tr = roofTrim(b, spots);
+  const out: JoinedRoof = { slopes: m.slopes, slopeUVs: m.slopeUVs, gables: m.gables, trim: tr.trim, gutters: tr.gutters, downpipes: tr.downpipes, caps: tr.caps };
+  // A tucked end (planRoofs runs extensions in under the first, main, block) stays inside the main block's walls.
+  const { beyond } = tuckHalves(b);
+  if (i > 0 && beyond.length && eavesOverlap(b, blocks[0])) {
+    const outside = blockRegion(blocks[0], "walls", 0, true).map((h): Half => ({ n: [-h.n[0], -h.n[1], -h.n[2]], d: -h.d }));
+    for (const h of beyond)
+      for (const side of outside) {
+        const slopes = subtractSoup(out.slopes, out.slopeUVs, [h, side]);
+        out.slopes = slopes.pos;
+        out.slopeUVs = slopes.uv;
+      }
+  }
+  blocks.forEach((o, j) => {
+    if (j === i || !eavesOverlap(b, o)) return;
+    // A later block gives way to an earlier one where they coincide.
+    const g = j < i ? JOIN_EPS : -JOIN_EPS;
+    for (const region of tileRegions(o, b, j > 0 && i === 0, g)) {
+      const slopes = subtractSoup(out.slopes, out.slopeUVs, region);
+      out.slopes = slopes.pos;
+      out.slopeUVs = slopes.uv;
+    }
+    out.trim = subtractSoup(out.trim, undefined, blockRegion(o, j < i ? "fascias" : "walls", g)).pos;
+    const gutterRegion = blockRegion(o, "gutters", g, true);
+    out.gutters = out.gutters.flatMap(([p, q]) => subtractSegment(p, q, gutterRegion));
+    const inside = (p: P3) => gutterRegion.every((h) => dot3(h.n, [p[0], 0, p[2]]) + h.d < 0);
+    out.downpipes = out.downpipes.filter((d) => !inside(d.path[0]));
+    // Ridge and hip lines go where they run under a later roof's tiles; an earlier roof's only where they lie in
+    // its slope (an extension's slope carrying on the same plane), so a hip just under a shallower slope keeps its tiles.
+    for (const region of tileRegions(o, b, j > 0 && i === 0, Math.abs(g) * 5)) {
+      const cuts = j < i ? [region] : region.filter((h) => h.n[1] === 1).map((h) => [...region, { n: [-h.n[0], -1, -h.n[2]] as P3, d: -h.d - CAP_SLAB }]);
+      for (const cut of cuts) out.caps = out.caps.flatMap(([p, q]) => subtractSegment(p, q, cut));
+    }
+  });
+  return out;
+}
+
 export interface FlatSpec {
   x0: number;
   z0: number;
@@ -504,6 +822,8 @@ export interface RoofPlan {
   chimneys: ChimneyStack[];
   /** Ground level, for downpipes. */
   groundY: number;
+  /** How each extension (rooms with a roofGroup on the top floor) is roofed. */
+  extensions?: ExtensionRoof[];
 }
 
 export function floorBase(model: HouseModel, floor: Floor) {
@@ -531,14 +851,43 @@ const ROOF_CLEARANCE = 0.02;
 const LEAN_TO_MAX_PITCH = 30;
 
 /**
+ * An extension whose walls stop more than this short of the main roof's
+ * front or rear wall line (or its side wall lines, for one at the front or
+ * back) is set back from it, so it gets its own roof.
+ */
+export const SET_BACK_TOL = 0.05;
+
+/** How an extension's roof was planned: what it is set back by, and how far its ridge sits below the main ridge. */
+export interface ExtensionRoof {
+  key: string;
+  /** Largest set-back of its walls from the main roof's wall lines, metres (0 when flush). */
+  setBack: number;
+  /** Whether it has its own roof (rather than the main roof carrying on over it). */
+  own: boolean;
+  /** Its ridge below the main ridge, metres (0 when the main roof carries on over it). */
+  drop: number;
+  pitchDeg: number;
+}
+
+/**
  * Work out the roofs from the floors alone: the top floor gets a pitched
- * roof (one per roof group if the extension roof is "separate", set down
- * below the main ridge); any lower-floor area with nothing above it, plus
- * canopies, gets a flat roof, or a lean-to over canopies if chosen.
+ * roof; any lower-floor area with nothing above it, plus canopies, gets a
+ * flat roof, or a lean-to over canopies if chosen.
+ *
+ * Rooms with a roofGroup are extensions. With the extension roof
+ * "separate", each gets its own roof set down below the main ridge. With
+ * "continue", the main roof carries on over an extension that lines up with
+ * it; one set back from its walls (or narrower) cannot be covered that way,
+ * so it gets its own subservient roof at the same pitch, its ridge as far
+ * below the main ridge as the set-back makes it. Either way the main roof
+ * keeps its own hipped or gabled end, and the extension's roof runs in under
+ * it (see RoofBlock.tuck), meeting it in valleys; roofParts trims each roof
+ * where the other covers it (see joinRoofs).
  */
 export function planRoofs(model: HouseModel): RoofPlan {
   const ext = exteriorOf(model);
   const blocks: RoofBlock[] = [];
+  const extensions: ExtensionRoof[] = [];
   const all = modelBounds(model.floors);
   const style: RoofEnd = ext.roofStyle === "hip" ? "hip" : "gable";
   const partyLeft = ext.partyWall === "left" || ext.partyWall === "both";
@@ -550,31 +899,60 @@ export function planRoofs(model: HouseModel): RoofPlan {
   const floors = [...model.floors].sort((a, b) => a.level - b.level);
   const topLevel = floors.length ? floors[floors.length - 1].level : 0;
   const groundY = (floors.length ? floorBase(model, floors[0]) : 0) - model.slabThickness - 0.01;
+  const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0) > TOL;
+  type Rect = ReturnType<typeof bbox> & { key: string; rooms: Room[] };
 
   const top = floors.filter((f) => f.level === topLevel && f.rooms.length);
   for (const floor of top) {
     const yTop = floorBase(model, floor) + model.ceilingHeight;
     const groups = new Map<string, Room[]>();
     for (const r of floor.rooms) {
-      const g = ext.extensionRoof === "separate" ? r.roofGroup ?? "main" : "main";
+      const g = r.roofGroup ?? "main";
       groups.set(g, [...(groups.get(g) ?? []), r]);
     }
-    const rects = [...groups.entries()].map(([key, rooms]) => ({ key, ...bbox(rooms.flatMap((r) => roomWorldPolygon(floor, r))) }));
-    const main = rects.find((r) => r.key === "main") ?? [...rects].sort((a, b) => b.w * b.h - a.w * a.h)[0];
-    const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0) > TOL;
+    const rectOf = (key: string, rooms: Room[]): Rect => ({ key, rooms, ...bbox(rooms.flatMap((r) => roomWorldPolygon(floor, r))) });
+    let rects = [...groups.entries()].map(([key, rooms]) => rectOf(key, rooms));
+    let main = rects.find((r) => r.key === "main") ?? [...rects].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    // Which side of the main block an extension stands on, if it stands beside it.
+    const besideX = (b: Rect) => (Math.abs(b.x1 - main.x0) < TOL || Math.abs(b.x0 - main.x1) < TOL) && overlap(b.y0, b.y1, main.y0, main.y1);
+    const besideZ = (b: Rect) => (Math.abs(b.y1 - main.y0) < TOL || Math.abs(b.y0 - main.y1) < TOL) && overlap(b.x0, b.x1, main.x0, main.x1);
+    const setBack = (b: Rect) =>
+      besideX(b)
+        ? Math.max(Math.abs(b.y0 - main.y0), Math.abs(b.y1 - main.y1))
+        : besideZ(b)
+          ? Math.max(Math.abs(b.x0 - main.x0), Math.abs(b.x1 - main.x1))
+          : 0;
+    if (ext.extensionRoof !== "separate") {
+      // The main roof carries on over every extension that lines up with it.
+      const carried = rects.filter((r) => r !== main && setBack(r) <= SET_BACK_TOL);
+      for (const r of carried) extensions.push({ key: r.key, setBack: setBack(r), own: false, drop: 0, pitchDeg: ext.pitchDeg });
+      if (carried.length) {
+        const merged = rectOf(main.key, [main, ...carried].flatMap((r) => r.rooms));
+        rects = [merged, ...rects.filter((r) => r !== main && !carried.includes(r))];
+        main = merged;
+      }
+    }
+    // The main block first: it takes precedence where roofs meet.
+    rects = [main, ...rects.filter((r) => r !== main)];
+
     const planned = rects.map((b) => {
-      // An extension's ridge runs away from the main roof so the two meet at a clean flush end.
+      // An extension's ridge runs away from the main roof, into the main roof's end or side.
       let axis: "x" | "z" = ext.ridgeAxis === "auto" ? (b.w >= b.h ? "x" : "z") : ext.ridgeAxis;
       if (b !== main) {
-        const besideX = (Math.abs(b.x1 - main.x0) < TOL || Math.abs(b.x0 - main.x1) < TOL) && overlap(b.y0, b.y1, main.y0, main.y1);
-        const besideZ = (Math.abs(b.y1 - main.y0) < TOL || Math.abs(b.y0 - main.y1) < TOL) && overlap(b.x0, b.x1, main.x0, main.x1);
-        if (besideX) axis = "x";
-        else if (besideZ) axis = "z";
+        if (besideX(b)) axis = "x";
+        else if (besideZ(b)) axis = "z";
       }
-      // An end that meets another roof block across its end line, or the party wall, stops flush.
+      // An extension's end at the main block runs in under the main roof.
+      const atMain = (v: number, side: "lo" | "hi") =>
+        b !== main &&
+        (axis === "x"
+          ? Math.abs((side === "lo" ? main.x1 : main.x0) - v) < TOL && overlap(main.y0, main.y1, b.y0, b.y1)
+          : Math.abs((side === "lo" ? main.y1 : main.y0) - v) < TOL && overlap(main.x0, main.x1, b.x0, b.x1));
+      // An extension's end that meets another extension across its end line, or the party wall, stops flush.
       const touches = (v: number, side: "lo" | "hi") =>
+        b !== main &&
         rects.some((o) =>
-          o === b
+          o === b || o === main
             ? false
             : axis === "x"
               ? Math.abs((side === "lo" ? o.x1 : o.x0) - v) < TOL && overlap(o.y0, o.y1, b.y0, b.y1)
@@ -583,6 +961,7 @@ export function planRoofs(model: HouseModel): RoofPlan {
       const party = (v: number, side: "lo" | "hi") =>
         axis === "x" && (side === "lo" ? partyLeft && Math.abs(v - all.x0) < TOL : partyRight && Math.abs(v - all.x1) < TOL);
       const [lo, hi] = axis === "x" ? [b.x0, b.x1] : [b.y0, b.y1];
+      const under = [atMain(lo, "lo"), atMain(hi, "hi")] as const;
       const block: RoofBlock = {
         x0: b.x0,
         z0: b.y0,
@@ -593,13 +972,21 @@ export function planRoofs(model: HouseModel): RoofPlan {
         pitchDeg: ext.pitchDeg,
         overhang: ext.overhang,
         clearance: ROOF_CLEARANCE,
-        start: party(lo, "lo") || touches(lo, "lo") ? "flush" : style,
-        end: party(hi, "hi") || touches(hi, "hi") ? "flush" : style,
+        start: party(lo, "lo") || touches(lo, "lo") || under[0] ? "flush" : style,
+        end: party(hi, "hi") || touches(hi, "hi") || under[1] ? "flush" : style,
       };
-      return { rect: b, block };
+      return { rect: b, block, under };
     });
-    const mainBlock = planned.find((p) => p.rect === main)!.block;
-    for (const p of planned) blocks.push(p.rect === main ? p.block : setDown(p.block, mainBlock, ext.extensionDrop));
+    const mainBlock = planned[0].block;
+    blocks.push(mainBlock);
+    const mainRidge = roofGeometry(mainBlock).ridgeY;
+    for (const p of planned.slice(1)) {
+      // Separate: the ridge set down by the chosen drop. Set back: the same pitch, never above the main ridge.
+      const b = setDown(p.block, mainBlock, ext.extensionRoof === "separate" ? ext.extensionDrop : 0);
+      const tuck = tuckUnder(b, mainBlock, p.under);
+      blocks.push(tuck ? { ...b, tuck } : b);
+      extensions.push({ key: p.rect.key, setBack: setBack(p.rect), own: true, drop: mainRidge - roofGeometry(b).ridgeY, pitchDeg: b.pitchDeg });
+    }
   }
 
   const blockRects = blocks.map((b): V2[] => [
@@ -641,7 +1028,7 @@ export function planRoofs(model: HouseModel): RoofPlan {
   }
 
   const chimneys = ext.chimneys.map((c) => placeChimney(c, blocks, flatRoofs, groundY));
-  return { blocks, flats, flatRoofs, leanTos, pillars, chimneys, groundY };
+  return { blocks, flats, flatRoofs, leanTos, pillars, chimneys, groundY, extensions };
 }
 
 /**
@@ -658,6 +1045,27 @@ export function setDown(b: RoofBlock, main: RoofBlock, drop: number): RoofBlock 
   if (natural <= target) return b;
   const pitch = (Math.atan(Math.max(0, target - y) / hs) * 180) / Math.PI;
   return { ...b, pitchDeg: Math.max(10, pitch) };
+}
+
+/**
+ * How far an extension's ends at the main block (`under`: start, end) must
+ * run on so its roof is wholly under the main roof there: past the main
+ * block's outer wall face until the main roof, rising from that face, is
+ * above the extension's ridge. Null when neither end meets the main block.
+ */
+export function tuckUnder(b: RoofBlock, main: RoofBlock, under: readonly [boolean, boolean]): [number, number] | null {
+  if (!under[0] && !under[1]) return null;
+  const half = (b.wallT ?? EXT_WALL_T) / 2;
+  const hs = ((b.axis === "x" ? b.z1 - b.z0 : b.x1 - b.x0) + 2 * half) / 2;
+  const tan = (deg: number) => Math.tan((deg * Math.PI) / 180);
+  const reach = (hs * tan(b.pitchDeg)) / tan(main.pitchDeg) + 0.05;
+  const [m0, m1] = b.axis === "x" ? [main.x0, main.x1] : [main.z0, main.z1];
+  const mh = (main.wallT ?? EXT_WALL_T) / 2;
+  const [u0, u1] = b.axis === "x" ? [b.x0, b.x1] : [b.z0, b.z1];
+  // The start meets the main block's high side, the end its low side; never run out past its far side.
+  const t0 = under[0] ? Math.min(u0 - (m1 + mh - reach), u0 - m0) : 0;
+  const t1 = under[1] ? Math.min(m0 - mh + reach - u1, m1 - u1) : 0;
+  return [Math.max(0, t0), Math.max(0, t1)];
 }
 
 function distToPolygonEdge(p: V2, poly: V2[]): number {

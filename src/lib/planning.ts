@@ -872,9 +872,16 @@ function labelOf(p: ExtensionPart, ground: number): string {
   return `${storeys} ${where}${over}`;
 }
 
-/** Proposed roof blocks over an extension's footprint. */
+/** Overlap (metres) a roof block's walls need with an extension's footprint to count as over it, not just beside it. */
+const OVER_TOL = 0.3;
+
+/**
+ * Proposed roof blocks over an extension's footprint: not the main roof of a
+ * house whose wall it merely stands against (an extension's own roof that
+ * runs in under it is the one over it).
+ */
 function blocksOver(plan: RoofPlan, p: ExtensionPart): RoofBlock[] {
-  return plan.blocks.filter((b) => b.x0 < p.x1 && b.x1 > p.x0 && b.z0 < p.z1 && b.z1 > p.z0);
+  return plan.blocks.filter((b) => b.x0 < p.x1 - OVER_TOL && b.x1 > p.x0 + OVER_TOL && b.z0 < p.z1 - OVER_TOL && b.z1 > p.z0 + OVER_TOL);
 }
 
 const mainBlock = (blocks: RoofBlock[]) => [...blocks].sort((a, b) => (b.x1 - b.x0) * (b.z1 - b.z0) - (a.x1 - a.x0) * (a.z1 - a.z0))[0];

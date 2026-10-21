@@ -271,7 +271,11 @@ export interface Exterior {
   ridgeAxis: "auto" | "x" | "z";
   pitchDeg: number;
   overhang: number;
-  /** Whether rooms tagged with a roofGroup share the main gable or get a separate lower one. */
+  /**
+   * Whether rooms tagged with a roofGroup share the main roof or get a separate
+   * lower one. With "continue", one set back from the house's walls still gets
+   * its own roof (it cannot share), at the same pitch.
+   */
   extensionRoof: "continue" | "separate";
   roofColor: string;
   wallColor: string;
@@ -284,7 +288,7 @@ export interface Exterior {
   fascia?: "white" | "trim";
   /** Draw gutters along the eaves and downpipes. */
   gutters?: boolean;
-  /** How far a separate extension roof's ridge sits below the main ridge, metres. */
+  /** How far a separate extension roof's ridge sits at least below the main ridge, metres (its pitch eases to get there). */
   extensionDrop?: number;
   /** Roof over porch canopies: flat, or a tiled lean-to falling away from the wall. */
   canopyRoof?: "flat" | "lean-to";

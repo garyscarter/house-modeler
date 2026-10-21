@@ -9,10 +9,10 @@ import {
   leanToHeightAt,
   leanToSurface,
   downpipeSpot,
+  joinRoofs,
   pushPoly,
   roofGeometry,
   roofHeightAt,
-  roofTrim,
   type FlatEdge,
   type FlatRoof,
   type LeanTo,
@@ -109,11 +109,11 @@ export function roofParts(
   };
 
   plan.blocks.forEach((b, bi) => {
-    const m = roofGeometry(b);
-    parts.tiles.pos.push(...m.slopes);
-    parts.tiles.uv.push(...m.slopeUVs);
-    parts.gables.push(...m.gables);
-    const tr = roofTrim(b, placed?.blocks[bi]);
+    // Each roof cut where another covers it, so an extension's roof meets the main roof in valleys.
+    const tr = joinRoofs(plan.blocks, bi, placed?.blocks[bi]);
+    parts.tiles.pos.push(...tr.slopes);
+    parts.tiles.uv.push(...tr.slopeUVs);
+    parts.gables.push(...tr.gables);
     parts.trim.push(...tr.trim);
     parts.caps.push(...tr.caps.map((line) => ({ line, pitchDeg: b.pitchDeg })));
     if (opts.gutters) {
