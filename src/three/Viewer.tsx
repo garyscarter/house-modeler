@@ -21,6 +21,7 @@ interface ViewerProps {
   photos: Photo[];
   showLabels: boolean;
   showCeilings: boolean;
+  doorsOpen?: boolean;
   selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room) => void;
   title?: string;
@@ -35,7 +36,7 @@ interface ViewerProps {
 }
 
 export function Viewer(props: ViewerProps) {
-  const { model, ghost, photos, showLabels, showCeilings, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId, variant, ghostVariant } = props;
+  const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId, variant, ghostVariant } = props;
   const bounds = useMemo(() => modelBounds([...model.floors, ...(ghost?.floors ?? [])]), [model, ghost]);
   const centre = useMemo(
     () => new THREE.Vector3((bounds.x0 + bounds.x1) / 2, 1, (bounds.y0 + bounds.y1) / 2),
@@ -73,6 +74,7 @@ export function Viewer(props: ViewerProps) {
           photos={photos}
           showLabels={showLabels}
           showCeilings={showCeilings}
+          doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
           visibleLevels={visibleLevels}

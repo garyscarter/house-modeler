@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -195,6 +195,28 @@ describe("door styles", () => {
     expect(shut.s[0]).toBeGreaterThan(0.6);
     const open = leafParts("half-glazed", 1).find((x) => x.mat === "leaf")!;
     expect(Math.abs(Math.sin(open.ry ?? 0))).toBeGreaterThan(0.9);
+  });
+
+  it("draws every swing door shut when doors are not shown open, whatever openDeg says", () => {
+    const leafRy = (kind: "door" | "french", out: 1 | -1 | 0, extra: Partial<Opening>) =>
+      leaves(openingParts(place(kind, kind === "french" ? 1.5 : 0.8, extra, 2.05), T, out, false).boxes).map((b) => Math.abs(Math.sin(b.ry ?? 0)));
+    for (const v of [...leafRy("door", 0, { openDeg: 90 }), ...leafRy("door", 1, {}), ...leafRy("french", -1, { openDeg: 120 })]) expect(v).toBeLessThan(1e-9);
+  });
+
+  it("lays bi-fold panels flat across the opening when shut", () => {
+    const w = 3;
+    const panes = glass(openingParts(place("bifold", w, {}, 2.1), T, 1, false).boxes);
+    expect(panes).toHaveLength(bifoldLayout(w, false).n);
+    expect(Math.min(...panes.map((p) => p.p[0]))).toBeLessThan(-w / 4);
+    expect(Math.max(...panes.map((p) => p.p[0]))).toBeGreaterThan(w / 4);
+  });
+
+  it("works out the effective open angle", () => {
+    expect(effectiveOpenDeg({}, 75)).toBe(75);
+    expect(effectiveOpenDeg({ openDeg: 30 }, 75)).toBe(30);
+    expect(effectiveOpenDeg({ openDeg: 300 }, 75)).toBe(180);
+    expect(effectiveOpenDeg({ openDeg: 30 }, 75, false)).toBe(0);
+    expect(effectiveOpenDeg({}, 80, false)).toBe(0);
   });
 
   it("lines internal doors with the lining material", () => {

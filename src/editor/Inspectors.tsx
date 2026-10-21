@@ -446,6 +446,7 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
       {(k === "door" || k === "front" || k === "french") && (
         <label>
           Drawn open (°)
+          <small className="muted">Only shown when View &gt; Doors open is on; otherwise every door is drawn shut.</small>
           <NumberField
             value={opening.openDeg}
             placeholder={k === "front" ? "0" : k === "french" ? "80" : "75"}

@@ -61,6 +61,8 @@ interface State {
   selectedPhotoId: string | null;
   showLabels: boolean;
   showCeilings: boolean;
+  /** Draw swing doors open (at their open angle) rather than shut. Persisted. */
+  doorsOpen: boolean;
   /** Hide floors above this level in the 3D view (null = show all). */
   maxLevel: number | null;
   /** Draw roofs, canopies and exterior photo pins. */
@@ -96,6 +98,7 @@ interface State {
         | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
+        | "doorsOpen"
         | "maxLevel"
         | "showExterior"
         | "showSite"
@@ -105,7 +108,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -176,6 +179,7 @@ export const useStore = create<State>()(
         selectedPhotoId: null,
         showLabels: true,
         showCeilings: false,
+        doorsOpen: false,
         maxLevel: null,
         showExterior: true,
         showSite: true,
@@ -269,6 +273,7 @@ export const useStore = create<State>()(
         settings: s.settings,
         sun: s.sun,
         costRates: s.costRates,
+        doorsOpen: s.doorsOpen,
       }),
       version: PERSIST_VERSION,
       migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
