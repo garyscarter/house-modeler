@@ -330,6 +330,14 @@ export interface FlatRoofSkirt {
    * returned only a short way down the sides. Unset or 0: no returns.
    */
   returns?: number;
+  /**
+   * How far the skirt's eaves (where the tiles start, the top of its fascia)
+   * sit below the flat roof's deck, metres, down to the tops of the walls at
+   * most. Its gutter, fascia and soffit come down with them, and a porch
+   * ceiling under the same roof, so the whole slope sits lower on the walls.
+   * Unset or 0: the eaves are level with the deck.
+   */
+  drop?: number;
 }
 
 export type TileStyle = "plain" | "concrete" | "slate";

@@ -131,7 +131,7 @@ export function roofParts(
 
   for (const fr of plan.flatRoofs) {
     const skirted = skirtedEdges(fr, opts.skirt);
-    flatRoofParts(fr, parts, skirted);
+    flatRoofParts(fr, parts, skirted, opts.skirt);
     if (skirted.length) skirtParts(fr, opts.skirt!, parts, { gutters: opts.gutters, foot: (x, z, from) => footAt(plan, x, z, from) });
   }
   for (const l of plan.leanTos) leanToParts(l, parts, opts.gutters);
@@ -255,11 +255,18 @@ export function footAt(plan: RoofPlan, x: number, z: number, from: number): numb
   return foot;
 }
 
-/** Membrane, fascias, soffits, edge trims and flashings of one flat roof. Skirted edges get no drip trim: the tiles cover them. */
-function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = []) {
+/**
+ * Membrane, fascias, soffits, edge trims and flashings of one flat roof. Skirted edges get no drip trim: the tiles cover them.
+ * Where the skirt's eaves are dropped below the deck (see skirtEaves) its fascia and soffit come down with them, the porch
+ * ceilings too, and the membrane stops where the slope rises through the deck, so it never shows over the tiles.
+ */
+function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = [], skirt?: FlatRoofSkirt) {
   const half = EXT_WALL_T / 2;
   const W = half + FLAT_OVERHANG;
   const ySoffit = fr.y - 0.04;
+  const low = skirt && skirted.length ? skirtEaves(fr, skirt) : null;
+  const dropped = low && low.yE < fr.top - 0.03 - 1e-6 ? low : null;
+  const yCeiling = dropped ? dropped.ySoffit : ySoffit;
   const membrane = (x0: number, z0: number, x1: number, z1: number) =>
     pushPoly(
       parts.membrane.pos,
@@ -278,15 +285,19 @@ function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = []
         [x0, z1],
       ],
     );
-  for (const r of fr.rects) membrane(r.x0, r.z0, r.x1, r.z1);
+  // A dropped skirt's tiles stay under the deck for a little way in from its eaves: keep the membrane off that strip.
+  const t = skirt ? Math.tan((skirt.pitchDeg * Math.PI) / 180) : 0;
+  const inset = dropped && t > 0 ? (fr.top - dropped.yE) / t - W : 0;
+  const cuts: Box2[] = inset > 0 ? skirted.map((s) => skirtStrip(s, inset)) : [];
+  for (const r of fr.rects) for (const p of cutBoxes([{ x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 }], cuts)) membrane(p.x0, p.z0, p.x1, p.z1);
   for (const r of fr.open)
     pushPoly(
       parts.ceiling,
       [
-        [r.x0, ySoffit, r.z0],
-        [r.x1, ySoffit, r.z0],
-        [r.x1, ySoffit, r.z1],
-        [r.x0, ySoffit, r.z1],
+        [r.x0, yCeiling, r.z0],
+        [r.x1, yCeiling, r.z0],
+        [r.x1, yCeiling, r.z1],
+        [r.x0, yCeiling, r.z1],
       ],
       down,
     );
@@ -299,14 +310,33 @@ function flatRoofParts(fr: FlatRoof, parts: RoofParts, skirted: SkirtEdge[] = []
       pushPoly(out, c0 === c1 ? [P(a, y0, c0), P(b, y0, c0), P(b, y1, c0), P(a, y1, c0)] : [P(a, y0, c0), P(b, y0, c0), P(b, y0, c1), P(a, y0, c1)], n);
     if (e.kind === "abutment") {
       const [a, b] = [e.a - e.fascia[0], e.b + e.fascia[1]];
-      quad(parts.flashing, a, b, -(half + 0.006), -(half + 0.006), fr.top - 0.01, fr.top + 0.15, N(-1));
+      // Where a dropped skirt's tiles run into this wall they carry their own flashing, and the deck's would stand proud of them.
+      const covered = dropped && skirt ? skirtWallCover(fr, skirt, skirted, e) : [];
+      for (const [p, q] of subtract(a, b, covered)) quad(parts.flashing, p, q, -(half + 0.006), -(half + 0.006), fr.top - 0.01, fr.top + 0.15, N(-1));
       continue;
     }
     const [fa, fb] = [e.a - e.fascia[0], e.b + e.fascia[1]];
-    quad(parts.trim, fa, fb, W, W, ySoffit, fr.top - 0.03, N(1));
-    quad(parts.trim, fa, fb, W, W - BOARD, ySoffit, ySoffit, down);
     const [oa, ob] = [e.a - e.soffit[0], e.b + e.soffit[1]];
-    quad(parts.trim, oa, ob, half, W - BOARD, ySoffit, ySoffit, down);
+    if (!dropped) {
+      quad(parts.trim, fa, fb, W, W, ySoffit, fr.top - 0.03, N(1));
+      quad(parts.trim, fa, fb, W, W - BOARD, ySoffit, ySoffit, down);
+      quad(parts.trim, oa, ob, half, W - BOARD, ySoffit, ySoffit, down);
+    } else {
+      // Under the skirt the fascia and soffit sit lower; elsewhere they stay at the deck.
+      const under = skirted.filter((s) => s.src === e).map((s): [number, number] => [s.a - s.fascia[0], s.b + s.fascia[1]]);
+      const within = (a: number, b: number) => under.map(([p, q]): [number, number] => [Math.max(a, p), Math.min(b, q)]).filter(([p, q]) => q - p > 0.01);
+      for (const [p, q] of subtract(fa, fb, under)) {
+        quad(parts.trim, p, q, W, W, ySoffit, fr.top - 0.03, N(1));
+        quad(parts.trim, p, q, W, W - BOARD, ySoffit, ySoffit, down);
+      }
+      for (const [p, q] of within(fa, fb)) {
+        quad(parts.trim, p, q, W, W, dropped.ySoffit, dropped.yE, N(1));
+        quad(parts.trim, p, q, W, W - BOARD, dropped.ySoffit, dropped.ySoffit, down);
+      }
+      for (const [p, q] of subtract(oa, ob, under)) quad(parts.trim, p, q, half, W - BOARD, ySoffit, ySoffit, down);
+      // From the wall line, so it also closes the slot over the open side of a porch, below the wall tops.
+      for (const [p, q] of within(oa, ob)) quad(parts.trim, p, q, 0, W - BOARD, dropped.ySoffit, dropped.ySoffit, down);
+    }
     // Stretches the skirt's tiles cover need neither the membrane strip nor the drip trim.
     // (Past a corner too, where the drip trim would otherwise run on a little.)
     const tiled = skirted.filter((s) => s.src === e).map((s): [number, number] => [s.a - s.fascia[0] - (s.cut[0] ? 0 : 0.05), s.b + s.fascia[1] + (s.cut[1] ? 0 : 0.05)]);
@@ -506,6 +536,82 @@ export function skirtEnd(e: SkirtEdge, end: 0 | 1, skirted: SkirtEdge[]): SkirtE
   return "wall";
 }
 
+/** Depth of a dropped skirt's fascia, from its eaves down to its soffit. */
+export const SKIRT_FASCIA = 0.2;
+
+/**
+ * Where a flat roof's skirt starts: the height of its eaves (the top of its
+ * fascia, where the tiles start) and of its soffit. Level with the deck
+ * unless the skirt is dropped, and then never below the tops of the walls.
+ */
+export function skirtEaves(fr: FlatRoof, skirt: FlatRoofSkirt): { yE: number; ySoffit: number } {
+  const deck = fr.top - 0.03;
+  const yE = Math.max(Math.min(fr.y, deck), deck - Math.max(0, skirt.drop ?? 0));
+  return { yE, ySoffit: Math.min(fr.y - 0.04, yE - SKIRT_FASCIA) };
+}
+
+/**
+ * Stretches of a taller wall (an abutment edge `g` of the flat roof) that a skirt's tiles run into: the tops of the
+ * slopes facing it, between their hips or valleys, and the ends of slopes that stop against it.
+ */
+function skirtWallCover(fr: FlatRoof, skirt: FlatRoofSkirt, skirted: SkirtEdge[], g: FlatEdge): [number, number][] {
+  const half = EXT_WALL_T / 2;
+  const W = half + FLAT_OVERHANG;
+  const run = skirtRun(fr, skirt);
+  const across = W - run;
+  const out: [number, number][] = [];
+  for (const s of skirted) {
+    const ends = [skirtEnd(s, 0, skirted), skirtEnd(s, 1, skirted)] as const;
+    if (s.axis === g.axis) {
+      if (!facing(s, fr.edges, skirted).some((f) => f.g === g && f.reach <= run + 1e-6)) continue;
+      const inset = (k: SkirtEnd) => (k === "hip" ? run : k === "valley" ? -run : 0);
+      out.push([s.a - s.fascia[0] + inset(ends[0]), s.b + s.fascia[1] - inset(ends[1])]);
+      continue;
+    }
+    // A slope ending square against this wall covers it from its eaves to its top.
+    for (const end of [0, 1] as const) {
+      const along = end === 0 ? s.a : s.b;
+      if (ends[end] !== "wall" || Math.abs(along - g.at) > half + 0.05) continue;
+      const [p, q] = [s.at + s.out * W, s.at + s.out * across];
+      out.push([Math.min(p, q), Math.max(p, q)]);
+    }
+  }
+  return out;
+}
+
+/** An axis-aligned rectangle on the ground plane, world metres. */
+interface Box2 {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+/** The strip `depth` wide just inside a skirted stretch's wall line, along its whole length. */
+function skirtStrip(s: SkirtEdge, depth: number): Box2 {
+  const [a, b] = [s.a - Math.max(0, s.fascia[0]), s.b + Math.max(0, s.fascia[1])];
+  const [c0, c1] = [Math.min(s.at, s.at - s.out * depth), Math.max(s.at, s.at - s.out * depth)];
+  return s.axis === "x" ? { x0: a, x1: b, z0: c0, z1: c1 } : { x0: c0, x1: c1, z0: a, z1: b };
+}
+
+/** What is left of `boxes` once every box in `cuts` is taken out, as rectangles. */
+export function cutBoxes(boxes: Box2[], cuts: Box2[]): Box2[] {
+  let out = boxes;
+  for (const c of cuts) {
+    out = out.flatMap((r): Box2[] => {
+      if (c.x1 <= r.x0 || c.x0 >= r.x1 || c.z1 <= r.z0 || c.z0 >= r.z1) return [r];
+      const [z0, z1] = [Math.max(r.z0, c.z0), Math.min(r.z1, c.z1)];
+      return [
+        { ...r, z1: c.z0 },
+        { ...r, z0: c.z1 },
+        { ...r, z0, z1, x1: c.x0 },
+        { ...r, z0, z1, x0: c.x1 },
+      ].filter((p) => p.x1 - p.x0 > 1e-6 && p.z1 - p.z0 > 1e-6);
+    });
+  }
+  return out;
+}
+
 /** Parts of [a, b] not covered by any of `cut`. */
 function subtract(a: number, b: number, cut: [number, number][]): [number, number][] {
   let out: [number, number][] = [[a, b]];
@@ -538,11 +644,11 @@ export function skirtParts(
   const W = half + FLAT_OVERHANG;
   const t = Math.tan((skirt.pitchDeg * Math.PI) / 180);
   const cos = Math.cos((skirt.pitchDeg * Math.PI) / 180);
-  const yE = fr.top - 0.03;
+  const { yE, ySoffit } = skirtEaves(fr, skirt);
+  const dropped = yE < fr.top - 0.03 - 1e-6;
   const run = skirtRun(fr, skirt);
   const yT = yE + run * t;
   const across = W - run;
-  const ySoffit = fr.y - 0.04;
   const yG = yE - 0.03;
   const vG = W + GUTTER_R;
   const hips = new Map<string, [P3, P3]>();
@@ -603,8 +709,18 @@ export function skirtParts(
         continue;
       }
       if (kind === "valley") continue;
-      if (kind === "square") pushPoly(parts.trim, [P(at, yE, W), P(at, yT, across), P(at, fr.top, across)], N(sign));
-      else {
+      if (kind === "square" && !dropped) pushPoly(parts.trim, [P(at, yE, W), P(at, yT, across), P(at, fr.top, across)], N(sign));
+      else if (kind === "square") {
+        // A dropped skirt's cheek: under the slope down to the deck where it rises above it, down to the wall
+        // tops nearer the eaves, and the end of the lowered fascia and soffit, where the plain edge's are higher.
+        const ax = Math.max(across, W - (fr.top - yE) / t);
+        const yX = yE + (W - ax) * t;
+        if (yT > yX + 1e-6) pushPoly(parts.trim, [P(at, yX, ax), P(at, yT, across), P(at, fr.top, across)], N(sign));
+        const bot = Math.min(yE, fr.y);
+        if (bot < yE - 1e-6) pushPoly(parts.trim, [P(at, yE, W), P(at, yX, ax), P(at, bot, ax), P(at, bot, W)], N(sign));
+        else pushPoly(parts.trim, [P(at, yE, W), P(at, yX, ax), P(at, bot, ax)], N(sign));
+        pushPoly(parts.trim, [P(at, ySoffit, half), P(at, ySoffit, W), P(at, yE, W), P(at, yE, half)], N(sign));
+      } else {
         const f = face(end) - sign * 0.006;
         pushPoly(parts.flashing, [P(f, yE - 0.02, W), P(f, yT - 0.02, across), P(f, yT + 0.15, across), P(f, yE + 0.15, W)], N(-sign));
       }

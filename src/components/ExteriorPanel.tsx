@@ -223,6 +223,16 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
                     onChange={(e) => setSkirt({ returns: Math.max(0, parseFloat(e.target.value) || 0) })}
                   />
                 </Field>
+                <Field label="Eaves below the deck (m)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={0.5}
+                    step={0.02}
+                    value={skirt.drop ?? 0}
+                    onChange={(e) => setSkirt({ drop: Math.max(0, parseFloat(e.target.value) || 0) })}
+                  />
+                </Field>
               </div>
             )}
           </>
