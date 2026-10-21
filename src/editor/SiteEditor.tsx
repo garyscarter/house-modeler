@@ -18,6 +18,17 @@ import {
   simpleSite,
 } from "../lib/site";
 import { SlopeFields } from "../components/SlopeFields";
+import {
+  MIN_OPENING,
+  defaultOpeningEnd,
+  edgeLength,
+  moveBoundaryCorner,
+  neighbourEdgeOf,
+  setOpeningWidth,
+  slideCorner,
+  type OpeningEnd,
+  type SlideAlong,
+} from "../lib/boundaryOpening";
 import "./SiteEditor.css";
 
 type Tool = "select" | "surface" | "neighbour";
@@ -26,7 +37,7 @@ type Sel =
   | { type: "surface" | "neighbour"; id: string; vertex: number | null }
   | null;
 type Drag =
-  | { kind: "vertex"; sel: NonNullable<Sel>; index: number }
+  | { kind: "vertex"; sel: NonNullable<Sel>; index: number; slide?: SlideAlong }
   | { kind: "move"; sel: NonNullable<Sel>; start: WPt; orig: WPt[] }
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number; moved: boolean }
   | { kind: "rect"; start: WPt }
@@ -230,11 +241,18 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     if (already && s.type !== "boundary") drag.current = { kind: "move", sel: s, start: toWorld(e), orig: polyOf(s) };
     else drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy, moved: true };
   };
+  /** Corners of a selected opening slide along the wall beside them, so the boundary line holds. */
+  const slideFor = (s: NonNullable<Sel>, index: number): SlideAlong | undefined => {
+    if (s.type !== "boundary" || s.edge === null || edgesOf(site)[s.edge]?.kind !== "open") return undefined;
+    if (index === s.edge) return "prev";
+    if (index === (s.edge + 1) % site.boundary.length) return "next";
+    return undefined;
+  };
   const onVertexDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
     e.stopPropagation();
     if (capture(e)) return;
     setSel({ ...s, vertex: index } as Sel);
-    drag.current = { kind: "vertex", sel: s, index };
+    drag.current = { kind: "vertex", sel: s, index, slide: slideFor(s, index) };
   };
   const onMidDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
     e.stopPropagation();
@@ -272,8 +290,18 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     const p = toWorld(e);
     if (d.kind === "rect") setDraft({ a: d.start, b: snap(p) });
     else if (d.kind === "vertex") {
-      const q = snap(p, { sel: d.sel, index: d.index });
-      editPoly(d.sel, (poly) => poly.map((o, i) => (i === d.index ? q : o)));
+      if (d.sel.type === "boundary") {
+        // An opening's corner slides along its neighbouring wall; any other boundary corner moves freely
+        // (snapping to nearby corners), taking the surface corners that met it along.
+        if (d.slide) updateSite((st) => slideCorner(st, d.index, d.slide!, p));
+        else {
+          const q = snap(p, { sel: d.sel, index: d.index });
+          updateSite((st) => moveBoundaryCorner(st, d.index, q));
+        }
+      } else {
+        const q = snap(p, { sel: d.sel, index: d.index });
+        editPoly(d.sel, (poly) => poly.map((o, i) => (i === d.index ? q : o)));
+      }
     } else if (d.kind === "move") {
       const dx = p.x - d.start.x;
       const dy = p.y - d.start.y;
@@ -440,6 +468,22 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               })}
             </g>
 
+            {sel?.type === "boundary" && sel.edge !== null && site.boundary[sel.edge] && (() => {
+              const a = site.boundary[sel.edge];
+              const b = site.boundary[(sel.edge + 1) % site.boundary.length];
+              const label = `${edgeLength(site, sel.edge).toFixed(2)} m`;
+              const mx = (a.x + b.x) / 2;
+              const my = (a.y + b.y) / 2 - 16 * px;
+              return (
+                <g className="site-dim" pointerEvents="none">
+                  <rect x={mx - label.length * fs * 0.29} y={my - fs * 0.75} width={label.length * fs * 0.58} height={fs * 1.5} rx={3 * px} />
+                  <text x={mx} y={my} fontSize={fs} textAnchor="middle" dominantBaseline="central">
+                    {label}
+                  </text>
+                </g>
+              );
+            })()}
+
             {sel && selPoly.length > 0 && (
               <g>
                 {selPoly.map((a, i) => {
@@ -546,6 +590,16 @@ function Inspector({
               <label>
                 Height (m)
                 <input type="number" step={0.1} min={0.3} max={4} value={edges[i].height} onChange={(e) => setEdge({ height: Math.max(0.1, num(e.target.value, edges[i].height)) })} />
+              </label>
+            )}
+            <OpeningWidth site={site} edge={i} />
+            {edges[i].kind === "open" && (
+              <label>
+                Wall ends beside the gap
+                <select value={edges[i].endFinish ?? "plain"} onChange={(e) => setEdge({ endFinish: e.target.value as "plain" | "pier" })}>
+                  <option value="plain">Plain (cut brickwork)</option>
+                  <option value="pier">Brick pier at each end</option>
+                </select>
               </label>
             )}
             {edges[i].kind === "wall" && (
@@ -657,6 +711,58 @@ function Inspector({
     );
   }
   return <EmptyInspector clearances={clearances} />;
+}
+
+/** Typed width of the selected edge. One end slides along the wall next to it, so the boundary line holds. */
+function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
+  const updateSite = useStore((s) => s.updateSite);
+  const [pick, setPick] = useState<{ edge: number; end: OpeningEnd } | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const n = site.boundary.length;
+  const end = pick && pick.edge === edge ? pick.end : defaultOpeningEnd(site, edge);
+  const width = edgeLength(site, edge);
+  const nb = neighbourEdgeOf(site, edge, end);
+  // "Left" and "right" by where the two corners sit on the plan.
+  const a = site.boundary[edge];
+  const b = site.boundary[(edge + 1) % n];
+  const startIsLeft = a.x <= b.x;
+  const endLabel = (e: OpeningEnd) => ((e === "start") === startIsLeft ? "left end" : "right end");
+  const apply = (v: string, e: OpeningEnd) => {
+    const w = parseFloat(v);
+    if (Number.isFinite(w)) updateSite((st) => setOpeningWidth(st, edge, w, e));
+  };
+  return (
+    <>
+      <label>
+        Width (m)
+        <input
+          type="number"
+          step={0.05}
+          min={MIN_OPENING}
+          value={draft ?? width.toFixed(2)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            apply(e.target.value, end);
+          }}
+          onBlur={() => setDraft(null)}
+        />
+      </label>
+      <label>
+        Move
+        <select value={end} onChange={(e) => setPick({ edge, end: e.target.value as OpeningEnd })}>
+          {(["start", "end"] as OpeningEnd[]).map((e) => (
+            <option key={e} value={e}>
+              {endLabel(e)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        Slides that end along edge {nb + 1} ({edgeLength(site, nb).toFixed(2)} m), so the boundary line stays put. Drive and lawn corners follow.
+        {edgesOf(site)[edge].kind === "open" && " Dragging an end of a selected opening does the same."}
+      </p>
+    </>
+  );
 }
 
 function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
