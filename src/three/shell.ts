@@ -1,16 +1,14 @@
 import * as THREE from "three";
 import type { Floor, Opening, Room, WallFinish } from "../types";
 import {
-  coveredIntervals,
   cutWall,
   roomWorldPolygon,
   windowSill,
   type OpeningPlacement,
   type V2,
-  type WallPiece,
   type WallSeg,
 } from "../lib/geometry";
-import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
+import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
 import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
 import { interiorFinish, outsideLook } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
@@ -31,6 +29,8 @@ export interface ShellInput {
   slab: number;
   /** Room outlines of the floor above, to carry external walls up through the slab. */
   upperPolys: V2[][];
+  /** Walls of the floor above: the band through the slab runs out to their outer faces. */
+  upperWalls: WallSeg[];
   /** Base of external walls on the lowest floor (down to the ground), or null. */
   plinthY: number | null;
   /** Height of this floor's base, so brick courses line up between storeys. */
@@ -155,6 +155,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   // Only rooms with feature walls need their faces split edge by edge.
   const featurePolys = new Map(rooms.filter((r) => roomsById.get(r.id)?.wallFinishes).map((r) => [r.id, r.poly]));
   const thick = walls.map(wallThickness);
+  const upperWalls = inp.upperWalls.map((w) => ({ wall: w, thickness: wallThickness(w) }));
   const ends = wallEnds(walls, thick);
   const batch = new Batcher();
   const bayFloors: BayFloor[] = [];
@@ -181,19 +182,10 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   walls.forEach((wall, i) => {
     const top = wall.height !== undefined ? Math.min(wall.height, H) : H;
     const { pieces, placements } = cutWall(wall, top);
-    const len = Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y);
-    const at = (t: number): V2 => ({ x: wall.a.x + ((wall.b.x - wall.a.x) * t) / len, y: wall.a.y + ((wall.b.y - wall.a.y) * t) / len });
-    // External walls run up through the slab where there is a floor above
-    // (so the outside face is continuous between storeys) and down to the
-    // ground on the lowest floor.
-    const bands: WallPiece[] = [];
-    if (wall.exterior && wall.height === undefined) {
-      for (const [t0, t1] of coveredIntervals(wall, inp.upperPolys)) bands.push({ a: at(t0), b: at(t1), y0: H, y1: H + inp.slab });
-      if (inp.plinthY !== null) bands.push({ a: wall.a, b: wall.b, y0: inp.plinthY, y1: 0 });
-    }
     const probe = thick[i] / 2 + 0.08;
     const spansOn = (s: 1 | -1) => spansByEdge(wall, sideSpans(wall, s, probe, rooms), (id) => featurePolys.get(id));
     const spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>] = [spansOn(1), spansOn(-1)];
+    const bands = wallBands(wall, thick[i], spans, { ceiling: H, slab: inp.slab, upperPolys: inp.upperPolys, upperWalls, plinthY: inp.plinthY });
     const { quads, skirting } = wallFaces({
       wall,
       thickness: thick[i],

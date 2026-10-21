@@ -239,6 +239,7 @@ function FloorShell({
     () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
     [model.floors, floor.level],
   );
+  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [model.floors, floor.level]);
   const finish = ext.wallFinish ?? "render";
   const shell = useMemo(
     () =>
@@ -248,6 +249,7 @@ function FloorShell({
         ceiling: H,
         slab,
         upperPolys,
+        upperWalls,
         // The lowest floor's external walls run down to the garden.
         plinthY: floor.level === lowest ? GROUND_Y - baseY - 0.02 : null,
         baseY,
@@ -255,7 +257,7 @@ function FloorShell({
         wallColor: ext.wallColor,
         trimColor: ext.trimColor,
       }),
-    [floor, walls, H, slab, upperPolys, lowest, baseY, finish, ext.wallColor, ext.trimColor],
+    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 
