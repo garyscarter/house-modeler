@@ -4,7 +4,8 @@ services:
   - type: web
     name: house-modeler
     runtime: node
-    plan: free
+    # A persistent disk needs a paid instance type (the free plan has no disks).
+    plan: starter
     region: frankfurt
     branch: main
     autoDeploy: true
@@ -13,6 +14,11 @@ services:
     buildCommand: (npm ci --include=dev || npx -y npm@11.6.2 ci --include=dev) && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
+    # Keeps the shared project (Settings -> Project sync) across deploys and restarts.
+    disk:
+      name: house-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -20,3 +26,5 @@ services:
         sync: false # you type this in the Render dashboard when creating the Blueprint
       - key: SESSION_SECRET
         generateValue: true
+      - key: DATA_DIR
+        value: /var/data # must be the disk's mountPath above

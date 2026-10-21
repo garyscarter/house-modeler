@@ -3,7 +3,8 @@
 //   npm run build && PASSCODE=... npm start
 //
 // Environment: PASSCODE (required, 4+ characters), SESSION_SECRET (optional but
-// recommended), PORT (default 10000).
+// recommended), PORT (default 10000), DATA_DIR (where the shared project is saved;
+// without it the saved project is lost on restart and the app is told so).
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,6 +26,7 @@ import {
   verifySessionToken,
 } from "./auth.mjs";
 import { renderLoginPage } from "./page.mjs";
+import { MAX_PROJECT_BODY_BYTES, createProjectStore, originMatchesHost, parsePutBody } from "./project.mjs";
 
 const PASSCODE = process.env.PASSCODE;
 if (typeof PASSCODE !== "string" || PASSCODE.length < MIN_PASSCODE_LENGTH) {
@@ -46,6 +48,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "d
 if (!fs.existsSync(path.join(ROOT, "index.html"))) {
   console.warn(`Warning: ${path.join(ROOT, "index.html")} not found. Run "npm run build" first.`);
 }
+
+// DATA_DIR should be a persistent disk. Without it the copy lives next to the app and is
+// wiped on every deploy, so the app is told "persistent: false" and says so in Settings.
+const PERSISTENT = Boolean(process.env.DATA_DIR);
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data"));
+if (!PERSISTENT) {
+  console.warn(
+    "WARNING: DATA_DIR is not set, so the shared project is NOT permanent: it is lost on every deploy or restart. Attach a persistent disk and set DATA_DIR to its mount path.",
+  );
+}
+const project = createProjectStore(DATA_DIR);
 
 const MAX_BODY_BYTES = 4096;
 const perIp = new RateLimiter({ limit: 10, windowMs: 15 * 60 * 1000 });
@@ -132,21 +145,65 @@ function wantsHtml(req) {
   return String(req.headers.accept ?? "").includes("text/html");
 }
 
-function readForm(req) {
+function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > limit) {
         reject(Object.assign(new Error("Body too large"), { status: 413 }));
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(new URLSearchParams(Buffer.concat(chunks).toString("utf8"))));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+const readForm = async (req) => new URLSearchParams(await readBody(req, MAX_BODY_BYTES));
+
+function sendJson(res, status, body, headers = {}) {
+  send(res, status, typeof body === "string" ? body : JSON.stringify(body), {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+}
+
+// /api/project: GET (?since=<revision> leaves the data out when nothing changed) and PUT.
+async function handleProject(req, res, url) {
+  const method = req.method ?? "GET";
+  if (method === "GET" || method === "HEAD") {
+    const meta = project.meta();
+    if (!meta) return sendJson(res, 404, { error: "nothing saved yet", persistent: PERSISTENT });
+    if (url.searchParams.get("since") === String(meta.revision)) return sendJson(res, 200, { ...meta, persistent: PERSISTENT });
+    // The stored file is `{ revision, savedAt, data }`; add the flag without parsing the (large) data.
+    const raw = project.readRaw();
+    return sendJson(res, 200, `${raw.slice(0, -1)},"persistent":${PERSISTENT}}`);
+  }
+  if (method !== "PUT") return sendJson(res, 405, { error: "method not allowed" }, { Allow: "GET, HEAD, PUT" });
+  if (!originMatchesHost(req.headers.origin, req.headers.host)) return sendJson(res, 403, { error: "bad origin" });
+  let text;
+  try {
+    if (Number(req.headers["content-length"]) > MAX_PROJECT_BODY_BYTES) throw Object.assign(new Error("Body too large"), { status: 413 });
+    text = await readBody(req, MAX_PROJECT_BODY_BYTES);
+  } catch (err) {
+    res.on("finish", () => req.destroy());
+    return sendJson(res, err.status ?? 400, { error: "too large" }, { Connection: "close" });
+  }
+  const body = parsePutBody(text);
+  if (!body) return sendJson(res, 400, { error: "not a project" });
+  let result;
+  try {
+    result = project.save(body.baseRevision, body.data);
+  } catch (err) {
+    console.error("Saving the project failed:", err?.message ?? err);
+    return sendJson(res, 500, { error: "could not save" });
+  }
+  const { ok, ...meta } = result;
+  sendJson(res, ok ? 200 : 409, { ...meta, persistent: PERSISTENT });
 }
 
 async function handleLogin(req, res) {
@@ -258,6 +315,13 @@ function serveFile(req, res, file, st) {
 }
 
 function serveStatic(req, res, pathname) {
+  let decoded = pathname;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    // resolveSafePath refuses a bad escape below
+  }
+  if (/^\/api(\/|$)/i.test(decoded)) return sendJson(res, 404, { error: "not found" });
   const target = resolveSafePath(ROOT, pathname);
   if (!target) {
     send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
@@ -302,6 +366,18 @@ const server = http.createServer((req, res) => {
     }
     if (pathname === "/logout" && (method === "GET" || method === "HEAD")) {
       handleLogout(req, res);
+      return;
+    }
+
+    // The API never falls through to the static files or index.html.
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
+      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "sign in required" });
+      if (pathname !== "/api/project") return sendJson(res, 404, { error: "not found" });
+      handleProject(req, res, new URL(rawUrl, "http://x")).catch((err) => {
+        console.error("Project request failed:", err?.message ?? err);
+        if (!res.headersSent) sendJson(res, 500, { error: "server error" });
+        else res.destroy();
+      });
       return;
     }
 
