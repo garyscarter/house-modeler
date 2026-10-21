@@ -181,14 +181,20 @@ describe("extension roofs", () => {
     expect(ridge(main) - ridge(separate(0.6).blocks.find((b) => b.x0 < -4)!)).toBeCloseTo(0.6);
   });
 
-  it("meets the main roof at a flush end on both sides, so no hip runs into it", () => {
+  it("runs in under the main roof's hipped end, which the main roof keeps", () => {
     const plan = separate();
     const ext = plan.blocks.find((b) => b.x0 < -4)!;
     const main = plan.blocks.find((b) => b !== ext)!;
+    expect(plan.blocks[0]).toBe(main);
     expect(ext.axis).toBe("x");
     expect(ext.end).toBe("flush");
-    expect(main.start).toBe("flush");
+    expect(main.start).toBe("hip");
     expect(ext.x1).toBeCloseTo(main.x0);
+    // Its slopes carry on under the main hip far enough that its ridge ends inside the main roof.
+    const tan = (d: number) => Math.tan((d * Math.PI) / 180);
+    const hs = (ext.z1 - ext.z0 + EXT_WALL_T) / 2;
+    expect(ext.x1 + ext.tuck![1]).toBeCloseTo(main.x0 - EXT_WALL_T / 2 + (hs * tan(ext.pitchDeg)) / tan(main.pitchDeg) + 0.05);
+    expect(roofHeightAt(main, ext.x1 + ext.tuck![1], (ext.z0 + ext.z1) / 2)!).toBeGreaterThan(roofGeometry(ext).ridgeY);
   });
 
   it("leaves a narrower extension alone when its ridge is already low enough", () => {

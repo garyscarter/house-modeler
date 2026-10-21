@@ -83,7 +83,10 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
   const set = (p: Partial<Exterior>) => updateModel(variant, { exterior: { ...ext, ...p } });
   const hasGroups = model.floors.some((f) => f.rooms.some((r) => r.roofGroup));
   const hasCanopies = model.floors.some((f) => (f.canopies ?? []).length > 0);
-  const hasFlat = planRoofs(model).flatRoofs.length > 0;
+  const roofPlan = planRoofs(model);
+  const hasFlat = roofPlan.flatRoofs.length > 0;
+  // Extensions set back from the house, which get their own roof even when the main roof would carry on.
+  const setBack = (roofPlan.extensions ?? []).filter((e) => e.own && e.setBack > 0);
   const skirt = ext.flatRoofSkirt ?? NO_SKIRT;
   const setSkirt = (p: Partial<FlatRoofSkirt>) => set({ flatRoofSkirt: { ...skirt, ...p } });
 
@@ -165,6 +168,14 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
               />
             </Field>
           </div>
+          {setBack.map((e) => (
+            <p key={e.key} className="muted small">
+              Set back {e.setBack.toFixed(2)} m from the house, so it has its own roof, run in under the main roof
+              {ext.extensionRoof === "separate"
+                ? `, its ridge ${e.drop.toFixed(2)} m below the main ridge at ${Math.round(e.pitchDeg)}°.`
+                : `: the same pitch, its ridge ${e.drop.toFixed(2)} m below the main ridge. Choose Separate to set it lower.`}
+            </p>
+          ))}
         </section>
       )}
 
