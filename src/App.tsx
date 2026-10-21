@@ -14,12 +14,13 @@ import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
 import { SitePanel } from "./components/SitePanel";
 import { ReportPanel } from "./components/ReportPanel";
+import { PlanningPanel } from "./components/PlanningPanel";
 import { SiteEditor } from "./editor/SiteEditor";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
 import { VARIANT_LABEL, type VariantKey } from "./types";
 
-type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "settings";
+type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "planning" | "settings";
 
 /** Below this width the sidebar becomes a slide-over drawer (keep in step with styles.css). */
 const DRAWER_QUERY = "(max-width: 899px)";
@@ -105,6 +106,7 @@ export default function App() {
     ["exterior", "Exterior", !!model],
     ["site", "Site", true],
     ["report", "Report", !!model],
+    ["planning", "Planning check", !!model],
     ["settings", "Settings", true],
   ];
 
@@ -173,6 +175,7 @@ export default function App() {
             {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
             {side === "site" && <SitePanel />}
             {side === "report" && model && <ReportPanel />}
+            {side === "planning" && model && <PlanningPanel />}
             {side === "settings" && <SettingsPanel />}
           </div>
         </aside>
