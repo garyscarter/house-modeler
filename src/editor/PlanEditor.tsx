@@ -915,7 +915,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               Fit
             </button>
             <button onClick={() => fit(imageRect)} title="Show the whole floorplan image">
-              Image
+              Fit image
             </button>
           </div>
         </div>
