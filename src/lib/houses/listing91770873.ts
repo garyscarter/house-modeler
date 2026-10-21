@@ -549,7 +549,9 @@ export function listingSite(): Site {
       { kind: "wall", height: 0.95, top: "brick", piers: false }, // 4 east, front garden
       { kind: "wall", height: 0.9, top: "brick", piers: false }, // 5 front garden wall
       { kind: "open", height: 0 }, // 6 drive opening
-      { kind: "wall", height: 1, top: "brick", piers: false }, // 7 west side of the drive
+      // 7 west side of the drive: level from the pavement, then one course higher for the last
+      // half metre or so up to the porch pier, while its base follows the drive (front-2, front-3, front-street).
+      { kind: "wall", height: 1, top: "brick", piers: false, follow: "step", stepEvery: 2.45 },
       { kind: "fence", height: 1.8 }, // 8 west, beside the pillar (hidden)
       { kind: "fence", height: 1.8 }, // 9 west, along the garage wall (hidden)
       { kind: "wall", height: 1.3, top: "brick", piers: false }, // 10 west, rear corner of the house

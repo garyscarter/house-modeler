@@ -417,7 +417,22 @@ export interface BoundaryEdge {
    * Default "plain" (the cut brickwork); "pier" caps each wall end with a brick pier.
    */
   endFinish?: "plain" | "pier";
+  /**
+   * Walls and fences: how the top meets sloping ground beside it (see lib/wallSteps.ts).
+   * "level" keeps one level top; "step" steps it in whole brick courses; "rake"
+   * slopes it with the ground. Default: "step" for a wall beside sloping ground,
+   * otherwise "level".
+   */
+  follow?: WallFollow;
+  /**
+   * Stepped walls and fences only: length of each level run between steps,
+   * metres, from the lower end. Absent: a step wherever the ground has
+   * climbed another brick course, at least 0.9 m apart.
+   */
+  stepEvery?: number;
 }
+
+export type WallFollow = "level" | "step" | "rake";
 
 /** A neighbouring building block (or outbuilding), drawn as simple massing. */
 export interface Neighbour {
