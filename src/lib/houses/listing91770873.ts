@@ -69,8 +69,8 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 16 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 16 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 17 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 17 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 1 };
 
@@ -341,7 +341,9 @@ export function listing91770873(image: string): HouseModel {
       // either side of a fixed centre pane under a top light (rear-1, front-2).
       op("window", 720, 795, "h", 1.0, { glazing: "fixed-top", ...UPVC }),
       op("window", 930, 795, "h", 1.85, { glazing: "casement-fixed-casement", ...UPVC }),
-      op("window", 750, 1285, "h", 0.65, { sill: 1.2, glazing: "fixed-top", ...UPVC }),
+      // The two front windows share one sill and head (front-2, front-street, front-1), about 0.9 m and 2.1 m
+      // above the floor; the skirt over the hall meets the wall about 0.25 m under their sills.
+      op("window", 750, 1285, "h", 0.65, { glazing: "fixed-top", ...UPVC }),
       op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...UPVC }),
       op("window", 610, 1080, "v", 0.6, UPVC),
     ],
@@ -404,7 +406,10 @@ export function listing91770873(image: string): HouseModel {
       // the corners: on the right all the way back to the two-storey wall, on the left
       // a short way down the garage side (length assumed), since the rear photos show
       // nothing rising above the plain flat edge at the back (rear-1, rear-4).
-      flatRoofSkirt: { sides: ["front"], depth: 1.8, pitchDeg: 30, returns: 2.0 },
+      // Its eaves sit on the wall tops, not up at the flat deck: the gutter is about
+      // 2.4 m up and the slope meets the two-storey wall about 3.3 m up, a quarter of
+      // a metre under the first-floor sills (front-2, front-street, front-1).
+      flatRoofSkirt: { sides: ["front"], depth: 1.8, pitchDeg: 30, returns: 2.0, drop: 0.26 },
       // Downpipes where the photos show them: the front gutter's on the west side wall at the front corner,
       // beside the soil stack (front-3); the rear gutter's between the patio doors and the kitchen window,
       // nothing at the west rear corner (rear-1, rear-4); and a small one off the single-storey's flat roof

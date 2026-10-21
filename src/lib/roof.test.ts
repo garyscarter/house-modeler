@@ -4,6 +4,7 @@ import {
   chimneyOnRidge,
   defaultChimney,
   exteriorOf,
+  floorBase,
   leanToHeightAt,
   planFlat,
   planRoofs,
@@ -14,8 +15,8 @@ import {
   setDown,
   type RoofBlock,
 } from "./roof";
-import { EXT_WALL_T } from "./geometry";
-import { SOIL_R, assignDownpipes, footAt, roofParts, skirtEnd, skirtParts, skirtRun, skirtedEdges, soilStack, type RoofParts } from "./roofParts";
+import { EXT_WALL_T, windowSill } from "./geometry";
+import { SKIRT_FASCIA, SOIL_R, assignDownpipes, cutBoxes, footAt, roofParts, skirtEaves, skirtEnd, skirtParts, skirtRun, skirtedEdges, soilStack, type RoofParts } from "./roofParts";
 import type { FlatRoofSkirt, HouseModel } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
 
@@ -476,7 +477,7 @@ describe("flat roof skirt", () => {
     // A flashing along the wall where the top of the slope meets it.
     const parts = blank();
     skirtParts(fr, skirt, parts);
-    const top = fr.top - 0.03 + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
+    const top = skirtEaves(fr, skirt).yE + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
     expect(Math.max(...verts(parts.tiles.pos).map((v) => v[1]))).toBeCloseTo(top, 6);
     expect(verts(parts.flashing).some((v) => Math.abs(v[2] - (main.z1 + EXT_WALL_T / 2)) < 0.01 && v[1] > top)).toBe(true);
     // Hip tiles on both front corners.
@@ -509,7 +510,7 @@ describe("flat roof skirt", () => {
   it("gutters the skirt, round the hips, with downpipes where the gutters stop", () => {
     const { plan, fr, skirt, main } = listing();
     const parts = roofParts(plan, { gutters: true, skirt });
-    const yG = fr.top - 0.06;
+    const yG = skirtEaves(fr, skirt).yE - 0.03;
     const front = parts.gutters.find(([a, b]) => Math.abs(a[1] - yG) < 1e-6 && Math.abs(a[2] - b[2]) < 1e-6 && a[2] > FRONT)!;
     expect(front).toBeDefined();
     // Out past both front corners, to meet the returns' gutters.
@@ -598,11 +599,86 @@ describe("flat roof skirt", () => {
       const parts = roofParts(plan, { gutters: true, skirt });
       // Every skirted stretch gets its slope, and nothing rises above the top of the slopes.
       expect(parts.tiles.pos.length / 9, name).toBeGreaterThanOrEqual(pieces.length + roofGeometry(main).slopes.length / 9);
-      const yT = fr.top - 0.03 + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
+      const yT = skirtEaves(fr, skirt).yE + run * Math.tan((skirt.pitchDeg * Math.PI) / 180);
       for (const v of verts(parts.tiles.pos).filter((p) => p[1] < main.y - 1)) expect(v[1], name).toBeLessThanOrEqual(yT + 1e-9);
     }
     // A narrowed porch limits the depth all round, so the slopes up its two sides meet in a ridge.
     const narrow = listing(cases[0][1]);
     expect(skirtRun(narrow.fr, narrow.skirt)).toBeCloseTo((680 - 530) / 73 / 2 + W, 6);
+  });
+
+  it("drops the skirt's eaves to the wall tops, with its gutter, fascia, soffit and the porch ceiling", () => {
+    const { plan, fr, skirt } = listing();
+    const { yE, ySoffit } = skirtEaves(fr, skirt);
+    expect(yE).toBeCloseTo(fr.y, 6);
+    expect(ySoffit).toBeCloseTo(fr.y - SKIRT_FASCIA, 6);
+    // Never below the wall tops, and level with the deck when not dropped.
+    expect(skirtEaves(fr, { ...skirt, drop: 5 }).yE).toBeCloseTo(fr.y, 6);
+    expect(skirtEaves(fr, { ...skirt, drop: 0 })).toEqual({ yE: fr.top - 0.03, ySoffit: fr.y - 0.04 });
+    const { drop: _, ...level } = skirt;
+    expect(roofParts(plan, { gutters: true, skirt: { ...level, drop: 0 } })).toEqual(roofParts(plan, { gutters: true, skirt: level }));
+
+    const parts = roofParts(plan, { gutters: true, skirt });
+    // The front gutter hangs off the lowered fascia; the porch ceiling is level with the lowered soffit.
+    expect(parts.gutters.some(([a, b]) => Math.abs(a[1] - (yE - 0.03)) < 1e-6 && Math.abs(a[2] - b[2]) < 1e-6 && a[2] > FRONT)).toBe(true);
+    expect(verts(parts.trim).some((v) => Math.abs(v[1] - ySoffit) < 1e-6 && Math.abs(v[2] - (FRONT + W)) < 1e-6)).toBe(true);
+    expect(parts.ceiling.length).toBeGreaterThan(0);
+    for (const v of verts(parts.ceiling)) expect(v[1]).toBeCloseTo(ySoffit, 6);
+    // The plain edges at the back keep their fascia up at the deck.
+    expect(verts(parts.trim).some((v) => Math.abs(v[1] - (fr.top - 0.03)) < 1e-6 && v[2] < (22 - 430) / 73)).toBe(true);
+    // The tiles still clear the wall tops at the walls' outer faces.
+    const t = Math.tan((skirt.pitchDeg * Math.PI) / 180);
+    expect(yE + FLAT_OVERHANG * t).toBeGreaterThan(fr.y);
+  });
+
+  it("keeps the deck's membrane under a dropped skirt's tiles", () => {
+    const { plan, fr, skirt } = listing();
+    const t = Math.tan((skirt.pitchDeg * Math.PI) / 180);
+    const { yE } = skirtEaves(fr, skirt);
+    const parts = roofParts(plan, { gutters: true, skirt });
+    const membrane = verts(parts.membrane.pos);
+    expect(membrane.length).toBeGreaterThan(0);
+    // Over the hall and porch the front slope is the highest thing: no membrane above it.
+    for (const v of membrane.filter((p) => p[0] > LEFT + 0.01 && p[0] < RIGHT - 0.01)) expect(v[1]).toBeLessThanOrEqual(yE + (FRONT + W - v[2]) * t + 1e-6);
+    // The membrane still runs right up to the plain back edge.
+    expect(Math.min(...membrane.map((v) => v[2]))).toBeLessThan((22 - 430) / 73 - EXT_WALL_T / 2);
+    // Nor does the deck's flashing stand out of the tiles where they run into the two-storey wall over the hall,
+    // though it stays along the wall beside the garage's flat roof.
+    const deckFlashing = verts(parts.flashing).filter((v) => Math.abs(v[1] - (fr.top + 0.15)) < 1e-6);
+    expect(deckFlashing.some((v) => v[0] > -0.4 && v[2] > 0)).toBe(false);
+    expect(deckFlashing.some((v) => v[2] < -1)).toBe(true);
+  });
+
+  it("cuts rectangles out of rectangles", () => {
+    const left = cutBoxes([{ x0: 0, z0: 0, x1: 4, z1: 3 }], [{ x0: -1, z0: 2.5, x1: 5, z1: 3 }, { x0: 3.5, z0: 0, x1: 4, z1: 1 }]);
+    const area = left.reduce((a, r) => a + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
+    expect(area).toBeCloseTo(12 - 4 * 0.5 - 0.5 * 1, 9);
+    expect(cutBoxes([{ x0: 0, z0: 0, x1: 1, z1: 1 }], [{ x0: 2, z0: 2, x1: 3, z1: 3 }])).toEqual([{ x0: 0, z0: 0, x1: 1, z1: 1 }]);
+  });
+
+  it("closes the lowered end where a dropped skirt's return stops", () => {
+    const { plan, fr, skirt } = listing();
+    const left = skirtedEdges(fr, skirt).find((e) => e.axis === "z" && e.out === -1)!;
+    const { yE, ySoffit } = skirtEaves(fr, skirt);
+    const parts = roofParts(plan, { gutters: true, skirt });
+    // A face across the end of the return, from the lowered soffit up past the deck.
+    const end = verts(parts.trim).filter((v) => Math.abs(v[2] - left.a) < 1e-6 && v[0] < LEFT + skirtRun(fr, skirt));
+    expect(Math.min(...end.map((v) => v[1]))).toBeCloseTo(ySoffit, 6);
+    expect(Math.max(...end.map((v) => v[1]))).toBeGreaterThan(fr.top);
+    expect(end.some((v) => Math.abs(v[1] - yE) < 1e-6 && Math.abs(v[0] - (LEFT - W)) < 1e-6)).toBe(true);
+  });
+
+  it("keeps the slope under the first-floor front windows, as listed and with the extension", () => {
+    for (const m of [listing91770873(""), listing91770873Proposed("")]) {
+      const plan = planRoofs(m);
+      const skirt = exteriorOf(m).flatRoofSkirt!;
+      const fr = plan.flatRoofs[0];
+      // Top of the slope, and of the flashing above it.
+      const top = skirtEaves(fr, skirt).yE + skirtRun(fr, skirt) * Math.tan((skirt.pitchDeg * Math.PI) / 180) + 0.1;
+      const first = m.floors.find((f) => f.level === 1)!;
+      const front = first.openings.filter((o) => o.kind === "window" && o.orientation === "h" && o.y === 1285);
+      expect(front.length).toBeGreaterThanOrEqual(m.preset?.id.includes("proposed") ? 3 : 2);
+      for (const o of front) expect(floorBase(m, first) + windowSill(o)).toBeGreaterThan(top + 0.1);
+    }
   });
 });
