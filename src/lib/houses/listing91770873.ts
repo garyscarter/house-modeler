@@ -71,6 +71,8 @@ const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
 export const LISTING_PRESET = { id: "listing-91770873", version: 16 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 16 };
+/** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 1 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -463,6 +465,11 @@ export const PRESETS: Record<string, { version: number; build: (image: string) =
   [LISTING_PROPOSED_PRESET.id]: { version: LISTING_PROPOSED_PRESET.version, build: listing91770873Proposed },
 };
 
+/** Registry of built-in plots, so the app can offer an update when the listing's plot improves. */
+export const SITE_PRESETS: Record<string, { version: number; build: () => Site }> = {
+  [LISTING_SITE_PRESET.id]: { version: LISTING_SITE_PRESET.version, build: listingSite },
+};
+
 const w = (pts: [number, number][]): WPt[] => pts.map(([x, y]) => ({ x, y }));
 const block = (name: string, x0: number, y0: number, x1: number, y1: number, extra: Partial<Neighbour>): Neighbour => ({
   id: uid(),
@@ -515,6 +522,7 @@ export function listingSite(): Site {
   // sitting 0.26 m above the garden.
   const twoStorey = 5.3;
   return {
+    preset: { ...LISTING_SITE_PRESET },
     frontBearing: 162,
     latitude: 51.44,
     longitude: -2.62,

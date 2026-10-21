@@ -45,3 +45,5 @@ label .site-unit input[type="number"] { width: 72px; display: inline-block; marg
 .site-slope label { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
 .site-slope label.check { flex-direction: row; align-items: center; gap: 6px; }
 .site-slope select, .site-slope input[type="number"] { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.site-stale-note { margin: 8px 0; }
+.site-stale-note p { margin: 0 0 6px; }

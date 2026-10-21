@@ -40,7 +40,8 @@ describe("remembered answers", () => {
     const s = fake();
     remember("load", 3, s);
     remember("update", 4, s);
-    expect(readRemembered(s)).toEqual({ load: 3, update: 4 });
+    remember("site", 2, s);
+    expect(readRemembered(s)).toEqual({ load: 3, update: 4, site: 2 });
   });
   it("survives junk and throwing storage", () => {
     const junk = { getItem: () => "{nope" };
