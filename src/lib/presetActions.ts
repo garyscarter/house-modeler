@@ -2,6 +2,7 @@ import { useStore } from "../store";
 import type { VariantKey } from "../types";
 import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
+import { freshSiteFor } from "./sitePreset";
 
 /**
  * Load the built-in listing into a variant, with its floorplan image and, if
@@ -32,4 +33,15 @@ export function updatePreset(variant: VariantKey): void {
   // Keep the user's floorplan image if they set one at the same pixel size.
   const keepImage = model.floors[0] && model.floors[0].imageW === fresh.floors[0].imageW;
   st.setVariant(variant, keepImage ? fresh : preset.build(placeholderImage()));
+}
+
+/**
+ * Replace a layout's own plot with the latest built-in one (this discards edits to it; it is one undo step).
+ * A layout with no plot of its own, or none at all, is left alone.
+ */
+export function updateSitePreset(variant: VariantKey): void {
+  const st = useStore.getState();
+  const site = st.sites[variant];
+  const fresh = site && freshSiteFor(site);
+  if (fresh) st.setSite(fresh, variant);
 }

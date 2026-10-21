@@ -2,6 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import { ask } from "./Dialogs";
 import { SITE_EDIT_ID, useSite, useStore } from "../store";
 import { SiteVariantNote } from "./SiteVariantNote";
+import { isStaleSite } from "../lib/sitePreset";
+import { siteSource } from "../lib/sites";
+import { updateSitePreset } from "../lib/presetActions";
 import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { compassPoint } from "../lib/sun";
@@ -35,6 +38,7 @@ export function SitePanel() {
     <div className="panel site-panel">
       <h3>Site</h3>
       <SiteVariantNote />
+      <StalePlotNote />
       {!site ? (
         <>
           <p className="muted small">
@@ -141,6 +145,28 @@ export function SitePanel() {
 }
 
 /** Plot and garden areas and the distance from each side of the house to the boundary. */
+/** Shown when the plot on screen is an older copy of the built-in one for listing 91770873. */
+function StalePlotNote() {
+  const sites = useStore((s) => s.sites);
+  const variants = useStore((s) => s.variants);
+  const active = useStore((s) => s.activeVariant);
+  // The layout whose plot is on screen: Proposed may be borrowing As listed's.
+  const source = siteSource(sites, active);
+  const site = source ? sites[source] : undefined;
+  const model = source ? variants[source] : undefined;
+  const stale = useMemo(() => isStaleSite(site, model), [site, model]);
+  if (!source || !stale) return null;
+  const update = async () => {
+    if (await ask("Replace this plot with the latest one for listing 91770873? Your edits to the plot are lost. You can undo it.", { ok: "Update" })) updateSitePreset(source);
+  };
+  return (
+    <div className="note small site-stale-note">
+      <p>A newer plot for listing 91770873 is available.</p>
+      <button onClick={update}>Update the plot</button>
+    </div>
+  );
+}
+
 function SiteFigures({ site, model }: { site: Site; model?: HouseModel }) {
   const figures = useMemo(() => {
     const outlines = model ? houseOutlines(model) : [];
