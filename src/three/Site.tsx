@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
+import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
 import { useStore } from "../store";
 import { useViewedSite } from "./viewedVariant";
 import { roofGeometry, type RoofEnd } from "../lib/roof";
@@ -298,6 +298,30 @@ function brickWall(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: n
   }
 }
 
+/**
+ * Brick piers at the ends of an opening (boundary edge i), flush with the cut
+ * ends of the brick walls beside it, as tall as those walls.
+ */
+function openingPiers(out: Record<Part, THREE.BufferGeometry[]>, boundary: V2[], edges: BoundaryEdge[], i: number) {
+  const n = boundary.length;
+  const PIER = 0.33;
+  const cap = (corner: V2, away: V2, wall: BoundaryEdge | undefined) => {
+    if (!wall || wall.kind !== "wall" || wall.height <= 0.6) return;
+    const len = Math.hypot(away.x - corner.x, away.y - corner.y);
+    if (len < PIER) return;
+    // Centre the pier half its width back along the wall, so its face is flush with the cut end.
+    const dx = (away.x - corner.x) / len;
+    const dy = (away.y - corner.y) / len;
+    const c = { x: corner.x + (dx * PIER) / 2, y: corner.y + (dy * PIER) / 2 };
+    const c2 = { x: c.x + dx / 1000, y: c.y + dy / 1000 };
+    const h = wall.height;
+    out.brick.push(along(metricBox(PIER, h - 0.06, PIER), c, c2, GROUND_Y + (h - 0.06) / 2));
+    out.coping.push(along(metricBox(0.4, 0.07, 0.4), c, c2, GROUND_Y + h - 0.02));
+  };
+  cap(boundary[i], boundary[(i - 1 + n) % n], edges[(i - 1 + n) % n]);
+  cap(boundary[(i + 1) % n], boundary[(i + 2) % n], edges[(i + 1) % n]);
+}
+
 /** Hedge as overlapping clipped blocks of slightly varying size, so the top isn't ruler-straight. */
 function hedge(out: Record<Part, THREE.BufferGeometry[]>, p: V2, q: V2, h: number) {
   const len = Math.hypot(q.x - p.x, q.y - p.y);
@@ -330,6 +354,7 @@ function Boundary({ site: { boundary, boundaryEdges }, buildings }: { site: Site
     boundary.forEach((a, i) => {
       const e = edges[i];
       const b = boundary[(i + 1) % boundary.length];
+      if (e?.kind === "open" && e.endFinish === "pier") openingPiers(out, boundary, edges, i);
       if (!e || e.kind === "open" || e.height <= 0.05) return;
       for (const [t0, t1] of clipSegmentOutside(a, b, buildings, 0.12)) {
         const p = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };

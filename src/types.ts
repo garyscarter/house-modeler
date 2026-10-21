@@ -412,6 +412,11 @@ export interface BoundaryEdge {
   top?: "coping" | "brick";
   /** Walls only: brick piers about every 3 m. Default true. */
   piers?: boolean;
+  /**
+   * Openings only: how the ends of the walls beside the gap are finished.
+   * Default "plain" (the cut brickwork); "pier" caps each wall end with a brick pier.
+   */
+  endFinish?: "plain" | "pier";
 }
 
 /** A neighbouring building block (or outbuilding), drawn as simple massing. */
