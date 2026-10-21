@@ -87,10 +87,19 @@ export function resolvedStyle(op: Opening, external: boolean): OpeningStyle | un
   return defaultStyle(op.kind, external);
 }
 
-/** Open angle of a swing leaf, radians: the opening's openDeg, or `deg`. */
-function openAngle(op: Opening, deg: number): number {
-  const d = op.openDeg ?? deg;
-  return (Math.max(0, Math.min(180, d)) * Math.PI) / 180;
+/**
+ * Angle in degrees a swing leaf is drawn open. With `doorsOpen` off every leaf
+ * is shut, whatever the opening's own openDeg says (the View switch wins);
+ * with it on, the opening's openDeg, or the kind's default `deg`.
+ */
+export function effectiveOpenDeg(op: Pick<Opening, "openDeg">, deg: number, doorsOpen = true): number {
+  if (!doorsOpen) return 0;
+  return Math.max(0, Math.min(180, op.openDeg ?? deg));
+}
+
+/** Open angle of a swing leaf, radians. */
+function openAngle(op: Opening, deg: number, doorsOpen: boolean): number {
+  return (effectiveOpenDeg(op, deg, doorsOpen) * Math.PI) / 180;
 }
 
 /** Number of casements for a window of this width (UK: about 0.5-0.75 m each). */
@@ -512,7 +521,7 @@ function swingSide(op: Opening, out: number, outwards = false): number {
 }
 
 /** Parts for any opening except bays (see bayParts). */
-export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 0): OpeningParts {
+export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 0, doorsOpen = true): OpeningParts {
   const op = pl.opening;
   const w = pl.width;
   const { y0, y1 } = pl;
@@ -530,7 +539,7 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
     }
     case "door": {
       const s = swingSide(op, out);
-      const ang = openAngle(op, 75);
+      const ang = openAngle(op, 75, doorsOpen);
       const style = resolvedStyle(op, !!out) as DoorStyle;
       if (out) {
         // External door (back door): frame near the outside, leaf opening inwards (or shut, in the frame).
@@ -554,13 +563,13 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       break;
     }
     case "front": {
-      // Front door, shut unless openDeg says otherwise, with a letter plate and knob.
+      // Front door, shut unless openDeg says otherwise (and doors are shown open), with a letter plate and knob.
       boxes.push(...doorFrame(w, y1, zf));
       const lw = w - 2 * FW;
       const lh = y1 - FW - 0.02;
       const f = out || 1;
       const s = swingSide(op, out);
-      const ang = openAngle(op, 0);
+      const ang = openAngle(op, 0, doorsOpen);
       const style = resolvedStyle(op, true) as DoorStyle;
       boxes.push(...leaf(hinge * (lw / 2), ang ? zf + s * (FD / 2) : zf, lw, -hinge, s, ang, doorLeaf(style, lh, 0.05, f * -hinge, true)));
       break;
@@ -615,7 +624,7 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       const lw = (w - 2 * FW) / 2;
       const hz = zf + s * (FD / 2);
       const lh = y1 - FW - 0.02;
-      const ang = openAngle(op, 80);
+      const ang = openAngle(op, 80, doorsOpen);
       boxes.push(...leaf(-lw, ang ? hz : zf, lw, 1, s, ang, glazedLeaf(lh, 0.055)));
       boxes.push(...leaf(lw, ang ? hz : zf, lw, -1, s, ang, glazedLeaf(lh, 0.055)));
       break;
@@ -628,7 +637,7 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       // Internal bi-folds get a lining like internal doors, external ones a frame and threshold.
       const layout = bifoldLayout(w, !out);
       boxes.push(...(out ? doorFrame(w, y1, zf) : doorLining(w, y1, wallT)));
-      boxes.push(...bifoldStack(layout, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true)));
+      boxes.push(...bifoldStack(layout, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true), !doorsOpen));
       break;
     }
   }
@@ -639,8 +648,13 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
  * Bi-fold panels folded into a concertina stack against one jamb: each
  * panel stands nearly square to the wall, alternately folding out and back.
  */
-function bifoldStack(l: BifoldLayout, h: number, zf: number, side: number, swing: number): Box[] {
+function bifoldStack(l: BifoldLayout, h: number, zf: number, side: number, swing: number, shut = false): Box[] {
   const boxes: Box[] = [];
+  if (shut) {
+    // Closed: the panels lie flat in a row across the opening.
+    for (let i = 0; i < l.n; i++) boxes.push(...place(glazedLeaf(h, 0.05, i === l.n - 1)(l.panel), [side * (l.clear / 2 - i * l.panel), 0.015, zf], rotTo(-side, 0)));
+    return boxes;
+  }
   let x = side * (l.clear / 2);
   let z = zf + swing * (FD / 2);
   for (let i = 0; i < l.n; i++) {

@@ -38,6 +38,8 @@ export interface ShellInput {
   wallFinish: WallFinish;
   wallColor: string;
   trimColor: string;
+  /** Draw swing doors at their open angle; off draws them all shut. */
+  doorsOpen: boolean;
 }
 
 export interface ShellMesh {
@@ -231,7 +233,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
     } else if (op.kind === "bay") {
       // A bay on an internal wall makes no sense; draw it as a window.
       parts = openingParts({ ...pl, y0: Math.min(windowSill(op), pl.y1 - 0.1), opening: { ...op, kind: "window" } }, wallT, out);
-    } else parts = openingParts(pl, wallT, out);
+    } else parts = openingParts(pl, wallT, out, inp.doorsOpen);
     for (const q of boxQuads(parts.boxes, frame)) batch.add(q, slotSpec(q.slot, null, op));
     for (const q of quadsToWorld(parts.quads, frame)) batch.add(q, slotSpec(q.slot, null, op));
   }

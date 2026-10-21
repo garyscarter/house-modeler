@@ -11,6 +11,7 @@ export function ViewControls({ model, both }: { model: HouseModel | undefined; b
   const viewMode = useStore((s) => s.viewMode);
   const showLabels = useStore((s) => s.showLabels);
   const showCeilings = useStore((s) => s.showCeilings);
+  const doorsOpen = useStore((s) => s.doorsOpen);
   const maxLevel = useStore((s) => s.maxLevel);
   const showExterior = useStore((s) => s.showExterior);
   const showSite = useStore((s) => s.showSite);
@@ -51,6 +52,9 @@ export function ViewControls({ model, both }: { model: HouseModel | undefined; b
         </label>
         <label className="check">
           <input type="checkbox" checked={showCeilings} onChange={(e) => setUi({ showCeilings: e.target.checked })} /> Ceilings
+        </label>
+        <label className="check" title="Draw swing doors at their open angle. Off: every door is drawn shut.">
+          <input type="checkbox" checked={doorsOpen} onChange={(e) => setUi({ doorsOpen: e.target.checked })} /> Doors open
         </label>
         <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
           <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior

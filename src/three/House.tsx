@@ -71,6 +71,8 @@ interface HouseProps {
   ghost?: boolean;
   showLabels?: boolean;
   showCeilings?: boolean;
+  /** Swing doors drawn at their open angle (default shut). */
+  doorsOpen?: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   /** Only render these floor levels (used to hide floors above the walk floor). */
@@ -91,6 +93,7 @@ export function House({
   ghost,
   showLabels = true,
   showCeilings = false,
+  doorsOpen = false,
   selectedRoomId,
   onSelectRoom,
   visibleLevels,
@@ -116,6 +119,7 @@ export function House({
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
           showCeilings={showCeilings}
+          doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
@@ -133,6 +137,7 @@ function FloorGroup({
   ghost,
   showLabels,
   showCeilings,
+  doorsOpen,
   selectedRoomId,
   onSelectRoom,
   otherFloor,
@@ -144,6 +149,7 @@ function FloorGroup({
   ghost: boolean;
   showLabels: boolean;
   showCeilings: boolean;
+  doorsOpen: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   otherFloor?: Floor | null;
@@ -183,7 +189,7 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} />
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} doorsOpen={doorsOpen} />
       {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
       <Balustrade runs={rails} />
 
@@ -220,6 +226,7 @@ function FloorShell({
   selectedRoomId,
   onSelectRoom,
   holes,
+  doorsOpen,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -229,6 +236,7 @@ function FloorShell({
   onSelectRoom?: (floor: Floor, room: Room) => void;
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
+  doorsOpen: boolean;
 }) {
   const ext = exteriorOf(model);
   const H = model.ceilingHeight;
@@ -256,8 +264,9 @@ function FloorShell({
         wallFinish: finish,
         wallColor: ext.wallColor,
         trimColor: ext.trimColor,
+        doorsOpen,
       }),
-    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor],
+    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 

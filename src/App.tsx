@@ -33,6 +33,7 @@ export default function App() {
   const viewMode = useStore((s) => s.viewMode);
   const showLabels = useStore((s) => s.showLabels);
   const showCeilings = useStore((s) => s.showCeilings);
+  const doorsOpen = useStore((s) => s.doorsOpen);
   const maxLevel = useStore((s) => s.maxLevel);
   const showExterior = useStore((s) => s.showExterior);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
@@ -191,6 +192,7 @@ export default function App() {
               photos={photos}
               showLabels={showLabels}
               showCeilings={showCeilings}
+              doorsOpen={doorsOpen}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
               title={VARIANT_LABEL[activeVariant]}
@@ -210,6 +212,7 @@ export default function App() {
                   photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
+                  doorsOpen={doorsOpen}
                   selectedRoomId={selectedRoomId}
                   onSelectRoom={(f, r) => {
                     setUi({ activeVariant: k });
@@ -231,6 +234,7 @@ export default function App() {
               photos={photos}
               showLabels={showLabels}
               showCeilings={showCeilings}
+              doorsOpen={doorsOpen}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
               title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
