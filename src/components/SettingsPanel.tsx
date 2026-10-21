@@ -1,7 +1,7 @@
 import { useStore } from "../store";
 import { ask } from "./Dialogs";
-import type { HouseModel, Photo } from "../types";
-import { sitesFromImport } from "../lib/sites";
+import { applyProject, syncNow, useSyncStatus } from "../lib/sync";
+import { statusText } from "../lib/syncLogic";
 
 export function SettingsPanel() {
   const settings = useStore((s) => s.settings);
@@ -11,6 +11,7 @@ export function SettingsPanel() {
   const sites = useStore((s) => s.sites);
   const costRates = useStore((s) => s.costRates);
   const reset = useStore((s) => s.reset);
+  const sync = useSyncStatus((s) => s.status);
 
   const exportJson = () => {
     // `sites` holds each layout's own plot; older exports had one shared `site`, which import still reads.
@@ -23,26 +24,14 @@ export function SettingsPanel() {
   };
 
   const importJson = async (file: File) => {
-    let data: { variants?: Record<string, HouseModel>; photos?: Photo[]; sites?: unknown; site?: unknown; costRates?: Record<string, number> };
+    let data: unknown;
     try {
       data = JSON.parse(await file.text());
     } catch {
       window.alert("That file is not valid JSON.");
       return;
     }
-    const looksLikeModel = (m: unknown) => !!m && Array.isArray((m as HouseModel).floors);
-    const current = data.variants?.current;
-    const proposed = data.variants?.proposed;
-    if (!looksLikeModel(current) && !looksLikeModel(proposed)) {
-      window.alert("That file does not contain a House Modeler project.");
-      return;
-    }
-    // One undoable step: replace everything at once.
-    useStore.setState({ costRates: data.costRates ?? costRates });
-    const models = { current: looksLikeModel(current) ? current : undefined, proposed: looksLikeModel(proposed) ? proposed : undefined };
-    useStore.getState().setVariant("current", models.current);
-    useStore.getState().setVariant("proposed", models.proposed);
-    useStore.setState({ photos: Array.isArray(data.photos) ? data.photos : [], sites: sitesFromImport({ sites: data.sites, site: data.site, variants: models }) });
+    if (!applyProject(data)) window.alert("That file does not contain a House Modeler project.");
   };
 
   return (
@@ -81,6 +70,14 @@ export function SettingsPanel() {
           Clear all
         </button>
       </div>
+      {sync.kind !== "off" && (
+        <p className="small muted sync-status" role="status">
+          {statusText(sync)}{" "}
+          <button onClick={syncNow} disabled={sync.kind === "saving"}>
+            Sync now
+          </button>
+        </p>
+      )}
     </div>
   );
 }

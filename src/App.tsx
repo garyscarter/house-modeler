@@ -10,6 +10,7 @@ import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
+import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
 import { SitePanel } from "./components/SitePanel";
@@ -59,9 +60,13 @@ export default function App() {
   useEffect(() => {
     if (!hydrated || asked.current) return;
     asked.current = true;
-    const { variants, sites } = useStore.getState();
-    const prompt = decideStartupPrompt(variants, PRESETS, LISTING_PRESET.id, readRemembered(), decideSiteUpdate(variants, sites));
-    if (prompt) void runStartupPrompt(prompt);
+    void (async () => {
+      // Load the server's copy first (if there is a server), so the prompt below looks at what was loaded.
+      await startSync();
+      const { variants, sites } = useStore.getState();
+      const prompt = decideStartupPrompt(variants, PRESETS, LISTING_PRESET.id, readRemembered(), decideSiteUpdate(variants, sites));
+      if (prompt) void runStartupPrompt(prompt);
+    })();
   }, [hydrated]);
 
   // Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo. Text fields keep their own undo.
