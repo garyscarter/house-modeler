@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import type { CatalogueItem } from "./catalogue";
+import { mountOf, type CatalogueItem } from "./catalogue";
 import { polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -506,7 +506,7 @@ export const turn = (rot: number, delta: number) => Math.round(normDeg(rot + del
 
 /** A fixture's size in metres (custom or catalogue) and the height of its base above the floor. */
 export function fixtureBox(fx: Fixture, item: CatalogueItem): { w: number; d: number; h: number; z0: number } {
-  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h, z0: item.mount ?? 0 };
+  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h, z0: mountOf(fx, item) };
 }
 
 /** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids are skipped. */

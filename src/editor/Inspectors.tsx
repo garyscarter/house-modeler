@@ -3,7 +3,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
 import { DEFAULT_EXTERIOR, FLOOR_FINISH_LABEL, GLAZING_LABEL, OPENING_KIND_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type GlazingPattern, type OpeningStyle, type SillStyle, type StairsDir } from "../types";
-import { DEFAULT_WORKTOP, hasWorktop, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -675,8 +675,18 @@ export function FixtureInspector({
             Reset to {item.w.toFixed(2)} × {item.d.toFixed(2)} × {item.h.toFixed(2)} m
           </button>
         )}
-        {item.mount !== undefined && <p className="muted small">Mounted {item.mount.toFixed(2)} m above the floor.</p>}
       </div>
+      {item.mount !== undefined && (
+        <div className="field">
+          <span className="field-label">Height above floor (m)</span>
+          <NumberField value={mountOf(fixture, item)} label="Height above floor" min={-0.001} onCommit={(mount) => onChange({ mount: Math.max(0, mount) })} />
+          {fixture.mount !== undefined && fixture.mount !== item.mount && (
+            <button className="link" onClick={() => onChange({ mount: undefined })}>
+              Reset to {item.mount.toFixed(2)} m
+            </button>
+          )}
+        </div>
+      )}
       <label>
         Colour
         <span className="colour-pick">

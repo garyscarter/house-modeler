@@ -36,14 +36,15 @@ const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL };
 const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
-type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror";
+type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror" | "glow";
 const materials = new Map<string, THREE.Material>();
 function material(color: string, finish: Finish): THREE.Material {
   const key = color + finish;
   let m = materials.get(key);
   if (!m) {
     if (finish === "glass") m = new THREE.MeshPhysicalMaterial({ color, transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
-    else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.05, metalness: 0.9 });
+    else if (finish === "glow") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.6 });
+    else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
     else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
     materials.set(key, m);
@@ -72,6 +73,8 @@ const DARK = "#1f2125";
 const GLASS = "#bfe0ee";
 const MARBLE = "#ece6da";
 const BRASS = "#c8a24a";
+const MIRROR = "#e4ecf0";
+const GLOW = "#fff1d6";
 
 const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop }: { symbol: Symbol; w: number; d: number; h: number; color: string; worktop: string }) {
   const parts = useMemo(() => fixtureParts(symbol, w, d, h, color, worktop), [symbol, w, d, h, color, worktop]);
@@ -178,6 +181,30 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, h - 0.03, 0, w - 0.14, 0.04, d - 0.14, "#dbe9f0", "gloss");
       cyl(w / 2 - 0.12, h + 0.08, 0, 0.03, 0.16, CHROME, "metal");
       break;
+    case "mirror":
+    case "mirror-lit": {
+      // Frame is the full depth; the glass sits a hair proud of its front face.
+      const t = 0.012;
+      box(0, h / 2, 0, w, h, d, color, "metal");
+      if (symbol === "mirror-lit") {
+        box(0, h / 2, -d / 2 + 0.004, w + 0.04, h + 0.04, 0.008, GLOW, "glow");
+        box(0, h / 2, d / 2 + 0.001, w - t * 2, h - t * 2, 0.002, MIRROR, "mirror");
+      } else box(0, h / 2, d / 2 + 0.001, w - t * 2, h - t * 2, 0.002, MIRROR, "mirror");
+      break;
+    }
+    case "mirror-round": {
+      out.push({ g: "cyl", p: [0, h / 2, 0], s: [w, d, h], c: color, f: "metal", axis: "z" });
+      out.push({ g: "cyl", p: [0, h / 2, d / 2 + 0.001], s: [w - 0.024, 0.002, h - 0.024], c: MIRROR, f: "mirror", axis: "z" });
+      break;
+    }
+    case "mirror-cabinet": {
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      const gap = 0.012;
+      const n = w >= 0.5 ? 2 : 1;
+      const dw = (w - gap * (n + 1)) / n;
+      for (let i = 0; i < n; i++) box(-w / 2 + gap + dw / 2 + i * (dw + gap), h / 2, d / 2 + 0.001, dw, h - gap * 2, 0.002, MIRROR, "mirror");
+      break;
+    }
     case "towel-rail": {
       for (const sx of [-1, 1]) cyl(sx * (w / 2 - 0.015), h / 2, 0, 0.03, h, color, "metal");
       const bars = Math.max(4, Math.round(h / 0.1));

@@ -114,6 +114,22 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <rect key="i" x={x0 + w * 0.06} y={y0 + d * 0.13} width={w * 0.88} height={d * 0.74} rx={d * 0.3} {...line} />,
         <circle key="p" cx={x1 - w * 0.13} cy={0} r={0.035 * m} {...line} />,
       );
+    case "mirror":
+    case "mirror-lit":
+    case "mirror-round":
+    case "mirror-cabinet": {
+      // A thin line along the wall with diagonal hatching for glass; round ones bulge, cabinets show their doors.
+      const tick = Math.min(0.06 * m, w * 0.1);
+      const at = [0.3, 0.42, 0.54].map((f) => x0 + w * f);
+      const mid = item.symbol === "mirror-cabinet" ? y0 + d / 2 : y1 + 0.03 * m;
+      return g(
+        item.symbol === "mirror-round" ? <path key="r" d={`M ${x0} ${y1} A ${w / 2} ${0.06 * m} 0 0 0 ${x1} ${y1}`} {...line} /> : null,
+        body(0),
+        item.symbol === "mirror-cabinet" && w > 0.5 * m ? <line key="c" x1={0} y1={y0} x2={0} y2={y1} {...thin} /> : null,
+        item.symbol === "mirror-lit" ? <line key="l" x1={x0} y1={y1 + 0.02 * m} x2={x1} y2={y1 + 0.02 * m} stroke="#f59e0b" strokeWidth={sw * 0.8} strokeOpacity={0.8} /> : null,
+        ...at.map((x) => <line key={x} x1={x - tick} y1={mid + tick * 0.8} x2={x + tick} y2={mid - tick * 0.8} {...line} />),
+      );
+    }
     case "towel-rail":
       return g(body(0), ...[0.25, 0.5, 0.75].map((f) => <line key={f} x1={x0 + w * f} y1={y0} x2={x0 + w * f} y2={y1} {...thin} />));
     case "sofa": {

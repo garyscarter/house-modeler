@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { askText } from "../components/Dialogs";
 import { STAIRS_VECTOR, stairTreads, WINDERS } from "../lib/stairs";
 import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
-import { CATALOGUE, CATEGORIES, byId, type CatalogueItem } from "../lib/catalogue";
+import { CATALOGUE, CATEGORIES, byId, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
 import { CanopyInspector, FixtureInspector, FloorInspector, NumberField, OpeningInspector, RoomInspector, WallInspector } from "./Inspectors";
@@ -150,7 +150,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
   const clashes = useMemo(() => overlappingIds(solids, 0.5), [solids]);
   // Wall-hung and worktop items draw over the units below them, whatever order they were placed in.
-  const drawOrder = useMemo(() => [...(floor.fixtures ?? [])].sort((a, b) => (byId(a.type)?.mount ?? 0) - (byId(b.type)?.mount ?? 0)), [floor.fixtures]);
+  const mountedAt = (fx: Fixture) => { const it = byId(fx.type); return it ? mountOf(fx, it) : 0; };
+  const drawOrder = useMemo(() => [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b)), [floor.fixtures]);
   const footprints = useMemo(
     () =>
       (floor.fixtures ?? []).flatMap((fx) => {

@@ -38,7 +38,11 @@ export type Symbol =
   | "shaker-wardrobe"
   | "boiler"
   | "hood"
-  | "fireplace";
+  | "fireplace"
+  | "mirror"
+  | "mirror-round"
+  | "mirror-cabinet"
+  | "mirror-lit";
 
 export interface CatalogueItem {
   id: string;
@@ -93,6 +97,10 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bath", name: "Bath (standard)", category: "Bathroom", w: 1.70, d: 0.70, h: 0.55, color: "#ffffff", symbol: "bath" },
   { id: "bath-1800", name: "Bath (1800)", category: "Bathroom", w: 1.80, d: 0.80, h: 0.55, color: "#ffffff", symbol: "bath" },
   { id: "bath-small", name: "Bath (small)", category: "Bathroom", w: 1.50, d: 0.70, h: 0.55, color: "#ffffff", symbol: "bath" },
+  { id: "mirror", name: "Mirror (rectangular)", category: "Bathroom", w: 0.60, d: 0.02, h: 0.80, color: "#b8bcc2", symbol: "mirror", mount: 1.1, note: "Wall-hung; colour is the frame, set the height to suit" },
+  { id: "mirror-round", name: "Mirror (round)", category: "Bathroom", w: 0.60, d: 0.02, h: 0.60, color: "#b8bcc2", symbol: "mirror-round", mount: 1.2, note: "Wall-hung; width and height set the oval" },
+  { id: "mirror-cabinet", name: "Mirror cabinet", category: "Bathroom", w: 0.60, d: 0.15, h: 0.70, color: "#f2f2f2", symbol: "mirror-cabinet", mount: 1.2, note: "Wall-hung, mirrored doors" },
+  { id: "mirror-lit", name: "Illuminated mirror", category: "Bathroom", w: 0.60, d: 0.04, h: 0.80, color: "#b8bcc2", symbol: "mirror-lit", mount: 1.1, note: "Wall-hung, softly lit edge" },
   { id: "towel-rail", name: "Heated towel rail", category: "Bathroom", w: 0.50, d: 0.10, h: 1.2, color: "#c8ccd1", symbol: "towel-rail", mount: 0.15, note: "Wall-hung" },
 
   // Living
@@ -164,6 +172,12 @@ export function burners(widthM: number): [number, number][] {
 /** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */
 export function hasWorktop(item: CatalogueItem): boolean {
   return item.category === "Kitchen" && (item.symbol === "worktop" || item.symbol === "sink" || item.symbol === "island" || item.symbol === "cabinet");
+}
+
+/** Height of a fixture's base above the floor: its own override, else the catalogue's, else 0 (on the floor). */
+export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount">): number {
+  const m = fx.mount ?? item.mount ?? 0;
+  return Number.isFinite(m) ? Math.max(0, m) : item.mount ?? 0;
 }
 
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];
