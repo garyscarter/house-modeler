@@ -26,6 +26,15 @@ export interface RoofBlock {
   /** Lift the roof surface this far clear of the walls' outer top edge, so the two never coincide. Default 0. */
   clearance?: number;
   /**
+   * Seat the roof as rafters on a wall plate are: its eaves (the tile line at
+   * the fascias) level with the wall tops, plus `clearance`, so the soffit
+   * sits a fascia's depth under the wall tops, just above the top-floor
+   * window heads, whatever the pitch and overhang. Otherwise the roof surface
+   * passes through the walls' outer top edge and its eaves drop below it by
+   * the overhang's fall.
+   */
+  eavesOnWalls?: boolean;
+  /**
    * How far the slopes run on past a flush start and end, under the roof
    * they meet (an extension's roof tucked in under the main roof's hip or
    * behind its gable). The walls, fascias and gutters still stop at the end.
@@ -80,6 +89,12 @@ interface Frame {
   L: (x: number, z: number) => [number, number];
 }
 
+/** Height of the roof surface over the walls' outer faces (the eaves are the overhang's fall below it). */
+export function roofSeatY(b: RoofBlock): number {
+  const lift = b.eavesOnWalls ? b.overhang * Math.tan((b.pitchDeg * Math.PI) / 180) : 0;
+  return b.y + (b.clearance ?? 0) + lift;
+}
+
 function frame(b: RoofBlock): Frame {
   const half = (b.wallT ?? EXT_WALL_T) / 2;
   const t = Math.tan((b.pitchDeg * Math.PI) / 180);
@@ -95,7 +110,7 @@ function frame(b: RoofBlock): Frame {
   let RU0 = b.start === "hip" ? U0 + hs : EU0;
   let RU1 = b.end === "hip" ? U1 - hs : EU1;
   if (RU0 > RU1) RU0 = RU1 = (RU0 + RU1) / 2;
-  const y = b.y + (b.clearance ?? 0);
+  const y = roofSeatY(b);
   return {
     y,
     t,
@@ -1038,6 +1053,7 @@ export function planRoofs(model: HouseModel): RoofPlan {
         pitchDeg: ext.pitchDeg,
         overhang: ext.overhang,
         clearance: ROOF_CLEARANCE,
+        eavesOnWalls: true,
         start: party(lo, "lo") || touches(lo, "lo") || under[0] ? "flush" : style,
         end: party(hi, "hi") || touches(hi, "hi") || under[1] ? "flush" : style,
       };
@@ -1106,10 +1122,12 @@ export function setDown(b: RoofBlock, main: RoofBlock, drop: number): RoofBlock 
   const half = (b.wallT ?? EXT_WALL_T) / 2;
   const hs = ((b.axis === "x" ? b.z1 - b.z0 : b.x1 - b.x0) + 2 * half) / 2;
   const y = b.y + (b.clearance ?? 0);
+  // The ridge rises from the eaves line when the eaves sit on the walls, from the wall face otherwise.
+  const run = hs + (b.eavesOnWalls ? b.overhang : 0);
   const target = mainRidge - Math.max(0, drop);
-  const natural = y + hs * Math.tan((b.pitchDeg * Math.PI) / 180);
+  const natural = y + run * Math.tan((b.pitchDeg * Math.PI) / 180);
   if (natural <= target) return b;
-  const pitch = (Math.atan(Math.max(0, target - y) / hs) * 180) / Math.PI;
+  const pitch = (Math.atan(Math.max(0, target - y) / run) * 180) / Math.PI;
   return { ...b, pitchDeg: Math.max(10, pitch) };
 }
 
@@ -1124,7 +1142,8 @@ export function tuckUnder(b: RoofBlock, main: RoofBlock, under: readonly [boolea
   const half = (b.wallT ?? EXT_WALL_T) / 2;
   const hs = ((b.axis === "x" ? b.z1 - b.z0 : b.x1 - b.x0) + 2 * half) / 2;
   const tan = (deg: number) => Math.tan((deg * Math.PI) / 180);
-  const reach = (hs * tan(b.pitchDeg)) / tan(main.pitchDeg) + 0.05;
+  // Where the main roof, rising from its seat over its wall face, clears the extension's ridge.
+  const reach = (roofSeatY(b) + hs * tan(b.pitchDeg) - roofSeatY(main)) / tan(main.pitchDeg) + 0.05;
   const [m0, m1] = b.axis === "x" ? [main.x0, main.x1] : [main.z0, main.z1];
   const mh = (main.wallT ?? EXT_WALL_T) / 2;
   const [u0, u1] = b.axis === "x" ? [b.x0, b.x1] : [b.z0, b.z1];
