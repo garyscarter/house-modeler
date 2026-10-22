@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 
 /** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
@@ -16,7 +16,7 @@ export function Fixtures({ floor }: { floor: Floor }) {
         const b = fixtureBox(f, item);
         return (
           <group key={f.id} position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
-            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} worktop={f.worktop ?? WORKTOP} />
+            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} worktop={f.worktop ?? WORKTOP} mount={b.z0} />
           </group>
         );
       })}
@@ -76,8 +76,8 @@ const BRASS = "#c8a24a";
 const MIRROR = "#e4ecf0";
 const GLOW = "#fff1d6";
 
-const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop }: { symbol: Symbol; w: number; d: number; h: number; color: string; worktop: string }) {
-  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color, worktop), [symbol, w, d, h, color, worktop]);
+const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop, mount }: { symbol: Symbol; w: number; d: number; h: number; color: string; worktop: string; mount: number }) {
+  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color, worktop, mount), [symbol, w, d, h, color, worktop, mount]);
   return (
     <group>
       {parts.map((pt, i) => (
@@ -99,8 +99,9 @@ const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop 
 /**
  * The parts of a fixture in its local frame: origin at the centre of its
  * footprint on its base, y up, back towards -z (the top of the plan).
+ * `mount` is the height of that base above the floor, for parts that reach down to it.
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP): Part[] {
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -113,6 +114,20 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     for (let i = 0; i < n; i++) {
       const cx = -w / 2 + ((i + 0.5) * w) / n;
       box(cx, handleAtTop ? y1 - 0.06 : y0 + 0.06, z + 0.012, Math.min(0.16, w / n - 0.1), 0.012, 0.02, CHROME, "metal");
+    }
+  };
+  /**
+   * Radiator valves at the bottom corners, on tails from the side tappings: a thermostatic head on the
+   * left, a lockshield on the right, each on a pipe down to the floor.
+   */
+  const valves = (z: number) => {
+    for (const sx of [-1, 1]) {
+      const x = sx * (w / 2 + 0.03);
+      box(sx * (w / 2 + 0.012), 0.03, z, 0.025, 0.016, 0.016, color, "satin");
+      cyl(x, 0.03, z, 0.026, 0.05, color, "satin");
+      if (sx < 0) cyl(x, 0.1, z, 0.044, 0.09, WHITE, "satin");
+      else cyl(x, 0.07, z, 0.024, 0.03, color, "satin");
+      if (mount > 0.01) cyl(x, (0.005 - mount) / 2, z, 0.015, mount + 0.005, color, "satin");
     }
   };
   /** A kitchen base carcass of height top, with plinth and worktop. Returns the front face z. */
@@ -488,6 +503,42 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, hearth + fh / 2 + 0.02, fz + 0.041, fw - 0.09, fh - 0.15, 0.004, "#141518", "gloss");
       box(0, hearth + 0.17, fz + 0.045, fw - 0.13, 0.09, 0.02, "#3b3734");
       box(0, hearth + 0.05, fz + 0.06, fw - 0.02, 0.06, 0.04, "#1d1e21", "metal");
+      break;
+    }
+    case "radiator": {
+      // Steel panels with pressed vertical channels; a double has a second panel behind with convector
+      // fins between, seen as a grille from above. Two brackets hold it off the wall.
+      const t = 0.02; // panel thickness
+      const off = Math.min(0.03, d * 0.4); // wall to the back panel, on the brackets
+      const zf = d / 2 - t / 2; // front panel
+      const panels = radiatorPanels(d);
+      const zb = panels === 2 ? -d / 2 + off + t / 2 : zf;
+      const lip = Math.min(0.03, h * 0.08); // flat band top and bottom, with no channels
+      const flute = shade(color, 0.86);
+      box(0, h / 2, zf, w, h, t, color, "satin");
+      if (panels === 2) {
+        box(0, h / 2, zb, w, h, t, color, "satin");
+        box(0, (h - 0.012) / 2, (zf + zb) / 2, w - 0.02, h - 0.012, zf - zb - t, shade(color, 0.62));
+      } else box(0, (h - 0.012) / 2, zf - t / 2 - 0.008, w - 0.02, h - 0.012, 0.016, shade(color, 0.62));
+      const n = Math.max(3, Math.round(w / 0.05));
+      for (let i = 1; i < n; i++) box(-w / 2 + (i * w) / n, h / 2, d / 2 + 0.0008, 0.007, h - lip * 2, 0.002, flute, "satin");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - Math.min(0.15, w * 0.2)), h * 0.7, -d / 2 + off / 2, 0.04, 0.08, off, shade(color, 0.8));
+      valves(zb);
+      break;
+    }
+    case "column-radiator": {
+      // Rows of round columns between a top and bottom header: two rows when it is deep enough.
+      const n = Math.max(3, Math.round(w / 0.065));
+      const dia = Math.min(0.032, (w / n) * 0.7);
+      const rows = d > 0.08 ? [d / 2 - dia / 2 - 0.004, d / 2 - dia * 1.5 - 0.012] : [d / 2 - dia / 2 - 0.004];
+      const head = Math.min(0.05, h * 0.06);
+      for (const z of rows) {
+        for (let i = 0; i < n; i++) cyl(-w / 2 + ((i + 0.5) * w) / n, h / 2, z, dia, h - head, color, "satin");
+        for (const y of [head / 2, h - head / 2]) box(0, y, z, w - 0.01, head, dia * 0.8, shade(color, 0.92), "satin");
+      }
+      const back = rows[rows.length - 1] - dia / 2;
+      for (const sx of [-1, 1]) box(sx * (w / 2 - Math.min(0.12, w * 0.2)), h * 0.75, (-d / 2 + back) / 2, 0.03, 0.05, back + d / 2, shade(color, 0.8));
+      valves(rows[rows.length - 1]);
       break;
     }
     case "boiler":

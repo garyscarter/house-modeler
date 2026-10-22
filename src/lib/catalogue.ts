@@ -37,6 +37,8 @@ export type Symbol =
   | "fitted-wardrobe"
   | "shaker-wardrobe"
   | "boiler"
+  | "radiator"
+  | "column-radiator"
   | "hood"
   | "fireplace"
   | "mirror"
@@ -142,6 +144,16 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "tumble-dryer", name: "Tumble dryer", category: "Utility", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "washer" },
   { id: "boiler", name: "Boiler (combi)", category: "Utility", w: 0.40, d: 0.30, h: 0.70, color: "#f2f2f2", symbol: "boiler", mount: 1.2, note: "Wall-hung" },
 
+  // Heating: UK steel panel radiators, wall-hung about 0.15 m off the floor. Depth sets the type
+  // (see radiatorPanels): about 0.07 m is a single panel with fins behind (type 11), 0.10 m a double (type 21 or 22).
+  { id: "radiator-single-600", name: "Radiator, single (600 × 600)", category: "Heating", w: 0.60, d: 0.07, h: 0.60, color: "#f4f4f1", symbol: "radiator", mount: 0.15, note: "Type 11 panel; set any width and height" },
+  { id: "radiator-single-1000", name: "Radiator, single (1000 × 450)", category: "Heating", w: 1.00, d: 0.07, h: 0.45, color: "#f4f4f1", symbol: "radiator", mount: 0.15, note: "Type 11 panel, under a window" },
+  { id: "radiator-double-1000", name: "Radiator, double (1000 × 600)", category: "Heating", w: 1.00, d: 0.10, h: 0.60, color: "#f4f4f1", symbol: "radiator", mount: 0.15, note: "Type 22: two panels with fins between" },
+  { id: "radiator-double-1200", name: "Radiator, double (1200 × 450)", category: "Heating", w: 1.20, d: 0.10, h: 0.45, color: "#f4f4f1", symbol: "radiator", mount: 0.15, note: "Type 22, low under a window" },
+  { id: "radiator-double-1600", name: "Radiator, double (1600 × 700)", category: "Heating", w: 1.60, d: 0.10, h: 0.70, color: "#f4f4f1", symbol: "radiator", mount: 0.15, note: "Type 22, for a large room" },
+  { id: "radiator-column", name: "Column radiator (800 × 600)", category: "Heating", w: 0.80, d: 0.10, h: 0.60, color: "#f4f4f1", symbol: "column-radiator", mount: 0.12, note: "Traditional steel columns; set any width" },
+  { id: "radiator-vertical", name: "Vertical radiator (450 × 1800)", category: "Heating", w: 0.45, d: 0.10, h: 1.80, color: "#3a3d42", symbol: "column-radiator", mount: 0.1, note: "Tall columns for a narrow wall" },
+
   // Other
   { id: "desk", name: "Desk", category: "Other", w: 1.20, d: 0.60, h: 0.75, color: WOOD, symbol: "table" },
   { id: "car", name: "Car (family hatchback)", category: "Other", w: 1.80, d: 4.40, h: 1.5, color: "#8c96a3", symbol: "car", note: "Typical UK family car" },
@@ -167,6 +179,15 @@ export function burners(widthM: number): [number, number][] {
         [-0.2, 0.18],
         [0.2, 0.18],
       ];
+}
+
+/**
+ * Panels of a panel radiator from its depth: a single panel (type 11) up to
+ * about 85 mm deep, a double (types 21 and 22) beyond; the plan and 3D view
+ * draw it this way, so changing the depth changes the type.
+ */
+export function radiatorPanels(d: number): 1 | 2 {
+  return d > 0.085 ? 2 : 1;
 }
 
 /** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */

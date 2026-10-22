@@ -22,6 +22,24 @@ Facts used to build the built-in model (`src/lib/houses/listing91770873.ts`), an
 - Serving hatch, kitchen to rear living room (kitchen-1, -2, living-rear-2): on the kitchen side a dark timber frame about 1.25 m wide sits over the returned units, but only its south half (about 0.65 m, sill about 1.0 m, head about 1.45 m) is open, glazed with frosted sliding panes; the north half is a papered panel. The living room side shows just that opening. Position fitted to kitchen-1's perspective; the model draws the opening only.
 - Two more doors: a glazed dark door across the corridor between the front hall and the kitchen (plan y 443, hung on its east jamb; galley-1, which is the front hall, not the galley), in a short partition, and a dark ledged plank door from the kitchen into the under-stairs cupboard (plan x 836–890 on y 345; kitchen-2). The cupboard stays part of the stairs hall in the model.
 
+## Radiators
+
+Wet central heating from the gas boiler: white steel panel radiators, hung about 0.15 m off the floor (bottoms level with the skirting tops), each with a thermostatic valve on one end. Positions along the walls are fitted from the photos' perspective, so they are good to perhaps ±0.2 m; widths and heights to about ±0.15 m. Room by room (model fixtures in `ground.fixtures` and `first.fixtures`):
+
+| Room | Wall | Size (w × h) | Type | Evidence |
+| --- | --- | --- | --- | --- |
+| Front hall | Front wall, under the larger front window (x 955), running a little past its west jamb | 1.0 × 0.6 m | Double convector (grille on top) | hall-front-1; also seen through the glazed door in hall-stairs-1 |
+| Stairs hall | See below: modelled on the east wall north of the living-room door | 0.8 × 0.5 m | Single convector | hall-stairs-2 |
+| Front living room | In the bay, against its front face | 0.7 × 0.45 m (assumed) | Single (assumed) | Inferred: only a thermostatic valve on a pipe from the floor shows, beside the sideboard that fills the bay (living-front-3) |
+| Bedroom 1 | East wall (to Bedroom 2), behind the bed, ending about 0.7 m short of the south corner | 1.2 × 0.45 m | Single convector | bedroom-1-1 |
+| Bedroom 2 | Rear wall, under the window, its east end at the window's east jamb (west end hidden by a chest) | 1.6 × 0.6 m | Single convector | bedroom-2-2, bedroom-2-3 |
+| Bedroom 3 | North wall (to the landing), its valve end about 0.4 m from the corner by the door | 1.2 × 0.45 m | Single convector | bedroom-3-2, bedroom-3-3 |
+| Bathroom | West wall beside the WC | Chrome ladder towel rail (already modelled) | — | bathroom-wc |
+
+None shows in the kitchen or the galley (every wall is units, brick or doors in kitchen-1 to -4 and galley-2), the rear living room (the patio doors run to the floor; the walls show a sofa, armchair, fireplace and TV units, so one could only be hidden behind the sofa on the west wall), the landing (landing-1) or the front hall's side window (a fridge stands under it in galley-1). The garage has none (not photographed).
+
+- Stairs hall: hall-stairs-2 looks west-north-west across the hall: the flight on the left, a chair against the wall under its upper end, and on the right-hand wall, perpendicular to that one, a painting over a radiator. Fitting the photo's perspective (vanishing point of the radiator's top and bottom edges, camera about 1.45 m up) puts that wall about 2.3 m from the camera, so it is the hall's north wall (to the kitchen), with the radiator about 0.25–1.1 m east of the flight's face (plan x about 915–975) and no door on that wall for at least 1.2 m east of the corner. The plan and the model put the kitchen-to-stairs-hall door there (x 921–979 on y 345). kitchen-2 agrees with the photo rather than the plan: its left-hand glazed door is set back at the end of a short papered recess, about 1.5 times as far from the camera as the ledged cupboard door, which fits a door at the south end of the papered alcove (x 975–1045) better than one beside the cupboard. So the kitchen door may be at the alcove, not where the plan draws it. Until that is settled, the model keeps the plan's door and stands the stairs-hall radiator on the east wall north of the living-room door (y 301–359), clear of every door swing.
+
 ## Stairs
 
 One flight, rising north (towards the rear) up the west side of the stairs hall, 0.9 m wide, with a quarter turn at each end, both turning the same way (`stairsTurn` and `stairsTopTurn` "right" on the ground floor):
