@@ -47,6 +47,29 @@ export function isStaleSite(site: Site | null | undefined, model: Pick<HouseMode
   return looksLikeListingSite(site, entry.build());
 }
 
+/** True when a layout is one of the built-in listing layouts, whose plot is the listing's. */
+export const isListingLayout = (model: Pick<HouseModel, "preset"> | undefined): boolean => !!model?.preset && LISTING_LAYOUTS.has(model.preset.id);
+
+/** Is this the listing's plot, or a copy of it that the owner may have edited? Offers the boundary update. */
+export function isListingPlot(site: Site | null | undefined, model: Pick<HouseModel, "preset"> | undefined, registry: SiteRegistry = SITE_PRESETS): boolean {
+  if (!site || !isListingLayout(model)) return false;
+  if (site.preset) return site.preset.id === LISTING_SITE_PRESET.id;
+  const entry = registry[LISTING_SITE_PRESET.id];
+  return !!entry && looksLikeListingSite(site, entry.build());
+}
+
+/**
+ * Has the owner changed this plot beyond its boundary treatments? Compares corners, buildings, garden surfaces
+ * (kind and shape) and orientation with `fresh`. A stale plot can differ for reasons of its own version, so a
+ * true here only means "may hold edits worth keeping".
+ */
+export function hasPlotEdits(site: Site, fresh: Site): boolean {
+  const core = (s: Site) =>
+    // Ids are made fresh each time a plot is built, so they do not count.
+    JSON.stringify([s.boundary, s.neighbours.map(({ id: _id, ...rest }) => rest), s.surfaces.map((x) => [x.kind, x.polygon]), s.frontBearing, s.latitude, s.longitude]);
+  return core(site) !== core(fresh);
+}
+
 /** The built-in plot to put in place of a stale `site`: the one its marker names, else the listing's. */
 export function freshSiteFor(site: Site, registry: SiteRegistry = SITE_PRESETS): Site | undefined {
   return (registry[site.preset?.id ?? LISTING_SITE_PRESET.id] ?? registry[LISTING_SITE_PRESET.id])?.build();
@@ -63,6 +86,8 @@ export type SiteUpdate = {
    * As listed's (so it goes with As listed's update); "own" when it differs, which needs its own explicit choice.
    */
   proposed?: "with-current" | "own";
+  /** As listed's stale plot has edits of its own (set only when true), so it can take boundary changes alone. */
+  currentEdited?: boolean;
 };
 
 /**
@@ -83,5 +108,7 @@ export function decideSiteUpdate(
   if (!current && !proposed) return null;
   const involved = [current ? sites.current : undefined, proposed ? sites.proposed : undefined];
   const version = Math.max(...involved.filter((s): s is Site => !!s).map((s) => registry[s.preset?.id ?? LISTING_SITE_PRESET.id]?.version ?? 0));
-  return { version, current, proposed };
+  const fresh = current && sites.current ? freshSiteFor(sites.current, registry) : undefined;
+  const currentEdited = !!fresh && hasPlotEdits(sites.current!, fresh);
+  return { version, current, proposed, ...(currentEdited ? { currentEdited } : {}) };
 }

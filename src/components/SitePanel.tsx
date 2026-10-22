@@ -2,10 +2,11 @@ import { useMemo, useRef, useState } from "react";
 import { ask } from "./Dialogs";
 import { SITE_EDIT_ID, useSite, useStore } from "../store";
 import { SiteVariantNote } from "./SiteVariantNote";
-import { isStaleSite } from "../lib/sitePreset";
+import { freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite } from "../lib/sitePreset";
 import { siteSource } from "../lib/sites";
 import { updateSitePreset } from "../lib/presetActions";
-import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind } from "../types";
+import { confirmBoundaryUpdates } from "./startupDialog";
+import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind, type VariantKey } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { compassPoint } from "../lib/sun";
 import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpleSite, type PlotDepths } from "../lib/site";
@@ -137,6 +138,7 @@ export function SitePanel() {
               Clear site
             </button>
           </div>
+          <BoundaryUpdateAction />
           {model && <SimpleSiteForm model={model} site={site} />}
         </>
       )}
@@ -155,6 +157,11 @@ function StalePlotNote() {
   const site = source ? sites[source] : undefined;
   const model = source ? variants[source] : undefined;
   const stale = useMemo(() => isStaleSite(site, model), [site, model]);
+  // A plot that differs from the built-in one beyond its fences and walls may hold edits worth keeping.
+  const edited = useMemo(() => {
+    const fresh = site && stale ? freshSiteFor(site) : undefined;
+    return !!site && !!fresh && hasPlotEdits(site, fresh);
+  }, [site, stale]);
   if (!source || !stale) return null;
   const update = async () => {
     if (await ask("Replace this plot with the latest one for listing 91770873? Your edits to the plot are lost. You can undo it.", { ok: "Update" })) updateSitePreset(source);
@@ -162,7 +169,40 @@ function StalePlotNote() {
   return (
     <div className="note small site-stale-note">
       <p>A newer plot for listing 91770873 is available.</p>
-      <button onClick={update}>Update the plot</button>
+      <div className="row">
+        <button onClick={update}>Update the plot</button>
+        {edited && <BoundaryUpdateButton source={source} label="Update the boundaries only (keep my edits)" />}
+      </div>
+    </div>
+  );
+}
+
+/** Brings a plot's walls, fences and hedges up to the latest built-in ones after showing what changes; the rest of the plot is kept. */
+function BoundaryUpdateButton({ source, label }: { source: VariantKey; label: string }) {
+  return (
+    <button
+      title="Updates the walls, fences and hedges and keeps your corners, drive opening and other edits"
+      onClick={async () => (await confirmBoundaryUpdates([source]))?.()}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Always-available boundary update, for a plot that is the listing's (or a copy of it) even when it is not flagged out of date. */
+function BoundaryUpdateAction() {
+  const sites = useStore((s) => s.sites);
+  const variants = useStore((s) => s.variants);
+  const active = useStore((s) => s.activeVariant);
+  const source = siteSource(sites, active);
+  const site = source ? sites[source] : undefined;
+  const model = source ? variants[source] : undefined;
+  const show = useMemo(() => isListingPlot(site, model), [site, model]);
+  if (!source || !show) return null;
+  return (
+    <div className="site-boundary-update">
+      <BoundaryUpdateButton source={source} label="Update boundaries from listing 91770873" />
+      <span className="muted small">Brings the walls, fences and hedges up to date and keeps your other plot edits.</span>
     </div>
   );
 }

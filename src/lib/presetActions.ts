@@ -3,6 +3,7 @@ import type { VariantKey } from "../types";
 import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
 import { freshSiteFor } from "./sitePreset";
+import { mergeBoundaryTreatments, type BoundaryMerge } from "./siteMerge";
 
 /**
  * Load the built-in listing into a variant, with its floorplan image and, if
@@ -44,4 +45,22 @@ export function updateSitePreset(variant: VariantKey): void {
   const site = st.sites[variant];
   const fresh = site && freshSiteFor(site);
   if (fresh) st.setSite(fresh, variant);
+}
+
+/**
+ * What bringing a layout's plot up to the latest built-in boundary treatments would do, without doing it.
+ * Undefined when the layout has no plot of its own. See mergeBoundaryTreatments for the matching rules.
+ */
+export function planBoundaryUpdate(variant: VariantKey): BoundaryMerge | undefined {
+  const site = useStore.getState().sites[variant];
+  const latest = site && freshSiteFor(site);
+  return site && latest ? mergeBoundaryTreatments(site, latest) : undefined;
+}
+
+/**
+ * Put in the plot `planBoundaryUpdate` worked out (it already carries the latest preset marker, so the plot
+ * stops being offered as out of date). One undo step; through the store, so project sync sees it like any edit.
+ */
+export function applyBoundaryUpdate(variant: VariantKey, merged: BoundaryMerge): void {
+  useStore.getState().setSite(merged.site, variant);
 }

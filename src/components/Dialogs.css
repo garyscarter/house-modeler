@@ -9,7 +9,7 @@
   padding: 16px; background: var(--panel); color: var(--text);
   border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
 }
-.dialog p { margin: 0; line-height: 1.4; }
+.dialog p { margin: 0; line-height: 1.4; white-space: pre-line; }
 .dialog input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog-buttons .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
