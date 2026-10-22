@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { byId } from "../catalogue";
-import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
+import { byId, mountOf, radiatorPanels } from "../catalogue";
+import { EXT_WALL_T, WALL_T, buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
+import { bayOutline } from "../openings";
 import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
 import { planRoofs } from "../roof";
 import { clipSegmentOutside } from "../site";
 import { surfaceHeightAt } from "../surfaceSlope";
 import { boundaryWallSegments } from "../wallSteps";
-import { listing91770873, listingSite } from "./listing91770873";
+import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./listing91770873";
 
 const house = listing91770873("");
 const ground = house.floors[0];
@@ -109,7 +110,11 @@ describe("the kitchen", () => {
   it("fits every unit inside the kitchen or galley without overlaps", () => {
     expect(overlappingIds(solids, 0.5).size).toBe(0);
     const kitchens = ground.rooms.filter((r) => r.name.startsWith("Kitchen")).map((r) => roomWorldPolygon(ground, r));
-    for (const s of solids.filter((s) => fixtures.find((f) => f.id === s.id)!.type !== "fireplace"))
+    const kitchenFixture = (id: string) => {
+      const f = fixtures.find((f) => f.id === id)!;
+      return f.type !== "fireplace" && byId(f.type)!.category !== "Heating";
+    };
+    for (const s of solids.filter((s) => kitchenFixture(s.id)))
       for (const c of s.corners) expect(kitchens.some((poly) => pointInPolygon(toWorld(ground, c), poly)), `${s.id} ${c.x},${c.y}`).toBe(true);
   });
 
@@ -247,5 +252,98 @@ describe("Bedroom 1 and bathroom fittings, rear garden beds", () => {
       const c = bed.polygon.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
       expect(surfaceHeightAt(bed, c)).toBeGreaterThan(0.2);
     }
+  });
+});
+
+describe("the radiators", () => {
+  type F = typeof ground;
+  type Fx = NonNullable<F["fixtures"]>[number];
+  const px = ground.pxPerM;
+  const radiators = (f: F) => (f.fixtures ?? []).filter((x) => byId(x.type)?.category === "Heating");
+  const box = (fx: Fx) => fixtureBox(fx, byId(fx.type)!);
+  /** The middle of a fixture's back edge on the plan, and the direction from its centre towards it. */
+  const back = (fx: Fx) => {
+    const r = (fx.rot * Math.PI) / 180;
+    const dir = { x: Math.round(Math.sin(r)), y: Math.round(-Math.cos(r)) };
+    const half = (box(fx).d * px) / 2;
+    return { p: { x: fx.x + dir.x * half, y: fx.y + dir.y * half }, dir };
+  };
+  const roomOf = (f: F, fx: Fx) => f.rooms.find((r) => pointInPolygon(toWorld(f, fx), roomWorldPolygon(f, r)))?.name;
+  const bay = ground.openings.find((o) => o.kind === "bay")!;
+  const inBay = (fx: Fx) => fx.y > bay.y && Math.abs(fx.x - bay.x) < (bay.widthM * px) / 2;
+
+  it("are in both halls, the front living room's bay and every bedroom; none in the kitchen, rear living room, landing or bathroom", () => {
+    const where = [ground, first].flatMap((f) => radiators(f).map((fx) => (inBay(fx) ? "bay" : roomOf(f, fx))));
+    expect(where.sort()).toEqual(["Bedroom 1", "Bedroom 2", "Bedroom 3", "Hallway (front)", "Hallway (stairs)", "bay"]);
+    // Double in the front hall (its convector grille shows in hall-front-1), single elsewhere.
+    for (const f of [ground, first])
+      for (const fx of radiators(f)) expect(radiatorPanels(box(fx).d), roomOf(f, fx)).toBe(roomOf(f, fx) === "Hallway (front)" ? 2 : 1);
+    // The Proposed layout builds on As listed, so it has them too, and both presets moved on.
+    expect(listing91770873Proposed("").floors.flatMap(radiators)).toHaveLength(6);
+    expect([LISTING_PRESET.version, LISTING_PROPOSED_PRESET.version]).toEqual([19, 19]);
+  });
+
+  it("hang about 0.15 m off the floor with their backs on a wall's inner face (the bay's on its base)", () => {
+    for (const f of [ground, first]) {
+      const walls = buildWalls(f);
+      for (const fx of radiators(f)) {
+        expect(mountOf(fx, byId(fx.type)!)).toBeCloseTo(0.15, 2);
+        const { p, dir } = back(fx);
+        if (inBay(fx)) {
+          // The bay's base is 0.2 m thick inside its outline (openings.ts); the radiator fits its front face.
+          const outline = bayOutline(bay.widthM, EXT_WALL_T, bay.depth);
+          expect(p.y).toBeCloseTo(bay.y + (outline[1].z - 0.2) * px, 0);
+          const face = outline[2].x - 0.2 * Math.tan(Math.PI / 8);
+          expect(Math.abs(fx.x - bay.x) + (box(fx).w * px) / 2).toBeLessThan(face * px);
+          continue;
+        }
+        const w = toWorld(f, p);
+        const on = walls.filter((s) => {
+          const dx = s.b.x - s.a.x;
+          const dy = s.b.y - s.a.y;
+          const l = Math.hypot(dx, dy);
+          const t = ((w.x - s.a.x) * dx + (w.y - s.a.y) * dy) / (l * l);
+          const off = Math.abs((w.x - s.a.x) * dy - (w.y - s.a.y) * dx) / l;
+          const half = (s.exterior ? EXT_WALL_T : WALL_T) / 2;
+          // Parallel to the radiator's length, so its back faces the wall.
+          return t > 0 && t < 1 && Math.abs(dx * dir.x + dy * dir.y) < 1e-6 && Math.abs(off - half) < 0.01;
+        });
+        expect(on.length, `${f.name} ${fx.x},${fx.y}`).toBe(1);
+      }
+    }
+  });
+
+  it("keep clear of the other fixtures and of every door's swing", () => {
+    for (const f of [ground, first]) {
+      const solids = fixtureSolids(f.fixtures ?? [], f.pxPerM, byId);
+      const rads = new Set(radiators(f).map((x) => x.id));
+      expect([...overlappingIds(solids, 0.5)].filter((id) => rads.has(id)), f.name).toEqual([]);
+      for (const o of f.openings.filter((o) => o.kind === "door" || o.kind === "front")) {
+        // The square the leaf sweeps, on both sides of the wall, as for the kitchen above.
+        const half = ((o.widthM - 0.1) * f.pxPerM) / 2;
+        const sweep = o.orientation === "h" ? rectCorners({ x: o.x, y: o.y }, 2 * half, 4 * half, 0) : rectCorners({ x: o.x, y: o.y }, 4 * half, 2 * half, 0);
+        for (const s of solids.filter((s) => rads.has(s.id))) expect(convexOverlap(sweep, s.corners, 0.5), `${f.name} door ${o.x},${o.y}`).toBe(false);
+      }
+    }
+  });
+
+  it("stay under the sill of a window they stand beneath", () => {
+    let under = 0;
+    for (const f of [ground, first]) {
+      for (const fx of radiators(f)) {
+        const { p } = back(fx);
+        const b = box(fx);
+        const along = fx.rot % 180 === 0 ? "h" : "v";
+        for (const o of f.openings.filter((o) => o.kind === "window" && o.orientation === along)) {
+          const across = along === "h" ? Math.abs(o.y - p.y) : Math.abs(o.x - p.x);
+          const overlaps = Math.abs(along === "h" ? o.x - fx.x : o.y - fx.y) < ((o.widthM + b.w) * px) / 2;
+          if (across > (EXT_WALL_T / 2) * px + 0.5 || !overlaps) continue;
+          under++;
+          expect(mountOf(fx, byId(fx.type)!) + b.h, `${f.name} ${fx.x},${fx.y}`).toBeLessThanOrEqual((o.sill ?? 0.9) - 0.1);
+        }
+      }
+    }
+    // The front hall's and Bedroom 2's.
+    expect(under).toBe(2);
   });
 });

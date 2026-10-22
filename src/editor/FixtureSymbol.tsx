@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, radiatorPanels, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 
 /**
  * Plan symbol for a catalogue item, drawn in a local frame centred on (0,0)
@@ -245,6 +245,31 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         ...dividers(w / (wardrobeDoorCount(item.symbol, w / m) * m), y1 - 0.03 * m, y1),
         <line key="r" x1={x0 + 0.04 * m} y1={y0 + d * 0.4} x2={x1 - 0.04 * m} y2={y0 + d * 0.4} {...thin} strokeDasharray={`${stroke * 5} ${stroke * 3}`} />,
       );
+    case "radiator": {
+      // A thin strip against the wall, hatched across, with a line along each panel's face and a valve
+      // at each end, as radiators are drawn on heating plans.
+      const pitch = 0.08 * m;
+      const n = Math.max(2, Math.round(w / pitch));
+      const faces = radiatorPanels(d / m) === 2 ? [y0 + d * 0.45, y1] : [y1];
+      return g(
+        body(0),
+        ...Array.from({ length: n }, (_, i) => {
+          const x = x0 + (i * w) / n;
+          return <line key={i} x1={x} y1={y1} x2={x + w / n} y2={y0} {...thin} />;
+        }),
+        ...faces.map((y) => <line key={`f${y}`} x1={x0} y1={y} x2={x1} y2={y} {...line} />),
+        ...[x0, x1].map((x) => <circle key={`v${x}`} cx={x} cy={y1 - d * 0.3} r={Math.min(0.025 * m, d * 0.45)} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw * 0.6} />),
+      );
+    }
+    case "column-radiator": {
+      // A row of round columns between the headers.
+      const n = Math.max(3, Math.round(w / (0.065 * m)));
+      const rr = Math.min((w / n) * 0.35, d * 0.3);
+      return g(
+        body(0),
+        ...Array.from({ length: n }, (_, i) => <circle key={i} cx={x0 + ((i + 0.5) * w) / n} cy={0} r={rr} {...thin} />),
+      );
+    }
     case "boiler":
       return g(body(r * 0.5), <circle key="f" cx={0} cy={y0 + d * 0.3} r={Math.min(w, d) * 0.15} {...line} />);
     case "hood": {

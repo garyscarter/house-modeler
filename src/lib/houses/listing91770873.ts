@@ -69,8 +69,8 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 18 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 18 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 19 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 19 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 2 };
 
@@ -291,6 +291,19 @@ export function listing91770873(image: string): HouseModel {
     { id: uid(), type: "wall-unit", x: 551.17, y: 136.25, rot: 270, w: 0.55, color: UNITS },
     // Rear living room: carved mahogany surround on the chimney breast's face (x 1253), marble hearth.
     { id: uid(), type: "fireplace", x: 1234.6, y: 153.5, rot: 90 },
+    // Radiators from the photos: white steel panels about 0.15 m off the floor, backs at the walls' inner
+    // faces (see NOTES.md for the room-by-room evidence). None shows in the kitchen, the galley or the rear
+    // living room. rot 180 backs onto the front wall.
+    // Front hall: a double convector under the larger front window, running a little past its west jamb
+    // (hall-front-1; seen through the glazed door in hall-stairs-1).
+    { id: uid(), type: "radiator-double-1000", x: 955, y: 607.2, rot: 180 },
+    // Stairs hall: a single convector under a painting, about 0.8 x 0.5 m (hall-stairs-2). The photo puts it
+    // on the north wall just east of the flight, where the plan has the kitchen door; until that is settled it
+    // stands on the east wall north of the living-room door.
+    { id: uid(), type: "radiator-single-1000", x: 1038.8, y: 330, rot: 90, w: 0.8, h: 0.5 },
+    // Front living room: inferred. Only a thermostatic valve shows, beside the sideboard that fills the bay
+    // (living-front-3), so a radiator stands in the bay against its front face (0.225 m out from the wall line).
+    { id: uid(), type: "radiator-single-1000", x: 1177, y: 528.9, rot: 180, w: 0.7 },
   ];
 
   const first = base(
@@ -391,6 +404,13 @@ export function listing91770873(image: string): HouseModel {
     { id: uid(), type: "wall-unit", x: 801, y: 1225, rot: 90, w: 0.65, d: 0.15, h: 0.6, color: "#eef1f2", label: "Mirror cabinet" },
     { id: uid(), type: "toilet", x: 639, y: 1250, rot: 270 },
     { id: uid(), type: "towel-rail", x: 697, y: 1185, rot: 270, w: 0.5, h: 1.5, color: "#dfe3e6" },
+    // Radiators: low white single convectors about 0.15 m off the floor (bedroom-1-1, -2-2, -2-3, -3-2, -3-3).
+    // Bedroom 1: on the east wall behind the bed, ending about 0.7 m short of the south corner.
+    { id: uid(), type: "radiator-single-1000", x: 768.8, y: 940, rot: 90, w: 1.2 },
+    // Bedroom 2: under the rear window, its east end at the window's east jamb.
+    { id: uid(), type: "radiator-single-1000", x: 936, y: 806.7, rot: 0, w: 1.6, h: 0.6 },
+    // Bedroom 3: on the wall to the landing, its valve end about 0.4 m from the door's corner.
+    { id: uid(), type: "radiator-single-1000", x: 927, y: 1046.2, rot: 0, w: 1.2 },
   ];
 
   return {
