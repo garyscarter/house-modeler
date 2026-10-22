@@ -69,8 +69,8 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 20 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 20 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 21 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 21 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 3 };
 
@@ -209,7 +209,13 @@ export function listing91770873(image: string): HouseModel {
       { ...op("bay", 1177, 515, "h", 1.6), depth: 0.3, glazing: "fixed-top", ...UPVC },
       op("door", 1045, 410, "v", 0.8, MAHOGANY_DOOR), // hall -> front living room
       op("door", 770, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> front hall
-      op("door", 950, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> stairs hall
+      // Kitchen -> stairs hall: not beside the stairs where the floorplan draws it (x 950 on y 345), but in the
+      // kitchen's east wall at its south-east corner, opening onto the little recess off the stairs hall by the
+      // living-room door (x 975-1045, y 278-345). kitchen-2 shows it there, beside the hatch wall with the
+      // kitchen's south wall running back from it to the cupboard door; hall-stairs-2 shows a radiator where
+      // the plan's door was (owner confirms). The wall between the recess's corners is only 0.92 m, so it is a
+      // 762 mm door. Latch to the north and hinges on the south jamb (kitchen-2), opening into the kitchen.
+      op("door", 975, 311.5, "v", 0.76, { ...MAHOGANY_DOOR, flipHinge: true }), // kitchen -> stairs hall
       op("door", 960, 515, "h", 0.8, MAHOGANY_DOOR), // stairs hall -> front hall
       // Glazed door across the corridor from the front hall to the kitchen, hung on its east jamb
       // (plan: leaf 745-805 at y 443, opening north; galley-1). It sits in a short partition (ground.walls below).
@@ -297,10 +303,9 @@ export function listing91770873(image: string): HouseModel {
     // Front hall: a double convector under the larger front window, running a little past its west jamb
     // (hall-front-1; seen through the glazed door in hall-stairs-1).
     { id: uid(), type: "radiator-double-1000", x: 955, y: 607.2, rot: 180 },
-    // Stairs hall: a single convector under a painting, about 0.8 x 0.5 m (hall-stairs-2). The photo puts it
-    // on the north wall just east of the flight, where the plan has the kitchen door; until that is settled it
-    // stands on the east wall north of the living-room door.
-    { id: uid(), type: "radiator-single-1000", x: 1038.8, y: 330, rot: 90, w: 0.8, h: 0.5 },
+    // Stairs hall: a single convector under a painting, about 0.8 x 0.5 m, on the hall side of the kitchen wall
+    // about 0.2 m east of the flight's face (hall-stairs-2). rot 0 backs onto that wall (inner face y 348.65).
+    { id: uid(), type: "radiator-single-1000", x: 942, y: 351.2, rot: 0, w: 0.8, h: 0.5 },
     // Front living room: inferred. Only a thermostatic valve shows, beside the sideboard that fills the bay
     // (living-front-3), so a radiator stands in the bay against its front face (0.225 m out from the wall line).
     { id: uid(), type: "radiator-single-1000", x: 1177, y: 528.9, rot: 180, w: 0.7 },
