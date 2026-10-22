@@ -869,6 +869,58 @@ export interface ExtensionRoof {
   pitchDeg: number;
 }
 
+/** Overlap (m²) between a house's and an extension's rectangles below which they are just touching. */
+const INTERLOCK_MIN = 0.05;
+
+type Box = { x0: number; y0: number; x1: number; y1: number };
+
+/** Clip a polygon (any shape) to one side of an axis line: `axis` x or y, keeping coordinates below (`below`) or above `at`. */
+function clipAxis(poly: V2[], axis: "x" | "y", at: number, below: boolean): V2[] {
+  const inside = (p: V2) => (below ? p[axis] <= at : p[axis] >= at);
+  const out: V2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    if (inside(a)) out.push(a);
+    if (inside(a) !== inside(b)) {
+      const t = (at - a[axis]) / (b[axis] - a[axis]);
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+  }
+  return out;
+}
+
+function shoelace(poly: V2[]): number {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) / 2;
+}
+
+/** Area of a polygon inside a box. */
+export function polyAreaIn(poly: V2[], b: Box): number {
+  let p = clipAxis(poly, "x", b.x0, false);
+  p = clipAxis(p, "x", b.x1, true);
+  p = clipAxis(p, "y", b.y0, false);
+  p = clipAxis(p, "y", b.y1, true);
+  return p.length >= 3 ? shoelace(p) : 0;
+}
+
+/** The parts of a polygon outside a box (slivers dropped), as up to four pieces. */
+export function polyOutside(poly: V2[], b: Box): V2[][] {
+  const mid = clipAxis(clipAxis(poly, "x", b.x0, false), "x", b.x1, true);
+  return [clipAxis(poly, "x", b.x0, true), clipAxis(poly, "x", b.x1, false), clipAxis(mid, "y", b.y0, true), clipAxis(mid, "y", b.y1, false)].filter(
+    (p) => p.length >= 3 && shoelace(p) > 1e-4,
+  );
+}
+
+function rectOverlapArea(a: Box, b: Box): number {
+  return Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+}
+
 /**
  * Work out the roofs from the floors alone: the top floor gets a pitched
  * roof; any lower-floor area with nothing above it, plus canopies, gets a
@@ -900,7 +952,7 @@ export function planRoofs(model: HouseModel): RoofPlan {
   const topLevel = floors.length ? floors[floors.length - 1].level : 0;
   const groundY = (floors.length ? floorBase(model, floors[0]) : 0) - model.slabThickness - 0.01;
   const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0) > TOL;
-  type Rect = ReturnType<typeof bbox> & { key: string; rooms: Room[] };
+  type Rect = ReturnType<typeof bbox> & { key: string; polys: V2[][] };
 
   const top = floors.filter((f) => f.level === topLevel && f.rooms.length);
   for (const floor of top) {
@@ -910,9 +962,23 @@ export function planRoofs(model: HouseModel): RoofPlan {
       const g = r.roofGroup ?? "main";
       groups.set(g, [...(groups.get(g) ?? []), r]);
     }
-    const rectOf = (key: string, rooms: Room[]): Rect => ({ key, rooms, ...bbox(rooms.flatMap((r) => roomWorldPolygon(floor, r))) });
-    let rects = [...groups.entries()].map(([key, rooms]) => rectOf(key, rooms));
+    const rectOf = (key: string, polys: V2[][]): Rect => ({ key, polys, ...bbox(polys.flat()) });
+    let rects = [...groups.entries()].map(([key, rooms]) => rectOf(key, rooms.map((r) => roomWorldPolygon(floor, r))));
     let main = rects.find((r) => r.key === "main") ?? [...rects].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    // Rooms that interlock across the line between the house and an extension (a landing run on into the
+    // extension, a cupboard poking back into the house) belong to the other one's roof: whichever side has
+    // less of its rooms inside the other's rectangle gives those parts up, so both keep their own outline.
+    for (const e of rects.filter((r) => r !== main)) {
+      if (rectOverlapArea(main, e) < INTERLOCK_MIN) continue;
+      const mainIn = main.polys.reduce((a, poly) => a + polyAreaIn(poly, e), 0);
+      const extIn = e.polys.reduce((a, poly) => a + polyAreaIn(poly, main), 0);
+      if (mainIn < INTERLOCK_MIN && extIn < INTERLOCK_MIN) continue;
+      const [give, keep] = mainIn <= extIn ? [main, e] : [e, main];
+      const trimmed = rectOf(give.key, give.polys.flatMap((poly) => polyOutside(poly, keep)));
+      if (!trimmed.polys.length) continue;
+      rects = rects.map((r) => (r === give ? trimmed : r));
+      if (give === main) main = trimmed;
+    }
     // Which side of the main block an extension stands on, if it stands beside it.
     const besideX = (b: Rect) => (Math.abs(b.x1 - main.x0) < TOL || Math.abs(b.x0 - main.x1) < TOL) && overlap(b.y0, b.y1, main.y0, main.y1);
     const besideZ = (b: Rect) => (Math.abs(b.y1 - main.y0) < TOL || Math.abs(b.y0 - main.y1) < TOL) && overlap(b.x0, b.x1, main.x0, main.x1);
@@ -927,7 +993,7 @@ export function planRoofs(model: HouseModel): RoofPlan {
       const carried = rects.filter((r) => r !== main && setBack(r) <= SET_BACK_TOL);
       for (const r of carried) extensions.push({ key: r.key, setBack: setBack(r), own: false, drop: 0, pitchDeg: ext.pitchDeg });
       if (carried.length) {
-        const merged = rectOf(main.key, [main, ...carried].flatMap((r) => r.rooms));
+        const merged = rectOf(main.key, [main, ...carried].flatMap((r) => r.polys));
         rects = [merged, ...rects.filter((r) => r !== main && !carried.includes(r))];
         main = merged;
       }

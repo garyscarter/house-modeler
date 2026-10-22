@@ -267,6 +267,73 @@ describe("a set-back side extension", () => {
   });
 });
 
+describe("a set-back extension interlocking with the house", () => {
+  /** The built-in Proposed with the landing run on 71 px into the extension, which is notched round it and set back. */
+  function interlocked(setBackPx: number) {
+    const m = listing91770873Proposed("");
+    const first = m.floors.find((f) => f.level === 1)!;
+    const landing = first.rooms.find((r) => r.name === "Landing")!;
+    landing.polygon = [
+      { x: 539, y: 1040 },
+      { x: 850, y: 1040 },
+      { x: 850, y: 1110 },
+      { x: 539, y: 1110 },
+    ];
+    const front = 1285 - setBackPx;
+    first.rooms.find((r) => r.name === "New Room")!.polygon = [
+      [315, 795],
+      [610, 795],
+      [610, 1040],
+      [539, 1040],
+      [539, 1110],
+      [610, 1110],
+      [610, front],
+      [315, front],
+    ].map(([x, y]) => ({ x, y }));
+    return m;
+  }
+
+  it("keeps the main roof to the house's own walls and gives the set-back extension its roof, landing and all", () => {
+    const plan = planRoofs(interlocked(34));
+    expect(plan.blocks).toHaveLength(2);
+    const [main, ext] = plan.blocks;
+    expect(main.x0).toBeCloseTo((610 - 650) / 73);
+    expect(main.z1).toBeCloseTo((1285 - 1203) / 73);
+    expect(main.start).toBe("hip");
+    expect(ext.x1).toBeCloseTo(main.x0);
+    expect(ext.z1).toBeCloseTo((1251 - 1203) / 73);
+    expect(plan.extensions![0].setBack).toBeCloseTo(34 / 73);
+    expectOneSurface(plan.blocks);
+  });
+
+  it("still carries the main roof over the extension when the interlocked extension is flush", () => {
+    const plan = planRoofs(interlocked(0));
+    expect(plan.blocks).toHaveLength(1);
+    expect(plan.blocks[0].x0).toBeCloseTo((315 - 650) / 73);
+  });
+
+  it("gives a cupboard poking back into the house to the main roof", () => {
+    const m = setBack(0.5);
+    const first = m.floors.find((f) => f.level === 1)!;
+    const room = first.rooms.find((r) => r.name === "New Room")!;
+    // A 0.7 m deep cupboard 1 m wide off the New Room, into Bedroom 1's corner.
+    room.polygon = [
+      [315, 795],
+      [661, 795],
+      [661, 868],
+      [610, 868],
+      [610, 1248.5],
+      [315, 1248.5],
+    ].map(([x, y]) => ({ x, y }));
+    const plan = planRoofs(m);
+    expect(plan.blocks).toHaveLength(2);
+    const [main, ext] = plan.blocks;
+    expect(main.x0).toBeCloseTo((610 - 650) / 73);
+    expect(ext.x1).toBeCloseTo(main.x0);
+    expectOneSurface(plan.blocks);
+  });
+});
+
 describe("planning check on a set-back extension", () => {
   const rules = (s: number) => {
     const site = listingSite();
