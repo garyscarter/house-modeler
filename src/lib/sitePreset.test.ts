@@ -37,14 +37,14 @@ describe("isStaleSite", () => {
     expect(isStaleSite(null, asListed)).toBe(false);
   });
   it("is true for a marker with an older version, and false for an unknown id", () => {
-    const reg = { [LISTING_SITE_PRESET.id]: { version: 2, build: listingSite } };
+    const reg = { [LISTING_SITE_PRESET.id]: { version: LISTING_SITE_PRESET.version + 1, build: listingSite } };
     expect(isStaleSite(listingSite(), asListed, reg)).toBe(true);
     const other = { ...listingSite(), preset: { id: "something-else", version: 1 } };
     expect(isStaleSite(other, asListed, reg)).toBe(false);
   });
   it("keeps the marker through an edit, so an edited older plot is still offered the update", () => {
     const edited = { ...listingSite(), frontBearing: 170 };
-    const reg = { [LISTING_SITE_PRESET.id]: { version: 2, build: listingSite } };
+    const reg = { [LISTING_SITE_PRESET.id]: { version: LISTING_SITE_PRESET.version + 1, build: listingSite } };
     expect(isStaleSite(edited, asListed, reg)).toBe(true);
   });
   it("recognises a legacy listing plot without a marker, on a built-in listing layout only", () => {
@@ -84,23 +84,23 @@ describe("freshSiteFor", () => {
 });
 
 describe("decideSiteUpdate", () => {
-  const reg = { [LISTING_SITE_PRESET.id]: { version: 2, build: listingSite } };
+  const reg = { [LISTING_SITE_PRESET.id]: { version: LISTING_SITE_PRESET.version + 1, build: listingSite } };
   const v = { current: asListed, proposed };
   it("is null when nothing is stale or there are no plots", () => {
     expect(decideSiteUpdate(v, {})).toBeNull();
     expect(decideSiteUpdate(v, { current: listingSite() })).toBeNull();
   });
   it("offers As listed's stale plot; Proposed borrowing it follows without being listed", () => {
-    expect(decideSiteUpdate(v, { current: legacySite() })).toEqual({ version: 1, current: true, proposed: undefined });
-    expect(decideSiteUpdate(v, { current: listingSite() }, reg)).toEqual({ version: 2, current: true, proposed: undefined });
+    expect(decideSiteUpdate(v, { current: legacySite() })).toEqual({ version: LISTING_SITE_PRESET.version, current: true, proposed: undefined });
+    expect(decideSiteUpdate(v, { current: listingSite() }, reg)).toEqual({ version: LISTING_SITE_PRESET.version + 1, current: true, proposed: undefined });
   });
   it("takes Proposed's unchanged copy along, but treats an edited one as its own", () => {
     const old = legacySite();
-    expect(decideSiteUpdate(v, { current: old, proposed: structuredClone(old) })).toEqual({ version: 1, current: true, proposed: "with-current" });
+    expect(decideSiteUpdate(v, { current: old, proposed: structuredClone(old) })).toEqual({ version: LISTING_SITE_PRESET.version, current: true, proposed: "with-current" });
     const edited = structuredClone(old);
     edited.boundary[6].x += 1.2;
-    expect(decideSiteUpdate(v, { current: old, proposed: edited })).toEqual({ version: 1, current: true, proposed: "own" });
-    expect(decideSiteUpdate(v, { current: listingSite(), proposed: edited })).toEqual({ version: 1, current: false, proposed: "own" });
+    expect(decideSiteUpdate(v, { current: old, proposed: edited })).toEqual({ version: LISTING_SITE_PRESET.version, current: true, proposed: "own" });
+    expect(decideSiteUpdate(v, { current: listingSite(), proposed: edited })).toEqual({ version: LISTING_SITE_PRESET.version, current: false, proposed: "own" });
   });
   it("ignores a cleared Proposed plot and a user-made one", () => {
     const simple = simpleSite(listing91770873(""), { front: 6, rear: 10, left: 1, right: 1 });

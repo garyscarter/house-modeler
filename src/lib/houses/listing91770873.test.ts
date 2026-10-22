@@ -3,7 +3,9 @@ import { byId } from "../catalogue";
 import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
 import { planRoofs } from "../roof";
+import { clipSegmentOutside } from "../site";
 import { surfaceHeightAt } from "../surfaceSlope";
+import { boundaryWallSegments } from "../wallSteps";
 import { listing91770873, listingSite } from "./listing91770873";
 
 const house = listing91770873("");
@@ -151,14 +153,47 @@ describe("the listing's garden walls", () => {
     expect(Math.abs(site.boundary[i + 1].x - pillar.x)).toBeLessThan(0.15);
   });
 
+  it("walls the plot all round: no fences or hedges, only the drive left open", () => {
+    const site = listingSite();
+    const edges = site.boundaryEdges ?? [];
+    expect(edges).toHaveLength(site.boundary.length);
+    expect(edges.filter((e) => e.kind !== "wall").map((e) => e.kind)).toEqual(["open"]);
+  });
+
+  it("carries the drive wall on behind the porch pillar to the garage front, level with its last step", () => {
+    const site = listingSite();
+    const edges = site.boundaryEdges ?? [];
+    const pillar = planRoofs(house).pillars[0];
+    const k = site.boundary.findIndex((p) => Math.abs(p.y - pillar.z) < 0.01 && Math.abs(p.x - pillar.x) < 0.15);
+    expect(k).toBeGreaterThan(0);
+    const drive = boundaryWallSegments(site.boundary, edges[k - 1], k - 1, site.surfaces);
+    const behind = boundaryWallSegments(site.boundary, edges[k], k, site.surfaces);
+    expect(edges[k]).toMatchObject({ kind: "wall", top: "brick" });
+    expect(behind).toHaveLength(1);
+    expect(behind[0].top).toBeCloseTo(drive[drive.length - 1].topEnd, 6);
+    expect(behind[0].topEnd).toBeCloseTo(behind[0].top, 6);
+    // It runs back to the garage front, under the porch.
+    expect(site.boundary[k + 1].y).toBeLessThan(pillar.z - 1);
+  });
+
+  it("keeps the east neighbour's conservatory clear of the boundary wall beside it, so the wall is drawn", () => {
+    const site = listingSite();
+    const k = site.boundary.findIndex((p, i) => i > 0 && p.x > 5 && p.y < -9);
+    const a = site.boundary[k];
+    const b = site.boundary[k + 1];
+    expect(site.boundaryEdges![k]).toMatchObject({ kind: "wall", height: 1.4 });
+    // Site.tsx stops a wall within 0.12 m of a building.
+    expect(clipSegmentOutside(a, b, site.neighbours.map((n) => n.polygon), 0.12)).toEqual([[0, 1]]);
+  });
+
   it("closes the front garden on the east with a low brick wall from the house front to the pavement", () => {
     const site = listingSite();
     const edges = site.boundaryEdges ?? [];
     const front = (515 - 430) / 73; // the front living room's wall line
     const k = site.boundary.findIndex((p) => p.x > 5 && Math.abs(p.y - front) < 0.05);
     expect(k).toBeGreaterThan(0);
-    // The stretch behind it, along the party wall, stays as it was; the stretch in front is a low wall to the pavement.
-    expect(edges[k - 1].kind).toBe("fence");
+    // The stretch behind it runs along the party wall; the stretch in front is a low wall to the pavement.
+    expect(edges[k - 1].kind).toBe("wall");
     expect(edges[k]).toMatchObject({ kind: "wall", height: 0.95 });
     expect(site.boundary[k + 1].y).toBeCloseTo(5.5);
     // On the line the old edge ran along, so the plot is unchanged.
@@ -199,12 +234,14 @@ describe("Bedroom 1 and bathroom fittings, rear garden beds", () => {
     }
   });
 
-  it("runs the patio out to a raised brick bed with a raised curved planter in front of the doors", () => {
+  it("runs the patio out to a raised brick bed, with a raised curved planter in front of the doors and a shrub bed along the west wall", () => {
     const { surfaces } = listingSite();
     const patio = surfaces.find((s) => s.kind === "patio")!;
     expect(Math.min(...patio.polygon.map((p) => p.y))).toBeLessThanOrEqual(-9);
     const beds = surfaces.filter((s) => s.kind === "bed");
-    expect(beds.length).toBe(2);
+    expect(beds.length).toBe(3);
+    // The shrubs stand in a bed against the west wall, not on the boundary.
+    expect(beds.some((b) => b.polygon.every((p) => p.x < -3.5 && p.y < -6.9 && p.y > -9.7))).toBe(true);
     for (const bed of beds) {
       const n = bed.polygon.length;
       const c = bed.polygon.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
