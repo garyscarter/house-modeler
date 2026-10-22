@@ -211,6 +211,8 @@ export interface Fixture {
   w?: number;
   d?: number;
   h?: number;
+  /** Height of the base above the floor in metres, for wall-hung items (default from the catalogue). */
+  mount?: number;
   color?: string;
   /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
   worktop?: string;
