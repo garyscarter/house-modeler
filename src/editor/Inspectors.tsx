@@ -638,6 +638,8 @@ export function FixtureInspector({
   clash,
   onChange,
   onDuplicate,
+  onCopy,
+  onPaste,
   onRemove,
 }: {
   fixture: Fixture;
@@ -645,6 +647,9 @@ export function FixtureInspector({
   clash: boolean;
   onChange: (p: Partial<Fixture>) => void;
   onDuplicate: () => void;
+  onCopy: () => void;
+  /** Present when the clipboard holds something to paste. */
+  onPaste?: () => void;
   onRemove: () => void;
 }) {
   const resized = fixture.w !== undefined || fixture.d !== undefined || fixture.h !== undefined;
@@ -707,6 +712,14 @@ export function FixtureInspector({
         <button onClick={onDuplicate} title="Ctrl+D or Cmd+D">
           Duplicate
         </button>
+        <button onClick={onCopy} title="Ctrl+C or Cmd+C: copy, then paste on any floor or layout">
+          Copy
+        </button>
+        {onPaste && (
+          <button onClick={onPaste} title="Ctrl+V or Cmd+V">
+            Paste
+          </button>
+        )}
         <button className="danger" onClick={onRemove} title="Delete">
           Remove
         </button>
