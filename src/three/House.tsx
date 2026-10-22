@@ -12,7 +12,7 @@ import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
-import { floorFlight, stairTreads } from "../lib/stairs";
+import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount } from "../lib/stairs";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { FLOOR_COLOUR, getMaterial, type MatSpec } from "./textures";
@@ -248,6 +248,8 @@ function FloorShell({
     [model.floors, floor.level],
   );
   const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [model.floors, floor.level]);
+  // The flight up from this floor: walls it passes over stop under its treads.
+  const flight = useMemo(() => (model.floors.some((f) => f.level === floor.level + 1) ? floorFlight(model, floor) : null), [model, floor]);
   const finish = ext.wallFinish ?? "render";
   const shell = useMemo(
     () =>
@@ -265,8 +267,9 @@ function FloorShell({
         wallColor: ext.wallColor,
         trimColor: ext.trimColor,
         doorsOpen,
+        flight,
       }),
-    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen],
+    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen, flight],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 
@@ -396,20 +399,27 @@ function WallBox({ piece, children, thickness }: { piece: WallPiece; children: R
 /**
  * The flight from this floor to the one above: each tread a solid block down
  * to the floor (the understairs is boxed in), carpeted across its top riser,
- * with kite winders at the foot when the flight turns there.
+ * with kite winders at the foot or head when the flight turns there. Where
+ * the flight passes over a wall into another room (a head running on over
+ * the kitchen), only a soffit hangs under the treads there.
  */
 function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
   const geom = useMemo(() => {
     const f = floorFlight(model, floor);
     if (!f) return null;
     const treads = stairTreads(f);
-    const riser = f.rise / treads.length;
+    const riser = f.rise / treadCount(f);
+    const boxed = boxedPart(floor, f);
     const body: THREE.BufferGeometry[] = [];
     const carpet: THREE.BufferGeometry[] = [];
     // Shapes are drawn on the plan (x, -y) and extruded up, then stood upright.
     const block = (pts: V2[], y0: number, y1: number) => new THREE.ExtrudeGeometry(shapeFrom(pts), { depth: y1 - y0, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, y0, 0);
     for (const t of treads) {
-      if (t.top - riser > 0.001) body.push(block(t.pts, 0, t.top - riser));
+      // Down to the floor over the stairs hall; a soffit where the flight has passed over a wall into another room.
+      const under = t.top - riser;
+      const box = boxed(t.pts);
+      if (box && under > 0.001) body.push(block(box, 0, under));
+      if (box !== t.pts && under > 0.001) body.push(block(t.pts, Math.max(0, under - SOFFIT), under));
       carpet.push(block(t.pts, Math.max(0, t.top - riser), t.top));
     }
     const merge = (parts: THREE.BufferGeometry[]) => {

@@ -793,6 +793,26 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
             </select>
           </label>
           <label>
+            Top of the flight
+            <select
+              value={floor.stairsTopTurn ?? "straight"}
+              onChange={(e) => updateFloor(variant, floor.id, { stairsTopTurn: e.target.value === "straight" ? undefined : (e.target.value as "left" | "right") })}
+            >
+              <option value="straight">Straight onto the landing</option>
+              <option value="left">Turns left onto the landing</option>
+              <option value="right">Turns right onto the landing</option>
+            </select>
+          </label>
+          {floor.stairsTopTurn && (
+            <label>
+              Winders at the top
+              <select value={floor.stairsTopWinders ?? 2} onChange={(e) => updateFloor(variant, floor.id, { stairsTopWinders: parseInt(e.target.value, 10) })}>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
+            </label>
+          )}
+          <label>
             Length × width (m)
             <span className="row">
               <input type="number" step="0.1" min="1" value={floor.stairsLen ?? 2.6} onChange={(e) => updateFloor(variant, floor.id, { stairsLen: parseFloat(e.target.value) || 2.6 })} />

@@ -13,6 +13,7 @@ import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld,
 import { interiorFinish, outsideLook } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { skirtingColour } from "../lib/skirting";
+import { clipUnderFlight, type FlightShape } from "../lib/stairs";
 import { type MatSpec, matKey } from "./textures";
 
 /**
@@ -40,6 +41,8 @@ export interface ShellInput {
   trimColor: string;
   /** Draw swing doors at their open angle; off draws them all shut. */
   doorsOpen: boolean;
+  /** The flight up from this floor, if any: walls it passes over stop under its treads. */
+  flight?: FlightShape | null;
 }
 
 export interface ShellMesh {
@@ -183,7 +186,9 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
 
   walls.forEach((wall, i) => {
     const top = wall.height !== undefined ? Math.min(wall.height, H) : H;
-    const { pieces, placements } = cutWall(wall, top);
+    const cut = cutWall(wall, top);
+    const { placements } = cut;
+    const pieces = inp.flight ? clipUnderFlight(cut.pieces, inp.flight, thick[i]) : cut.pieces;
     const probe = thick[i] / 2 + 0.08;
     const spansOn = (s: 1 | -1) => spansByEdge(wall, sideSpans(wall, s, probe, rooms), (id) => featurePolys.get(id));
     const spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>] = [spansOn(1), spansOn(-1)];
