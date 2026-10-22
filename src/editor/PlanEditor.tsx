@@ -41,6 +41,8 @@ import {
 import { roomColor } from "../three/House";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";
+import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/nudge";
+import { getClipboardFixture, setClipboardFixture, useClipboardFixture } from "../lib/clipboard";
 import "./PlanEditor.css";
 
 type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
@@ -102,6 +104,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
   /** Canopies have no ids, so the selected one is its index in floor.canopies. */
   const [selectedCanopy, setSelectedCanopy] = useState<number | null>(null);
+  /** The room corner last tapped or dragged: the one the arrow keys move. */
+  const [activeCorner, setActiveCorner] = useState<{ roomId: string; idx: number } | null>(null);
+  const clipboard = useClipboardFixture();
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
   const [category, setCategory] = useState(CATEGORIES[0]);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -186,6 +191,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setSelectedCanopy(s.canopy ?? null);
     setUi({ selectedRoomId: s.room ?? null });
     setEdgeEdit(null);
+    setActiveCorner(null);
   };
 
   const setFixtures = (fn: (fx: Fixture[]) => Fixture[]) => updateFloor(variant, floor.id, (f) => ({ ...f, fixtures: fn(f.fixtures ?? []) }));
@@ -194,6 +200,20 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     const src = (floor.fixtures ?? []).find((x) => x.id === id);
     if (!src) return;
     const copy: Fixture = { ...src, id: uid(), x: src.x + 0.2 * ppm, y: src.y + 0.2 * ppm };
+    setFixtures((all) => [...all, copy]);
+    select({ fixture: copy.id });
+  };
+  const copyFixture = (id: string) => {
+    const src = (floor.fixtures ?? []).find((x) => x.id === id);
+    if (src) setClipboardFixture(src);
+  };
+  /** Paste the clipboard's fixture onto this floor (any layout or floor), selecting the copy. */
+  const pasteFixture = () => {
+    const src = getClipboardFixture();
+    if (!src || !byId(src.type)) return;
+    const centre = cam && size ? { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 } : { x: floor.imageW / 2, y: floor.imageH / 2 };
+    const at = pasteAt(src, floor.fixtures ?? [], { w: floor.imageW, h: floor.imageH }, centre, ppm);
+    const copy: Fixture = { ...src, id: uid(), x: at.x, y: at.y };
     setFixtures((all) => [...all, copy]);
     select({ fixture: copy.id });
   };
@@ -215,12 +235,53 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     }
   };
 
+  /** Move the selection by (dx, dy) image px; false when nothing selected can move that way. */
+  const nudgeSelection = (dx: number, dy: number): boolean => {
+    if (selectedCanopy !== null) {
+      if (!canopies[selectedCanopy]) return false;
+      setCanopies((all) => moveCanopy(all, selectedCanopy, dx, dy));
+    } else if (selectedFixtureId) {
+      const fx = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
+      if (!fx) return false;
+      patchFixture(fx.id, { x: fx.x + dx, y: fx.y + dy });
+    } else if (selectedOpeningId) {
+      const o = floor.openings.find((x) => x.id === selectedOpeningId);
+      if (!o) return false;
+      // The wall it sits on: the nearest one running the same way.
+      const along = segs.filter((s) => segOrientation(s) === o.orientation);
+      const near = nearestSegment({ x: o.x, y: o.y }, along.length ? along : segs);
+      if (near) {
+        const at = slideOpening(o, near.seg, dx, dy, ppm);
+        updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.map((x) => (x.id === o.id ? { ...x, ...at } : x)) }));
+      }
+    } else if (selectedWallId) {
+      if (!(floor.walls ?? []).some((w) => w.id === selectedWallId)) return false;
+      updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWallId ? { ...w, a: { x: w.a.x + dx, y: w.a.y + dy }, b: { x: w.b.x + dx, y: w.b.y + dy } } : w)) }));
+    } else if (activeCorner && selectedRoomId === activeCorner.roomId) {
+      const room = floor.rooms.find((r) => r.id === activeCorner.roomId);
+      if (!room?.polygon[activeCorner.idx]) return false;
+      updateFloor(variant, floor.id, (f) => ({
+        ...f,
+        rooms: f.rooms.map((r) => (r.id === room.id ? { ...r, polygon: r.polygon.map((v, i) => (i === activeCorner.idx ? { x: v.x + dx, y: v.y + dy } : v)) } : r)),
+      }));
+    } else return false;
+    return true;
+  };
+
   // Keyboard shortcuts read the latest state through a ref so the listener is attached once.
   const onKey = (e: KeyboardEvent) => {
-    const t = e.target;
-    if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement) return;
+    if (keyBelongsElsewhere(e.target, document)) return;
     const mod = e.ctrlKey || e.metaKey;
-    if (e.key === "Escape") {
+    const arrow = !mod && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
+    if (arrow) {
+      if (!placing && tool === "select" && nudgeSelection(arrow.x * ppm, arrow.y * ppm)) e.preventDefault();
+    } else if (mod && e.key.toLowerCase() === "c" && selectedFixtureId) {
+      e.preventDefault();
+      copyFixture(selectedFixtureId);
+    } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixture()) {
+      e.preventDefault();
+      pasteFixture();
+    } else if (e.key === "Escape") {
       setDraft([]);
       setCalib([]);
       setMeasure([]);
@@ -540,6 +601,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           </button>
         ))}
         {tool === "room" && draft.length >= 3 && <button onClick={finishRoom}>Finish room</button>}
+        {clipboard && !selectedFixture && (
+          <button onClick={pasteFixture} title="Paste the copied furniture onto this floor">
+            Paste {byId(clipboard.type)?.name ?? "item"}
+          </button>
+        )}
         <span className="plan-image-ctl">
           <button
             className={planImage.show ? "active" : ""}
@@ -566,7 +632,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       </div>
       <div className="plan-hint">
         {tool === "canopy" && (draft.length ? "Click the opposite corner of the canopy." : "Click one corner of the porch canopy, then the opposite corner. Corners snap to walls and rooms.")}
-        {tool === "select" && "Tap a room, canopy, opening or item to edit it. Drag corners and items; drag the background to pan, pinch or scroll to zoom."}
+        {tool === "select" && "Tap a room, canopy, opening or item to edit it. Drag corners and items; drag the background to pan, pinch or scroll to zoom. Arrows nudge (Shift ×10) · Ctrl/⌘C, V copy and paste furniture."}
         {tool === "rect" && (draft.length ? "Click the opposite corner." : "Click one corner of the room, then the opposite corner. Corners snap to existing ones.")}
         {tool === "room" && "Click each corner in order, then click the first corner again (or Finish room). Esc cancels."}
         {tool === "door" && "Click on a wall to place a door."}
@@ -823,6 +889,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         sw={stroke * (sel ? 2 : 1.3)}
                         onPointerDown={(e) => {
                           select({ room: r.id });
+                          setActiveCorner({ roomId: r.id, idx: i });
                           startDrag(e, { kind: "corner", roomId: r.id, idx: i });
                         }}
                         onClick={(e) => e.stopPropagation()}
@@ -928,6 +995,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               clash={clashes.has(selectedFixture.id)}
               onChange={(p) => patchFixture(selectedFixture.id, p)}
               onDuplicate={() => duplicateFixture(selectedFixture.id)}
+              onCopy={() => copyFixture(selectedFixture.id)}
+              onPaste={clipboard ? pasteFixture : undefined}
               onRemove={removeSelected}
             />
           ) : selected ? (

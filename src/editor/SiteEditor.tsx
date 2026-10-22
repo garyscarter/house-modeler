@@ -30,6 +30,7 @@ import {
   type OpeningEnd,
   type SlideAlong,
 } from "../lib/boundaryOpening";
+import { arrowDelta, keyBelongsElsewhere, shiftPts } from "../lib/nudge";
 import "./SiteEditor.css";
 
 type Tool = "select" | "surface" | "neighbour";
@@ -188,10 +189,35 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     setSel(null);
   };
 
+  /** Arrow-key nudge in metres: the selected corner, or a whole surface / building with no corner picked. */
+  const nudge = (s: NonNullable<Sel>, dx: number, dy: number): boolean => {
+    if (s.vertex !== null) {
+      const i = s.vertex;
+      if (!polyOf(s)[i]) return false;
+      if (s.type === "boundary") {
+        const slide = slideFor(s, i);
+        updateSite((st) => {
+          const c = st.boundary[i];
+          if (!c) return st;
+          const p = { x: c.x + dx, y: c.y + dy };
+          return slide ? slideCorner(st, i, slide, p) : moveBoundaryCorner(st, i, p);
+        });
+      } else editPoly(s, (poly) => poly.map((o, j) => (j === i ? { x: o.x + dx, y: o.y + dy } : o)));
+      return true;
+    }
+    if (s.type === "boundary") return false;
+    editPoly(s, (poly) => shiftPts(poly, dx, dy));
+    return true;
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+      if (keyBelongsElsewhere(e.target, document)) return;
+      const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
+      if (arrow) {
+        if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
+        return;
+      }
       if (e.key === "Escape") {
         setSel(null);
         setDraft(null);
@@ -372,7 +398,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         <button onClick={() => setView(fitView(size.w, size.h))}>Fit</button>
         <span className="hint">
           {tool === "select"
-            ? "Tap a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan, pinch or scroll to zoom."
+            ? "Tap a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan, pinch or scroll to zoom. Arrows nudge the selected corner or shape (Shift ×10)."
             : "Drag out a rectangle."}
         </span>
       </div>
