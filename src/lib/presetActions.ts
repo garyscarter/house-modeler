@@ -1,6 +1,6 @@
 import { useStore } from "../store";
 import type { VariantKey } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "./houses/listing91770873";
+import { LISTING_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
 import { freshSiteFor } from "./sitePreset";
 import { mergeBoundaryTreatments, type BoundaryMerge } from "./siteMerge";
@@ -29,6 +29,8 @@ export function updatePreset(variant: VariantKey): void {
   const st = useStore.getState();
   const model = st.variants[variant];
   if (!model?.preset || !PRESETS[model.preset.id]) return;
+  // Never overwrite a Proposed design that is an old copy of As listed (it still carries As listed's tag).
+  if (variant === "proposed" && model.preset.id === LISTING_PRESET.id) return;
   const preset = PRESETS[model.preset.id];
   const fresh = preset.build(model.floors[0]?.image ?? placeholderImage());
   // Keep the user's floorplan image if they set one at the same pixel size.

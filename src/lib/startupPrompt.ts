@@ -47,6 +47,8 @@ export function decideStartupPrompt(
   let version = 0;
   for (const k of ["current", "proposed"] as VariantKey[]) {
     const p = variants[k]?.preset;
+    // A Proposed still tagged as As listed is a copy made before copies dropped the tag: it is the user's own design.
+    if (k === "proposed" && p?.id === listingPresetId) continue;
     const latest = p && registry[p.id]?.version;
     if (p && latest !== undefined && latest > p.version) {
       stale.push(k);

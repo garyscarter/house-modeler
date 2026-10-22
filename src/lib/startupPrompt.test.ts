@@ -18,6 +18,10 @@ describe("decideStartupPrompt", () => {
   it("offers an update for an out-of-date built-in variant", () => {
     expect(decideStartupPrompt({ current: m("a", 4), proposed: m("b", 5) }, REG, "a", {})).toEqual({ kind: "update", version: 5, variants: ["current"] });
   });
+  it("never offers to replace a Proposed that is an old copy of As listed (still tagged as As listed)", () => {
+    expect(decideStartupPrompt({ current: m("a", 4), proposed: m("a", 4) }, REG, "a", {})).toEqual({ kind: "update", version: 5, variants: ["current"] });
+    expect(decideStartupPrompt({ current: m("a", 5), proposed: m("a", 4) }, REG, "a", {})).toBeNull();
+  });
   it("never touches a variant without a preset", () => {
     expect(decideStartupPrompt({ current: m("a", 5), proposed: m() }, REG, "a", {})).toBeNull();
   });
