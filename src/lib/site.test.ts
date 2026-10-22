@@ -160,6 +160,9 @@ describe("plot helpers", () => {
     expect(s.boundaryEdges).toHaveLength(4);
     expect(s.neighbours).toHaveLength(1);
     expect(s.neighbours[0].partySide).toBe("left");
+    // The attached half shares the roof: same pitch and overhang, so the gutter line carries on.
+    expect(s.neighbours[0].pitchDeg).toBe(model.exterior!.pitchDeg);
+    expect(s.neighbours[0].overhang).toBe(model.exterior!.overhang);
     expect(s.neighbours[0].polygon[0].x).toBe(8);
     expect(s.surfaces.map((x) => x.kind)).toEqual(["lawn", "lawn", "pavement", "road"]);
   });

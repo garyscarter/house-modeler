@@ -121,7 +121,9 @@ function expectOneSurface(blocks: RoofBlock[]) {
   expect(checked).toBeGreaterThan(1000);
 }
 
-const tan28 = Math.tan((28 * Math.PI) / 180);
+/** The listing's roof pitch, which a set-back extension keeps. */
+const PITCH = listing91770873Proposed("").exterior!.pitchDeg;
+const tanP = Math.tan((PITCH * Math.PI) / 180);
 const half = EXT_WALL_T / 2;
 
 function blocksOf(s: number, opts?: Parameters<typeof setBack>[1]) {
@@ -137,7 +139,7 @@ describe("a set-back side extension", () => {
     expect(plan.blocks).toHaveLength(1);
     const [b] = plan.blocks;
     expect([b.start, b.end, b.tuck]).toEqual(["hip", "flush", undefined]);
-    expect(plan.extensions).toEqual([{ key: "extension", setBack: 0, own: false, drop: 0, pitchDeg: 28 }]);
+    expect(plan.extensions).toEqual([{ key: "extension", setBack: 0, own: false, drop: 0, pitchDeg: PITCH }]);
     // With one roof nothing is cut away.
     const j = joinRoofs(plan.blocks, 0);
     const t = roofTrim(b);
@@ -158,12 +160,12 @@ describe("a set-back side extension", () => {
       expect(plan.blocks[0]).toBe(main);
       expect(main.start).toBe("hip");
       expect(main.z1).toBeCloseTo(ext.z1 + s);
-      expect([ext.axis, ext.start, ext.end, ext.pitchDeg]).toEqual(["x", "hip", "flush", 28]);
+      expect([ext.axis, ext.start, ext.end, ext.pitchDeg]).toEqual(["x", "hip", "flush", PITCH]);
       // The same pitch over a span `s` shallower: the ridge sits s/2 tan(pitch) lower, and the rear slopes are one plane.
       const drop = roofGeometry(main).ridgeY - roofGeometry(ext).ridgeY;
-      expect(drop).toBeCloseTo((s / 2) * tan28);
+      expect(drop).toBeCloseTo((s / 2) * tanP);
       expect(roofHeightAt(ext, -2, -5)).toBeCloseTo(roofHeightAt(main, 1, -5)!);
-      expect(plan.extensions).toEqual([{ key: "extension", setBack: expect.closeTo(s, 6), own: true, drop: expect.closeTo(drop, 6), pitchDeg: 28 }]);
+      expect(plan.extensions).toEqual([{ key: "extension", setBack: expect.closeTo(s, 6), own: true, drop: expect.closeTo(drop, 6), pitchDeg: PITCH }]);
     });
 
     it(`puts the extension's front eaves on its set-back wall (${s} m), with no roof in front of it`, () => {
@@ -204,10 +206,10 @@ describe("a set-back side extension", () => {
   it("sets a separate set-back extension down by at least the chosen drop", () => {
     const { plan, ext, main } = blocksOf(0.5, { mode: "separate" });
     expect(roofGeometry(main).ridgeY - roofGeometry(ext).ridgeY).toBeCloseTo(0.3);
-    expect(ext.pitchDeg).toBeLessThan(28);
+    expect(ext.pitchDeg).toBeLessThan(PITCH);
     expectOneSurface(plan.blocks);
     // A set-back that already drops the ridge further keeps the pitch.
-    expect(blocksOf(1.5, { mode: "separate" }).ext.pitchDeg).toBe(28);
+    expect(blocksOf(1.5, { mode: "separate" }).ext.pitchDeg).toBe(PITCH);
   });
 
   it("meets a flush separate extension without gaps too, leaving the main roof's eaves and front hip whole", () => {
@@ -348,7 +350,8 @@ describe("planning check on a set-back extension", () => {
     const { ridge, pitch } = rules(1);
     expect(ridge.status).toBe("pass");
     const [own, house] = metres(ridge.reason);
-    expect(house - own).toBeCloseTo(0.3, 1);
+    // Set back 1 m at the same pitch, the ridge drops half a metre's rise; the reason quotes heights to 0.1 m.
+    expect(Math.abs(house - own - 0.5 * tanP)).toBeLessThanOrEqual(0.1 + 1e-9);
     expect(pitch.status).toBe("pass");
   });
 });

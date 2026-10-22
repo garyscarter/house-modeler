@@ -69,10 +69,10 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 18 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 18 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 19 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 19 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
-export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 2 };
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 3 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -405,8 +405,13 @@ export function listing91770873(image: string): HouseModel {
       roofStyle: "hip",
       partyWall: "right",
       ridgeAxis: "x",
-      // A shallow roof: the front-street camera, fitted to the walls, puts the ridge where a 28 degree pitch does.
-      pitchDeg: 28,
+      // About 32 degrees: cameras fitted to the walls and windows of front-street, front-1, front-2 and front-3
+      // (pitch-free points only) put the ridge cap about 2.4 m over the eaves, and the close views just miss the
+      // slope, as they would up to about 31-34 degrees (NOTES). 28 put the ridge about 0.35 m too low.
+      pitchDeg: 32,
+      // Slim eaves: the gutter's outer lip is about 0.3-0.35 m off the wall at the hip corner (front-street,
+      // front-2) and the soffit reads narrow from below (front-2, front-3), so the tiles stop about 0.25 m out.
+      overhang: 0.25,
       roofColor: "#6e4a3c",
       wallColor: RENDER,
       wallFinish: "render",
@@ -601,13 +606,14 @@ export function listingSite(): Site {
       { kind: "wall", height: 1.3, top: "brick", piers: false },
     ],
     neighbours: [
-      // Pale render with a brick band, sharing our roof covering and its 28 degree pitch.
-      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 28, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
+      // Pale render with a brick band, under one continuous roof with ours: the same 32 degree pitch and eaves.
+      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 32, overhang: 0.25, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
       // A white uPVC conservatory (rear photos). It stands just behind the boundary wall, whose top and
       // pierced panel show in front of its glazing (rear-3); set 0.24 m off the line so the wall is drawn.
       block("No. 26 conservatory", 6.06, -9.41, 8.88, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
       block("No. 26 side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),
-      // Red brick with a red clay-tile hipped roof (front photos).
+      // Red brick with a red clay-tile hipped roof (front photos). Measured with the front-street camera it rises a
+      // little more than ours over a similar depth, so it stays at 35 degrees.
       block("West neighbour", -12.8, -6.15, -6.36, 0.78, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left", color: "#a5583f", roofColor: "#a14e36" }),
       block("Outbuilding behind the garden", -7.7, -15.1, 1.4, -11.5, { eaves: 2.4, roof: "flat" }),
     ],

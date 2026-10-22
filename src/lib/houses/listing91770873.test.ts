@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { byId } from "../catalogue";
 import { buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
-import { planRoofs } from "../roof";
+import { planRoofs, roofGeometry } from "../roof";
 import { clipSegmentOutside } from "../site";
 import { surfaceHeightAt } from "../surfaceSlope";
 import { boundaryWallSegments } from "../wallSteps";
@@ -247,5 +247,21 @@ describe("Bedroom 1 and bathroom fittings, rear garden beds", () => {
       const c = bed.polygon.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
       expect(surfaceHeightAt(bed, c)).toBeGreaterThan(0.2);
     }
+  });
+});
+
+describe("the main roof (fitted to the front photos)", () => {
+  const main = planRoofs(house).blocks[0];
+  const g = roofGeometry(main);
+
+  it("rises about 2.3-2.45 m from the eaves to the ridge line, as the fitted cameras measure", () => {
+    expect(g.ridgeY - g.eavesY).toBeGreaterThan(2.25);
+    expect(g.ridgeY - g.eavesY).toBeLessThan(2.45);
+  });
+
+  it("is one continuous roof with No. 26: the attached neighbour has the same pitch and eaves overhang", () => {
+    const n26 = listingSite().neighbours.find((n) => n.name.startsWith("No. 26 (attached)"))!;
+    expect(n26.pitchDeg).toBe(house.exterior!.pitchDeg);
+    expect(n26.overhang).toBe(house.exterior!.overhang);
   });
 });

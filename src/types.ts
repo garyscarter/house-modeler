@@ -467,6 +467,8 @@ export interface Neighbour {
   eaves: number;
   roof: "hip" | "gable" | "flat";
   pitchDeg?: number;
+  /** Eaves overhang of a pitched roof, metres (default 0.35); an attached neighbour's matches the house's so the gutter line carries on. */
+  overhang?: number;
   ridgeAxis?: "auto" | "x" | "z";
   /** Side of the footprint that is a party wall (roof stops flush there). */
   partySide?: "none" | "left" | "right";

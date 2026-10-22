@@ -286,6 +286,7 @@ export function simpleSite(model: HouseModel, depths: PlotDepths, keep?: Pick<Si
     eaves: Math.round(eaves * 10) / 10,
     roof: ext.roofStyle,
     pitchDeg: ext.pitchDeg,
+    overhang: ext.overhang,
     ridgeAxis: "x",
     partySide: side === "right" ? "left" : "right",
   });
