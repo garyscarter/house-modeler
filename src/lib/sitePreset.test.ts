@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "../store";
 import { listing91770873, listing91770873Proposed, listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "./houses/listing91770873";
-import { updatePreset, updateSitePreset } from "./presetActions";
-import { decideSiteUpdate, freshSiteFor, isStaleSite, looksLikeListingSite } from "./sitePreset";
+import { applyBoundaryUpdate, planBoundaryUpdate, updatePreset, updateSitePreset } from "./presetActions";
+import { setOpeningWidth } from "./boundaryOpening";
+import { decideSiteUpdate, freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite, looksLikeListingSite } from "./sitePreset";
 import { simpleSite } from "./site";
 import { decideStartupPrompt, describeUpdate } from "./startupPrompt";
 import type { Site } from "../types";
@@ -145,11 +146,37 @@ describe("the startup prompt with a plot update", () => {
   });
   it("never replaces an edited Proposed plot without the explicit choice", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true, proposed: "own" } });
-    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Update, and Proposed's plot too (your plot edits there are lost)", "Not now"]);
+    expect(d.choices.map((c) => c.label)).toEqual([
+      "Update",
+      "Update the boundaries only (keep my edits)",
+      "Update, and Proposed's plot too (your plot edits there are lost)",
+      "Not now",
+    ]);
     expect(d.choices[0].plan!.sites).toEqual(["current"]);
     expect(d.choices[0].plan!.remember).toEqual(["site"]);
-    expect(d.choices[1].plan!.sites).toEqual(["current", "proposed"]);
+    // Boundaries only: As listed's unedited plot is replaced, Proposed's edited one keeps its edits.
+    expect(d.choices[1].plan).toEqual({ layouts: [], sites: ["current"], boundaries: ["proposed"], remember: [] });
+    expect(d.choices[2].plan!.sites).toEqual(["current", "proposed"]);
     expect(d.message).toContain("Proposed has a plot of its own");
+  });
+  it("offers boundaries only for an edited As listed plot, with layouts or without", () => {
+    const only = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true, currentEdited: true } });
+    expect(only.choices.map((c) => c.label)).toEqual(["Update", "Update the boundaries only (keep my edits)", "Not now"]);
+    expect(only.choices[1].plan).toEqual({ layouts: [], sites: [], boundaries: ["current"], remember: [] });
+    const both = describeUpdate({ kind: "update", version: 5, variants: ["current"], site: { version: 1, current: true, proposed: "with-current", currentEdited: true } });
+    expect(both.choices[1].label).toBe("Update, and only the plot's boundaries (keep my plot edits)");
+    expect(both.choices[1].plan).toEqual({ layouts: ["current"], sites: [], boundaries: ["current", "proposed"], remember: [] });
+    expect(both.message).toContain("boundaries-only");
+  });
+  it("offers no boundaries-only choice for a plot with no edits", () => {
+    const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true } });
+    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Not now"]);
+    expect(d.choices[0].plan!.boundaries).toBeUndefined();
+  });
+  it("offers just the boundaries when only Proposed's own plot is stale", () => {
+    const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: false, proposed: "own" } });
+    expect(d.choices.map((c) => c.label)).toEqual(["Update Proposed's plot (your plot edits there are lost)", "Update the boundaries only (keep my edits)", "Not now"]);
+    expect(d.choices[1].plan).toEqual({ layouts: [], sites: [], boundaries: ["proposed"], remember: [] });
   });
   it("takes Proposed's unchanged copy with As listed", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true, proposed: "with-current" } });
@@ -160,6 +187,32 @@ describe("the startup prompt with a plot update", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: false, proposed: "own" } });
     expect(d.choices[0].label).toContain("Proposed's plot");
     expect(d.choices[0].plan).toEqual({ layouts: [], sites: ["proposed"], remember: [] });
+  });
+});
+
+describe("telling edited plots from unedited ones", () => {
+  it("sees no edits in a copy that differs only in treatments and ids", () => {
+    expect(hasPlotEdits(legacySite(), listingSite())).toBe(false);
+  });
+  it("sees a moved corner, a changed neighbour or a moved bearing", () => {
+    expect(hasPlotEdits(setOpeningWidth(listingSite(), 6, 4), listingSite())).toBe(true);
+    const n = listingSite();
+    n.neighbours[0].eaves += 1;
+    expect(hasPlotEdits(n, listingSite())).toBe(true);
+    expect(hasPlotEdits({ ...listingSite(), frontBearing: 170 }, listingSite())).toBe(true);
+  });
+  it("flags As listed's edited stale plot in decideSiteUpdate, only when it is", () => {
+    const v = { current: asListed, proposed };
+    expect(decideSiteUpdate(v, { current: legacySite() })?.currentEdited).toBeUndefined();
+    expect(decideSiteUpdate(v, { current: setOpeningWidth(legacySite(), 6, 4) })?.currentEdited).toBe(true);
+  });
+  it("knows a listing plot on a listing layout", () => {
+    expect(isListingPlot(listingSite(), asListed)).toBe(true);
+    expect(isListingPlot(legacySite(), proposed)).toBe(true);
+    expect(isListingPlot(listingSite(), {})).toBe(false);
+    expect(isListingPlot(listingSite(), undefined)).toBe(false);
+    expect(isListingPlot(undefined, asListed)).toBe(false);
+    expect(isListingPlot(simpleSite(listing91770873(""), { front: 6, rear: 10, left: 1, right: 1 }), asListed)).toBe(false);
   });
 });
 
@@ -206,5 +259,28 @@ describe("updating through the store", () => {
     st().undo();
     expect(st().variants.current!.preset!.version).toBe(1);
     expect(st().sites.current!.preset).toBeUndefined();
+  });
+  it("updates the boundaries of an edited plot, keeps the widened drive, and undoes in one step", () => {
+    st().setVariant("current", listing91770873(""));
+    st().setVariant("proposed", listing91770873Proposed(""));
+    const mine = setOpeningWidth(legacySite(), 6, 4.0, "start");
+    useStore.setState({ sites: { current: legacySite(), proposed: mine }, past: [] });
+    const plan = planBoundaryUpdate("proposed")!;
+    expect(plan.changes.map((c) => c.edge)).toContain(7); // the drive-side wall gains its stepped top
+    applyBoundaryUpdate("proposed", plan);
+    const after = st().sites.proposed!;
+    expect(after.boundary).toEqual(mine.boundary);
+    expect(after.boundaryEdges![6].kind).toBe("open");
+    expect(after.boundaryEdges![7]).toMatchObject({ follow: "step", stepEvery: 2.45 });
+    expect(after.preset).toEqual(LISTING_SITE_PRESET);
+    expect(isStaleSite(after, proposed)).toBe(false);
+    expect(st().sites.current!.preset).toBeUndefined();
+    expect(st().past).toHaveLength(1);
+    st().undo();
+    expect(st().sites.proposed).toBe(mine);
+  });
+  it("has nothing to plan for a layout with no plot of its own", () => {
+    st().setVariant("current", listing91770873(""));
+    expect(planBoundaryUpdate("proposed")).toBeUndefined();
   });
 });

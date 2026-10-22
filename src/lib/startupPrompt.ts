@@ -68,7 +68,14 @@ type UpdatePrompt = Extract<StartupPrompt, { kind: "update" }>;
 type Answer = "update" | "site";
 
 /** What accepting a choice does: layouts to refresh, plots to replace, and which answers to remember afterwards. */
-export type UpdatePlan = { layouts: VariantKey[]; sites: VariantKey[]; remember: Answer[] };
+export type UpdatePlan = {
+  layouts: VariantKey[];
+  /** Plots replaced by the latest built-in one. */
+  sites: VariantKey[];
+  /** Plots that keep their edits and take only the latest boundary treatments (walls, fences, hedges). */
+  boundaries?: VariantKey[];
+  remember: Answer[];
+};
 export type UpdateChoice = { label: string; plan: UpdatePlan | null };
 
 /** The answers a "not now" remembers: one per part that was on offer. */
@@ -93,6 +100,15 @@ export function describeUpdate(prompt: UpdatePrompt): { message: string; choices
   // The plots replaced by a plain "Update": As listed's, plus Proposed's when it is an unchanged copy of it.
   const sites: VariantKey[] = [...(site.current ? (["current"] as const) : []), ...(site.proposed === "with-current" ? (["proposed"] as const) : [])];
   const own = site.proposed === "own";
+  // The plots with edits worth keeping, which can take the new boundary treatments alone.
+  const keepers: VariantKey[] = [
+    ...(site.current && site.currentEdited ? (["current"] as const) : []),
+    ...(own || (site.proposed === "with-current" && site.currentEdited) ? (["proposed"] as const) : []),
+  ];
+  const boundaryChoice = (replaced: VariantKey[], withLayouts: VariantKey[]): UpdateChoice => ({
+    label: withLayouts.length ? "Update, and only the plot's boundaries (keep my plot edits)" : "Update the boundaries only (keep my edits)",
+    plan: { layouts: withLayouts, sites: replaced.filter((k) => !keepers.includes(k)), boundaries: keepers, remember: [] },
+  });
   const tail = " Layouts and plots you copied or made yourself are not touched. You can undo it.";
 
   if (!layouts.length && !sites.length) {
@@ -101,6 +117,7 @@ export function describeUpdate(prompt: UpdatePrompt): { message: string; choices
       message: `A newer plot for listing 91770873 is available. Proposed has a plot of its own; updating it replaces your plot edits there.${tail}`,
       choices: [
         { label: "Update Proposed's plot (your plot edits there are lost)", plan: { layouts: [], sites: ["proposed"], remember: [] } },
+        boundaryChoice([], []),
         { label: "Not now", plan: null },
       ],
     };
@@ -108,14 +125,16 @@ export function describeUpdate(prompt: UpdatePrompt): { message: string; choices
   const parts = [...(layouts.length ? [`house layouts (${layouts.map((k) => VARIANT_LABEL[k]).join(", ")})`] : []), ...(sites.length ? ["the plot"] : [])];
   const edits = [...(layouts.length ? [`the built-in ${names} layout${layouts.length > 1 ? "s" : ""}`] : []), ...(sites.length ? ["the plot"] : [])];
   const ownNote = own ? " Proposed has a plot of its own, which is left as it is unless you choose to update it too." : "";
+  const keepNote = keepers.length ? " To keep your plot edits and only bring in the new fences and walls, choose the boundaries-only update." : "";
   const choices: UpdateChoice[] = [
     // Declining Proposed's own plot is an answer for it, so it is not asked again for this version.
     { label: "Update", plan: { layouts, sites, remember: own ? ["site"] : [] } },
   ];
+  if (keepers.length) choices.push(boundaryChoice(sites, layouts));
   if (own) choices.push({ label: "Update, and Proposed's plot too (your plot edits there are lost)", plan: { layouts, sites: [...sites, "proposed"], remember: [] } });
   choices.push({ label: "Not now", plan: null });
   return {
-    message: `${layouts.length ? `A newer version of listing 91770873 is available: ${parts.join(" and ")}.` : "A newer plot for listing 91770873 is available."} Update? This replaces any edits you made to ${edits.join(" and ")}.${ownNote}${tail}`,
+    message: `${layouts.length ? `A newer version of listing 91770873 is available: ${parts.join(" and ")}.` : "A newer plot for listing 91770873 is available."} Update? This replaces any edits you made to ${edits.join(" and ")}.${ownNote}${keepNote}${tail}`,
     choices,
   };
 }
