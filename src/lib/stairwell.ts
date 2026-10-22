@@ -1,6 +1,6 @@
 import type { Floor, HouseModel } from "../types";
 import { buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
-import { flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
+import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
 
 /**
  * Stairwells: the opening in the floor above each flight, and where its
@@ -134,12 +134,19 @@ export interface RailRun {
   b: V2;
   ya: number;
   yb: number;
+  /** Where the newel posts at a and b start, metres above this floor (default 0, standing on it): a newel over a room the flight only passes over hangs from its soffit. */
+  fa?: number;
+  fb?: number;
 }
+
+/** How far a newel hanging from the flight drops below the pitch line, metres. */
+const NEWEL_DROP = 0.35;
 
 /**
  * Balustrades for a stairwell: along the open sides of the flight on the
  * floor below, and round the open edges of the opening on the floor above,
- * leaving the top of the flight open to step off.
+ * leaving the top of the flight open to step off: its end when it arrives
+ * straight, the side it turns to when its head winds onto the landing.
  */
 export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRun[]; upper: RailRun[] } {
   const lower = model.floors.find((f) => f.id === well.lowerId);
@@ -150,13 +157,22 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
   // Plan direction of +l across the flight (see flightPoint).
   const across = { x: -f.dir.y, y: f.dir.x };
   const side = (sign: number): V2 => ({ x: across.x * sign, y: across.y * sign });
+  const boxed = boxedIn(lower, f);
+  /** The end of a turned head, where the side it turns to begins. */
+  const headStart = f.topTurn ? f.run - f.width : f.run;
 
   for (const l of [-f.width / 2, f.width / 2]) {
-    // On the side the winders are entered from, the rail starts at the newel where they turn.
-    const s0 = f.turn && Math.sign(l) === f.turn ? f.width : 0;
+    const sign = Math.sign(l);
+    // On the side the foot's winders are entered from, the rail starts at the newel where they turn;
+    // on the side a turned head steps off, it ends at the newel where the head turns.
+    const s0 = f.turn && sign === f.turn ? f.width : 0;
+    const s1 = f.topTurn && sign === f.topTurn ? headStart : f.run;
     const a = flightPoint(f, s0, l);
-    const b = flightPoint(f, f.run, l);
-    if (openSide(lower, a, b, side(Math.sign(l)), model.ceilingHeight)) out.lower.push({ a, b, ya: stairHeight(f, s0, l * 0.999), yb: f.rise });
+    const b = flightPoint(f, s1, l);
+    if (s1 - s0 < 0.05 || !openSide(lower, a, b, side(sign), model.ceilingHeight)) continue;
+    const ya = stairHeight(f, s0, l * 0.999);
+    const yb = stairHeight(f, s1, l * 0.999);
+    out.lower.push({ a, b, ya, yb, fa: boxed(a) ? 0 : Math.max(0, ya - NEWEL_DROP), fb: boxed(b) ? 0 : Math.max(0, yb - NEWEL_DROP) });
   }
   for (const r of well.rects) {
     const corners = [
@@ -167,12 +183,24 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     const ls = corners.map((c) => flightL(f, c.x, c.y));
     const [s0, s1] = [Math.min(...ss), Math.max(...ss)];
     const [l0, l1] = [Math.min(...ls), Math.max(...ls)];
-    const edges: [V2, V2, V2][] = [
-      [flightPoint(f, s0, l0), flightPoint(f, s1, l0), side(-1)],
-      [flightPoint(f, s0, l1), flightPoint(f, s1, l1), side(1)],
-      [flightPoint(f, s0, l0), flightPoint(f, s0, l1), { x: -f.dir.x, y: -f.dir.y }],
-    ];
-    for (const [a, b, dir] of edges) if (openSide(upper, a, b, dir, model.ceilingHeight)) out.upper.push({ a, b, ya: 0, yb: 0 });
+    const edges: [V2, V2, V2][] = [];
+    for (const [l, sign] of [
+      [l0, -1],
+      [l1, 1],
+    ]) {
+      // The side a turned head steps off onto the landing stays open.
+      const e = f.topTurn && sign === f.topTurn ? Math.min(s1, headStart) : s1;
+      if (e - s0 > 0.05) edges.push([flightPoint(f, s0, l), flightPoint(f, e, l), side(sign)]);
+    }
+    edges.push([flightPoint(f, s0, l0), flightPoint(f, s0, l1), { x: -f.dir.x, y: -f.dir.y }]);
+    // A turned head's far end is guarded too (usually it is against a wall).
+    if (f.topTurn) edges.push([flightPoint(f, s1, l0), flightPoint(f, s1, l1), f.dir]);
+    for (const [a, b, dir] of edges) {
+      // An edge shared with another part of the same opening (it spans two rooms) is not an edge.
+      const m = { x: (a.x + b.x) / 2 + dir.x * 0.15, y: (a.y + b.y) / 2 + dir.y * 0.15 };
+      if (well.rects.some((o) => o !== r && m.x > o.x0 && m.x < o.x1 && m.y > o.y0 && m.y < o.y1)) continue;
+      if (openSide(upper, a, b, dir, model.ceilingHeight)) out.upper.push({ a, b, ya: 0, yb: 0 });
+    }
   }
   return out;
 }

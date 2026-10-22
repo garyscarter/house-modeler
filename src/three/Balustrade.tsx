@@ -38,8 +38,9 @@ function balustradeGeometry(runs: RailRun[]): THREE.BufferGeometry | null {
       const p = at(i / n);
       parts.push(post(p.x, p.z, p.y, p.y + RAIL_H, 0.032));
     }
-    // Newel posts stand on the floor below (on a flight, inside the boxed-in understairs).
-    parts.push(post(a.x, a.z, 0, a.y + RAIL_H + 0.12, 0.09), post(b.x, b.z, 0, b.y + RAIL_H + 0.12, 0.09));
+    // Newel posts stand on the floor below (on a flight, inside the boxed-in understairs), or hang
+    // from the flight's soffit where it has passed over a wall into another room.
+    parts.push(post(a.x, a.z, r.fa ?? 0, a.y + RAIL_H + 0.12, 0.09), post(b.x, b.z, r.fb ?? 0, b.y + RAIL_H + 0.12, 0.09));
     // Up a flight, a string board along the open side covers the ends of the treads.
     if (r.yb !== r.ya) parts.push(beam(new THREE.Vector3(a.x, a.y - 0.08, a.z), new THREE.Vector3(b.x, b.y - 0.08, b.z), 0.035, 0.3));
   }

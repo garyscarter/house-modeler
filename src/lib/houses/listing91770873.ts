@@ -69,8 +69,8 @@ const UPVC: Partial<Opening> = { sillStyle: "upvc" };
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 17 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 17 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 18 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 18 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 2 };
 
@@ -216,8 +216,9 @@ export function listing91770873(image: string): HouseModel {
       op("door", 772, 443, "h", 0.85, { ...MAHOGANY_DOOR, flipHinge: true, flipSwing: true }),
       // Ledged plank door from the kitchen to the cupboard under the top of the stairs (plan: the grey
       // cupboard at x 836-900, y 345-405, its door 836-890; kitchen-2: latch on the west, so hung on
-      // the east jamb, opening into the kitchen).
-      op("door", 863, 345, "h", 0.7, { style: "ledged", color: "#3a2516", liningColor: "#3a2516", flipHinge: true, flipSwing: true }),
+      // the east jamb, opening into the kitchen). It is lower than the glazed doors either side, about
+      // 1.75 m, its head tucked under the flight that passes over it into the kitchen (kitchen-2).
+      op("door", 863, 345, "h", 0.7, { style: "ledged", color: "#3a2516", liningColor: "#3a2516", flipHinge: true, flipSwing: true, head: 1.75 }),
       // Serving hatch from the kitchen to the rear living room. On the kitchen side a dark timber frame
       // about 1.25 m wide (y 110-202) sits over the returned units, but only its south half is open,
       // glazed with frosted sliding panes; the north half is a papered panel (kitchen-1, -2). The living
@@ -233,7 +234,7 @@ export function listing91770873(image: string): HouseModel {
       // 0.5 m wide on its left (partly hidden by the porch pier in front-3) and a thin one on its right.
       op("garage", 635, 515, "h", 2.15, { color: "#b3202e", style: "up-over", frameColor: "#f2efe6" }), // garage door
     ],
-    { x: 865, y: 430 },
+    { x: 865, y: 393.5 }, // centre of the flight (below)
     // Covered porch in front of the garage door and front door.
     [
       [
@@ -246,10 +247,17 @@ export function listing91770873(image: string): HouseModel {
   );
   // Ground-floor flight rises towards the top of the plan, arriving at the landing.
   // Its bottom steps wind a quarter turn so you step on from the hall side (photos).
+  // Its head winds a quarter turn the same way, two winders onto the west end of the landing,
+  // stepped off eastwards (owner; the floorplan's walk line turns east at the top, and landing-1
+  // is taken from there looking east). The flight runs on over the kitchen/hall wall: its head
+  // fills the landing's full depth, from the foot (plan y 514) to the landing's north wall
+  // (first-floor y 1046 = ground y 273), so 3.3 m, 13 risers of about 204 mm.
   ground.stairsDir = "up";
-  ground.stairsLen = 2.3;
+  ground.stairsLen = 3.3;
   ground.stairsWidth = 0.9;
   ground.stairsTurn = "right";
+  ground.stairsTopTurn = "right";
+  ground.stairsTopWinders = 2;
   // The partition holding the glazed door across the corridor between the front hall and the kitchen,
   // and the back of the rear living room's chimney breast: the notch leaves the party wall open there,
   // so a 0.1 m wall flush with the party wall's outer face (1290 + 9 px) closes it.
@@ -319,6 +327,8 @@ export function listing91770873(image: string): HouseModel {
           wallFinishes: Object.fromEntries([1, 2, 3].map((i) => [i, { covering: "paint" as const, paint: "#a68b97" }])),
         },
       ),
+      // The head of the stairs winds onto its west end (x 617-683, the landing's full depth); the clear
+      // landing is east of it, about 0.87 m deep (plan "0.87 x 2.23 m").
       rect("Landing", 610, 1040, 850, 1110, undefined, { floorFinish: "carpet", color: CARPET_STAIRS, wallPaint: "#f1eee8" }),
       // Beige tiles floor to ceiling with travertine mosaic strips.
       poly("Bathroom", [
@@ -329,6 +339,8 @@ export function listing91770873(image: string): HouseModel {
         [610, 1215],
         [690, 1215],
       ], undefined, { floorFinish: "tile", color: BATHROOM_FLOOR, wallCovering: "tiles", wallPaint: "#dccdbb", wallAccent: "#cdbb9f" }),
+      // The straight part of the flight below the head, beside the bathroom; open to the landing across
+      // its whole width (the floorplan draws no wall there).
       rect("Stairs", 610, 1110, 690, 1215, undefined, { floorFinish: "carpet", color: CARPET_STAIRS, wallPaint: "#f1eee8" }),
     ],
     [
@@ -336,7 +348,7 @@ export function listing91770873(image: string): HouseModel {
       op("door", 805, 1040, "h", 0.8, WHITE_DOOR),
       op("door", 850, 1075, "v", 0.8, WHITE_DOOR),
       op("door", 722, 1110, "h", 0.65, WHITE_DOOR), // west of the shower (floorplan)
-      op("gap", 650, 1110, "h", 0.8), // stairs open onto the landing
+      op("gap", 650, 1110, "h", 1.09), // the flight runs on into the landing: no wall between them
       // Bedroom 1, the bathroom and bedroom 3: one pane under a top light; bedroom 2: side casements
       // either side of a fixed centre pane under a top light (rear-1, front-2).
       op("window", 720, 795, "h", 1.0, { glazing: "fixed-top", ...UPVC }),
@@ -347,8 +359,15 @@ export function listing91770873(image: string): HouseModel {
       op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...UPVC }),
       op("window", 610, 1080, "v", 0.6, UPVC),
     ],
-    { x: 650, y: 1162 },
+    { x: 650, y: 1166.5 }, // where the ground floor's flight arrives (below)
   );
+  // The flight arriving from the ground floor, drawn the same on this floor's plan.
+  first.stairsDir = "up";
+  first.stairsLen = 3.3;
+  first.stairsWidth = 0.9;
+  first.stairsTurn = "right";
+  first.stairsTopTurn = "right";
+  first.stairsTopWinders = 2;
   // Back of Bedroom 3's chimney breast, closing the party wall behind its notch (as on the ground floor).
   first.walls = [{ id: uid(), a: { x: 1080.5, y: 1040 }, b: { x: 1080.5, y: 1103 }, color: RENDER }];
   // Fitted wardrobes from the photos, backs against the walls at their inner faces
@@ -457,7 +476,9 @@ export function listing91770873Proposed(image: string): HouseModel {
   const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { roofGroup: "extension" });
   first.rooms.push(newRoom);
   first.openings.push(
-    op("door", 610, 1075, "v", 0.8, WHITE_DOOR), // from the landing (assumed)
+    // From the landing (assumed). It opens beside the stair head's winders, so it can't be reached
+    // from the landing as drawn: a placeholder until the owner settles the entrance (see NOTES.md).
+    op("door", 610, 1075, "v", 0.8, WHITE_DOOR),
     op("window", 470, 795, "h", 1.8, UPVC), // north (assumed)
     op("window", 470, 1285, "h", 1.8, UPVC), // south (assumed)
   );

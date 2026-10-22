@@ -256,9 +256,9 @@ function stairsSvg(model: HouseModel, floor: Floor, X: (p: V2) => string, Y: (p:
   const up = model.floors.some((f) => f.level === floor.level + 1);
   const lines: string[] = [];
   lines.push(`<polygon points="${corners.map((p) => `${X(p)},${Y(p)}`).join(" ")}" fill="#fff"/>`);
-  const flight = up ? floorFlight(model, floor) : null;
-  if (flight?.turn) {
-    // Winders at the foot: draw every tread's outline.
+  const flight = floorFlight(model, floor);
+  if (flight && (flight.turn || flight.topTurn)) {
+    // Winders at the foot or head: draw every tread's outline (on the floor above too, where the flight arrives).
     for (const t of stairTreads(flight)) lines.push(`<polygon points="${t.pts.map((p) => `${X(p)},${Y(p)}`).join(" ")}"/>`);
   } else {
     const steps = Math.max(6, Math.round(run / 0.25));

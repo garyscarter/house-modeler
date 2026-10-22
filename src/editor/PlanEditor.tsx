@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { askText } from "../components/Dialogs";
-import { STAIRS_VECTOR, stairTreads, WINDERS } from "../lib/stairs";
+import { flightWinders, STAIRS_VECTOR } from "../lib/stairs";
 import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
 import { CATALOGUE, CATEGORIES, byId, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
@@ -1336,13 +1336,17 @@ function StairsMarker({
   const ay = d === "up" ? -1 : d === "down" ? 1 : 0;
   const tip = { x: s.x + (ax * len) / 2, y: s.y + (ay * len) / 2 };
   const tail = { x: s.x - (ax * len) / 2, y: s.y - (ay * len) / 2 };
-  // Winder lines at a turned foot, in image px.
-  const turn = floor.stairsTurn === "left" ? -1 : floor.stairsTurn === "right" ? 1 : 0;
-  const winders = turn
-    ? stairTreads({ centre: s, dir: STAIRS_VECTOR[d], run: len, width: w, rise: 1, turn })
-        .slice(0, WINDERS)
-        .map((t) => t.pts)
-    : [];
+  // Winder lines at a turned foot or head, in image px.
+  const side = (t?: "left" | "right") => (t === "left" ? -1 : t === "right" ? 1 : 0);
+  const winders = flightWinders({
+    centre: s,
+    dir: STAIRS_VECTOR[d],
+    run: len,
+    width: w,
+    turn: side(floor.stairsTurn),
+    topTurn: side(floor.stairsTopTurn),
+    topWinders: floor.stairsTopWinders,
+  });
   return (
     <g className={interactive ? "plan-handle" : undefined} style={interactive ? undefined : { pointerEvents: "none" }} onPointerDown={onPointerDown} onClick={(e) => e.stopPropagation()}>
       <rect x={s.x - rw / 2} y={s.y - rh / 2} width={rw} height={rh} fill="#7c3aed" fillOpacity={0.2} stroke="#7c3aed" strokeWidth={stroke} />
