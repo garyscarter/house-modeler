@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { byId, mountOf, radiatorPanels } from "../catalogue";
 import { EXT_WALL_T, WALL_T, buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { bayOutline } from "../openings";
-import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
+import { convexOverlap, doorSwing, fixtureBox, fixtureSolids, outsideSide, overlappingIds, rectCorners } from "../planMath";
 import { planRoofs, roofGeometry } from "../roof";
 import { clipSegmentOutside } from "../site";
 import { surfaceHeightAt } from "../surfaceSlope";
@@ -126,6 +126,33 @@ describe("the kitchen", () => {
       const sweep = o.orientation === "h" ? rectCorners({ x: o.x, y: o.y }, 2 * half, 4 * half, 0) : rectCorners({ x: o.x, y: o.y }, 4 * half, 2 * half, 0);
       for (const s of low) expect(convexOverlap(sweep, s.corners, 0.5), `${o.x},${o.y}`).toBe(false);
     }
+  });
+
+  it("puts the door to the stairs hall in the kitchen's east wall at the recess, opening into the kitchen clear of the hatch and the cupboard door", () => {
+    // Not beside the stairs, where the floorplan draws it (kitchen-2, hall-stairs-2; owner).
+    expect(ground.openings.some((o) => o.kind === "door" && o.y === 345 && o.x > 900)).toBe(false);
+    const door = ground.openings.find((o) => o.kind === "door" && o.x === 975)!;
+    expect(door).toMatchObject({ orientation: "v", style: "glazed-15" });
+    const px = ground.pxPerM;
+    const half = (door.widthM * px) / 2;
+    // Within the recess's west wall, between its north wall (y 278) and the kitchen's south wall (y 345).
+    expect(door.y - half).toBeGreaterThan(278 + (WALL_T / 2) * px);
+    expect(door.y + half).toBeLessThan(345 - (WALL_T / 2) * px);
+    const wall = buildWalls(ground).find((w) => w.openings.some((p) => p.opening === door))!;
+    expect(wall.exterior).toBeFalsy();
+    // The leaf: hinged on the south jamb ("v" runs top to bottom), swinging west (local +y) into the kitchen.
+    const { hinge, swing } = doorSwing(door, outsideSide(door, ground.rooms, 5));
+    expect([hinge, swing]).toEqual([1, 1]);
+    const leaf = (door.widthM - 0.1) * px;
+    const sweep = rectCorners({ x: door.x - leaf / 2, y: door.y + half - leaf / 2 }, leaf, leaf, 0);
+    const hatch = ground.openings.find((o) => o.kind === "window" && o.x === 975)!;
+    expect(hatch.y + (hatch.widthM * px) / 2).toBeLessThan(door.y - half);
+    const cupboard = ground.openings.find((o) => o.style === "ledged")!;
+    const cl = (cupboard.widthM - 0.1) * px;
+    // The cupboard door hangs on its east jamb and swings north into the kitchen.
+    const cupboardSweep = rectCorners({ x: cupboard.x + (cupboard.widthM * px) / 2 - cl / 2, y: cupboard.y - cl / 2 }, cl, cl, 0);
+    expect(convexOverlap(sweep, cupboardSweep, 0.5)).toBe(false);
+    for (const s of solids) expect(convexOverlap(sweep, s.corners, 0.5), s.id).toBe(false);
   });
 
   it("runs the sink under the galley window and opens the hatch where the returned units end", () => {
