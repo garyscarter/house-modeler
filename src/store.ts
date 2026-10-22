@@ -65,6 +65,8 @@ interface State {
   doorsOpen: boolean;
   /** Floorplan image drawn behind the plan editor (shown, 0.1-1 opacity). Persisted. */
   planImage: { show: boolean; opacity: number };
+  /** Draw walls at their real thickness in the plan editor. Persisted per browser, not synced. */
+  planWalls: boolean;
   /** Hide floors above this level in the 3D view (null = show all). */
   maxLevel: number | null;
   /** Draw roofs, canopies and exterior photo pins. */
@@ -102,6 +104,7 @@ interface State {
         | "showCeilings"
         | "doorsOpen"
         | "planImage"
+        | "planWalls"
         | "maxLevel"
         | "showExterior"
         | "showSite"
@@ -111,7 +114,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -184,6 +187,7 @@ export const useStore = create<State>()(
         showCeilings: false,
         doorsOpen: false,
         planImage: { show: true, opacity: 0.9 },
+        planWalls: true,
         maxLevel: null,
         showExterior: true,
         showSite: true,
@@ -279,6 +283,7 @@ export const useStore = create<State>()(
         costRates: s.costRates,
         doorsOpen: s.doorsOpen,
         planImage: s.planImage,
+        planWalls: s.planWalls,
       }),
       version: PERSIST_VERSION,
       migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
