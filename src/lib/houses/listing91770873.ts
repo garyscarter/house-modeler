@@ -72,7 +72,7 @@ const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
 export const LISTING_PRESET = { id: "listing-91770873", version: 17 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 17 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
-export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 1 };
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 2 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -542,9 +542,10 @@ export function listingSite(): Site {
       [5.67, 5.5], // 5 front-east
       [-1.85, 5.5], // 6 drive, east edge
       [-4.88, 5.5], // 7 front-west
-      // West side: brick wall up the drive to the garage-front pier, the
-      // garage wall itself, a brick wall with a block panel and bin store
-      // at the back of the house (rear-1, rear-2, rear-4), then hedge.
+      // West side: brick wall up the drive to the garage-front pier and on
+      // to the garage front, the garage wall itself, then a brick wall with a
+      // block panel and bin store at the back of the house (rear-1, rear-2,
+      // rear-4) that runs on behind a shrub bed.
       // The wall ends under the porch pillar (canopy corner at x -4.589,
       // z 2.60), centred so its street face is flush with the pillar's.
       [-4.626, 2.6], // 8 wall meets the pillar
@@ -554,10 +555,14 @@ export function listingSite(): Site {
     ]),
     // Edge i runs from boundary[i] to boundary[i + 1].
     boundaryEdges: [
-      { kind: "fence", height: 1.8 }, // 0 rear: not visible in any photo
-      { kind: "fence", height: 1.8 }, // 1 east, back garden: not visible
-      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside No. 26's conservatory
-      { kind: "fence", height: 1.8 }, // 3 east, along the party wall (hidden)
+      // Every boundary is a red brick garden wall with a brick-on-edge top and no piers (owner). Where a
+      // photo shows it the height is from the photo; elsewhere the side walls carry on at their visible height.
+      { kind: "wall", height: 1.8, top: "brick", piers: false }, // 0 rear: not visible in any photo (owner)
+      // 1 east, back garden: the wall beside the conservatory carries on past its far end at the
+      // same height (rear-3); further back it is not visible (owner).
+      { kind: "wall", height: 1.4, top: "brick", piers: false },
+      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside No. 26's conservatory (rear-3)
+      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 3 east, along the party wall (hidden by the buildings)
       // A low brick wall like the front one, from the house front to the pavement (owner; front-garden).
       { kind: "wall", height: 0.95, top: "brick", piers: false }, // 4 east, front garden
       { kind: "wall", height: 0.9, top: "brick", piers: false }, // 5 front garden wall
@@ -565,16 +570,21 @@ export function listingSite(): Site {
       // 7 west side of the drive: level from the pavement, then one course higher for the last
       // half metre or so up to the porch pier, while its base follows the drive (front-2, front-3, front-street).
       { kind: "wall", height: 1, top: "brick", piers: false, follow: "step", stepEvery: 2.45 },
-      { kind: "fence", height: 1.8 }, // 8 west, beside the pillar (hidden)
-      { kind: "fence", height: 1.8 }, // 9 west, along the garage wall (hidden)
-      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 10 west, rear corner of the house
-      { kind: "hedge", height: 2 }, // 11 west, back garden
+      // 8 west, under the porch from the pillar back to the garage front: the drive wall carries on
+      // behind the pillar, level at its stepped-up height (owner; front-2, front-street). The dark timber
+      // gate seen past the pillar (front-2, front-3) stands behind it, across the west neighbour's side passage.
+      { kind: "wall", height: 1.075, top: "brick", piers: false, follow: "level" },
+      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 9 west, along the garage wall (hidden by it)
+      { kind: "wall", height: 1.3, top: "brick", piers: false }, // 10 west, rear corner of the house (rear-1, rear-2, rear-4)
+      // 11 west, back garden: the same wall carries on behind a raised bed of tall shrubs (rear-2; owner).
+      { kind: "wall", height: 1.3, top: "brick", piers: false },
     ],
     neighbours: [
       // Pale render with a brick band, sharing our roof covering and its 28 degree pitch.
       block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 28, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
-      // A white uPVC conservatory (rear photos).
-      block("No. 26 conservatory", 5.82, -9.41, 8.64, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
+      // A white uPVC conservatory (rear photos). It stands just behind the boundary wall, whose top and
+      // pierced panel show in front of its glazing (rear-3); set 0.24 m off the line so the wall is drawn.
+      block("No. 26 conservatory", 6.06, -9.41, 8.88, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
       block("No. 26 side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),
       // Red brick with a red clay-tile hipped roof (front photos).
       block("West neighbour", -12.8, -6.15, -6.36, 0.78, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left", color: "#a5583f", roofColor: "#a14e36" }),
@@ -596,6 +606,18 @@ export function listingSite(): Site {
           [5.8, -9.6],
           [5.82, -10.5],
           [-4.5, -10.5],
+        ],
+        RAISED_BED,
+      ),
+      // Raised brick-kerbed bed of tall shrubs (buddleia) along the west wall, from the bin store back
+      // to the long bed (rear-2, rear-garden); its width is an estimate.
+      surface(
+        "bed",
+        [
+          [-4.55, -7.0],
+          [-3.75, -7.0],
+          [-3.75, -9.6],
+          [-4.53, -9.6],
         ],
         RAISED_BED,
       ),
