@@ -525,8 +525,8 @@ function neighbourGeometry(n: Neighbour) {
     y: GROUND_Y + n.eaves,
     axis,
     pitchDeg: n.pitchDeg ?? 35,
-    // Eaves on the wall tops at the default overhang, as the house's own roof is seated, so an attached neighbour's gutter line carries on from ours.
-    overhang: 0.35,
+    // Eaves on the wall tops, as the house's own roof is seated; an attached neighbour shares the house's overhang, so its gutter line carries on from ours.
+    overhang: n.overhang ?? 0.35,
     eavesOnWalls: true,
     start: flushStart ? "flush" : style,
     end: flushEnd ? "flush" : style,

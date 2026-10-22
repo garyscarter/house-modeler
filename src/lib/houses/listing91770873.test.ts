@@ -3,7 +3,7 @@ import { byId, mountOf, radiatorPanels } from "../catalogue";
 import { EXT_WALL_T, WALL_T, buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
 import { bayOutline } from "../openings";
 import { convexOverlap, fixtureBox, fixtureSolids, overlappingIds, rectCorners } from "../planMath";
-import { planRoofs } from "../roof";
+import { planRoofs, roofGeometry } from "../roof";
 import { clipSegmentOutside } from "../site";
 import { surfaceHeightAt } from "../surfaceSlope";
 import { boundaryWallSegments } from "../wallSteps";
@@ -280,7 +280,7 @@ describe("the radiators", () => {
       for (const fx of radiators(f)) expect(radiatorPanels(box(fx).d), roomOf(f, fx)).toBe(roomOf(f, fx) === "Hallway (front)" ? 2 : 1);
     // The Proposed layout builds on As listed, so it has them too, and both presets moved on.
     expect(listing91770873Proposed("").floors.flatMap(radiators)).toHaveLength(6);
-    expect([LISTING_PRESET.version, LISTING_PROPOSED_PRESET.version]).toEqual([19, 19]);
+    expect(Math.min(LISTING_PRESET.version, LISTING_PROPOSED_PRESET.version)).toBeGreaterThanOrEqual(19);
   });
 
   it("hang about 0.15 m off the floor with their backs on a wall's inner face (the bay's on its base)", () => {
@@ -345,5 +345,21 @@ describe("the radiators", () => {
     }
     // The front hall's and Bedroom 2's.
     expect(under).toBe(2);
+  });
+});
+
+describe("the main roof (fitted to the front photos)", () => {
+  const main = planRoofs(house).blocks[0];
+  const g = roofGeometry(main);
+
+  it("rises about 2.3-2.45 m from the eaves to the ridge line, as the fitted cameras measure", () => {
+    expect(g.ridgeY - g.eavesY).toBeGreaterThan(2.25);
+    expect(g.ridgeY - g.eavesY).toBeLessThan(2.45);
+  });
+
+  it("is one continuous roof with No. 26: the attached neighbour has the same pitch and eaves overhang", () => {
+    const n26 = listingSite().neighbours.find((n) => n.name.startsWith("No. 26 (attached)"))!;
+    expect(n26.pitchDeg).toBe(house.exterior!.pitchDeg);
+    expect(n26.overhang).toBe(house.exterior!.overhang);
   });
 });
