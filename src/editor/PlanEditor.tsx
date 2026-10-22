@@ -39,6 +39,7 @@ import {
   type Size,
 } from "../lib/planMath";
 import { roomColor } from "../three/House";
+import { planWallLines, planWalls } from "../lib/planWalls";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";
 import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/nudge";
@@ -76,6 +77,10 @@ const TOOLS: [Tool, string][] = [
   ["calibrate", "Calibrate"],
 ];
 
+/** Real-thickness walls in the plan: near-black fill with a lighter edge so they read on the floorplan image and on white. */
+const WALL_FILL = "#27272a";
+const WALL_EDGE = "#a1a1aa";
+
 /** Screen pixels a press may wander before it counts as a drag rather than a tap. */
 const TAP_SLOP = 6;
 
@@ -90,6 +95,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const setUi = useStore((s) => s.setUi);
   const planImage = useStore((s) => s.planImage);
+  const wallsOn = useStore((s) => s.planWalls);
   const [tool, setTool] = useState<Tool>(floor.rooms.length ? "select" : "rect");
   const [calib, setCalib] = useState<Pt[]>([]);
   const [draft, setDraft] = useState<Pt[]>([]);
@@ -136,6 +142,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const lines = useMemo(() => wallLines(floor, WALL_T, EXT_WALL_T), [floor]);
   const segs = useMemo(() => lines.map((l) => [l.a, l.b] as Seg), [lines]);
+  // The walls as the 3D shell builds them, with real thickness: drawn as the wall layer and used to sit furniture flush on the faces.
+  // Only the geometry matters here, so fixture drags and the like do not rebuild them.
+  const { rooms: fRooms, walls: fWalls, openings: fOpenings, pxPerM: fPpm, origin: fOrigin, offset: fOffset } = floor;
+  const wallShapes = useMemo(() => (wallsOn ? planWalls(floor) : []), [wallsOn, fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
+  const faceLines = useMemo(() => planWallLines(floor), [fRooms, fWalls, fPpm, fOrigin, fOffset]);
   const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
   const clashes = useMemo(() => overlappingIds(solids, 0.5), [solids]);
   // Wall-hung and worktop items draw over the units below them, whatever order they were placed in.
@@ -159,7 +170,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     if (free) return null;
     // Reach: a little more than for corners, and never under 10 cm when zoomed right in.
     const reach = Math.max(snapTol * 1.5, 0.1 * ppm);
-    const onWall = snapToWall(c, b.w * ppm, b.d * ppm, lines, reach, rot);
+    const onWall = snapToWall(c, b.w * ppm, b.d * ppm, faceLines, reach, rot);
     if (!onWall) return null;
     const others = footprints.filter((f) => f.id !== exclude);
     return abutNeighbours(onWall, b.w * ppm, b.d * ppm, b.z0, b.z0 + b.h, others, reach);
@@ -627,6 +638,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               onChange={(e) => setUi({ planImage: { ...planImage, opacity: Number(e.target.value) / 100 } })}
             />
           )}
+          <button
+            className={wallsOn ? "active" : ""}
+            aria-pressed={wallsOn}
+            title="Draw the walls at their real thickness, so furniture can be placed against the true wall faces"
+            onClick={() => setUi({ planWalls: !wallsOn })}
+          >
+            Walls
+          </button>
         </span>
         <span className="hint right">Scale {ppm.toFixed(1)} px/m</span>
       </div>
@@ -700,11 +719,27 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill={roomColor(r)}
                 fillOpacity={r.id === selectedRoomId ? 0.7 : 0.42}
-                stroke={r.id === selectedRoomId ? "#d97706" : "#1f2937"}
+                stroke={wallsOn ? "none" : r.id === selectedRoomId ? "#d97706" : "#1f2937"}
                 strokeWidth={stroke * (r.id === selectedRoomId ? 2.2 : 1.2)}
                 strokeLinejoin="round"
               />
             ))}
+            {wallsOn && (
+              <g className="plan-walls" style={{ pointerEvents: "none" }}>
+                {/* Outline pass then fill pass: the stroke only survives round the outside of the joined walls, not along the seams between them. */}
+                {wallShapes.map((w, i) => (
+                  <polygon key={"wo" + i} points={w.poly.map((p) => `${p.x},${p.y}`).join(" ")} fill={WALL_FILL} stroke={WALL_EDGE} strokeWidth={px * 3} strokeLinejoin="round" />
+                ))}
+                {wallShapes.map((w, i) => (
+                  <polygon key={"wf" + i} points={w.poly.map((p) => `${p.x},${p.y}`).join(" ")} fill={WALL_FILL} />
+                ))}
+                {orderedRooms
+                  .filter((r) => r.id === selectedRoomId)
+                  .map((r) => (
+                    <polygon key={"rs" + r.id} points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#d97706" strokeWidth={stroke * 2.2} strokeLinejoin="round" />
+                  ))}
+              </g>
+            )}
             {canopies.map((c, i) => (
               <CanopyLabel key={"cl" + i} poly={c} ppm={ppm} px={px} fontSize={fontSize} />
             ))}
@@ -770,7 +805,19 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               const sel = w.id === selectedWallId;
               return (
                 <g key={w.id}>
-                  <line x1={w.a.x} y1={w.a.y} x2={w.b.x} y2={w.b.y} stroke={sel ? "#d97706" : w.color ?? "#1f2937"} strokeWidth={Math.max(WALL_T * ppm, stroke * 3)} strokeLinecap="round" />
+                  {(!wallsOn || sel) && (
+                    <line
+                      x1={w.a.x}
+                      y1={w.a.y}
+                      x2={w.b.x}
+                      y2={w.b.y}
+                      stroke={sel ? "#d97706" : w.color ?? "#1f2937"}
+                      strokeOpacity={wallsOn ? 0.6 : 1}
+                      strokeWidth={Math.max(WALL_T * ppm, stroke * 3)}
+                      strokeLinecap={wallsOn ? "butt" : "round"}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
                   <line
                     x1={w.a.x}
                     y1={w.a.y}
