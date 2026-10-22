@@ -10,12 +10,14 @@ import {
   planRoofs,
   roofGeometry,
   roofHeightAt,
+  roofSeatY,
   downpipeSpot,
+  FASCIA_DEPTH,
   roofTrim,
   setDown,
   type RoofBlock,
 } from "./roof";
-import { EXT_WALL_T, windowSill } from "./geometry";
+import { EXT_WALL_T, openingHeights, windowSill } from "./geometry";
 import { SKIRT_FASCIA, SOIL_R, assignDownpipes, cutBoxes, footAt, roofParts, skirtEaves, skirtEnd, skirtParts, skirtRun, skirtedEdges, soilStack, type RoofParts } from "./roofParts";
 import type { FlatRoofSkirt, HouseModel } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
@@ -163,6 +165,61 @@ describe("roof detail", () => {
   });
 });
 
+describe("eaves seated on the walls", () => {
+  const soffit = (b: RoofBlock) => {
+    // The lowest trim along the eaves is the soffit (hipped ends have no bargeboards to go lower).
+    const { trim } = roofTrim(b);
+    let lo = Infinity;
+    for (let i = 1; i < trim.length; i += 3) lo = Math.min(lo, trim[i]);
+    return lo;
+  };
+
+  it("puts the eaves level with the wall tops and the soffit a fascia's depth under them, whatever the pitch and overhang", () => {
+    for (const pitchDeg of [22.5, 28, 35, 45, 55])
+      for (const overhang of [0, 0.2, 0.35, 0.6]) {
+        const b: RoofBlock = { ...base, start: "hip", end: "hip", pitchDeg, overhang, clearance: 0.02, eavesOnWalls: true };
+        const m = roofGeometry(b);
+        expect(m.eavesY).toBeCloseTo(b.y + 0.02);
+        expect(soffit(b)).toBeCloseTo(b.y + 0.02 - FASCIA_DEPTH);
+        // The roof still clears the walls' outer top edge.
+        expect(roofHeightAt(b, 5, -0.1)!).toBeGreaterThanOrEqual(b.y + 0.02 - 1e-9);
+      }
+  });
+
+  it("lifts the roof by the overhang's fall and leaves unseated roofs as they were", () => {
+    const seated = roofGeometry({ ...base, eavesOnWalls: true });
+    const plain = roofGeometry(base);
+    expect(seated.ridgeY - plain.ridgeY).toBeCloseTo(base.overhang);
+    expect(plain.eavesY).toBeCloseTo(4.7);
+    expect(roofSeatY({ ...base, eavesOnWalls: true })).toBeCloseTo(5.3);
+  });
+
+  it("keeps the soffit just above the top-floor window heads of the listing, at any pitch", () => {
+    for (const m of [listing91770873(""), listing91770873Proposed("")]) {
+      for (const pitchDeg of [m.exterior!.pitchDeg, 35, 45]) {
+        const plan = planRoofs({ ...m, exterior: { ...m.exterior!, pitchDeg } });
+        const first = m.floors.find((f) => f.level === 1)!;
+        const heads = first.openings.filter((o) => o.kind === "window").map((o) => floorBase(m, first) + openingHeights(o, m.ceilingHeight).y1);
+        expect(heads.length).toBeGreaterThan(0);
+        for (const b of plan.blocks) {
+          const gap = soffit(b) - Math.max(...heads);
+          // A band of render about 0.1 m deep between the window frames and the soffit (front-2, front-street, rear-1).
+          expect(gap).toBeGreaterThan(0.05);
+          expect(gap).toBeLessThan(0.15);
+        }
+      }
+    }
+  });
+
+  it("eases a set-down extension's pitch about its eaves, which stay level with the main roof's", () => {
+    const main: RoofBlock = { ...base, start: "hip", end: "flush", clearance: 0.02, eavesOnWalls: true };
+    const ext: RoofBlock = { ...main, x0: 10, x1: 14, z0: 0, z1: 6, start: "flush", end: "hip" };
+    const down = setDown(ext, main, 0.4);
+    expect(roofGeometry(main).ridgeY - roofGeometry(down).ridgeY).toBeCloseTo(0.4);
+    expect(roofGeometry(down).eavesY).toBeCloseTo(roofGeometry(main).eavesY);
+  });
+});
+
 describe("extension roofs", () => {
   const separate = (drop?: number) => {
     const m = listing91770873Proposed("");
@@ -193,7 +250,9 @@ describe("extension roofs", () => {
     // Its slopes carry on under the main hip far enough that its ridge ends inside the main roof.
     const tan = (d: number) => Math.tan((d * Math.PI) / 180);
     const hs = (ext.z1 - ext.z0 + EXT_WALL_T) / 2;
-    expect(ext.x1 + ext.tuck![1]).toBeCloseTo(main.x0 - EXT_WALL_T / 2 + (hs * tan(ext.pitchDeg)) / tan(main.pitchDeg) + 0.05);
+    // Both seat their eaves on the walls, so the main roof starts higher over its wall face than the eased extension does.
+    const rise = roofSeatY(ext) + hs * tan(ext.pitchDeg) - roofSeatY(main);
+    expect(ext.x1 + ext.tuck![1]).toBeCloseTo(main.x0 - EXT_WALL_T / 2 + rise / tan(main.pitchDeg) + 0.05);
     expect(roofHeightAt(main, ext.x1 + ext.tuck![1], (ext.z0 + ext.z1) / 2)!).toBeGreaterThan(roofGeometry(ext).ridgeY);
   });
 
