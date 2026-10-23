@@ -5,6 +5,8 @@ import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
 import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
+import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
+import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
 import { shade } from "./shell";
 
@@ -55,7 +57,8 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const p = toWorld(floor, { x: f.x, y: f.y });
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0)) {
+    const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -153,7 +156,7 @@ const GLOW = "#fff1d6";
  * footprint on its base, y up, back towards -z (the top of the plan).
  * `mount` is the height of that base above the floor, for parts that reach down to it.
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0): Part[] {
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -193,6 +196,49 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     const n = Math.max(1, Math.round(width / 0.6));
     for (let i = 1; i < n; i++) box(-width / 2 + (i * width) / n, (y0 + y1) / 2, z, 0.004, y1 - y0, 0.012, DARK);
     if (rail) box(0, y1 - 0.02, z + 0.002, width, 0.035, 0.008, DARK, "satin");
+  };
+  /**
+   * Door fronts across bay [x0, x1] in band [y0, y1], faces at zFront: two leaves when the bay is over 0.55 m wide
+   * (one when `single`), 4 mm gaps, in the given style.
+   */
+  const fronts = (x0: number, x1: number, y0: number, y1: number, zFront: number, style: JoineryFront, c = color, single = false, knob = true) => {
+    if (style === "open" || y1 - y0 < 0.03) return;
+    const t = 0.018;
+    const gap = 0.004;
+    const n = single || x1 - x0 <= 0.55 ? 1 : 2;
+    const lw = (x1 - x0) / n;
+    const zc = zFront - t / 2;
+    const hh = y1 - y0 - gap;
+    const yc = (y0 + y1) / 2;
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + (i + 0.5) * lw;
+      const fw = lw - gap;
+      // The meeting edge: the right edge of the left leaf, the left edge of the right leaf, the right edge when alone.
+      const dir = n === 1 ? 1 : i === 0 ? 1 : -1;
+      const ex = cx + dir * (fw / 2 - 0.045);
+      if (style === "glass") {
+        const rail = 0.05;
+        box(cx, y0 + gap / 2 + rail / 2, zc, fw, rail, t, c, "satin");
+        box(cx, y1 - gap / 2 - rail / 2, zc, fw, rail, t, c, "satin");
+        for (const sx of [-1, 1]) box(cx + (sx * (fw - rail)) / 2, yc, zc, rail, hh - 2 * rail, t, c, "satin");
+        box(cx, yc, zc, fw - 2 * rail + 0.01, hh - 2 * rail + 0.01, 0.006, GLASS, "glass");
+      } else {
+        box(cx, yc, zc, fw, hh, t, c, "satin");
+        if (style === "shaker") {
+          const rail = 0.06;
+          const bw = fw - 2 * rail;
+          const bh = hh - 2 * rail;
+          if (bw > 0.05 && bh > 0.05) {
+            const bead = shade(c, 0.93);
+            for (const sy of [-1, 1]) box(cx, yc + (sy * bh) / 2, zFront + 0.003, bw, 0.009, 0.006, bead, "satin");
+            for (const sx of [-1, 1]) box(cx + (sx * bw) / 2, yc, zFront + 0.003, 0.009, bh, 0.006, bead, "satin");
+          }
+        }
+      }
+      if (!knob) continue;
+      if (style === "slab") box(ex, yc, zFront + 0.012, 0.012, Math.min(0.3, hh * 0.4), 0.02, CHROME, "metal");
+      else cyl(ex, y0 + hh * 0.5 + (hh > 0.7 ? -hh * 0.25 : 0), zFront + 0.012, 0.032, 0.024, KNOB, "satin", "z");
+    }
   };
   /** A built-in appliance face: dark glass door with a handle bar near its top. */
   const appliance = (yc: number, hh: number, z: number) => {
@@ -577,15 +623,130 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, 0.64, d / 2 + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
       box(0, 1.86, d / 2 + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
       break;
-    case "shelf":
-      box(0, h / 2, 0, w, h, d, color, "satin");
-      // A few things on it so it reads as an open shelf.
-      if (w > 0.4) {
-        cyl(-w * 0.3, h + 0.09, 0, 0.1, 0.18, "#e9e4da", "gloss");
-        cyl(-w * 0.18, h + 0.06, 0, 0.08, 0.12, "#e9e4da", "gloss");
-        box(w * 0.25, h + 0.11, -0.02, 0.24, 0.22, 0.03, "#7f8b78", "satin");
+    case "built-in": {
+      if (!j) {
+        box(0, h / 2, 0, w, h, d, color, "satin");
+        break;
+      }
+      const t = 0.018;
+      const cc = j.carcass;
+      const L = builtInLayout(j, w, h);
+      const f = d / 2;
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, shade(cc, 0.85));
+      for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), h / 2, 0, t, h, d, cc, "satin");
+      box(0, h - t / 2, 0, w - 2 * t, t, d, cc, "satin");
+      if (L.plinth) box(0, L.plinth[1] / 2, -0.025, w - 2 * t, L.plinth[1], d - 0.1, shade(color, 0.8));
+      const inner = L.bayXs.slice(1, -1);
+      const bays = L.bayXs.slice(0, -1).map((x, i): [number, number] => [x + (i === 0 ? t : t / 2), L.bayXs[i + 1] - (i === L.bayXs.length - 2 ? t : t / 2)]);
+      if (L.base) {
+        const [b0, b1] = L.base;
+        box(0, b0 + t / 2, 0, w - 2 * t, t, d - 0.01, cc, "satin");
+        for (const x of inner) box(x, (b0 + b1) / 2, 0, t, b1 - b0, d - 0.01, cc, "satin");
+        for (const [x0, x1] of bays) {
+          if (j.baseFront === "open") box((x0 + x1) / 2, (b0 + b1) / 2, 0, x1 - x0, t, d - 0.04, cc, "satin");
+          else fronts(x0, x1, b0, b1, f, j.baseFront);
+        }
+      }
+      if (L.top) box(0, (L.top[0] + L.top[1]) / 2, 0.01, w, TOP_T, d + 0.02, j.topColor, "satin");
+      const [u0, u1] = L.upper;
+      const ud = Math.min(j.upperD, d);
+      const uz = -d / 2 + ud / 2;
+      if (u1 - u0 > 0.05) {
+        for (const x of inner) box(x, (u0 + u1) / 2, uz, t, u1 - u0, ud, cc, "satin");
+        if (j.upperFront === "open") {
+          const bookColours = ["#7b3b3b", "#2f4f6f", "#5d6b3a", "#b08a4a"];
+          for (const [bi, y] of L.shelfYs.entries()) {
+            for (const [x0, x1] of bays) box((x0 + x1) / 2, y, uz, x1 - x0, 0.022, ud, cc, "satin");
+            if (bi % 2 === 0) {
+              const gapH = Math.min(0.3, (u1 - u0) / (j.shelves + 1) - 0.05);
+              if (gapH > 0.08)
+                bays.forEach(([x0, x1], k) => {
+                  const bw = x1 - x0;
+                  const bh = Math.min(gapH, 0.24 + ((k + bi) % 3) * 0.02);
+                  for (let q = 0; q < 3; q++) box(x0 + bw * (0.18 + q * 0.17), y + 0.011 + bh / 2, uz, bw * 0.13, bh, ud * 0.7, bookColours[(q + k + bi) % 4]);
+                });
+            }
+          }
+        } else {
+          for (const y of L.shelfYs) box(0, y, uz, w - 2 * t, 0.022, ud, cc, "satin");
+          for (const [x0, x1] of bays) fronts(x0, x1, u0, u1, -d / 2 + ud, j.upperFront);
+        }
+      }
+      if (L.topBox) {
+        const [y0, y1] = L.topBox;
+        box(0, y0 + t / 2, 0, w - 2 * t, t, d - 0.01, cc, "satin");
+        const style: JoineryFront = j.upperFront !== "open" ? j.upperFront : j.baseFront !== "open" ? j.baseFront : "slab";
+        for (const [x0, x1] of bays) fronts(x0, x1, y0 + t, y1, f, style);
       }
       break;
+    }
+    case "window-seat": {
+      if (!j) {
+        box(0, h / 2, 0, w, h, d, color, "satin");
+        break;
+      }
+      const boxTop = h - CUSHION_T;
+      const ph = j.plinth ? 0.08 : 0;
+      const t = 0.018;
+      if (ph > 0) box(0, ph / 2, -0.025, w - 0.02, ph, d - 0.1, shade(color, 0.8));
+      box(0, (ph + boxTop - 0.02) / 2, 0, w, boxTop - 0.02 - ph, d, color, "satin");
+      box(0, boxTop - 0.01, 0.01, w, 0.02, d + 0.02, color, "satin");
+      const n = Math.max(1, j.bays);
+      const bw = w / n;
+      const front = d / 2;
+      for (let i = 0; i < n; i++) {
+        const x0 = -w / 2 + i * bw + (i === 0 ? t : t / 2);
+        const x1 = -w / 2 + (i + 1) * bw - (i === n - 1 ? t : t / 2);
+        if (j.seatFront === "drawers") {
+          fronts(x0, x1, ph + 0.01, boxTop - 0.02, front, "slab", color, true, false);
+          box((x0 + x1) / 2, (ph + boxTop) / 2, front + 0.012, Math.min(0.2, bw * 0.5), 0.012, 0.02, CHROME, "metal");
+        } else {
+          fronts(x0, x1, ph + 0.01, boxTop - 0.03, front, "shaker", color, true, false);
+        }
+      }
+      if (j.seatFront !== "drawers") box(0, boxTop - 0.025, front + 0.002, w, 0.006, 0.01, DARK);
+      box(0, boxTop + CUSHION_T / 2, 0.01, w - 0.02, CUSHION_T, d - 0.03, j.cushion, "matt");
+      if (j.backCushion) {
+        const m = Math.max(1, Math.round(w / 0.6));
+        const cw = w / m;
+        for (let i = 0; i < m; i++) lean(-w / 2 + (i + 0.5) * cw, boxTop + CUSHION_T + 0.21, -d / 2 + 0.08, cw - 0.03, 0.42, 0.14, -0.12, shade(j.cushion, 1.06));
+      }
+      break;
+    }
+    case "wall-box": {
+      if (!j) {
+        box(0, h / 2, 0, w, h, d, color, "satin");
+        break;
+      }
+      const t = 0.018;
+      const cc = j.carcass;
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, shade(cc, 0.85));
+      box(0, h - t / 2, 0, w, t, d, cc, "satin");
+      box(0, t / 2, 0, w, t, d, cc, "satin");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), h / 2, 0, t, h, d, cc, "satin");
+      const n = j.bays;
+      for (let k = 1; k < n; k++) box(-w / 2 + (k * w) / n, h / 2, 0, t, h - 2 * t, d - 0.01, cc, "satin");
+      for (let i = 1; i <= j.shelves; i++) box(0, t + (i * (h - 2 * t)) / (j.shelves + 1), 0, w - 2 * t, t, d - 0.01, cc, "satin");
+      if (j.front !== "open") for (let i = 0; i < n; i++) fronts(-w / 2 + (i * w) / n + (i === 0 ? t : t / 2), -w / 2 + ((i + 1) * w) / n - (i === n - 1 ? t : t / 2), 0.0, h, d / 2, j.front);
+      break;
+    }
+    case "shelf": {
+      const st = j ? shelfStack(j, h) : { n: 1, t: h, ys: [0] };
+      for (const y of st.ys) box(0, y + st.t / 2, 0, w, st.t, d, color, "satin");
+      // A few things on it so it reads as an open shelf.
+      if (w > 0.4) {
+        const top = st.ys[st.n - 1] + st.t;
+        cyl(-w * 0.3, top + 0.09, 0, 0.1, 0.18, "#e9e4da", "gloss");
+        cyl(-w * 0.18, top + 0.06, 0, 0.08, 0.12, "#e9e4da", "gloss");
+        box(w * 0.25, top + 0.11, -0.02, 0.24, 0.22, 0.03, "#7f8b78", "satin");
+        if (st.n > 1) {
+          const y1 = st.ys[1] + st.t;
+          cyl(w * 0.3, y1 + 0.05, 0, 0.07, 0.1, "#c9b99a", "gloss");
+          if (st.n > 2) box(-w * 0.25, st.ys[2] + st.t + 0.07, 0, 0.2, 0.14, 0.12, "#7b3b3b");
+        }
+      }
+      break;
+    }
     case "wall-cabinet":
       box(0, h / 2, 0, w, h, d, color, "satin");
       doors(0.01, h - 0.01, d / 2, 0.6, false);
