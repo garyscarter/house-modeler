@@ -100,6 +100,12 @@ describe("replies and projects", () => {
     expect(parseProject("nope", {})).toBeNull();
     expect(parseProject(null, {})).toBeNull();
   });
+  it("round-trips saved views, and leaves them undefined when absent", () => {
+    const views = [{ id: "v1", name: "Kitchen", position: { x: 1, y: 2, z: 3 }, target: { x: 0, y: 1, z: 0 }, maxLevel: null }];
+    expect(parseProject({ variants: { current: model }, savedViews: views }, {})?.savedViews).toEqual(views);
+    expect(parseProject({ variants: { current: model } }, {})?.savedViews).toBeUndefined();
+    expect(parseProject({ variants: {}, savedViews: views }, {}, { allowEmpty: true })?.savedViews).toEqual(views);
+  });
   it("accepts an emptied project only from the server", () => {
     expect(parseProject({ variants: {} }, { z: 2 }, { allowEmpty: true })).toEqual({ variants: {}, photos: [], sites: {}, costRates: { z: 2 } });
     expect(parseProject({ variants: {} }, { z: 2 })).toBeNull();

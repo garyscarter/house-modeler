@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Floor, HouseModel, Photo, Room, Site, VariantKey } from "./types";
+import type { Floor, HouseModel, Photo, Room, SavedView, Site, VariantKey } from "./types";
 import { imageAwareStorage } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
@@ -50,6 +50,8 @@ interface State {
   sun: SunState;
   /** Cost rates for the report, keyed by line item. */
   costRates: Record<string, number>;
+  /** Named 3D camera views (project-level; not undoable). */
+  savedViews: SavedView[];
 
   /** Undo history (not persisted). */
   past: Snapshot[];
@@ -100,6 +102,9 @@ interface State {
   setSettings: (s: Partial<Settings>) => void;
   setSun: (s: Partial<SunState>) => void;
   setCostRates: (r: Record<string, number>) => void;
+  addSavedView: (v: SavedView) => void;
+  updateSavedView: (id: string, patch: Partial<Pick<SavedView, "name" | "position" | "target" | "maxLevel">>) => void;
+  removeSavedView: (id: string) => void;
   setVariant: (k: VariantKey, m: HouseModel | undefined) => void;
   /** Copy one variant over another (e.g. "As listed" to "Proposed" to start a design). */
   copyVariant: (from: VariantKey, to: VariantKey) => void;
@@ -145,7 +150,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "savedViews" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -192,6 +197,7 @@ export const useStore = create<State>()(
         settings: { quality: "high" },
         sun: { enabled: false, dayOfYear: 172, hour: 15 },
         costRates: {},
+        savedViews: [],
         past: [],
         future: [],
         undo: () => {
@@ -258,6 +264,9 @@ export const useStore = create<State>()(
         setSettings: (s) => rawSet((st) => ({ settings: { ...st.settings, ...s } })),
         setSun: (s) => rawSet((st) => ({ sun: { ...st.sun, ...s } })),
         setCostRates: (r) => rawSet({ costRates: r }),
+        addSavedView: (v) => rawSet((st) => ({ savedViews: [...st.savedViews, v] })),
+        updateSavedView: (id, patch) => rawSet((st) => ({ savedViews: st.savedViews.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
+        removeSavedView: (id) => rawSet((st) => ({ savedViews: st.savedViews.filter((v) => v.id !== id) })),
         setVariant: (k, m) =>
           setState((st) => {
             const variants = { ...st.variants };
@@ -356,7 +365,7 @@ export const useStore = create<State>()(
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
           ),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
       };
     },
     {
@@ -369,6 +378,7 @@ export const useStore = create<State>()(
         settings: s.settings,
         sun: s.sun,
         costRates: s.costRates,
+        savedViews: s.savedViews,
         doorsOpen: s.doorsOpen,
         planImage: s.planImage,
         planWalls: s.planWalls,
@@ -383,6 +393,7 @@ export const useStore = create<State>()(
       // Older saves lack the newer persisted fields; keep the defaults for those.
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<Persisted>) };
+        if (!Array.isArray(merged.savedViews)) merged.savedViews = [];
         if (!isMode(merged.mode)) merged.mode = "build";
         if (!VIEW_MODES.includes(merged.viewMode)) merged.viewMode = "single";
         if (merged.tab !== "3d" && merged.tab !== "plan") merged.tab = "3d";
