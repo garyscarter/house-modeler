@@ -67,6 +67,21 @@ export function isValidPose(p: unknown): p is CameraPose {
   return Math.hypot(position!.x - target!.x, position!.y - target!.y, position!.z - target!.z) > 1e-6;
 }
 
+/**
+ * A remembered pose that belongs with this frame: valid, looking at a point in
+ * or near the box (half its largest span of slack, for panning), from no
+ * further than `maxDistance`. A pose saved for another house or plot fails, so
+ * the view opens on home instead of on empty ground.
+ */
+export function poseFits(p: unknown, box: FrameBox, maxDistance: number): p is CameraPose {
+  if (!isValidPose(p)) return false;
+  const pad = Math.max(box.x1 - box.x0, box.y1 - box.y0, box.height, 6) / 2;
+  const t = p.target;
+  const near = t.x >= box.x0 - pad && t.x <= box.x1 + pad && t.z >= box.y0 - pad && t.z <= box.y1 + pad && t.y >= -pad && t.y <= box.height + pad;
+  const d = Math.hypot(p.position.x - t.x, p.position.y - t.y, p.position.z - t.z);
+  return near && d <= maxDistance * 1.001;
+}
+
 export const HOME_AZIMUTH_DEG = 35;
 export const HOME_ELEVATION_DEG = 28;
 export const HOME_MARGIN = 0.12;

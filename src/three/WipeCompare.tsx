@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { VARIANT_LABEL, type Floor, type Photo, type Room, type VariantKey } from "../types";
+import type { V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { SunControls } from "../components/SunControls";
 import { Viewer } from "./Viewer";
@@ -13,6 +14,8 @@ export interface WipeCompareProps {
   doorsOpen: boolean;
   selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room, variant: VariantKey) => void;
+  /** Decorate: a click on a wall face in either view (see Viewer's onPickWall), with the layout it was in. */
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays: { id: string; poly: V2[] }[] | undefined, variant: VariantKey) => void;
   maxLevel: number | null;
   showExterior: boolean;
 }
@@ -47,6 +50,16 @@ export function WipeCompare(p: WipeCompareProps) {
     return r.width > 0 ? (e.clientX - r.left) / r.width : 0.5;
   };
 
+  // Per-layout handlers, kept stable so the viewers' memoised floors don't re-render when the divider moves.
+  const { onSelectRoom, onPickWall } = p;
+  const handlers = useMemo(() => {
+    const per = (k: VariantKey) => ({
+      select: (f: Floor, r: Room) => onSelectRoom(f, r, k),
+      wall: onPickWall && ((f: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => onPickWall(f, hit, normal, bays, k)),
+    });
+    return { current: per("current"), proposed: per("proposed") };
+  }, [onSelectRoom, onPickWall]);
+
   const { current, proposed } = variants;
   if (!current || !proposed) {
     const k: VariantKey = proposed ? "proposed" : "current";
@@ -62,7 +75,8 @@ export function WipeCompare(p: WipeCompareProps) {
             showCeilings={p.showCeilings}
             doorsOpen={p.doorsOpen}
             selectedRoomId={p.selectedRoomId}
-            onSelectRoom={(f, r) => p.onSelectRoom(f, r, k)}
+            onSelectRoom={handlers[k].select}
+            onPickWall={handlers[k].wall}
             maxLevel={p.maxLevel}
             showExterior={p.showExterior}
             chrome={false}
@@ -87,9 +101,9 @@ export function WipeCompare(p: WipeCompareProps) {
 
   return (
     <div ref={root} className={`wipe${dragging ? " dragging" : ""}`} style={{ "--wipe": pos } as React.CSSProperties}>
-      <Viewer {...shared} model={current} variant="current" captureId="wipe-current" onSelectRoom={(f, r) => p.onSelectRoom(f, r, "current")} />
+      <Viewer {...shared} model={current} variant="current" captureId="wipe-current" onSelectRoom={handlers.current.select} onPickWall={handlers.current.wall} />
       <div className="wipe-top">
-        <Viewer {...shared} model={proposed} variant="proposed" captureId="wipe-proposed" onSelectRoom={(f, r) => p.onSelectRoom(f, r, "proposed")} />
+        <Viewer {...shared} model={proposed} variant="proposed" captureId="wipe-proposed" onSelectRoom={handlers.proposed.select} onPickWall={handlers.proposed.wall} />
       </div>
 
       <span className="wipe-label before" aria-hidden>

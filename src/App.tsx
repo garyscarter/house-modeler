@@ -117,14 +117,21 @@ export default function App() {
       },
       wall:
         pickWall &&
-        ((floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }) => {
+        ((floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays?: { id: string; poly: { x: number; y: number }[] }[]) => {
           setUi({ activeVariant: k });
-          pickWall(floor, hit, normal);
+          pickWall(floor, hit, normal, bays);
         }),
     });
     return { current: per("current"), proposed: per("proposed") };
   }, [setUi, onSelectRoom, pickWall]);
   const onWipeSelect = useCallback((f: Floor, r: Room, k: VariantKey) => pickIn[k].select(f, r), [pickIn]);
+  const onWipePickWall = useMemo(
+    () =>
+      pickWall &&
+      ((f: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays: { id: string; poly: { x: number; y: number }[] }[] | undefined, k: VariantKey) =>
+        pickIn[k].wall?.(f, hit, normal, bays)),
+    [pickIn, pickWall],
+  );
 
   // The 3D view stays mounted once opened, hidden on the Plan tab, so coming back doesn't rebuild it.
   const show3d = tab === "3d";
@@ -219,6 +226,7 @@ export default function App() {
                   doorsOpen={doorsOpen}
                   selectedRoomId={selectedRoomId}
                   onSelectRoom={onWipeSelect}
+                  onPickWall={onWipePickWall}
                   maxLevel={maxLevel}
                   showExterior={showExterior}
                 />

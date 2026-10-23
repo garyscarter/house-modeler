@@ -1,8 +1,12 @@
 /* Wipe compare: As listed underneath, Proposed on top and clipped to the right of the divider. --wipe is 0.05..0.95. */
 .wipe { --wipe: 0.5; position: relative; flex: 1; min-width: 0; overflow: hidden; }
-.wipe > .viewer, .wipe-top { position: absolute; inset: 0; }
-.wipe-top { clip-path: inset(0 0 0 calc(var(--wipe) * 100%)); }
-.wipe .viewer { flex: none; }
+.wipe-top { position: absolute; inset: 0; clip-path: inset(0 0 0 calc(var(--wipe) * 100%)); }
+/* Every viewer fills the whole box, the one inside .wipe-top too: a .viewer there would otherwise be a plain
+   block with no height, and its canvas would fall back to the 150 px default and draw the scene in a strip. */
+.wipe .viewer { position: absolute; inset: 0; flex: none; }
+/* "Preparing the 3D view…" centres in each side's visible part, clear of the divider handle in the middle. */
+.wipe > .viewer .viewer-loading { right: calc((1 - var(--wipe)) * 100%); }
+.wipe-top .viewer-loading { left: calc(var(--wipe) * 100%); }
 
 /* A 28 px wide strip is the grab area; the line and handle are drawn inside it. */
 .wipe-divider {

@@ -8,7 +8,7 @@ import { House } from "./House";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
-import { easeInOut, frameFor, homeView, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { easeInOut, frameFor, homeView, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube, requestView } from "./ViewCube";
 import { ContextMenu, type MenuState } from "../components/ContextMenu";
@@ -241,10 +241,13 @@ function Orbit({
   /** True while this view is applying a pose it was handed, so its own change event isn't sent back out. */
   const applying = useRef(false);
   const saveTimer = useRef(0);
+  /** The pose waiting to be saved, so an unmount inside the debounce still saves it. */
+  const unsaved = useRef<CameraPose | null>(null);
   const lastYaw = useRef(NaN);
   const aspect = canvasSize.width && canvasSize.height ? canvasSize.width / canvasSize.height : 1.6;
-  const latest = useRef({ aspect, frame, bounds, size, centre, heightOf });
-  latest.current = { aspect, frame, bounds, size, centre, heightOf };
+  const maxDistance = Math.max(size * 6, 60);
+  const latest = useRef({ aspect, frame, bounds, size, centre, heightOf, maxDistance });
+  latest.current = { aspect, frame, bounds, size, centre, heightOf, maxDistance };
 
   const poseFor = (side: ViewRequest): CameraPose => {
     const l = latest.current;
@@ -260,6 +263,14 @@ function Orbit({
   const jump = (pose: CameraPose) => {
     applying.current = true;
     try {
+      const c = controls.current;
+      // Drop any momentum left from this view's own last drag first: with damping, update() would keep adding it
+      // after the jump, and two linked views coasting at once would hand the camera back and forth.
+      if (c?.enableDamping) {
+        c.enableDamping = false;
+        c.update();
+        c.enableDamping = true;
+      }
       camera.position.set(pose.position.x, pose.position.y, pose.position.z);
       controls.current?.target.set(pose.target.x, pose.target.y, pose.target.z);
       camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
@@ -273,12 +284,20 @@ function Orbit({
     target: new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z),
     offset: new THREE.Spherical().setFromVector3(new THREE.Vector3(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z)),
   });
-  /** Tell the other views, and remember the pose for next time (debounced). */
+  /** Remember the pose for next time, debounced (damping keeps moving the camera after a drag ends). */
+  const remember = (p: CameraPose) => {
+    unsaved.current = p;
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      unsaved.current = null;
+      saveCameraPose(p);
+    }, 300);
+  };
+  /** Tell the other views, and remember the pose. */
   const settle = () => {
     const p = current();
     publishPose(linkId, p);
-    window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => saveCameraPose(p), 300);
+    remember(p);
   };
   const startGlide = (pose: CameraPose) => {
     const c = controls.current;
@@ -297,7 +316,10 @@ function Orbit({
   useEffect(() => {
     if (!first.current || canvasSize.width <= 0 || canvasSize.height <= 0 || !controls.current) return;
     first.current = false;
-    jump(lastPose() ?? loadCameraPose() ?? poseFor("home"));
+    // A remembered pose must suit this house: one saved for another house or plot opens on home instead.
+    const l = latest.current;
+    const fits = (p: CameraPose | null) => (p && poseFits(p, l.frame, l.maxDistance) ? p : null);
+    jump(fits(lastPose()) ?? fits(loadCameraPose()) ?? poseFor("home"));
     publishPose(linkId, current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasSize.width, canvasSize.height]);
@@ -310,7 +332,10 @@ function Orbit({
     };
     window.addEventListener("house:view", onView);
     const off = subscribePose((from, pose) => {
-      if (from === linkId || glide.current) return;
+      if (from === linkId) return;
+      // Another view moved: it is being dragged, or its glide (started by the same request as ours) has just ended.
+      // Either way it wins, so a drag in one view stops a glide in the others rather than being yanked back by it.
+      glide.current = null;
       first.current = false;
       jump(pose);
     });
@@ -318,6 +343,8 @@ function Orbit({
       window.removeEventListener("house:view", onView);
       off();
       window.clearTimeout(saveTimer.current);
+      if (unsaved.current) saveCameraPose(unsaved.current);
+      unsaved.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
@@ -330,7 +357,9 @@ function Orbit({
     };
     const onChange = () => {
       if (applying.current || glide.current) return;
-      publishPose(linkId, current());
+      const p = current();
+      publishPose(linkId, p);
+      remember(p);
     };
     c.addEventListener("start", cancel);
     c.addEventListener("change", onChange);
@@ -385,6 +414,6 @@ function Orbit({
   });
 
   return (
-    <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI / 2 - 0.02} minDistance={1.5} maxDistance={Math.max(size * 6, 60)} />
+    <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI / 2 - 0.02} minDistance={1.5} maxDistance={maxDistance} />
   );
 }
