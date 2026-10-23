@@ -12,7 +12,7 @@ import { WALL_COVERING_LABEL, type WallCovering } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../lib/wallCovering";
 import { ColourSwatches } from "./ColourSwatches";
 import { skirtingColour } from "../lib/skirting";
-import { roomColor } from "../three/House";
+import { roomColor } from "../lib/roomColor";
 import { finishColour, floorAngle, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
 import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
 import { FeatureWalls } from "./FeatureWalls";

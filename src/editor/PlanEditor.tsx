@@ -40,7 +40,7 @@ import {
   type Seg,
   type Size,
 } from "../lib/planMath";
-import { roomColor } from "../three/House";
+import { roomColor } from "../lib/roomColor";
 import { planWallLines, planWalls } from "../lib/planWalls";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";

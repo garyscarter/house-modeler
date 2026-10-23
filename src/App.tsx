@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
-import { Viewer } from "./three/Viewer";
 import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
 import { PhotosPanel } from "./components/PhotosPanel";
@@ -15,12 +14,16 @@ import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
 import { SitePanel } from "./components/SitePanel";
-import { ReportPanel } from "./components/ReportPanel";
 import { PlanningPanel } from "./components/PlanningPanel";
 import { SiteEditor } from "./editor/SiteEditor";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
-import { VARIANT_LABEL, type VariantKey } from "./types";
+import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
+
+// three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
+const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
+// The report's snapshot and model exports reach into the 3D renderer, so it loads on demand too.
+const ReportPanel = lazy(() => import("./components/ReportPanel").then((m) => ({ default: m.ReportPanel })));
 
 type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "planning" | "settings";
 
@@ -100,9 +103,25 @@ export default function App() {
   const editingSite = editFloorId === SITE_EDIT_ID;
   const editFloor = model?.floors.find((f) => f.id === editFloorId) ?? model?.floors[0];
 
-  const onSelectRoom = (floor: { id: string }, room: { id: string }) => {
-    setUi({ selectedRoomId: room.id, editFloorId: floor.id });
-  };
+  // Stable, so the 3D view's memoised floors don't re-render on every App render.
+  const onSelectRoom = useCallback((floor: Floor, room: Room) => setUi({ selectedRoomId: room.id, editFloorId: floor.id }), [setUi]);
+  const selectIn = useMemo(
+    () =>
+      Object.fromEntries(
+        (["current", "proposed"] as VariantKey[]).map((k) => [
+          k,
+          (floor: Floor, room: Room) => {
+            setUi({ activeVariant: k });
+            onSelectRoom(floor, room);
+          },
+        ]),
+      ) as Record<VariantKey, (floor: Floor, room: Room) => void>,
+    [setUi, onSelectRoom],
+  );
+  // The 3D view stays mounted once opened, hidden on the Plan tab, so coming back doesn't rebuild it.
+  const show3d = tab === "3d";
+  const [opened3d, setOpened3d] = useState(show3d);
+  if (show3d && !opened3d) setOpened3d(true);
 
   if (!hydrated) return <div className="loading">Loading…</div>;
 
@@ -181,7 +200,11 @@ export default function App() {
             {side === "photos" && <PhotosPanel />}
             {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
             {side === "site" && <SitePanel />}
-            {side === "report" && model && <ReportPanel />}
+            {side === "report" && model && (
+              <Suspense fallback={<p>Loading the report…</p>}>
+                <ReportPanel />
+              </Suspense>
+            )}
             {side === "planning" && model && <PlanningPanel />}
             {side === "settings" && <SettingsPanel />}
           </div>
@@ -195,61 +218,67 @@ export default function App() {
               {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
             </div>
           )}
-          {model && tab === "3d" && viewMode === "single" && (
-            <Viewer
-              model={model}
-              photos={photos}
-              showLabels={showLabels}
-              showCeilings={showCeilings}
-              doorsOpen={doorsOpen}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              title={VARIANT_LABEL[activeVariant]}
-              maxLevel={maxLevel}
-              showExterior={showExterior}
-              variant={activeVariant}
-            />
-          )}
-          {model && tab === "3d" && viewMode === "side-by-side" && both && (
-            <div className="split">
-              {(["current", "proposed"] as VariantKey[]).map((k) => (
-                <Viewer
-                  key={k}
-                  captureId={k}
-                  variant={k}
-                  model={variants[k]!}
-                  photos={photos}
-                  showLabels={showLabels}
-                  showCeilings={showCeilings}
-                  doorsOpen={doorsOpen}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={(f, r) => {
-                    setUi({ activeVariant: k });
-                    onSelectRoom(f, r);
-                  }}
-                  title={VARIANT_LABEL[k]}
-                  maxLevel={maxLevel}
-                  showExterior={showExterior}
-                />
-              ))}
+          {model && opened3d && (
+            <div className="view3d" hidden={!show3d}>
+              <Suspense fallback={<div className="viewer-loading">Loading the 3D view…</div>}>
+                {viewMode === "single" && (
+                  <Viewer
+                    active={show3d}
+                    model={model}
+                    photos={photos}
+                    showLabels={showLabels}
+                    showCeilings={showCeilings}
+                    doorsOpen={doorsOpen}
+                    selectedRoomId={selectedRoomId}
+                    onSelectRoom={onSelectRoom}
+                    title={VARIANT_LABEL[activeVariant]}
+                    maxLevel={maxLevel}
+                    showExterior={showExterior}
+                    variant={activeVariant}
+                  />
+                )}
+                {viewMode === "side-by-side" && both && (
+                  <div className="split">
+                    {(["current", "proposed"] as VariantKey[]).map((k) => (
+                      <Viewer
+                        key={k}
+                        active={show3d}
+                        captureId={k}
+                        variant={k}
+                        model={variants[k]!}
+                        photos={photos}
+                        showLabels={showLabels}
+                        showCeilings={showCeilings}
+                        doorsOpen={doorsOpen}
+                        selectedRoomId={selectedRoomId}
+                        onSelectRoom={selectIn[k]}
+                        title={VARIANT_LABEL[k]}
+                        maxLevel={maxLevel}
+                        showExterior={showExterior}
+                      />
+                    ))}
+                  </div>
+                )}
+                {viewMode === "overlay" && both && otherModel && (
+                  <Viewer
+                    active={show3d}
+                    model={model}
+                    ghost={otherModel}
+                    variant={activeVariant}
+                    ghostVariant={other}
+                    photos={photos}
+                    showLabels={showLabels}
+                    showCeilings={showCeilings}
+                    doorsOpen={doorsOpen}
+                    selectedRoomId={selectedRoomId}
+                    onSelectRoom={onSelectRoom}
+                    title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
+                    maxLevel={maxLevel}
+                    showExterior={showExterior}
+                  />
+                )}
+              </Suspense>
             </div>
-          )}
-          {model && tab === "3d" && viewMode === "overlay" && both && otherModel && (
-            <Viewer
-              model={model}
-              ghost={otherModel}
-              variant={activeVariant}
-              ghostVariant={other}
-              photos={photos}
-              showLabels={showLabels}
-              showCeilings={showCeilings}
-              doorsOpen={doorsOpen}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
-              maxLevel={maxLevel}
-              showExterior={showExterior}
-            />
           )}
           {model && tab === "plan" && editingSite && <SiteEditor />}
           {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={editFloor.id} variant={activeVariant} floor={editFloor} />}

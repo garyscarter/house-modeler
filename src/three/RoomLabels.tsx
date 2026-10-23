@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import type { Floor } from "../types";
 import { polygonArea, polygonCentroid, roomWorldPolygon } from "../lib/geometry";
 
@@ -35,6 +35,9 @@ export function RoomLabels({ floor, baseY, ceiling }: { floor: Floor; baseY: num
   }, [rooms]);
   const [visible, setVisible] = useState(false);
   const shown = useRef(false);
+  const invalidate = useThree((s) => s.invalidate);
+  // The view renders on demand: draw a frame so the labels that just mounted get placed.
+  useEffect(() => invalidate(), [visible, invalidate]);
   useFrame(({ camera }) => {
     const top = baseY + ceiling;
     const dy = camera.position.y - top;
