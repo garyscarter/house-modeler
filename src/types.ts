@@ -308,6 +308,8 @@ export interface Fixture {
   worktop?: string;
   /** Optional label shown on the plan. */
   label?: string;
+  /** Items sharing a groupId are selected, moved, turned and copied together on the plan (a dining table and its chairs). */
+  groupId?: string;
 }
 
 export interface Floor {

@@ -2,30 +2,36 @@ import { useSyncExternalStore } from "react";
 import type { Fixture } from "../types";
 
 /**
- * In-app clipboard for furniture. Module-level so it survives switching
- * layouts and floors, and mirrored to sessionStorage so it survives a tab
- * switch or reload. The system clipboard is never touched.
+ * In-app clipboard for furniture (one item or a whole selection, with its layout). Module-level so it
+ * survives switching layouts and floors, and mirrored to sessionStorage so it survives a tab switch
+ * or reload. The system clipboard is never touched.
  */
 const KEY = "house-modeler.fixture-clipboard";
-let current: Fixture | null | undefined;
+const EMPTY: Fixture[] = [];
+let current: Fixture[] | undefined;
 const listeners = new Set<() => void>();
 
-const load = (): Fixture | null => {
+const valid = (f: Fixture) => !!f && typeof f.type === "string" && Number.isFinite(f.x) && Number.isFinite(f.y);
+
+const load = (): Fixture[] => {
   try {
     const raw = sessionStorage.getItem(KEY);
-    const f = raw ? (JSON.parse(raw) as Fixture) : null;
-    return f && typeof f.type === "string" && Number.isFinite(f.x) && Number.isFinite(f.y) ? f : null;
+    const v = raw ? JSON.parse(raw) : null;
+    // An older save held a single fixture.
+    const list: Fixture[] = Array.isArray(v) ? v : v ? [v] : [];
+    const ok = list.filter(valid);
+    return ok.length ? ok : EMPTY;
   } catch {
-    return null;
+    return EMPTY;
   }
 };
 
-export const getClipboardFixture = (): Fixture | null => (current === undefined ? (current = load()) : current);
+export const getClipboardFixtures = (): Fixture[] => (current === undefined ? (current = load()) : current);
 
-export function setClipboardFixture(f: Fixture | null) {
-  current = f ? { ...f } : null;
+export function setClipboardFixtures(list: Fixture[]) {
+  current = list.length ? list.map((f) => ({ ...f })) : EMPTY;
   try {
-    if (f) sessionStorage.setItem(KEY, JSON.stringify(f));
+    if (list.length) sessionStorage.setItem(KEY, JSON.stringify(list));
     else sessionStorage.removeItem(KEY);
   } catch {
     /* storage unavailable: the in-memory copy still works */
@@ -33,12 +39,12 @@ export function setClipboardFixture(f: Fixture | null) {
   listeners.forEach((l) => l());
 }
 
-export function useClipboardFixture(): Fixture | null {
+export function useClipboardFixtures(): Fixture[] {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    getClipboardFixture,
+    getClipboardFixtures,
   );
 }

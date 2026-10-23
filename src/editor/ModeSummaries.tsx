@@ -48,6 +48,7 @@ export function FurnishSummary({ floor, clashes, onAdd, onPaste }: { floor: Floo
   return (
     <div className="mode-summary">
       <p className="summary-line">{furnishSummary(floor, clashes)}</p>
+      <p className="muted small">Shift+click adds items to the selection; Ctrl/⌘+G groups them so they move together.</p>
       {(onAdd || onPaste) && (
         <div className="row">
           {onAdd && (
