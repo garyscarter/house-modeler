@@ -16,7 +16,7 @@ const js = pick(/<script type="module"[^>]*src="([^"]+)"/) ?? assets.find((f) =>
 const css = pick(/<link rel="stylesheet"[^>]*href="([^"]+)"/) ?? assets.find((f) => /^index-.*\.css$/.test(f));
 writeFileSync(
   `${out}/house-modeler.html`,
-  `<title>House Modeler</title>
+  `<title>Storey</title>
 <meta name="description" content="Visualise a house from its listing floorplan and plan the renovation.">
 <link rel="stylesheet" href="assets/${css}">
 <style>

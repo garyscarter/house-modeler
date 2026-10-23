@@ -50,7 +50,7 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
       window.alert("That file is not valid JSON.");
       return;
     }
-    if (!applyProject(data)) window.alert("That file does not contain a House Modeler project.");
+    if (!applyProject(data)) window.alert("That file does not contain a Storey project.");
   };
 
   return (

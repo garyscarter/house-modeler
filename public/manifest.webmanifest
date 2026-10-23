@@ -1,6 +1,6 @@
 {
-  "name": "House Modeler",
-  "short_name": "House",
+  "name": "Storey",
+  "short_name": "Storey",
   "description": "Visualise a house from its listing floorplan and plan the renovation.",
   "start_url": "./",
   "scope": "./",

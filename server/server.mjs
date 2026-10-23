@@ -414,7 +414,7 @@ const server = http.createServer((req, res) => {
 server.requestTimeout = 60_000;
 server.headersTimeout = 20_000;
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`House Modeler listening on port ${PORT}, serving ${ROOT}`);
+  console.log(`Storey listening on port ${PORT}, serving ${ROOT}`);
 });
 
 for (const signal of ["SIGTERM", "SIGINT"]) {

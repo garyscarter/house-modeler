@@ -5,8 +5,9 @@ import { isMacPlatform } from "../lib/commands";
 import { HouseMenu } from "./HouseMenu";
 import { ModeBar } from "./ModeBar";
 import { Icon } from "./icons";
+import { BrandMark } from "./BrandMark";
 
-/** The top bar: the house menu, the five modes, the layout switch, undo and redo, and the palette and shortcut buttons. */
+/** The top bar: the Storey wordmark, the house menu, the five modes, the layout switch, undo and redo, and the palette and shortcut buttons. */
 export function TopBar() {
   const variants = useStore((s) => s.variants);
   const activeVariant = useStore((s) => s.activeVariant);
@@ -22,6 +23,10 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
+        <span className="brand" title="Storey">
+          <BrandMark />
+          <span className="brand-name">Storey</span>
+        </span>
         <HouseMenu name={houseName(variants[activeVariant] ?? variants.current ?? variants.proposed)} />
       </div>
       <ModeBar />
