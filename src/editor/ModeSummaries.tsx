@@ -6,6 +6,7 @@ import { fixtureSolids, overlappingIds } from "../lib/planMath";
 import { FloorSettings, NumberField } from "./Inspectors";
 import { Section } from "../components/Section";
 import { useStore } from "../store";
+import { MyFurnitureList } from "./MyFurniture";
 
 /** How many furniture items on the floor overlap another (the plan's red outlines). */
 export function useClashCount(floor: Floor): number {
@@ -59,6 +60,7 @@ export function FurnishSummary({ floor, clashes, onAdd, onPaste }: { floor: Floo
           {onPaste && <button onClick={onPaste}>Paste</button>}
         </div>
       )}
+      <MyFurnitureList />
     </div>
   );
 }

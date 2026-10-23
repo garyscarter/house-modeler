@@ -152,6 +152,10 @@ export function buildCommands(c: CommandContext): Command[] {
   const other: Look = c.look === "glass" ? "studio" : "glass";
   add(`look:${other}`, `Look: ${other === "glass" ? "Glass" : "Studio"}`, "Settings", () => c.setLook(other), { keywords: ["look", "theme", "appearance"] });
 
+  add("my-furniture-add", "Add a piece of furniture I own", "Furnish", () => {
+    c.setMode("furnish");
+    c.dispatch("house:add-piece", {});
+  }, { keywords: ["mine", "own", "sofa", "measure"] });
   add("edit:undo", "Undo", "Edit", c.undo, { hint: `${mod}Z` });
   add("edit:redo", "Redo", "Edit", c.redo, { hint: `${mod}${shift}Z` });
 

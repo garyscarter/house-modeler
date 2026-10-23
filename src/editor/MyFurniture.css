@@ -1,0 +1,13 @@
+.my-furniture { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.my-furniture h4 { margin: 0; }
+.piece-row { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.piece-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.piece-form { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.piece-form label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.piece-form input[type="color"] { width: 48px; height: 28px; padding: 0; }
+.piece-form [aria-invalid="true"] { border-color: var(--warn); }
+.piece-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.piece-sizes input { width: 100%; min-width: 0; }
+.picker-foot { padding-top: 6px; }
+.my-furniture-review td { vertical-align: top; text-align: left; }
+.my-furniture-review th { text-align: left; }
