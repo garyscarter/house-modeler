@@ -208,6 +208,8 @@ export const useStore = create<State>()(
             if (!m) return {};
             // Same ids on both sides let the report pair rooms up across variants.
             const copy: HouseModel = structuredClone(m);
+            // A copy of a built-in house is the owner's design, not a built-in, but remembers which version it started from.
+            if (copy.preset) copy.basedOn = { ...copy.preset };
             delete copy.preset;
             // The listing's printed area describes As listed, not a layout made from it.
             if (to !== "current") delete copy.listedArea;

@@ -3,7 +3,8 @@ import { useStore } from "../store";
 import { VARIANT_LABEL, type VariantKey } from "../types";
 import { applyBoundaryUpdate, loadListing, planBoundaryUpdate, updatePreset, updateSitePreset } from "../lib/presetActions";
 import { describeBoundaryChanges } from "../lib/siteMerge";
-import { describeUpdate, notNowRemembers, remember, type StartupPrompt } from "../lib/startupPrompt";
+import { describeUpdate, notNowRemembers, remember, type Remembered, type StartupPrompt } from "../lib/startupPrompt";
+import { openListingReview } from "./ListingUpdatesDialog";
 
 /**
  * Work out the boundary-only update for these layouts' plots and ask the owner to confirm it, listing what
@@ -39,7 +40,12 @@ export async function runStartupPrompt(prompt: StartupPrompt): Promise<void> {
     choices.map((c) => c.label),
   );
   const plan = i === null ? null : choices[i].plan;
-  const note = (kinds: ("update" | "site")[]) => kinds.forEach((k) => remember(k, k === "update" ? prompt.version : prompt.site!.version));
+  const versionOf: Record<"update" | "site" | "review", () => number> = {
+    update: () => prompt.version,
+    site: () => prompt.site!.version,
+    review: () => prompt.review!,
+  };
+  const note = (kinds: (keyof Remembered & ("update" | "site" | "review"))[]) => kinds.forEach((k) => remember(k, versionOf[k]()));
   if (!plan) return note(notNowRemembers(prompt));
   // Edited plots take the boundary changes only, after the owner has seen what changes; declining stops it all.
   const keepEdits = plan.boundaries?.length ? await confirmBoundaryUpdates(plan.boundaries) : undefined;
@@ -49,4 +55,6 @@ export async function runStartupPrompt(prompt: StartupPrompt): Promise<void> {
   plan.sites.forEach(updateSitePreset);
   keepEdits?.();
   note(plan.remember);
+  // Then the owner's own Proposed design: they pick what to bring in. Cancelling it is a "not now" for this version.
+  if (plan.review && prompt.review !== undefined && !(await openListingReview("proposed"))) note(["review"]);
 }
