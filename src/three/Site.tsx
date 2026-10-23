@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
@@ -8,10 +8,13 @@ import { useViewedSite } from "./viewedVariant";
 import { roofGeometry, type RoofEnd } from "../lib/roof";
 import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
 import { clipSegmentOutside, edgesOf } from "../lib/site";
+import { metricUvs } from "../lib/neighbourUv";
 import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
 import { surfaceLook } from "../lib/surfaceFinish";
 import { boundaryWallSegments, wallAt, type WallSegment } from "../lib/wallSteps";
 import { triangles } from "./Roof";
+import { membraneTexture, tileTextures } from "./roofTextures";
+import { getMaterial } from "./textures";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { useSiteView } from "./siteView";
 import { SunHoursOverlay } from "./SunHours";
@@ -82,9 +85,44 @@ function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
       polygonOffsetFactor: -layer,
       polygonOffsetUnits: -layer * 4,
     });
+    if (kind === "road") breakUpRepeat(m as THREE.MeshStandardMaterial);
     materials.set(key, m);
   }
   return m;
+}
+
+/**
+ * The road's 4 m texture tile shows its dark blotches at a visible rhythm. Mix
+ * in smooth two-octave noise from world position, at 10 to 30 m, which
+ * lightens and darkens the surface so no two tiles read alike.
+ */
+function breakUpRepeat(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vRoadXZ;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvRoadXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+varying vec2 vRoadXZ;
+float roadHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float roadNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(roadHash(i), roadHash(i + vec2(1.0, 0.0)), f.x), mix(roadHash(i + vec2(0.0, 1.0)), roadHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+{
+  float lo = roadNoise(vRoadXZ * 0.09) * 0.65 + roadNoise(vRoadXZ * 0.23 + 17.0) * 0.35;
+  diffuseColor.rgb *= 0.78 + 0.44 * lo;
+}`,
+      );
+  };
+  m.customProgramCacheKey = () => "road-variation";
 }
 
 function plainMaterial(color: string, layer = 0): THREE.Material {
@@ -501,15 +539,58 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
   );
 }
 
-/** Light neutral massing for neighbours, so our house stands out. */
+/** Fallback tints for a neighbour with no colour of its own. */
 const NEIGHBOUR_WALL = "#f7f7f5";
 const NEIGHBOUR_ROOF = "#aca7a2";
 const FLAT_ROOF = "#9a9894";
+
+/** Neighbours sit in the background: their colours are pulled toward grey and their relief eased. */
+const WALL_DESAT = 0.35;
+const ROOF_DESAT = 0.15;
+const NEIGHBOUR_BUMP = 0.6;
+
+const mixToGrey = (hex: string, amount: number) => {
+  const c = new THREE.Color(hex);
+  const l = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
+  return "#" + c.lerp(new THREE.Color(l, l, l), amount).getHexString();
+};
+
+const neighbourBases = new Map<string, THREE.MeshStandardMaterial>();
+/** Cached, softened versions of the house's exterior materials; per-neighbour copies are cloned from these so fading never touches the house. */
+function neighbourBase(key: string, make: () => THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  let m = neighbourBases.get(key);
+  if (!m) {
+    m = make();
+    neighbourBases.set(key, m);
+  }
+  return m;
+}
+function neighbourWallBase(color: string): THREE.MeshStandardMaterial {
+  // Strongly coloured walls read as brick, pale ones as render.
+  const hsl = { h: 0, s: 0, l: 0 };
+  new THREE.Color(color).getHSL(hsl);
+  const finish = hsl.s > 0.25 && hsl.l < 0.7 ? "brick" : "render";
+  return neighbourBase(`wall|${finish}|${color}`, () => {
+    const m = (getMaterial({ kind: "ext", finish, color: mixToGrey(color, WALL_DESAT) }) as THREE.MeshStandardMaterial).clone();
+    m.bumpScale *= NEIGHBOUR_BUMP;
+    return m;
+  });
+}
+function neighbourRoofBase(color: string): THREE.MeshStandardMaterial {
+  return neighbourBase(`roof|${color}`, () => {
+    const tex = tileTextures("plain");
+    return new THREE.MeshStandardMaterial({ color: mixToGrey(color, ROOF_DESAT), map: tex.map, bumpMap: tex.bump, bumpScale: 2 * NEIGHBOUR_BUMP, roughness: tex.roughness, side: THREE.DoubleSide });
+  });
+}
+function neighbourFlatBase(): THREE.MeshStandardMaterial {
+  return neighbourBase("flat", () => new THREE.MeshStandardMaterial({ color: FLAT_ROOF, map: membraneTexture(), roughness: 0.95 }));
+}
 
 function neighbourGeometry(n: Neighbour) {
   const walls = new THREE.ExtrudeGeometry(flatShape(n.polygon), { depth: Math.max(0.5, n.eaves), bevelEnabled: false });
   walls.rotateX(-Math.PI / 2);
   walls.translate(0, GROUND_Y, 0);
+  setMetricUvs(walls);
   const b = bbox(n.polygon);
   if (n.roof === "flat" || n.polygon.length < 3) return { walls, slopes: null, gables: null, top: GROUND_Y + n.eaves };
   const axis = !n.ridgeAxis || n.ridgeAxis === "auto" ? (b.w >= b.h ? "x" : "z") : n.ridgeAxis;
@@ -532,7 +613,13 @@ function neighbourGeometry(n: Neighbour) {
     end: flushEnd ? "flush" : style,
     wallT: 0,
   });
-  return { walls, slopes: triangles(m.slopes), gables: triangles(m.gables), top: m.ridgeY };
+  return { walls, slopes: setMetricUvs(triangles(m.slopes)), gables: setMetricUvs(triangles(m.gables)), top: m.ridgeY };
+}
+
+/** Give a non-indexed triangle-soup geometry (extrusions and roof triangles are) UVs in world metres. */
+function setMetricUvs(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(metricUvs(g.attributes.position.array), 2));
+  return g;
 }
 
 /** The ground beyond the plot, 300 m across, with UVs in metres like the other site surfaces' textures expect. Shared, never disposed. */
@@ -548,22 +635,37 @@ function farGround(): THREE.PlaneGeometry {
 
 /** Opacity of see-through neighbours when chosen in the Site panel. */
 const GHOST_OPACITY = 0.3;
-/** Opacity of a neighbour that fades on its own in front of the camera: faint, so it doesn't read as haze over the garden. */
-const FADED_OPACITY = 0.08;
 
 /**
- * A neighbour's walls and roof. It turns see-through on its own while it
- * stands between the camera and the house, so the side and rear views
- * aren't just a wall; its shadow stays.
+ * A neighbour's walls and roof. It stops drawing while it stands between the
+ * camera and the house, so the side and rear views aren't just a wall: colour
+ * writes go off but the meshes keep casting shadows (it is still a building),
+ * and a faint outline keeps the mass readable.
  */
 function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; house: THREE.Vector3 }) {
+  const invalidate = useThree((s) => s.invalidate);
   const geo = useMemo(() => neighbourGeometry(n), [n]);
   useDisposeAll(useMemo(() => [geo.walls, geo.slopes, geo.gables], [geo]));
+  const edges = useMemo(() => [geo.walls, geo.slopes].flatMap((g) => (g ? [new THREE.EdgesGeometry(g, 30)] : [])), [geo]);
+  useDisposeAll(edges);
+  const outline = useMemo(() => new THREE.LineBasicMaterial({ color: "#5d6269", transparent: true, opacity: 0.3, depthWrite: false }), []);
+  useEffect(() => () => outline.dispose(), [outline]);
+  const outlineRef = useRef<THREE.Group>(null);
   const mats = useMemo(() => {
-    const make = (color: string, side: THREE.Side = THREE.FrontSide) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.92, side, transparent: ghost, opacity: ghost ? GHOST_OPACITY : 1, depthWrite: !ghost });
+    const make = (base: THREE.MeshStandardMaterial, side?: THREE.Side) => {
+      const m = base.clone();
+      if (side !== undefined) m.side = side;
+      if (ghost) {
+        m.transparent = true;
+        m.opacity = GHOST_OPACITY;
+        m.depthWrite = false;
+      }
+      return m;
+    };
+    const wall = neighbourWallBase(n.color ?? NEIGHBOUR_WALL);
+    const roof = neighbourRoofBase(n.roofColor ?? NEIGHBOUR_ROOF);
     // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
-    return [make(FLAT_ROOF), make(n.color ?? NEIGHBOUR_WALL), make(n.roofColor ?? NEIGHBOUR_ROOF, THREE.DoubleSide), make(n.color ?? NEIGHBOUR_WALL, THREE.DoubleSide)];
+    return [make(neighbourFlatBase()), make(wall), make(roof, THREE.DoubleSide), make(wall, THREE.DoubleSide)];
   }, [n.color, n.roofColor, ghost]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
 
@@ -574,6 +676,7 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
   const probe = useMemo(() => ({ ray: new THREE.Ray(), hit: new THREE.Vector3(), faded: false }), []);
   useEffect(() => {
     probe.faded = false;
+    if (outlineRef.current) outlineRef.current.visible = false;
   }, [mats, probe]);
   useFrame(({ camera }) => {
     if (ghost) return;
@@ -586,11 +689,11 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
     if (blocks === probe.faded) return;
     probe.faded = blocks;
     for (const m of mats) {
-      m.transparent = blocks;
-      m.opacity = blocks ? FADED_OPACITY : 1;
+      m.colorWrite = !blocks;
       m.depthWrite = !blocks;
-      m.needsUpdate = true;
     }
+    if (outlineRef.current) outlineRef.current.visible = blocks;
+    invalidate();
   });
 
   return (
@@ -598,6 +701,11 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
       <mesh geometry={geo.walls} material={[mats[0], mats[1]]} castShadow receiveShadow />
       {geo.slopes && <mesh geometry={geo.slopes} material={mats[2]} castShadow receiveShadow />}
       {geo.gables && <mesh geometry={geo.gables} material={mats[3]} castShadow receiveShadow />}
+      <group ref={outlineRef} visible={false}>
+        {edges.map((e, i) => (
+          <lineSegments key={i} geometry={e} material={outline} />
+        ))}
+      </group>
     </group>
   );
 }
