@@ -2,12 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { askText } from "../components/Dialogs";
 import { flightWinders, STAIRS_VECTOR } from "../lib/stairs";
 import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
-import { CATALOGUE, CATEGORIES, byId, mountOf, type CatalogueItem } from "../lib/catalogue";
+import { byId, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
 import { confirmKnockThrough } from "./KnockThrough";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
-import { CanopyInspector, FixtureInspector, FloorInspector, NumberField, OpeningInspector, RoomInspector, WallInspector } from "./Inspectors";
+import { BuildRoomPanel, CanopyInspector, FixtureInspector, NumberField, OpeningInspector, WallInspector } from "./Inspectors";
+import { AddItemButton } from "./AddItem";
+import { DecoratePanel } from "./DecoratePanel";
+import { BuildSummary, DecorateSummary, FurnishSummary } from "./ModeSummaries";
+import { usePanelPrefs } from "../components/panelPrefs";
+import { pickInPlan } from "../lib/decorPick";
+import { PLAN_TOOLS, pruneSelection, type Tool } from "../lib/modes";
 import { useCoarsePointer, usePlanCamera } from "./usePlanCamera";
 import { uid } from "../types";
 import { useStore } from "../store";
@@ -47,8 +53,6 @@ import { insertCorner, removeCorner } from "../lib/featureWalls";
 import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/nudge";
 import { getClipboardFixture, setClipboardFixture, useClipboardFixture } from "../lib/clipboard";
 import "./PlanEditor.css";
-
-type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
 
 type Drag =
   | { kind: "corner"; roomId: string; idx: number }
@@ -95,10 +99,16 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const updateFloor = useStore((s) => s.updateFloor);
   const updateRoom = useStore((s) => s.updateRoom);
   const selectedRoomId = useStore((s) => s.selectedRoomId);
+  const selectedEdge = useStore((s) => s.selectedEdge);
+  const mode = useStore((s) => s.mode);
+  const setMode = useStore((s) => s.setMode);
+  const build = mode === "build";
+  const decorate = mode === "decorate";
+  const furnish = mode === "furnish";
   const setUi = useStore((s) => s.setUi);
   const planImage = useStore((s) => s.planImage);
   const wallsOn = useStore((s) => s.planWalls);
-  const [tool, setTool] = useState<Tool>(floor.rooms.length ? "select" : "rect");
+  const [tool, setTool] = useState<Tool>(mode === "build" && !floor.rooms.length ? "rect" : "select");
   const [calib, setCalib] = useState<Pt[]>([]);
   const [draft, setDraft] = useState<Pt[]>([]);
   const [hover, setHover] = useState<Pt | null>(null);
@@ -116,7 +126,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [activeCorner, setActiveCorner] = useState<{ roomId: string; idx: number } | null>(null);
   const clipboard = useClipboardFixture();
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [addOpen, setAddOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const pointers = useRef(new Map<number, Pt>());
@@ -203,7 +213,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setSelectedWallId(s.wall ?? null);
     setSelectedFixtureId(s.fixture ?? null);
     setSelectedCanopy(s.canopy ?? null);
-    setUi({ selectedRoomId: s.room ?? null });
+    setLitEdge(null);
+    setUi({ selectedRoomId: s.room ?? null, selectedEdge: null });
     setEdgeEdit(null);
     setActiveCorner(null);
   };
@@ -251,6 +262,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   /** Move the selection by (dx, dy) image px; false when nothing selected can move that way. */
   const nudgeSelection = (dx: number, dy: number): boolean => {
+    if (!build && !furnish) return false;
     if (selectedCanopy !== null) {
       if (!canopies[selectedCanopy]) return false;
       setCanopies((all) => moveCanopy(all, selectedCanopy, dx, dy));
@@ -294,6 +306,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       copyFixture(selectedFixtureId);
     } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixture()) {
       e.preventDefault();
+      // Furniture only lives in Furnish: switch there, then paste.
+      if (!furnish) setMode("furnish");
       pasteFixture();
     } else if (e.key === "Escape") {
       setDraft([]);
@@ -314,7 +328,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     } else if (mod && e.key.toLowerCase() === "d" && selectedFixtureId) {
       e.preventDefault();
       duplicateFixture(selectedFixtureId);
-    } else if (e.key === "Delete" || e.key === "Backspace") {
+    } else if ((e.key === "Delete" || e.key === "Backspace") && (build || furnish)) {
       removeSelected();
     }
   };
@@ -558,7 +572,16 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         addRoom(draft);
         setDraft([]);
       } else setDraft([...draft, p]);
-    } else {
+    } else if (decorate) {
+      const hit = pickInPlan(floor.rooms.map((r) => ({ id: r.id, poly: r.polygon })), raw, 8 * px + 0.12 * ppm);
+      select({ room: hit?.roomId });
+      if (hit) {
+        setUi({ selectedEdge: hit.edge === null ? null : { edge: hit.edge, side: hit.side } });
+        if (hit.edge === null) usePanelPrefs.getState().setOpen("decorate.floor", true);
+      }
+    } else if (furnish) {
+      select({});
+    } else if (build) {
       // Rooms sit over canopies, so they win where the two overlap.
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
       // Shift+click a neighbour of the selected room: knock the two through.
@@ -593,6 +616,25 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setEdgeEdit(null);
     if (t !== "place") setPlacing(null);
   };
+  // A mode change drops the tool in hand and any selection the new mode cannot hold.
+  const prevMode = useRef(mode);
+  useEffect(() => {
+    if (prevMode.current === mode) return;
+    prevMode.current = mode;
+    drag.current = null;
+    pick("select");
+    setPlacing(null);
+    setAddOpen(false);
+    const keep = pruneSelection(mode, {
+      room: selectedRoomId ?? undefined,
+      opening: selectedOpeningId ?? undefined,
+      wall: selectedWallId ?? undefined,
+      fixture: selectedFixtureId ?? undefined,
+      canopy: selectedCanopy ?? undefined,
+    });
+    select(keep);
+    if (mode === "decorate" && selectedEdge) setUi({ selectedEdge });
+  }, [mode]);
   const startPlacing = (item: CatalogueItem) => {
     setPlacing({ item, rot: placing?.rot ?? 0 });
     setTool("place");
@@ -600,6 +642,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setDraft([]);
     setMeasure([]);
   };
+  // Build and Decorate light the edge the panel is hovering; Decorate also keeps the picked wall lit.
+  const litShown = litEdge ?? (decorate && selectedEdge ? selectedEdge.edge : null);
   const editRoom = edgeEdit && floor.rooms.find((r) => r.id === edgeEdit.roomId);
   const vb = cam && size ? viewBoxOf(cam, size) : { x: 0, y: 0, w: floor.imageW, h: floor.imageH };
   const measureEnd = measure.length === 1 ? hover : measure[1];
@@ -615,13 +659,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   return (
     <div className="plan-editor">
       <div className="toolbar plan-toolbar">
-        {TOOLS.map(([t, label]) => (
+        {furnish && <AddItemButton activeId={placing?.item.id} onPick={startPlacing} open={addOpen} onOpenChange={setAddOpen} />}
+        {TOOLS.filter(([t]) => PLAN_TOOLS[mode].includes(t)).map(([t, label]) => (
           <button key={t} className={tool === t ? "active" : ""} onClick={() => pick(t)}>
             {label}
           </button>
         ))}
         {tool === "room" && draft.length >= 3 && <button onClick={finishRoom}>Finish room</button>}
-        {clipboard && !selectedFixture && (
+        {furnish && clipboard && (
           <button onClick={pasteFixture} title="Paste the copied furniture onto this floor">
             Paste {byId(clipboard.type)?.name ?? "item"}
           </button>
@@ -656,11 +701,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             Walls
           </button>
         </span>
-        <span className="hint right">Scale {ppm.toFixed(1)} px/m</span>
+        {build && <span className="hint right">Scale {ppm.toFixed(1)} px/m</span>}
       </div>
       <div className="plan-hint">
         {tool === "canopy" && (draft.length ? "Click the opposite corner of the canopy." : "Click one corner of the porch canopy, then the opposite corner. Corners snap to walls and rooms.")}
-        {tool === "select" && "Tap a room, canopy, opening or item to edit it. Drag corners and items; drag the background to pan, pinch or scroll to zoom. Arrows nudge (Shift ×10) · Ctrl/⌘C, V copy and paste furniture."}
+        {tool === "select" && build && "Click a room, canopy, opening or wall to edit it. Drag corners; drag the background to pan, scroll to zoom. Arrows nudge (Shift ×10). Shift+click a neighbouring room to knock through."}
+        {tool === "select" && decorate && "Click a floor, or a wall near its edge, to decorate it. Drag the background to pan, scroll to zoom."}
+        {tool === "select" && furnish && "Click Add to place furniture. Click an item to edit it; drag to move. Arrows nudge (Shift ×10) · R turns 90°, Shift+R 15° · Ctrl/⌘C, V copy and paste · Ctrl/⌘D duplicates · Delete removes."}
+        {tool === "select" && mode === "review" && "Drag the background to pan, scroll to zoom. Use Measure to check a distance."}
         {tool === "rect" && (draft.length ? "Click the opposite corner." : "Click one corner of the room, then the opposite corner. Corners snap to existing ones.")}
         {tool === "room" && "Click each corner in order, then click the first corner again (or Finish room). Esc cancels."}
         {tool === "door" && "Click on a wall to place a door."}
@@ -709,7 +757,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   className="plan-canopy"
                   onPointerDown={(e) => {
                     // Only the selected canopy drags, so a swipe over an unselected one still pans the plan.
-                    if (tool !== "select" || !sel) return;
+                    if (!build || tool !== "select" || !sel) return;
                     startDrag(e, { kind: "canopy", idx: i, p0: toImage(e), x0: e.clientX, y0: e.clientY, list0: canopies, moved: false });
                   }}
                 >
@@ -717,7 +765,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 </polygon>
               );
             })}
-            {floor.rooms.length === 0 && tool === "select" && (
+            {floor.rooms.length === 0 && tool === "select" && build && (
               <text x={vb.x + vb.w / 2} y={vb.y + vb.h * 0.08} fontSize={fontSize * 1.2} textAnchor="middle" fill="#2563eb" fontWeight={600} {...halo}>
                 No rooms yet. Pick "Rectangle room" and click two opposite corners of each room.
               </text>
@@ -765,17 +813,19 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   key={fx.id}
                   transform={`translate(${fx.x} ${fx.y}) rotate(${fx.rot})`}
                   className="plan-fixture"
+                  style={furnish ? undefined : { pointerEvents: "none", opacity: 0.55 }}
                   onPointerDown={(e) => {
-                    if (tool !== "select") return;
+                    if (!furnish || tool !== "select") return;
                     const wasSelected = fx.id === selectedFixtureId;
                     select({ fixture: fx.id });
                     const p = toImage(e);
                     startDrag(e, { kind: "fixture", fixtureId: fx.id, dx: fx.x - p.x, dy: fx.y - p.y, x0: e.clientX, y0: e.clientY, moved: false, wasSelected });
                   }}
                   onClick={(e) => {
-                    if (tool === "select") e.stopPropagation();
+                    if (furnish && tool === "select") e.stopPropagation();
                   }}
                   onDoubleClick={(e) => {
+                    if (!furnish) return;
                     e.stopPropagation();
                     patchFixture(fx.id, { rot: turn(fx.rot, 90) });
                   }}
@@ -835,6 +885,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     stroke="transparent"
                     strokeWidth={handleR * 2}
                     className="plan-hit"
+                    style={build || decorate ? undefined : { pointerEvents: "none" }}
                     onPointerDown={(e) => {
                       if (tool !== "select") return;
                       e.stopPropagation();
@@ -844,7 +895,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   >
                     <title>Wall{w.height !== undefined ? ` (${w.height} m high)` : ""}. Tap to edit, drag the ends to move.</title>
                   </line>
-                  {tool === "select" &&
+                  {tool === "select" && build &&
                     (["a", "b"] as const).map((end) => (
                       <Handle
                         key={end}
@@ -867,7 +918,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {tool === "wall" && draft.length === 1 && hover && (
               <line x1={draft[0].x} y1={draft[0].y} x2={hover.x} y2={hover.y} stroke="#16a34a" strokeWidth={stroke * 3} strokeLinecap="round" style={{ pointerEvents: "none" }} />
             )}
-            {floor.stairs && <StairsMarker floor={floor} stroke={stroke} handleR={handleR} interactive={tool === "select"} onPointerDown={(e) => startDrag(e, { kind: "stairs" })} />}
+            {floor.stairs && <StairsMarker floor={floor} stroke={stroke} handleR={handleR} interactive={build && tool === "select"} onPointerDown={(e) => startDrag(e, { kind: "stairs" })} />}
 
             {floor.openings.map((o) => {
               const len = o.widthM * ppm;
@@ -886,6 +937,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     fill={sel ? "#d97706" : "transparent"}
                     fillOpacity={sel ? 0.18 : 0}
                     className="plan-hit plan-opening"
+                    style={build ? undefined : { pointerEvents: "none" }}
                     onPointerDown={(e) => {
                       if (tool !== "select") return;
                       select({ opening: o.id });
@@ -906,7 +958,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               );
             })}
 
-            {tool === "select" &&
+            {build && tool === "select" &&
               orderedRooms.map((r) => {
                 const sel = r.id === selectedRoomId;
                 return (
@@ -960,7 +1012,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   </g>
                 );
               })}
-            {tool === "select" &&
+            {build && tool === "select" &&
               selectedCanopyPoly?.map((p, i) => (
                 <Handle
                   key={"ch" + i}
@@ -976,8 +1028,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   <title>Drag to resize the canopy</title>
                 </Handle>
               ))}
-            {selected && litEdge !== null && litEdge < selected.polygon.length && <LitEdge room={selected} idx={litEdge} px={px} fontSize={fontSize} />}
-            {selected && tool === "select" && (
+            {selected && litShown !== null && litShown < selected.polygon.length && <LitEdge room={selected} idx={litShown} px={px} fontSize={fontSize} />}
+            {selected && build && tool === "select" && (
               <EdgeLabels room={selected} ppm={ppm} px={px} fontSize={fontSize} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onEdit={(idx) => setEdgeEdit({ roomId: selected.id, idx })} />
             )}
 
@@ -1043,79 +1095,78 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           </div>
         </div>
 
-        <div className="side">
-          {selectedFixture && selectedFixtureItem ? (
-            <FixtureInspector
-              fixture={selectedFixture}
-              item={selectedFixtureItem}
-              clash={clashes.has(selectedFixture.id)}
-              onChange={(p) => patchFixture(selectedFixture.id, p)}
-              onDuplicate={() => duplicateFixture(selectedFixture.id)}
-              onCopy={() => copyFixture(selectedFixture.id)}
-              onPaste={clipboard ? pasteFixture : undefined}
-              onRemove={removeSelected}
-            />
-          ) : selected ? (
-            <RoomInspector
-              key={selected.id}
-              variant={variant}
-              floor={floor}
-              room={selected}
-              onChange={(p) => updateRoom(variant, floor.id, selected.id, p)}
-              onHighlightEdge={setLitEdge}
-            />
-          ) : selectedCanopyPoly ? (
-            <CanopyInspector
-              key={selectedCanopy}
-              poly={selectedCanopyPoly}
-              ppm={ppm}
-              onResize={(w, h, fixed) => setCanopies((all) => resizeCanopy(all, selectedCanopy!, w, h, fixed))}
-              onDelete={() => {
-                setCanopies((all) => removeCanopy(all, selectedCanopy!));
-                setSelectedCanopy(null);
-              }}
-            />
-          ) : selectedOpening ? (
-            <OpeningInspector
-              opening={selectedOpening}
-              pair={selectedOpening.kind === "door" && selectedOpening.widthM > DOUBLE_DOOR_M && outsideSide(selectedOpening, floor.rooms, 0.3 * ppm) === 0}
-              onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.map((o) => (o.id === selectedOpening.id ? { ...o, ...p } : o)) }))}
-              onDelete={removeSelected}
-            />
-          ) : selectedWall ? (
-            <WallInspector
-              wall={selectedWall}
-              onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWall.id ? { ...w, ...p } : w)) }))}
-              onDelete={removeSelected}
-            />
-          ) : (
-            <p className="muted">Select a room to check its size and finishes, a porch canopy, an opening to change its type and size, an item of furniture, or a wall.</p>
-          )}
-          <hr />
-          <div className="palette">
-            <div className="row">
-              <b>Furniture</b>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-            <div className="palette-items">
-              {CATALOGUE.filter((c) => c.category === category).map((c) => (
-                <button key={c.id} className={placing?.item.id === c.id ? "active" : ""} title={c.note ?? ""} onClick={() => startPlacing(c)}>
-                  <span>{c.name}</span>
-                  <span className="muted">
-                    {c.w.toFixed(2)} × {c.d.toFixed(2)} m
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="muted small">Typical UK sizes. Pick one, then tap the plan to place it.</p>
+        {mode !== "review" && (
+          <div className="side">
+            {furnish ? (
+              selectedFixture && selectedFixtureItem ? (
+                <FixtureInspector
+                  fixture={selectedFixture}
+                  item={selectedFixtureItem}
+                  clash={clashes.has(selectedFixture.id)}
+                  onChange={(p) => patchFixture(selectedFixture.id, p)}
+                  onDuplicate={() => duplicateFixture(selectedFixture.id)}
+                  onCopy={() => copyFixture(selectedFixture.id)}
+                  onPaste={clipboard ? pasteFixture : undefined}
+                  onRemove={removeSelected}
+                />
+              ) : (
+                <FurnishSummary floor={floor} clashes={clashes.size} onAdd={() => setAddOpen(true)} onPaste={clipboard ? pasteFixture : undefined} />
+              )
+            ) : decorate ? (
+              selected ? (
+                <DecoratePanel key={selected.id} variant={variant} floor={floor} room={selected} edge={selectedEdge} onChange={(p) => updateRoom(variant, floor.id, selected.id, p)} onHighlightEdge={setLitEdge} />
+              ) : selectedWall ? (
+                <WallInspector
+                  mode="decorate"
+                  wall={selectedWall}
+                  onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWall.id ? { ...w, ...p } : w)) }))}
+                  onDelete={removeSelected}
+                />
+              ) : (
+                <DecorateSummary floor={floor} />
+              )
+            ) : selected ? (
+              <BuildRoomPanel
+                key={selected.id}
+                variant={variant}
+                floor={floor}
+                room={selected}
+                onChange={(p) => updateRoom(variant, floor.id, selected.id, p)}
+                onHighlightEdge={setLitEdge}
+              />
+            ) : selectedCanopyPoly ? (
+              <CanopyInspector
+                key={selectedCanopy}
+                poly={selectedCanopyPoly}
+                ppm={ppm}
+                onResize={(w, h, fixed) => setCanopies((all) => resizeCanopy(all, selectedCanopy!, w, h, fixed))}
+                onDelete={() => {
+                  setCanopies((all) => removeCanopy(all, selectedCanopy!));
+                  setSelectedCanopy(null);
+                }}
+              />
+            ) : selectedOpening ? (
+              <OpeningInspector
+                opening={selectedOpening}
+                pair={selectedOpening.kind === "door" && selectedOpening.widthM > DOUBLE_DOOR_M && outsideSide(selectedOpening, floor.rooms, 0.3 * ppm) === 0}
+                onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.map((o) => (o.id === selectedOpening.id ? { ...o, ...p } : o)) }))}
+                onDelete={removeSelected}
+              />
+            ) : selectedWall ? (
+              <WallInspector
+                mode="build"
+                wall={selectedWall}
+                onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWall.id ? { ...w, ...p } : w)) }))}
+                onDelete={removeSelected}
+              />
+            ) : (
+              <>
+                <BuildSummary variant={variant} floor={floor} />
+                <p className="muted small">Select a room to check its size and finishes, a porch canopy, an opening to change its type and size, or a wall.</p>
+              </>
+            )}
           </div>
-          <hr />
-          <FloorInspector variant={variant} floor={floor} />
-        </div>
+        )}
       </div>
     </div>
   );

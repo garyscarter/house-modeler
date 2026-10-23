@@ -10,7 +10,9 @@ import { polygonArea, polygonCentroid, roomWorldPolygon } from "../lib/geometry"
  * Labels are HTML overlays, so nothing in the scene hides them. To keep them
  * readable the house only labels its topmost visible floor (lower floors
  * would be read through the floors above, and "show up to" a level makes
- * that level the top), and this component hides them unless the camera is
+ * that level the top), and with the roof drawn over them only the selected
+ * room is labelled. Unselected labels show the name only; the printed size
+ * and area belong to the selected room. This component hides them unless the camera is
  * looking down into the rooms: above the floor's ceiling and at least
  * MIN_ELEVATION above the horizon. At street level (the front and rear
  * presets) the labels would sit over the walls and roof of the elevation
@@ -18,7 +20,20 @@ import { polygonArea, polygonCentroid, roomWorldPolygon } from "../lib/geometry"
  */
 const MIN_ELEVATION = (12 * Math.PI) / 180;
 
-export function RoomLabels({ floor, baseY, ceiling }: { floor: Floor; baseY: number; ceiling: number }) {
+export function RoomLabels({
+  floor,
+  baseY,
+  ceiling,
+  roofOver = false,
+  selectedRoomId = null,
+}: {
+  floor: Floor;
+  baseY: number;
+  ceiling: number;
+  /** The roof is drawn over this floor: label only the selected room, or the labels float on the tiles. */
+  roofOver?: boolean;
+  selectedRoomId?: string | null;
+}) {
   const rooms = useMemo(
     () =>
       floor.rooms.map((room) => {
@@ -51,14 +66,18 @@ export function RoomLabels({ floor, baseY, ceiling }: { floor: Floor; baseY: num
   if (!visible) return null;
   return (
     <group>
-      {rooms.map(({ room, c, area }) => (
+      {rooms
+        .filter(({ room }) => !roofOver || room.id === selectedRoomId)
+        .map(({ room, c, area }) => (
         <Html key={room.id} position={[c.x, 0.05, c.y]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
           <div className="room-label">
             {room.name}
-            <span>
-              {room.dims && `${room.dims.w.toFixed(2)} × ${room.dims.h.toFixed(2)} m · `}
-              {area.toFixed(1)} m²
-            </span>
+            {room.id === selectedRoomId && (
+              <span>
+                {room.dims && `${room.dims.w.toFixed(2)} × ${room.dims.h.toFixed(2)} m · `}
+                {area.toFixed(1)} m²
+              </span>
+            )}
           </div>
         </Html>
       ))}

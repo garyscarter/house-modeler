@@ -1,52 +1,18 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { getCapture, registerCapture, useCaptureIds, type CaptureTarget } from "./captureRegistry";
 
-export interface CaptureTarget {
-  gl: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-}
-
-const registry = new Map<string, CaptureTarget>();
-const listeners = new Set<() => void>();
-let ids: string[] = [];
-const changed = () => {
-  ids = [...registry.keys()];
-  listeners.forEach((l) => l());
-};
+export type { CaptureTarget };
+export { getCapture, useCaptureIds };
 
 /** Registers a viewer's renderer, scene and camera so exports can reach them. */
 export function CaptureBridge({ id }: { id: string }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
-  useEffect(() => {
-    registry.set(id, { gl, scene, camera });
-    changed();
-    return () => {
-      registry.delete(id);
-      changed();
-    };
-  }, [id, gl, scene, camera]);
+  useEffect(() => registerCapture(id, { gl, scene, camera }), [id, gl, scene, camera]);
   return null;
-}
-
-/** The registered viewer with this id, or the first one. */
-export function getCapture(id?: string): CaptureTarget | undefined {
-  if (id) return registry.get(id);
-  return registry.values().next().value;
-}
-
-/** Ids of the 3D viewers on screen ("main", or "current" and "proposed" side by side), for the export buttons. */
-export function useCaptureIds(): string[] {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => ids,
-  );
 }
 
 /** Largest side of a snapshot, px; beyond this some iPads fail to allocate the buffer. */
