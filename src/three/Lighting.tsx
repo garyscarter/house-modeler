@@ -1,24 +1,31 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Sky } from "@react-three/drei";
 import * as THREE from "three";
+import { Sky } from "three-stdlib";
 import { useStore } from "../store";
 import { useViewedSite } from "./viewedVariant";
 import { daylight, worldToBearing } from "../lib/sun";
 import { useSunInfo } from "./useSun";
 import { GROUND_Y } from "./Site";
+import { setGlassMode } from "./textures";
 
 /** Default key light: high, from the front right, so the front elevation reads with soft side shadows. */
 const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
+/** Key light intensities: the default front-right light, and the real sun at full height. */
+const KEY_DEFAULT = 4.2;
+const KEY_SUN = 5;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
 /** Shadow edge softness in shadow-map texels. */
 const SHADOW_RADIUS = { high: 3, balanced: 2, low: 1 } as const;
 
 const WHITE_SUN = new THREE.Color("#fff3e2");
 const LOW_SUN = new THREE.Color("#ff9a52");
-const DAY_SKY = new THREE.Color("#dfe9f7");
+const DAY_SKY = new THREE.Color("#eef0f2");
 const DUSK_SKY = new THREE.Color("#5d6f9c");
 const GROUND_BOUNCE = new THREE.Color("#8d8270");
+const MOON = new THREE.Color("#9db4ff");
+/** Below this sun altitude (degrees) it is night: the physical sky gives way to a gradient, windows light up. */
+const NIGHT_ALTITUDE = -4;
 // Scratch objects for fitting the shadow camera, which runs every frame while the sun study plays.
 const _target = new THREE.Vector3();
 const _sphere = new THREE.Sphere();
@@ -28,23 +35,24 @@ const _c = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Scene lighting: soft sky light (hemisphere plus a gradient environment
- * map) and a shadow-casting key light. With the sun study on, the key light
+ * Scene lighting: soft sky light (an environment map, with a faint
+ * hemisphere light) and a shadow-casting key light. With the sun study on, the key light
  * is the real sun for the site's location, date and time; below the
- * horizon only a dim twilight remains.
+ * horizon only a dim twilight remains, with a cool moon fill and lit windows.
  */
 export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number }) {
   const sun = useSunInfo();
   const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
   const quality = useStore((s) => s.settings.quality);
-  const scene = useThree((s) => s.scene);
+  const invalidate = useThree((s) => s.invalidate);
   const light = useRef<THREE.DirectionalLight>(null);
-  useSkyEnvironment();
 
   const active = !!sun?.active;
   const altitude = active ? sun!.position.altitude : 50;
   const day = daylight(altitude);
+  const night = active && altitude < NIGHT_ALTITUDE;
+  useSkyEnvironment(active && !night ? sun!.vector : null, altitude, day.sky);
   const dir = useMemo(() => (active ? new THREE.Vector3(...sun!.vector) : DEFAULT_DIR.clone()), [active, sun]);
 
   // Everything that casts or catches a shadow worth seeing: the house, and the plot and neighbours when shown.
@@ -106,18 +114,21 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
     l.shadow.needsUpdate = true;
   }, [box, dir, quality]);
 
-  const keyIntensity = active ? 5 * day.sun : 4.2;
+  // Glass is real transmission on high quality, and lit from inside at night.
+  useEffect(() => {
+    setGlassMode(quality === "high", night);
+    invalidate();
+  }, [quality, night, invalidate]);
+
+  const keyIntensity = active ? KEY_SUN * day.sun : KEY_DEFAULT;
   const keyColor = useMemo(() => (active ? WHITE_SUN.clone().lerp(LOW_SUN, day.warmth) : WHITE_SUN.clone()), [active, day.warmth]);
   const skyLevel = active ? day.sky : 1;
   const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1), [active, day.sky]);
 
-  useEffect(() => {
-    scene.environmentIntensity = skyLevel * 0.5;
-  }, [scene, skyLevel]);
-
   return (
     <>
-      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={skyLevel * 0.5} />
+      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={skyLevel * 0.15} />
+      <directionalLight position={[-0.3, 0.8, 0.5]} color={MOON} intensity={night ? 0.3 : 0} />
       {/* Always casts, even at night, so the sun setting doesn't recompile every material. */}
       <directionalLight ref={light} intensity={keyIntensity} color={keyColor} castShadow />
       {site && <CompassBridge frontBearing={site.frontBearing} />}
@@ -125,29 +136,112 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   );
 }
 
+/** Environment gradient (zenith, horizon, ground): muted, so shadows stay neutral rather than cyan. */
+const ENV_GRADIENT = ["#a7bcd8", "#eceef0", "#857b6c"];
+/** Environment light as a share of the sky level: the main ambient light. */
+const ENV_INTENSITY = 0.8;
+/** Zenith and horizon the gradient warms toward as the sun nears the horizon in a sun study. */
+const ENV_DUSK = ["#9ea8c4", "#f0cfae"];
+/** Sun altitude (degrees) below which the environment starts to warm. */
+const DUSK_ALTITUDE = 25;
+/** The environment is re-baked at most this often while the sun moves. */
+const REBAKE_MS = 250;
+
+/** The visible physical sky dome. Unscaled, it would blow out to white. */
+function makeSky(scale: number) {
+  const sky = new Sky();
+  if (scale !== 1) {
+    sky.material.fragmentShader = sky.material.fragmentShader.replace("gl_FragColor = vec4( retColor, 1.0 );", `gl_FragColor = vec4( retColor * ${scale.toFixed(3)}, 1.0 );`);
+  }
+  return sky;
+}
+
+function aimSky(sky: Sky, sunVector: readonly number[], altitude: number) {
+  const u = sky.material.uniforms;
+  u.sunPosition.value.set(sunVector[0], sunVector[1], sunVector[2]);
+  u.turbidity.value = 5;
+  u.rayleigh.value = altitude > 0 ? 1.4 : 2.5;
+  u.mieCoefficient.value = 0.004;
+  u.mieDirectionalG.value = 0.85;
+}
+
 /**
- * Soft image-based light with no download: a sky-to-ground gradient
- * rendered into a prefiltered environment map once per renderer.
+ * Soft image-based light with no download: a prefiltered environment map
+ * that is the scene's main ambient light. By default a muted sky-to-ground
+ * gradient; during a sun study (`sunVector` set) the gradient warms as the
+ * sun nears the horizon, so dusk gets warm ambient light. (Baking the
+ * physical sky itself doesn't work: it draws nothing into PMREM's cube
+ * camera.) Re-baking is throttled, and the last position always lands.
  */
-function useSkyEnvironment() {
+function useSkyEnvironment(sunVector: [number, number, number] | null, altitude: number, skyLevel: number) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
+  const invalidate = useThree((s) => s.invalidate);
+  const bake = useRef<(v: readonly number[] | null, alt: number) => void>(() => {});
+  const wanted = useRef({ v: sunVector as readonly number[] | null, alt: altitude });
+  wanted.current = { v: sunVector, alt: altitude };
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const last = useRef(0);
+
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
-    const env = new THREE.Scene();
-    const mat = skyGradientMaterial(new THREE.Color("#7fa7dc"), new THREE.Color("#eef2f6"), new THREE.Color("#6f6656"), false);
-    const geo = new THREE.SphereGeometry(10, 32, 16);
-    env.add(new THREE.Mesh(geo, mat));
-    const rt = pmrem.fromScene(env, 0.02);
-    geo.dispose();
-    mat.dispose();
-    pmrem.dispose();
-    scene.environment = rt.texture;
-    return () => {
-      if (scene.environment === rt.texture) scene.environment = null;
-      rt.dispose();
+    const gradient = new THREE.Scene();
+    const gradientGeo = new THREE.SphereGeometry(10, 32, 16);
+    const gradientMat = skyGradientMaterial(new THREE.Color(ENV_GRADIENT[0]), new THREE.Color(ENV_GRADIENT[1]), new THREE.Color(ENV_GRADIENT[2]), false);
+    gradient.add(new THREE.Mesh(gradientGeo, gradientMat));
+    const top = new THREE.Color(ENV_GRADIENT[0]), horizon = new THREE.Color(ENV_GRADIENT[1]);
+    const duskTop = new THREE.Color(ENV_DUSK[0]), duskHorizon = new THREE.Color(ENV_DUSK[1]);
+    let rt: THREE.WebGLRenderTarget | null = null;
+    let baked = -1;
+    bake.current = (v, alt) => {
+      // Warmth in twentieth steps, so a playing sun re-bakes only when the colour visibly changes.
+      const warmth = v ? Math.round(THREE.MathUtils.clamp(1 - alt / DUSK_ALTITUDE, 0, 1) * 20) / 20 : 0;
+      if (rt && warmth === baked) return;
+      baked = warmth;
+      gradientMat.uniforms.top.value.copy(top).lerp(duskTop, warmth);
+      gradientMat.uniforms.horizon.value.copy(horizon).lerp(duskHorizon, warmth);
+      const next = pmrem.fromScene(gradient, 0.02);
+      scene.environment = next.texture;
+      rt?.dispose();
+      rt = next;
+      invalidate();
     };
-  }, [gl, scene]);
+    bake.current(wanted.current.v, wanted.current.alt);
+    return () => {
+      bake.current = () => {};
+      if (rt && scene.environment === rt.texture) scene.environment = null;
+      rt?.dispose();
+      gradientGeo.dispose();
+      gradientMat.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene, invalidate]);
+
+  // The sun moved: re-bake now, or once the throttle allows, with whatever the latest position is by then.
+  const key = sunVector ? sunVector.join() : "";
+  useEffect(() => {
+    if (timer.current) return;
+    const run = () => {
+      timer.current = null;
+      last.current = performance.now();
+      bake.current(wanted.current.v, wanted.current.alt);
+    };
+    const wait = REBAKE_MS - (performance.now() - last.current);
+    if (wait <= 0) run();
+    else timer.current = setTimeout(run, wait);
+  }, [key]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    scene.environmentIntensity = skyLevel * ENV_INTENSITY;
+    invalidate();
+  }, [scene, skyLevel, invalidate]);
 }
 
 /**
@@ -183,12 +277,14 @@ function skyGradientMaterial(top: THREE.Color, horizon: THREE.Color, bottom: THR
 }
 
 /** Backdrop gradients (zenith, horizon, ground): a soft day sky, and a deep blue for after dusk. */
-const DAY_BACKDROP = ["#a9c6ea", "#eef1f4", "#d9ddd6"].map((c) => new THREE.Color(c));
+const DAY_BACKDROP = ["#8fb2e0", "#e2e9f0", "#d9ddd6"].map((c) => new THREE.Color(c));
 const NIGHT_BACKDROP = ["#0c1529", "#2d3c60", "#1b2232"].map((c) => new THREE.Color(c));
+/** Share of the physical sky's brightness shown behind the house. */
+const SKY_BRIGHTNESS = 0.4;
 const SUN_HAZE = new THREE.Color("#dbe3ea");
 const LOW_HAZE = new THREE.Color("#f0c8a0");
 /** Fog starts well beyond the plot so only the far ground fades; the colour is set as a prop. */
-const FOG_ARGS: [string, number, number] = ["#eef1f4", 140, 420];
+const FOG_ARGS: [string, number, number] = ["#e2e9f0", 140, 420];
 
 /**
  * The sky behind the scene: a physical sky lit by the sun during a sun
@@ -202,16 +298,35 @@ export function SkyBackdrop() {
   const dome = useRef<THREE.Mesh>(null);
   const backdrop = useMemo(() => skyGradientMaterial(DAY_BACKDROP[0].clone(), DAY_BACKDROP[1].clone(), DAY_BACKDROP[2].clone(), true), []);
   useEffect(() => () => backdrop.dispose(), [backdrop]);
+  // The visible sky is scaled down: unscaled it comes out near white and the house disappears into it.
+  const sky = useMemo(() => {
+    const k = makeSky(SKY_BRIGHTNESS);
+    k.scale.setScalar(400);
+    return k;
+  }, []);
+  useEffect(
+    () => () => {
+      sky.geometry.dispose();
+      sky.material.dispose();
+    },
+    [sky],
+  );
+  const invalidate = useThree((s) => s.invalidate);
   // Keep the dome centred on the camera so its horizon stays level wherever it goes.
   useFrame(() => dome.current?.position.copy(camera.position));
 
   const alt = sun?.active ? sun.position.altitude : null;
-  const physical = alt !== null && alt > -4;
+  const physical = alt !== null && alt > NIGHT_ALTITUDE;
   const night = alt !== null && !physical;
   useEffect(() => {
     const cols = night ? NIGHT_BACKDROP : DAY_BACKDROP;
     (["top", "horizon", "bottom"] as const).forEach((k, i) => (backdrop.uniforms[k].value as THREE.Color).copy(cols[i]));
   }, [backdrop, night]);
+  useEffect(() => {
+    if (!sun?.active || alt === null) return;
+    aimSky(sky, sun.vector, alt);
+    invalidate();
+  }, [sky, sun, alt, invalidate]);
   const fog = useMemo(() => {
     if (alt === null || night) return (night ? NIGHT_BACKDROP : DAY_BACKDROP)[1].clone();
     const day = daylight(alt);
@@ -221,7 +336,7 @@ export function SkyBackdrop() {
   return (
     <>
       {physical ? (
-        <Sky distance={400} sunPosition={sun!.vector} turbidity={5} rayleigh={alt! > 0 ? 1.4 : 2.5} mieCoefficient={0.004} mieDirectionalG={0.85} />
+        <primitive object={sky} />
       ) : (
         <mesh ref={dome} material={backdrop} renderOrder={-1000} frustumCulled={false}>
           <sphereGeometry args={[300, 32, 16]} />
@@ -242,7 +357,7 @@ function CompassBridge({ frontBearing }: { frontBearing: number }) {
   const last = useRef(NaN);
   const el = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    el.current = gl.domElement.closest(".viewer");
+    el.current = gl.domElement.closest(".wipe") ?? gl.domElement.closest(".viewer");
     last.current = NaN;
   }, [gl, frontBearing]);
   useFrame(({ camera }) => {

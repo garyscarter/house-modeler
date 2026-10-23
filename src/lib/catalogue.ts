@@ -236,3 +236,13 @@ export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount
 
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];
 export const byId = (id: string) => CATALOGUE.find((c) => c.id === id);
+
+/** Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note. */
+export function filterCatalogue(query: string, category: string | "All"): CatalogueItem[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return CATALOGUE.filter((c) => {
+    if (category !== "All" && c.category !== category) return false;
+    const hay = `${c.name} ${c.category} ${c.note ?? ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}

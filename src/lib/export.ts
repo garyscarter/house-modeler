@@ -2,7 +2,7 @@ import type { Floor, HouseModel, Opening, Site } from "../types";
 import { bbox, buildWalls, cutWall, modelBounds, pointInPolygon, polygonCentroid, roomWorldPolygon, toWorld, type V2 } from "./geometry";
 import { outwardSign, wallEnds, wallThickness } from "./walls";
 import { bifoldLayout, bifoldZigzag } from "./bifold";
-import { bayOutline } from "./openings";
+import { bayOutline, frontUnit } from "./openings";
 import { axisRect, DOUBLE_DOOR_M, doorSwing } from "./planMath";
 import { floorFlight, stairTreads } from "./stairs";
 import {
@@ -199,9 +199,19 @@ function openingSymbol(o: Opening, len: number, t: number, k: number, outside: 1
   const glazing = (y: number) => `<line x1="${f2(-half)}" y1="${f2(y)}" x2="${f2(half)}" y2="${f2(y)}"/>`;
   switch (o.kind) {
     case "door":
-    case "front":
-      if (o.kind === "door" && outside === 0 && len > DOUBLE_DOOR_M * k) return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
+      if (outside === 0 && len > DOUBLE_DOOR_M * k) return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
       return breakWall + leaf(hingeSide * half, len, hingeSide > 0 ? -1 : 1);
+    case "front": {
+      // The leaf swings across its own span; side lights are glazing past a mullion.
+      const unit = frontUnit(o, len / k);
+      const [d0, d1] = unit.door.map((x) => x * k);
+      const lights = unit.lights.map(([a, b]) => {
+        const mx = Math.abs(a * k + half) < 1e-6 ? b * k : a * k;
+        const g = (y: number) => `<line x1="${f2(a * k)}" y1="${f2(y)}" x2="${f2(b * k)}" y2="${f2(y)}"/>`;
+        return g(-t / 2) + g(0) + g(t / 2) + `<line x1="${f2(mx)}" y1="${f2(-t / 2)}" x2="${f2(mx)}" y2="${f2(t / 2)}"/>`;
+      });
+      return breakWall + lights.join("") + leaf(hingeSide > 0 ? d1 : d0, d1 - d0, hingeSide > 0 ? -1 : 1);
+    }
     case "french":
       return breakWall + leaf(-half, half, 1) + leaf(half, half, -1);
     case "bifold": {

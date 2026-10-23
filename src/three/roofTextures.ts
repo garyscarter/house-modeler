@@ -24,7 +24,7 @@ function canvas(w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  return { c, ctx: c.getContext("2d")! };
+  return { c, ctx: c.getContext("2d", { willReadFrequently: true })! };
 }
 
 function texture(c: HTMLCanvasElement, sizeM: [number, number], color: boolean) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -228,6 +228,57 @@ describe("door styles", () => {
     expect(b.filter((x) => x.mat === "obscure")).toHaveLength(2);
     const plate = b.filter((x) => x.mat === "metal").find((x) => x.s[0] === 0.28)!;
     expect(plate.p[2]).toBeGreaterThan(0);
+  });
+});
+
+describe("front door units and contemporary styles", () => {
+  it("splits a unit into the door and its side lights, the door taking 0.75 to 0.98 m", () => {
+    expect(frontUnit({}, 0.9)).toEqual({ door: [-0.45, 0.45], lights: [] });
+    // Too narrow for a light: all door.
+    expect(frontUnit({ sidelight: "latch" }, 0.9).lights).toEqual([]);
+    // Hinges at the start jamb (-x), so the handle side is +x.
+    const latch = frontUnit({ sidelight: "latch" }, 1.3);
+    expect(latch.door[0]).toBeCloseTo(-0.65);
+    expect(latch.door[1]).toBeCloseTo(0.25);
+    expect(latch.lights).toHaveLength(1);
+    expect(latch.lights[0][1]).toBeCloseTo(0.65);
+    expect(frontUnit({ sidelight: "hinge" }, 1.3).lights[0][0]).toBeCloseTo(-0.65);
+    expect(frontUnit({ sidelight: "hinge", flipHinge: true }, 1.3).lights[0][1]).toBeCloseTo(0.65);
+    const both = frontUnit({ sidelight: "both" }, 1.8);
+    expect(both.door[1] - both.door[0]).toBeCloseTo(0.98);
+    expect(both.lights).toHaveLength(2);
+  });
+
+  it("glazes a side light full height beside the leaf, past a mullion, in one frame", () => {
+    const plain = openingParts(place("front", 1.3, { style: "flush" }, 2.05), T, 1).boxes;
+    const unit = openingParts(place("front", 1.3, { style: "flush", sidelight: "latch" }, 2.05), T, 1).boxes;
+    expect(glass(plain)).toHaveLength(0);
+    const g = glass(unit);
+    expect(g).toHaveLength(1);
+    expect(g[0].s[1]).toBeGreaterThan(1.8);
+    expect(g[0].p[0]).toBeGreaterThan(0.25);
+    // The leaf stays a door's width, in the rest of the unit.
+    const lf = leaves(unit)[0];
+    expect(lf.s[0]).toBeGreaterThan(0.75);
+    expect(lf.s[0]).toBeLessThan(0.9);
+    expect(lf.p[0]).toBeLessThan(0);
+    // A mullion runs the full height between them.
+    expect(unit.filter((b) => b.mat === "frame" && b.s[1] > 2 && Math.abs(b.p[0] - 0.25) < 1e-6)).toHaveLength(1);
+    expect(glass(openingParts(place("front", 1.8, { style: "flush", sidelight: "both" }, 2.05), T, 1).boxes)).toHaveLength(2);
+  });
+
+  it("draws the contemporary and cottage styles", () => {
+    expect(doorLeaf("strip", 2.0, 0.05, 1, true)(0.85).filter((x) => x.mat === "obscure")).toHaveLength(1);
+    expect(doorLeaf("squares", 2.0, 0.05, 1, true)(0.85).filter((x) => x.mat === "obscure")).toHaveLength(3);
+    expect(doorLeaf("grooved", 2.0, 0.05, 1, true)(0.85).filter((x) => x.mat === "groove").length).toBeGreaterThan(8);
+    const cottage = doorLeaf("cottage", 2.0, 0.05, 1, true)(0.85);
+    expect(glass(cottage)).toHaveLength(1);
+    expect(glass(cottage)[0].p[1]).toBeGreaterThan(1.4);
+    // Contemporary front doors have a long pull bar outside; the cottage door a knob.
+    const tall = (b: Box[]) => b.filter((x) => x.mat === "metal" && x.s[1] > 0.5);
+    expect(tall(doorLeaf("strip", 2.0, 0.05, 1, true)(0.85))).toHaveLength(1);
+    expect(tall(cottage)).toHaveLength(0);
+    expect(styleOptions("front").map((o) => o.value)).toEqual(expect.arrayContaining(["strip", "squares", "grooved", "cottage"]));
   });
 });
 

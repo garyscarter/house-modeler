@@ -1,10 +1,11 @@
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
-import { useLoader } from "@react-three/fiber";
+import { useLoader, useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
+import { roomColor } from "../lib/roomColor";
 import { wallThickness } from "../lib/walls";
 import { ceilingY } from "../lib/ceiling";
 import { Roof } from "./Roof";
@@ -12,7 +13,8 @@ import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
-import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount } from "../lib/stairs";
+import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightShape } from "../lib/stairs";
+import { flightStructure, floorsStructure, modelStructure } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { getMaterial, type MatSpec } from "./textures";
@@ -30,41 +32,10 @@ import {
   type WallPiece,
 } from "../lib/geometry";
 
-export { WALL_T };
+export { WALL_T, roomColor };
 
 export function floorBaseY(model: HouseModel, floor: Floor) {
   return floor.level * (model.ceilingHeight + model.slabThickness);
-}
-
-const ROOM_COLORS: Record<string, string> = {
-  kitchen: "#e8d9b5",
-  bath: "#cfe3ec",
-  shower: "#cfe3ec",
-  wc: "#cfe3ec",
-  "en-suite": "#cfe3ec",
-  ensuite: "#cfe3ec",
-  bed: "#e3d5e6",
-  living: "#d9e4cf",
-  lounge: "#d9e4cf",
-  recep: "#d9e4cf",
-  sitting: "#d9e4cf",
-  dining: "#e6dcc8",
-  hall: "#e2e2dc",
-  landing: "#e2e2dc",
-  garage: "#cfcfcf",
-  util: "#dcdcd0",
-  study: "#d6dfe8",
-  office: "#d6dfe8",
-  conserv: "#d8ebe0",
-  store: "#d9d9d9",
-  cupboard: "#d9d9d9",
-};
-
-export function roomColor(room: Room): string {
-  if (room.color) return room.color;
-  const n = room.name.toLowerCase();
-  for (const k of Object.keys(ROOM_COLORS)) if (n.includes(k)) return ROOM_COLORS[k];
-  return "#e4e1d8";
 }
 
 interface HouseProps {
@@ -77,6 +48,10 @@ interface HouseProps {
   doorsOpen?: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  /** Right-click on a room's floor, with the pointer position in the window. */
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
+  /** Decorate: a click on a wall face (hit point and face normal in the plan frame: world x, z). */
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Only render these floor levels (used to hide floors above the walk floor). */
   visibleLevels?: number[] | null;
   /**
@@ -89,6 +64,9 @@ interface HouseProps {
   showExterior?: boolean;
 }
 
+/** Decorate: furniture, ceilings and the roof swallow clicks so a click never reaches the wall or floor behind them. */
+const block = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
 export function House({
   model,
   photos,
@@ -98,6 +76,8 @@ export function House({
   doorsOpen = false,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
+  onPickWall,
   visibleLevels,
   diffAgainst,
   showExterior,
@@ -107,10 +87,13 @@ export function House({
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
   const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
-  const wells = useMemo(() => stairwells(model), [model]);
+  // Stairwells depend on structure only, so recolouring leaves them (and every floor group's props) as they were.
+  const structure = modelStructure(model);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const wells = useMemo(() => stairwells(model), [structure]);
   return (
     <group>
-      {showExterior && !ghost && ext.showRoof && <Roof model={model} />}
+      {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
       {showExterior && !ghost && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (
         <FloorGroup
@@ -120,10 +103,13 @@ export function House({
           photos={photos}
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
+          roofOver={!!showExterior && !ghost && ext.showRoof}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onContextRoom={ghost ? undefined : onContextRoom}
+          onPickWall={onPickWall}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
         />
@@ -132,16 +118,30 @@ export function House({
   );
 }
 
-function FloorGroup({
+/**
+ * One floor's walls, floors, fixtures and stairs. Memoised: a model edit hands every floor a new `model`, but a
+ * floor only needs to redraw when its own data, the exterior or the structure of the other floors changed.
+ */
+const FloorGroup = memo(FloorGroupInner, (a, b) => {
+  const { model: ma, ...ra } = a;
+  const { model: mb, ...rb } = b;
+  for (const k of Object.keys(ra) as (keyof typeof ra)[]) if (ra[k] !== rb[k]) return false;
+  return ma === mb || (ma.exterior === mb.exterior && modelStructure(ma) === modelStructure(mb));
+});
+
+function FloorGroupInner({
   model,
   floor,
   photos,
   ghost,
   showLabels,
+  roofOver,
   showCeilings,
   doorsOpen,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
+  onPickWall,
   otherFloor,
   wells,
 }: {
@@ -150,14 +150,19 @@ function FloorGroup({
   photos: Photo[];
   ghost: boolean;
   showLabels: boolean;
+  /** The roof is drawn over this floor, so only the selected room is labelled. */
+  roofOver: boolean;
   showCeilings: boolean;
   doorsOpen: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   otherFloor?: Floor | null;
   wells: Stairwell[];
 }) {
   const y0 = floorBaseY(model, floor);
+  const modelSig = modelStructure(model);
   // Openings in this floor (stairwells from below) and in the ceiling over it (stairwells up from here).
   const holes = useMemo(() => wells.filter((w) => w.upperId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
   const ceilingHoles = useMemo(() => wells.filter((w) => w.lowerId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
@@ -169,9 +174,14 @@ function FloorGroup({
       out.push(...(w.lowerId === floor.id ? b.lower : b.upper));
     }
     return out;
-  }, [wells, model, floor.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wells, modelSig, floor.id]);
   const H = model.ceilingHeight;
   const hasAbove = model.floors.some((f) => f.level === floor.level + 1);
+  // The flight up from this floor, once for the shell (walls it passes over stop under its treads) and the stairs.
+  const flightSig = flightStructure(model, floor);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const flight = useMemo(() => (hasAbove ? floorFlight(model, floor) : null), [hasAbove, flightSig]);
   const allWalls = useMemo(() => buildWalls(floor), [floor]);
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
@@ -191,8 +201,12 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} doorsOpen={doorsOpen} />
-      {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onContextRoom={onContextRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} flight={flight} />
+      {showCeilings && (
+        <group onClick={onPickWall ? block : undefined}>
+          {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+        </group>
+      )}
       <Balustrade runs={rails} />
 
       {otherWalls &&
@@ -202,11 +216,13 @@ function FloorGroup({
           </WallBox>
         ))}
 
-      {floor.stairs && hasAbove && <Stairs model={model} floor={floor} />}
+      {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
 
-      <Fixtures floor={floor} />
+      <group onClick={onPickWall ? block : undefined}>
+        <Fixtures floor={floor} />
+      </group>
 
-      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} />}
+      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
 
       {floor.rooms.map((room) => (
         <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />
@@ -227,15 +243,22 @@ function FloorShell({
   photos,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
+  onPickWall,
   holes,
   doorsOpen,
+  flight,
 }: {
   model: HouseModel;
   floor: Floor;
   walls: WallSeg[];
+  /** The flight up from this floor (see FloorGroup). */
+  flight: FlightShape | null;
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
   doorsOpen: boolean;
@@ -245,13 +268,15 @@ function FloorShell({
   const slab = model.slabThickness;
   const lowest = Math.min(...model.floors.map((f) => f.level));
   const baseY = floorBaseY(model, floor);
+  // The floor above, keyed on its structure so recolouring a room does not rebuild every floor's shell.
+  const upperSig = floorsStructure(model.floors.filter((f) => f.level === floor.level + 1), false);
   const upperPolys = useMemo(
     () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
-    [model.floors, floor.level],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [upperSig],
   );
-  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [model.floors, floor.level]);
-  // The flight up from this floor: walls it passes over stop under its treads.
-  const flight = useMemo(() => (model.floors.some((f) => f.level === floor.level + 1) ? floorFlight(model, floor) : null), [model, floor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [upperSig]);
   const finish = ext.wallFinish ?? "render";
   const shell = useMemo(
     () =>
@@ -299,6 +324,7 @@ function FloorShell({
           photos={photos}
           selected={room.id === selectedRoomId}
           onSelect={() => onSelectRoom?.(floor, room)}
+          onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
         />
       ))}
       {shell.bayFloors.map((b, i) => {
@@ -311,11 +337,30 @@ function FloorShell({
             photos={photos}
             selected={room.id === selectedRoomId}
             onSelect={() => onSelectRoom?.(floor, room)}
+            onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
           />
         ) : null;
       })}
+      {onContextRoom && <RoomHover floor={floor} holes={holes} />}
       {shell.meshes.map((m) => (
-        <mesh key={m.key} geometry={m.geometry} material={getMaterial(m.spec)} castShadow={m.castShadow} receiveShadow />
+        <mesh
+          key={m.key}
+          geometry={m.geometry}
+          material={getMaterial(m.spec)}
+          castShadow={m.castShadow}
+          receiveShadow
+          onClick={
+            onPickWall &&
+            ((e) => {
+              // A wall top (or any up/down face) is swallowed rather than falling through to the floor beneath.
+              e.stopPropagation();
+              if (!e.face || Math.abs(e.face.normal.y) > 0.5) return;
+              // Shell meshes are not rotated or moved, so the local normal is the world normal.
+              const bays = shell.bayFloors.flatMap((b) => (b.roomId ? [{ id: b.roomId, poly: b.poly }] : []));
+              onPickWall(floor, { x: e.point.x, y: e.point.z }, { x: e.face.normal.x, y: e.face.normal.z }, bays);
+            })
+          }
+        />
       ))}
     </group>
   );
@@ -337,7 +382,20 @@ function floorSpec(room: Room, selected: boolean): MatSpec {
   return { kind: "floor", finish, color: finishColour(room)!, selected, grout: room.floorGrout && groutColour(room) };
 }
 
-function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
+/** Where the last pointer press landed, to tell a right-click from a right-drag (which pans the view). */
+const lastDown = { x: 0, y: 0 };
+if (typeof window !== "undefined")
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      lastDown.x = e.clientX;
+      lastDown.y = e.clientY;
+    },
+    true,
+  );
+
+function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void; onContext?: (x: number, y: number) => void }) {
+  const setUi = useUiSetter();
   // Shape coordinates are metres, so the UVs keep boards and tiles at their real size;
   // a floor angle turns them about the plan's origin, so rooms laid the same way line up.
   const angle = floorAngle(room);
@@ -367,6 +425,29 @@ function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; po
         e.stopPropagation();
         onSelect();
       }}
+      onPointerOver={
+        onContext &&
+        ((e) => {
+          e.stopPropagation();
+          setUi({ hoveredRoomId: room.id });
+        })
+      }
+      onPointerOut={
+        onContext &&
+        (() => {
+          if (useStore.getState().hoveredRoomId === room.id) setUi({ hoveredRoomId: null });
+        })
+      }
+      onPointerUp={
+        onContext &&
+        ((e) => {
+          // A right-click that did not drag (a right-drag pans the view).
+          const n = e.nativeEvent;
+          if (e.button !== 2 || Math.hypot(n.clientX - lastDown.x, n.clientY - lastDown.y) >= 4) return;
+          e.stopPropagation();
+          onContext(n.clientX, n.clientY);
+        })
+      }
     >
       {photo && (
         <Suspense fallback={<primitive object={material} attach="material" />}>
@@ -374,6 +455,43 @@ function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; po
         </Suspense>
       )}
     </mesh>
+  );
+}
+
+/**
+ * The room under the pointer (here or in the plan), drawn on its floor. It
+ * subscribes to the hovered room itself, so hovering never re-renders the floor.
+ */
+function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
+  const id = useStore((s) => s.hoveredRoomId);
+  const invalidate = useThree((s) => s.invalidate);
+  // Frames are drawn on demand: ask for one when the hovered room changes.
+  useEffect(() => invalidate(), [id, invalidate]);
+  const room = id ? floor.rooms.find((r) => r.id === id) : undefined;
+  const polys = useMemo(() => (room ? cutWells(roomWorldPolygon(floor, room), holes) : []), [floor, room, holes]);
+  const geom = useMemo(() => (polys.length ? new THREE.ShapeGeometry(polys.map(shapeFrom)) : null), [polys]);
+  const outline = useMemo(
+    () =>
+      polys.map((p) => {
+        const g = new THREE.BufferGeometry().setFromPoints(p.map((q) => new THREE.Vector3(q.x, 0.024, q.y)));
+        return g;
+      }),
+    [polys],
+  );
+  useEffect(() => () => geom?.dispose(), [geom]);
+  useEffect(() => () => outline.forEach((g) => g.dispose()), [outline]);
+  if (!geom) return null;
+  return (
+    <group>
+      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2} raycast={() => null}>
+        <meshBasicMaterial color="#14a89b" toneMapped={false} transparent opacity={0.34} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} />
+      </mesh>
+      {outline.map((g, i) => (
+        <lineLoop key={i} geometry={g} renderOrder={3} raycast={() => null}>
+          <lineBasicMaterial color="#14a89b" toneMapped={false} />
+        </lineLoop>
+      ))}
+    </group>
   );
 }
 
@@ -418,9 +536,9 @@ function WallBox({ piece, children, thickness }: { piece: WallPiece; children: R
  * the flight passes over a wall into another room (a head running on over
  * the kitchen), only a soffit hangs under the treads there.
  */
-function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
+function Stairs({ floor, flight: f }: { floor: Floor; flight: FlightShape | null }) {
+  // `f` changes whenever anything the treads read does (see flightStructure), so `floor` is not a dependency.
   const geom = useMemo(() => {
-    const f = floorFlight(model, floor);
     if (!f) return null;
     const treads = stairTreads(f);
     const riser = f.rise / treadCount(f);
@@ -443,7 +561,8 @@ function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
       return g;
     };
     return { body: merge(body), carpet: merge(carpet) };
-  }, [model, floor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f]);
   useEffect(() => () => {
     geom?.body?.dispose();
     geom?.carpet?.dispose();
@@ -534,7 +653,6 @@ function ExteriorPins({ model, photos }: { model: HouseModel; photos: Photo[] })
   );
 }
 
-// Small indirection so House doesn't import the store at module top (keeps it testable).
 import { useStore } from "../store";
 function useUiSetter() {
   return useStore((s) => s.setUi);

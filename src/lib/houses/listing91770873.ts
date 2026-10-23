@@ -79,8 +79,8 @@ const FF_WINDOW: Partial<Opening> = { ...UPVC, sill: 0.98, head: 1.95 };
 /** The hall's windows: frames about 1 m tall, sills about 0.95 m up (front-street, front-2, front-3). */
 const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 22 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 22 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 23 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 23 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 4 };
 
