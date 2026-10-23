@@ -5,6 +5,7 @@ import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
 import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
@@ -13,22 +14,26 @@ import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
+import { SitePanel } from "./components/SitePanel";
+import { ReportPanel } from "./components/ReportPanel";
+import { PlanningPanel } from "./components/PlanningPanel";
+import { SiteEditor } from "./editor/SiteEditor";
 import { ModeBar } from "./components/ModeBar";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { siteEditPatch } from "./lib/modes";
 import { pickWallFace } from "./lib/decorPick";
 import { roomWorldPolygon } from "./lib/geometry";
-import { SiteEditor } from "./editor/SiteEditor";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
 import { VARIANT_LABEL, type Floor, type VariantKey } from "./types";
 
+type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "planning" | "settings";
+
+/** Below this width the sidebar becomes a slide-over drawer (keep in step with styles.css). */
+const DRAWER_QUERY = "(max-width: 899px)";
 /** From this width the view controls fit inline in the header; narrower screens get the View popover. */
 const INLINE_QUERY = "(min-width: 1680px)";
-
-/** The Project menu (the pull-out drawer): floorplans, photos and settings. */
-type Side = "floorplans" | "photos" | "settings";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -52,6 +57,7 @@ export default function App() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const mode = useStore((s) => s.mode);
+  const drawer = useMediaQuery(DRAWER_QUERY);
   const inline = useMediaQuery(INLINE_QUERY);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -92,7 +98,7 @@ export default function App() {
   }, [undo, redo]);
 
   // A panel action that opens the plan editor or another floor should reveal it.
-  useEffect(() => setDrawerOpen(false), [tab, editFloorId]);
+  useEffect(() => setDrawerOpen(false), [tab, editFloorId, drawer]);
 
   const model = variants[activeVariant];
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
@@ -131,15 +137,21 @@ export default function App() {
   const sides: [Side, string, boolean][] = [
     ["floorplans", "Floorplans", true],
     ["photos", `Photos (${photos.length})`, true],
+    ["exterior", "Exterior", !!model],
+    ["site", "Site", true],
+    ["report", "Report", !!model],
+    ["planning", "Planning check", !!model],
     ["settings", "Settings", true],
   ];
 
   return (
-    <div className={drawerOpen ? "app drawer-open" : "app"} data-mode={mode}>
+    <div className={drawer && drawerOpen ? "app drawer-open" : "app"} data-mode={mode}>
       <header>
-        <button className="drawer-toggle" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Project" title="Project">
-          <span aria-hidden="true">☰</span>
-        </button>
+        {drawer && (
+          <button className="drawer-toggle" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Panels" title="Panels">
+            <span aria-hidden="true">☰</span>
+          </button>
+        )}
         <h1>House Modeler</h1>
         <div className="seg hdr-undo">
           <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -171,14 +183,16 @@ export default function App() {
       <ModeBar />
 
       <div className="body">
-        {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
-        <aside className="drawer" aria-label="Project" aria-hidden={!drawerOpen ? true : undefined} inert={!drawerOpen ? true : undefined}>
-          <div className="drawer-head">
-            <b>Project</b>
-            <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close project menu">
-              ×
-            </button>
-          </div>
+        {drawer && drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
+        <aside className={drawer ? "drawer" : undefined} aria-hidden={drawer && !drawerOpen ? true : undefined} inert={drawer && !drawerOpen ? true : undefined}>
+          {drawer && (
+            <div className="drawer-head">
+              <b>Panels</b>
+              <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close panels">
+                ×
+              </button>
+            </div>
+          )}
           <div className="seg vertical">
             {sides.map(([key, label, enabled]) => (
               <button key={key} className={side === key ? "active" : ""} onClick={() => setSide(key)} disabled={!enabled}>
@@ -194,6 +208,10 @@ export default function App() {
               </>
             )}
             {side === "photos" && <PhotosPanel />}
+            {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
+            {side === "site" && <SitePanel />}
+            {side === "report" && model && <ReportPanel />}
+            {side === "planning" && model && <PlanningPanel />}
             {side === "settings" && <SettingsPanel />}
           </div>
         </aside>
@@ -203,7 +221,7 @@ export default function App() {
             <div className="empty">
               <h2>Load the listing</h2>
               <p>Open Floorplans and choose Load listing 91770873 to see the house in 3D.</p>
-              <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>
+              {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
             </div>
           )}
           {model && tab === "3d" && viewMode === "single" && (

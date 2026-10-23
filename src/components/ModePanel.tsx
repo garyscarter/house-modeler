@@ -1,16 +1,11 @@
-import { useEffect } from "react";
-import { SITE_EDIT_ID, useSite, useStore } from "../store";
+import { SITE_EDIT_ID, useStore } from "../store";
 import type { Floor, Room } from "../types";
 import { MODE_LABEL, type Mode } from "../lib/modes";
-import { buildSummary, decorateSummary, furnishSummary, siteSummary } from "../lib/modeSummary";
 import { BuildSummary, DecorateSummary, FurnishSummary, useClashCount } from "../editor/ModeSummaries";
 import { DecoratePanel } from "../editor/DecoratePanel";
 import { BuildRoomPanel } from "../editor/Inspectors";
 import { PlotPanel } from "./PlotPanel";
 import { ReviewPanel } from "./ReviewPanel";
-import { useMediaQuery } from "./useMediaQuery";
-import { NARROW_QUERY } from "./breakpoints";
-import { usePanelPrefs } from "./panelPrefs";
 
 /**
  * The panel beside (or, on narrow screens, over the bottom of) the 3D view: what the current mode shows for
@@ -25,10 +20,6 @@ export function ModePanel() {
   const selectedEdge = useStore((s) => s.selectedEdge);
   const updateRoom = useStore((s) => s.updateRoom);
   const setUi = useStore((s) => s.setUi);
-  const site = useSite();
-  const narrow = useMediaQuery(NARROW_QUERY);
-  const sheetOpen = usePanelPrefs((s) => s.sheetOpen);
-  const setPrefs = usePanelPrefs((s) => s.setPrefs);
 
   // The floor the panel is about: the one the plan shows, else the room's, else the lowest.
   const picked = selectedRoomId ? model?.floors.find((f) => f.rooms.some((r) => r.id === selectedRoomId)) : undefined;
@@ -36,12 +27,6 @@ export function ModePanel() {
   const room: Room | undefined = floor?.rooms.find((r) => r.id === selectedRoomId) ?? picked?.rooms.find((r) => r.id === selectedRoomId);
   const roomFloor = room && floor?.rooms.includes(room) ? floor : picked;
   const edge = room && selectedEdge && selectedEdge.edge < room.polygon.length ? selectedEdge : null;
-
-  // A room or wall just picked in Build or Decorate opens the sheet.
-  const pickKey = (mode === "build" || mode === "decorate") && room ? `${room.id}:${edge ? edge.edge + edge.side : ""}` : "";
-  useEffect(() => {
-    if (narrow && pickKey) setPrefs({ sheetOpen: true });
-  }, [narrow, pickKey, setPrefs]);
 
   const clashes = useClashCount(floor ?? EMPTY_FLOOR);
 
@@ -74,32 +59,10 @@ export function ModePanel() {
     }
   })();
 
-  const summary = ((): string => {
-    if (mode === "plot") return siteSummary(site);
-    if (mode === "review") return "Report and planning check";
-    if (!floor) return "";
-    if ((mode === "build" || mode === "decorate") && room) return room.name;
-    return mode === "build" ? buildSummary(floor) : mode === "decorate" ? decorateSummary(floor) : furnishSummary(floor, clashes);
-  })();
-
-  if (narrow) {
-    return (
-      <div className="mode-sheet" data-mode={mode} data-open={sheetOpen}>
-        <button className="sheet-head" aria-expanded={sheetOpen} onClick={() => setPrefs({ sheetOpen: !sheetOpen })}>
-          <b>{MODE_LABEL[mode]}</b>
-          <span className="sect-sum">{summary}</span>
-          <span className="sect-chev" aria-hidden="true">
-            {sheetOpen ? "▾" : "▴"}
-          </span>
-        </button>
-        {sheetOpen && <div className="sheet-body">{body}</div>}
-      </div>
-    );
-  }
   return (
-    <aside className={mode === "review" ? "mode-panel wide" : "mode-panel"} data-mode={mode satisfies Mode} aria-label={`${MODE_LABEL[mode]} panel`}>
+    <div className={mode === "review" ? "mode-panel wide" : "mode-panel"} data-mode={mode satisfies Mode} role="region" aria-label={`${MODE_LABEL[mode]} panel`}>
       {body}
-    </aside>
+    </div>
   );
 }
 

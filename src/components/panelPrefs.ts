@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 /**
  * Per-browser panel layout: which sections are open, the Review tab, the
- * bottom sheet and the furniture category. Kept out of the main store so it
+ * and the furniture category. Kept out of the main store so it
  * adds no undo steps and never travels with exported or synced projects.
  */
 interface PanelPrefs {
@@ -11,11 +11,9 @@ interface PanelPrefs {
   open: Record<string, boolean>;
   setOpen: (id: string, v: boolean) => void;
   reviewTab: "report" | "planning";
-  /** The narrow-screen bottom sheet is expanded. */
-  sheetOpen: boolean;
   /** Last furniture category chosen in the Add picker ("All" = none). */
   addCategory: string;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "reviewTab" | "sheetOpen" | "addCategory">>) => void;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "reviewTab" | "addCategory">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -24,14 +22,13 @@ export const usePanelPrefs = create<PanelPrefs>()(
       open: {},
       setOpen: (id, v) => set((s) => (s.open[id] === v ? s : { open: { ...s.open, [id]: v } })),
       reviewTab: "report",
-      sheetOpen: false,
       addCategory: "All",
       setPrefs: (p) => set(p),
     }),
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, reviewTab: s.reviewTab, sheetOpen: s.sheetOpen, addCategory: s.addCategory }),
+      partialize: (s) => ({ open: s.open, reviewTab: s.reviewTab, addCategory: s.addCategory }),
     },
   ),
 );
