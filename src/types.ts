@@ -677,3 +677,13 @@ export interface MyPiece {
   color?: string;
   note?: string;
 }
+
+/** A named 3D camera view, shared by both layouts (project-level, synced). */
+export interface SavedView {
+  id: string;
+  name: string;
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  /** Floor cap when saved; null/absent = all floors. */
+  maxLevel?: number | null;
+}

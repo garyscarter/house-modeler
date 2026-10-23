@@ -32,11 +32,12 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
   const sites = useStore((s) => s.sites);
   const costRates = useStore((s) => s.costRates);
   const pieces = useStore((s) => s.pieces);
+  const savedViews = useStore((s) => s.savedViews);
   const reset = useStore((s) => s.reset);
 
   const exportJson = () => {
     // `sites` holds each layout's own plot; older exports had one shared `site`, which import still reads.
-    const blob = new Blob([JSON.stringify({ variants, photos, sites, costRates, pieces }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ variants, photos, sites, costRates, pieces, savedViews }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "house-model.json";

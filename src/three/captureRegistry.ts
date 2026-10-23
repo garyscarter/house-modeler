@@ -11,6 +11,8 @@ export interface CaptureTarget {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.Camera;
+  /** Ask the viewer for another frame (after a capture changed its camera or size). */
+  invalidate?: () => void;
 }
 
 const registry = new Map<string, CaptureTarget>();
@@ -35,6 +37,9 @@ export function getCapture(id?: string): CaptureTarget | undefined {
   if (id) return registry.get(id);
   return registry.values().next().value;
 }
+
+/** The ids of the viewers registered right now, outside React. */
+export const captureIds = (): string[] => ids;
 
 /** Ids of the 3D viewers on screen ("main", or "current" and "proposed" side by side), for the export buttons. */
 export function useCaptureIds(): string[] {

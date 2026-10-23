@@ -20,6 +20,7 @@ import {
 } from "../lib/report";
 import { changesCsv, downloadBlob, fileDate, planExtent, planScale, planSvg, printHtml, slug } from "../lib/export";
 import { useCaptureIds } from "../three/captureRegistry";
+import { renderSavedViews } from "./SavedViews";
 
 // Snapshots and model export use three.js, which loads with the 3D view; fetch them when used.
 const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
@@ -374,6 +375,16 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
           // A failed snapshot only leaves the picture out.
         }
       }
+      const savedViews = useStore.getState().savedViews;
+      let views: { name: string; shots: { label: string; src: string }[] }[] | undefined;
+      if (savedViews.length) {
+        try {
+          const pics = await renderSavedViews(savedViews);
+          views = savedViews.map((v) => ({ name: v.name, shots: pics[v.id] ?? [] }));
+        } catch {
+          // Without 3D views on screen the pictures are left out.
+        }
+      }
       const html = printHtml({
         date: longDate(),
         variants: present.map((k) => ({ label: VARIANT_LABEL[k], model: variants[k]!, notes: roomNotes(variants[k]!), site: siteOf(sites, k) })),
@@ -381,6 +392,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         changes,
         rates,
         snapshots,
+        views,
       });
       if (!w) {
         downloadBlob(new Blob([html], { type: "text/html" }), `house-report-${date}.html`);

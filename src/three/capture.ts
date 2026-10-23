@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import type { CameraPose } from "../lib/cameraViews";
 import { getCapture, registerCapture, useCaptureIds, type CaptureTarget } from "./captureRegistry";
 
 export type { CaptureTarget };
@@ -11,7 +12,8 @@ export function CaptureBridge({ id }: { id: string }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
-  useEffect(() => registerCapture(id, { gl, scene, camera }), [id, gl, scene, camera]);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => registerCapture(id, { gl, scene, camera, invalidate }), [id, gl, scene, camera, invalidate]);
   return null;
 }
 
@@ -27,27 +29,78 @@ const MAX_SIDE = 4096;
 export async function captureImage(id: string | undefined, scale: number): Promise<Blob> {
   const t = getCapture(id);
   if (!t) throw new Error("Open the 3D view to take a snapshot.");
-  const { gl, scene, camera } = t;
+  const { gl } = t;
   const size = gl.getSize(new THREE.Vector2());
   const ratio = gl.getPixelRatio();
   const s = Math.min(scale, MAX_SIDE / Math.max(size.x, size.y, 1));
   const out = document.createElement("canvas");
+  try {
+    gl.setPixelRatio(s);
+    gl.setSize(size.x, size.y, false);
+    renderToCanvas(t, out);
+  } finally {
+    gl.setPixelRatio(ratio);
+    gl.setSize(size.x, size.y, false);
+  }
+  return encodePng(out);
+}
+
+/** Render a viewer's scene once and copy the result to `out`, which takes the renderer's buffer size. */
+function renderToCanvas({ gl, scene, camera }: CaptureTarget, out: HTMLCanvasElement) {
   // With post-processing on, the composer switches the renderer's tone mapping off and applies it itself; a direct render needs it back.
   const toneMapping = gl.toneMapping;
   try {
     if (toneMapping === THREE.NoToneMapping) gl.toneMapping = THREE.NeutralToneMapping;
-    gl.setPixelRatio(s);
-    gl.setSize(size.x, size.y, false);
     gl.render(scene, camera);
     out.width = gl.domElement.width;
     out.height = gl.domElement.height;
     out.getContext("2d")!.drawImage(gl.domElement, 0, 0);
   } finally {
     gl.toneMapping = toneMapping;
+  }
+}
+
+const encodePng = (c: HTMLCanvasElement): Promise<Blob> =>
+  new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode the snapshot."))), "image/png"));
+
+/**
+ * A PNG of a viewer from another camera pose, at a fixed size and aspect. The
+ * viewer's own camera, aspect, pixel ratio and size are put back afterwards,
+ * so nothing on screen changes.
+ */
+export async function captureAt(id: string | undefined, pose: CameraPose, w = 1200, h = 800): Promise<Blob> {
+  const t = getCapture(id);
+  if (!t) throw new Error("Open the 3D view to take a snapshot.");
+  const { gl, camera } = t;
+  const cam = camera as THREE.PerspectiveCamera;
+  const size = gl.getSize(new THREE.Vector2());
+  const ratio = gl.getPixelRatio();
+  const position = cam.position.clone();
+  const quaternion = cam.quaternion.clone();
+  const aspect = cam.aspect;
+  const out = document.createElement("canvas");
+  try {
+    cam.position.set(pose.position.x, pose.position.y, pose.position.z);
+    cam.lookAt(pose.target.x, pose.target.y, pose.target.z);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
+    gl.setPixelRatio(1);
+    gl.setSize(w, h, false);
+    gl.shadowMap.needsUpdate = true;
+    renderToCanvas(t, out);
+  } finally {
+    cam.position.copy(position);
+    cam.quaternion.copy(quaternion);
+    cam.aspect = aspect;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
     gl.setPixelRatio(ratio);
     gl.setSize(size.x, size.y, false);
+    gl.shadowMap.needsUpdate = true;
+    t.invalidate?.();
   }
-  return new Promise((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode the snapshot."))), "image/png"));
+  return encodePng(out);
 }
 
 /** Meshes this many metres across are the sky dome and the far ground, not the model. */

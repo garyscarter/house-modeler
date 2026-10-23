@@ -136,6 +136,23 @@ describe("printHtml", () => {
   });
 });
 
+describe("printHtml saved views", () => {
+  const a = listing91770873("");
+  const base = { date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] };
+  it("prints each view with escaped name and a picture per layout", () => {
+    const html = printHtml({ ...base, views: [{ name: "Kitchen <b>& garden", shots: [{ label: "As listed", src: "data:image/png;base64,AAAA" }, { label: "Proposed", src: "data:image/png;base64,BBBB" }] }] });
+    expect(html).toContain('<section class="views"><h2>Saved views</h2>');
+    expect(html).toContain("Kitchen &lt;b&gt;&amp; garden");
+    expect(html).not.toContain("<b>& garden");
+    expect(html).toContain("base64,BBBB");
+    expect(html).toContain("Proposed");
+  });
+  it("leaves the section out with no views", () => {
+    expect(printHtml(base)).not.toContain('class="views"');
+    expect(printHtml({ ...base, views: [] })).not.toContain('class="views"');
+  });
+});
+
 describe("file names", () => {
   it("are safe and dated", () => {
     expect(slug("Floor 1 (Proposed)")).toBe("floor-1-proposed");

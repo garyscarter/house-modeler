@@ -9,7 +9,7 @@ import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
-import { easeInOut, frameFor, homeView, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { easeInOut, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube } from "./ViewCube";
 import { requestView } from "./viewRequest";
@@ -269,18 +269,23 @@ function Orbit({
     const t = controls.current?.target ?? centre;
     return { position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, target: { x: t.x, y: t.y, z: t.z } };
   };
+  /**
+   * Drop any momentum left from this view's own last drag: with damping, update() would keep adding it after a
+   * jump or glide, and two linked views coasting at once would hand the camera back and forth.
+   */
+  const dropMomentum = () => {
+    const c = controls.current;
+    if (c?.enableDamping) {
+      c.enableDamping = false;
+      c.update();
+      c.enableDamping = true;
+    }
+  };
   /** Move the camera without announcing it. */
   const jump = (pose: CameraPose) => {
     applying.current = true;
     try {
-      const c = controls.current;
-      // Drop any momentum left from this view's own last drag first: with damping, update() would keep adding it
-      // after the jump, and two linked views coasting at once would hand the camera back and forth.
-      if (c?.enableDamping) {
-        c.enableDamping = false;
-        c.update();
-        c.enableDamping = true;
-      }
+      dropMomentum();
       camera.position.set(pose.position.x, pose.position.y, pose.position.z);
       controls.current?.target.set(pose.target.x, pose.target.y, pose.target.z);
       camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
@@ -317,6 +322,12 @@ function Orbit({
       settle();
       return;
     }
+    applying.current = true;
+    try {
+      dropMomentum();
+    } finally {
+      applying.current = false;
+    }
     glide.current = { t0: performance.now(), from: spherical(current()), to: spherical(pose) };
     invalidate();
   };
@@ -337,8 +348,10 @@ function Orbit({
   // Every linked view glides to a requested side, and follows another view's camera.
   useEffect(() => {
     const onView = (e: Event) => {
-      const side = (e as CustomEvent<{ side?: ViewRequest }>).detail?.side;
-      if (side) startGlide(poseFor(side));
+      const detail = (e as CustomEvent<{ side?: ViewRequest; pose?: unknown }>).detail;
+      if (detail?.pose !== undefined) {
+        if (isValidPose(detail.pose)) startGlide({ position: { ...detail.pose.position }, target: { ...detail.pose.target } });
+      } else if (detail?.side) startGlide(poseFor(detail.side));
     };
     window.addEventListener("house:view", onView);
     const off = subscribePose((from, pose) => {

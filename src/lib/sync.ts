@@ -100,8 +100,8 @@ async function call(method: "GET" | "PUT", url: string, body?: unknown, timeoutM
 }
 
 const currentProject = (): ProjectData => {
-  const { variants, photos, sites, costRates, pieces } = useStore.getState();
-  return { variants, photos, sites, costRates, pieces };
+  const { variants, photos, sites, costRates, pieces, savedViews } = useStore.getState();
+  return { variants, photos, sites, costRates, pieces, savedViews };
 };
 
 /** Put a project into the store the way Import JSON does. Returns false when it isn't a project. */
@@ -112,6 +112,7 @@ export function applyProject(data: unknown, fromServer = false): boolean {
   try {
     // One undoable step: replace everything at once.
     useStore.setState({ costRates: project.costRates });
+    if (project.savedViews) useStore.setState({ savedViews: project.savedViews });
     useStore.getState().setVariant("current", project.variants.current);
     useStore.getState().setVariant("proposed", project.variants.proposed);
     useStore.setState({ photos: project.photos, sites: project.sites });
@@ -196,7 +197,7 @@ async function check(): Promise<void> {
     dirty = saved.dirty ?? false;
     useStore.subscribe((s, prev) => {
       if (applying) return;
-      if (s.variants !== prev.variants || s.photos !== prev.photos || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces) onChange();
+      if (s.variants !== prev.variants || s.photos !== prev.photos || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
     });
   }
   const server: Revision | null = reply.status === 404 ? null : { revision: reply.json.revision, savedAt: reply.json.savedAt };

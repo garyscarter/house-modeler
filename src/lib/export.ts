@@ -462,6 +462,8 @@ export interface PrintInput {
   site?: Site;
   /** PNG data URLs of the 3D view, with captions. */
   snapshots: { caption: string; src: string }[];
+  /** Saved camera views, each with a picture per layout. */
+  views?: { name: string; shots: { label: string; src: string }[] }[];
 }
 
 /** A self-contained, print-friendly HTML report: areas, changes, costs, notes and plans. */
@@ -473,6 +475,14 @@ export function printHtml(p: PrintInput): string {
   sec.push(`<header><h1>House report</h1><p class="muted">${esc(p.date)} · Areas are internal, measured to the traced wall centre lines.</p></header>`);
   if (p.snapshots.length) {
     sec.push(`<section class="shots">${p.snapshots.map((s) => `<figure><img src="${s.src}" alt=""><figcaption>${esc(s.caption)}</figcaption></figure>`).join("")}</section>`);
+  }
+
+  if (p.views?.some((v) => v.shots.length)) {
+    const figs = p.views
+      .filter((v) => v.shots.length)
+      .map((v) => `<figure class="view"><h3>${esc(v.name)}</h3><div class="view-grid">${v.shots.map((s) => `<div><img src="${s.src}" alt=""><span class="cap">${esc(s.label)}</span></div>`).join("")}</div></figure>`)
+      .join("");
+    sec.push(`<section class="views"><h2>Saved views</h2>${figs}</section>`);
   }
 
   // Areas.
@@ -564,6 +574,7 @@ dl { margin: 0; } dt { font-weight: 600; margin-top: 6px; } dd { margin: 0 0 4px
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(70mm, 1fr)); gap: 6px; margin-top: 10px; }
 .shots figure { margin: 0; } .shots img { width: 100%; border: 1px solid #e5e7eb; } .shots figcaption { font-size: 9pt; color: #6b7280; }
 section { break-inside: avoid-page; }
+section.views { break-inside: auto; } figure.view { margin: 0 0 12px; break-inside: avoid; } .view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .view-grid img { display: block; width: 100%; border: 1px solid #e5e7eb; } .view-grid .cap { font-size: 9pt; color: #6b7280; }
 section.plan { break-before: page; text-align: center; padding-top: 6px; }
 section.plan svg { max-width: 100%; height: auto; }
 .bar { position: sticky; top: 0; background: #fff; padding: 8px 0; border-bottom: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: center; }

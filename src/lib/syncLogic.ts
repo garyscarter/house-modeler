@@ -1,5 +1,6 @@
-import type { HouseModel, MyPiece, Photo, VariantKey } from "../types";
+import type { HouseModel, MyPiece, Photo, SavedView, VariantKey } from "../types";
 import { sanitizePieces } from "./myFurniture";
+import { parseSavedViews } from "./savedViews";
 import { migrateModel, migratePhotos, migrateSites } from "./migrate";
 import { sitesFromImport, type Sites } from "./sites";
 
@@ -19,6 +20,7 @@ export interface ProjectData {
   costRates: Record<string, number>;
   /** The owner's own furniture (absent in older copies). */
   pieces?: MyPiece[];
+  savedViews?: SavedView[];
 }
 
 /** A revision of the server's copy. */
@@ -120,13 +122,13 @@ const looksLikeModel = (m: unknown): m is HouseModel => !!m && Array.isArray((m 
  */
 export function parseProject(data: unknown, costRatesNow: Record<string, number>, opts: { allowEmpty?: boolean } = {}): ProjectData | null {
   if (!data || typeof data !== "object") return null;
-  const d = data as { variants?: Record<string, unknown>; photos?: unknown; sites?: unknown; site?: unknown; costRates?: Record<string, number>; pieces?: unknown };
+  const d = data as { variants?: Record<string, unknown>; photos?: unknown; sites?: unknown; site?: unknown; costRates?: Record<string, number>; pieces?: unknown; savedViews?: unknown };
   const current = looksLikeModel(d.variants?.current) ? d.variants?.current : undefined;
   const proposed = looksLikeModel(d.variants?.proposed) ? d.variants?.proposed : undefined;
   if (!current && !proposed) {
     // An emptied project (after Reset) is a valid server copy, but not a valid import.
     const emptied = opts.allowEmpty && !!d.variants && typeof d.variants === "object" && !Array.isArray(d.variants) && Object.keys(d.variants).length === 0;
-    return emptied ? { variants: {}, photos: [], sites: {}, costRates: d.costRates ?? costRatesNow, pieces: sanitizePieces(d.pieces) } : null;
+    return emptied ? { variants: {}, photos: [], sites: {}, costRates: d.costRates ?? costRatesNow, pieces: sanitizePieces(d.pieces), savedViews: parseSavedViews(d.savedViews) } : null;
   }
   const variants: ProjectData["variants"] = {};
   if (current) variants.current = migrateModel(current);
@@ -137,5 +139,6 @@ export function parseProject(data: unknown, costRatesNow: Record<string, number>
     sites: migrateSites(sitesFromImport({ sites: d.sites, site: d.site, variants })),
     costRates: d.costRates ?? costRatesNow,
     pieces: sanitizePieces(d.pieces),
+    savedViews: parseSavedViews(d.savedViews),
   };
 }

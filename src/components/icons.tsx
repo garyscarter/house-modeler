@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "select" | "rect" | "polygon" | "wall" | "canopy" | "door" | "window" | "gap" | "measure" | "image" | "walls"
   | "zoomIn" | "zoomOut" | "fit" | "fitImage" | "undo" | "redo" | "search" | "help" | "sun" | "eye" | "compare"
-  | "chevronDown" | "chevronRight" | "close" | "plus" | "paste" | "house" | "layers" | "info" | "more";
+  | "chevronDown" | "chevronRight" | "close" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil";
 
 /** Inline 24-viewBox stroke icons; they take their colour from the text (currentColor). */
 const PATHS: Record<IconName, ReactNode> = {
@@ -32,6 +32,7 @@ const PATHS: Record<IconName, ReactNode> = {
   chevronDown: <path d="M6 9l6 6 6-6" />,
   chevronRight: <path d="M9 6l6 6-6 6" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  pencil: <path d="M4 20l4-1 11-11-3-3L5 16zM14 7l3 3" />,
   plus: <path d="M12 5v14M5 12h14" />,
   paste: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9z" /></>,
   house: <><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></>,
