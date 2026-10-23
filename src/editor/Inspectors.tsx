@@ -13,6 +13,7 @@ import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCover
 import { skirtingColour } from "../lib/skirting";
 import { roomColor } from "../three/House";
 import { FeatureWalls } from "./FeatureWalls";
+import { KnockThrough } from "./KnockThrough";
 import {
   COLOUR_KINDS,
   DOOR_KINDS,
@@ -335,6 +336,7 @@ export function RoomInspector({
           ))}
         </div>
       )}
+      <KnockThrough variant={variant} floor={floor} room={room} />
       <button
         className="danger"
         onClick={async () => {
