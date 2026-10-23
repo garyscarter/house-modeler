@@ -614,15 +614,8 @@ ${foot}
 // ---------------------------------------------------------------------------
 // Files
 
-/** Today's date as yyyy-mm-dd, for file names. */
-export const fileDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-/** A file name made safe for every platform: "Floor 1 (Proposed)" -> "floor-1-proposed". */
-export const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "file";
+// fileDate and slug live in fileNames.ts, so the settings panel can name its export without loading this module.
+export { fileDate, slug } from "./fileNames";
 
 /** Save a blob through a temporary link (works on desktop browsers and iOS Safari). */
 export function downloadBlob(blob: Blob, name: string) {

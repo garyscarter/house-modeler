@@ -2,6 +2,7 @@
   position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; z-index: var(--z-review); overflow-y: auto; background: var(--bg); color: var(--text);
   outline: none; font-size: 15px; line-height: 1.5;
 }
+.review-page.review-loading { display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
 
 /* Sticky bar */
 .review-page .rv-bar { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }

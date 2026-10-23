@@ -5,7 +5,7 @@ import { statusText } from "../lib/syncLogic";
 import { Loader } from "./Loader";
 import { BrandMark } from "./BrandMark";
 import { BRAND_NAME, downloadPrefix } from "../lib/brand";
-import { fileDate, slug } from "../lib/export";
+import { fileDate, slug } from "../lib/fileNames";
 import { houseName } from "../lib/studio";
 
 const QUALITY: [string, string, string][] = [

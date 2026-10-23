@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
-import { PlanEditor } from "./editor/PlanEditor";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
@@ -18,7 +17,6 @@ import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
-import { SiteEditor } from "./editor/SiteEditor";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { siteEditPatch } from "./lib/modes";
@@ -32,6 +30,9 @@ import { BrandMark } from "./components/BrandMark";
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
 const WipeCompare = lazy(() => import("./three/WipeCompare").then((m) => ({ default: m.WipeCompare })));
+// The 2D editors load the first time the Plan tab opens.
+const PlanEditor = lazy(() => import("./editor/PlanEditor").then((m) => ({ default: m.PlanEditor })));
+const SiteEditor = lazy(() => import("./editor/SiteEditor").then((m) => ({ default: m.SiteEditor })));
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -254,8 +255,19 @@ export default function App() {
             </Suspense>
           </div>
         )}
-        {model && tab === "plan" && editingSite && <SiteEditor />}
-        {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
+        {model && tab === "plan" && (
+          <Suspense
+            fallback={
+              <div className="viewer-loading" role="status">
+                <Loader kind="blueprint" size={40} />
+                Opening the plan
+              </div>
+            }
+          >
+            {editingSite && <SiteEditor />}
+            {!editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
+          </Suspense>
+        )}
 
         {showInspector && (
           <InspectorCard className="side">

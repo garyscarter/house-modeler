@@ -8,17 +8,22 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 const out = "dist-hosted";
 execSync(`npx vite build --base=./ --outDir ${out} --emptyOutDir`, { stdio: "inherit" });
 const assets = readdirSync(`${out}/assets`);
-// The entry script and stylesheet, as Vite linked them from its own index.html (the 3D view,
-// post-processing and report are separate chunks that the entry loads on demand).
+// The entry script, the chunks it imports at startup (preloaded) and every stylesheet, as Vite linked
+// them from its own index.html. The 3D view, plan editor, review and post-processing are separate
+// chunks that the entry loads on demand.
 const html = readFileSync(`${out}/index.html`, "utf8");
-const pick = (re) => html.match(re)?.[1]?.replace(/^\.?\/?assets\//, "");
-const js = pick(/<script type="module"[^>]*src="([^"]+)"/) ?? assets.find((f) => /^index-.*\.js$/.test(f));
-const css = pick(/<link rel="stylesheet"[^>]*href="([^"]+)"/) ?? assets.find((f) => /^index-.*\.css$/.test(f));
+const strip = (href) => href.replace(/^\.?\/?assets\//, "");
+const all = (re) => [...html.matchAll(new RegExp(re, "g"))].map((m) => strip(m[1]));
+const js = all(/<script type="module"[^>]*src="([^"]+)"/)[0] ?? assets.find((f) => /^index-.*\.js$/.test(f));
+const css = all(/<link rel="stylesheet"[^>]*href="([^"]+)"/);
+if (!css.length) css.push(assets.find((f) => /^index-.*\.css$/.test(f)));
+const preload = all(/<link rel="modulepreload"[^>]*href="([^"]+)"/);
 writeFileSync(
   `${out}/house-modeler.html`,
   `<title>Storey</title>
 <meta name="description" content="Visualise a house from its listing floorplan and plan the renovation.">
-<link rel="stylesheet" href="assets/${css}">
+${css.map((f) => `<link rel="stylesheet" href="assets/${f}">`).join("\n")}
+${preload.map((f) => `<link rel="modulepreload" crossorigin href="assets/${f}">`).join("\n")}
 <style>
   /* A one-screen app: fill the page inside the viewer's safe-area padding rather than 100dvh. */
   :root { color-scheme: light; }

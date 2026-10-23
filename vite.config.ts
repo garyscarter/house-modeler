@@ -20,6 +20,14 @@ export default defineConfig({
     __BUILD_COMMIT__: JSON.stringify(commit),
   },
   server: { watch: { ignored: ["**/.claude/**"] } },
+  build: {
+    rolldownOptions: {
+      output: {
+        // React rarely changes between releases, so it gets a chunk of its own that browsers keep cached.
+        codeSplitting: { groups: [{ name: "react", test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "server/**/*.test.mjs"],
