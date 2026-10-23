@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planTargetAt } from "./planHit";
+import { nextUnder, planTargetAt } from "./planHit";
 import { floor, rect } from "./testing";
 import type { Opening } from "../types";
 
@@ -39,5 +39,25 @@ describe("planTargetAt", () => {
   it("is empty outside everything", () => {
     expect(planTargetAt(f, { x: 900, y: 900 }, "build", tol)).toEqual({ kind: "empty" });
     expect(planTargetAt(f, { x: 100, y: 100 }, "review", tol)).toEqual({ kind: "empty" });
+  });
+});
+
+describe("nextUnder", () => {
+  it("cycles down a stack and wraps", () => {
+    const p = { x: 110, y: 110 };
+    expect(nextUnder(solids, p, null)).toBe("lamp");
+    expect(nextUnder(solids, p, "lamp")).toBe("bed");
+    expect(nextUnder(solids, p, "bed")).toBe("lamp");
+    expect(nextUnder(solids, p, "other")).toBe("lamp");
+  });
+  it("stays on a single item and returns null on empty ground", () => {
+    expect(nextUnder(solids, { x: 60, y: 60 }, "bed")).toBe("bed");
+    expect(nextUnder(solids, { x: 500, y: 500 }, "bed")).toBeNull();
+  });
+  it("reaches a rug under a unit", () => {
+    const rug = { id: "rug", corners: [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 300 }, { x: 0, y: 300 }] };
+    const stack = [rug, solids[0]];
+    expect(nextUnder(stack, { x: 60, y: 60 }, "bed")).toBe("rug");
+    expect(nextUnder(stack, { x: 60, y: 60 }, "rug")).toBe("bed");
   });
 });

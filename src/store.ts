@@ -151,6 +151,15 @@ const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
 const COALESCE_MS = 700;
 let lastPush = 0;
+let held = false;
+let heldPushed = false;
+
+/** While on, a whole gesture (a drag) makes one undo step: the first model change pushes a snapshot, later ones don't. Turning it off lets the next edit push. */
+export function holdUndo(on: boolean) {
+  held = on;
+  heldPushed = false;
+  if (!on) lastPush = 0;
+}
 
 /** The variant photos are matched against (rooms are named from it). */
 const photoSource = (variants: State["variants"]): VariantKey | undefined =>
@@ -168,8 +177,10 @@ export const useStore = create<State>()(
         if (touches) {
           const now = Date.now();
           const snap: Snapshot = { variants: st.variants, photos: st.photos, sites: st.sites };
-          const past = now - lastPush < COALESCE_MS && st.past.length ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
+          const coalesce = held ? heldPushed && st.past.length > 0 : now - lastPush < COALESCE_MS && st.past.length > 0;
+          const past = coalesce ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
           lastPush = now;
+          if (held) heldPushed = true;
           rawSet({ ...patch, past, future: [] });
         } else rawSet(patch);
       };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Fixture } from "../types";
-import { duplicateFixtures, exactGroup, expandToGroups, fixturesInRect, groupFixtures, moveFixtures, rotateFixtures, selectionBounds, ungroupFixtures } from "./fixtureGroups";
+import { duplicateFixtures, exactGroup, expandToGroups, fixturesInRect, groupFixtures, moveFixtures, positionsCentre, rotateFixtures, selectionBounds, ungroupFixtures } from "./fixtureGroups";
 import { CATALOGUE } from "./catalogue";
 
 const type = CATALOGUE[0].id;
@@ -78,5 +78,12 @@ describe("fixturesInRect and selectionBounds", () => {
     expect(b.x0).toBeLessThan(100);
     expect(b.x1).toBeGreaterThan(100);
     expect(selectionBounds(base, [], 100)).toBeNull();
+  });
+});
+
+describe("positionsCentre", () => {
+  it("is the middle of the positions box, null for none", () => {
+    expect(positionsCentre([fx("a", 0, 10), fx("b", 100, 30)])).toEqual({ x: 50, y: 20 });
+    expect(positionsCentre([])).toBeNull();
   });
 });
