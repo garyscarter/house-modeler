@@ -152,8 +152,13 @@ describe("RateLimiter", () => {
 });
 
 describe("clientIp", () => {
-  it("uses the first x-forwarded-for entry, else the socket", () => {
-    expect(clientIp({ "x-forwarded-for": "1.2.3.4, 10.0.0.1" }, "127.0.0.1")).toBe("1.2.3.4");
+  it("ignores x-forwarded-for with 0 hops and uses the n-th from the end otherwise", () => {
+    const h = { "x-forwarded-for": "6.6.6.6, 1.2.3.4, 10.0.0.1" };
+    expect(clientIp(h, "127.0.0.1", 0)).toBe("127.0.0.1");
+    expect(clientIp(h, "127.0.0.1")).toBe("127.0.0.1");
+    expect(clientIp(h, "127.0.0.1", 1)).toBe("10.0.0.1");
+    expect(clientIp(h, "127.0.0.1", 2)).toBe("1.2.3.4");
+    expect(clientIp(h, "127.0.0.1", 9)).toBe("127.0.0.1");
     expect(clientIp({}, "127.0.0.1")).toBe("127.0.0.1");
     expect(clientIp({}, undefined)).toBe("unknown");
   });

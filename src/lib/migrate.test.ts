@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
-import { migratePersisted, PERSIST_VERSION } from "./migrate";
+import { migrateModel, migratePersisted, PERSIST_VERSION } from "./migrate";
 
 describe("persisted-state migration", () => {
   it("moves the shared plot of a version 4 save onto both layouts", () => {
@@ -32,4 +32,30 @@ describe("persisted-state migration", () => {
   });
 
   it("is at version 5", () => expect(PERSIST_VERSION).toBe(5));
+});
+
+describe("migrateModel", () => {
+  const withOpening = (o: Record<string, unknown>) => {
+    const m = JSON.parse(JSON.stringify(listing91770873("")));
+    m.floors[0].openings = [{ id: "o1", ...o }];
+    return m;
+  };
+  it("turns a style garage door into kind garage", () => {
+    const m = migrateModel(withOpening({ kind: "door", style: "garage" }));
+    expect(m.floors[0].openings[0].kind).toBe("garage");
+    expect("style" in m.floors[0].openings[0]).toBe(false);
+    expect(migrateModel(m)).toEqual(m);
+  });
+  it("leaves a panel door alone", () => {
+    const m = withOpening({ kind: "door", style: "panel" });
+    expect(migrateModel(m).floors[0].openings[0]).toEqual({ id: "o1", kind: "door", style: "panel" });
+  });
+  it("adds a hip roof and party wall to a listing exterior without one", () => {
+    const m = JSON.parse(JSON.stringify(listing91770873("")));
+    m.exterior = { ...m.exterior };
+    delete m.exterior.roofStyle;
+    const out = migrateModel(m);
+    expect(out.exterior?.roofStyle).toBe("hip");
+    expect(out.exterior?.partyWall).toBe("right");
+  });
 });

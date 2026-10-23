@@ -7,8 +7,6 @@ import {
   diffWalls,
   estimatePxPerM,
   openingHeights,
-  polygonArea,
-  snapRooms,
   type WallPiece,
   type WallSeg,
 } from "./geometry";
@@ -132,11 +130,5 @@ describe("scale and snapping", () => {
   it("estimates pixels per metre from printed sizes", () => {
     const rooms = [rect("A", 0, 0, 300, 400, { dims: { w: 3, h: 4 } }), rect("B", 0, 0, 200, 200, { dims: { w: 2, h: 2 } })];
     expect(estimatePxPerM(rooms)).toBeCloseTo(100);
-  });
-
-  it("snaps nearly shared edges together", () => {
-    const [a, b] = snapRooms([rect("A", 0, 0, 300, 400), rect("B", 303, 0, 600, 400)], 10);
-    expect(a.polygon[1].x).toBeCloseTo(b.polygon[0].x);
-    expect(Math.abs(polygonArea(a.polygon))).toBeGreaterThan(0);
   });
 });

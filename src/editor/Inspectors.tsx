@@ -944,7 +944,7 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
           {floor.stairsTopTurn && (
             <label>
               Winders at the top
-              <select value={floor.stairsTopWinders ?? 2} onChange={(e) => updateFloor(variant, floor.id, { stairsTopWinders: parseInt(e.target.value, 10) })}>
+              <select value={floor.stairsTopWinders ?? 2} onChange={(e) => updateFloor(variant, floor.id, { stairsTopWinders: parseInt(e.target.value, 10) === 3 ? 3 : 2 })}>
                 <option value={2}>2</option>
                 <option value={3}>3</option>
               </select>

@@ -47,6 +47,25 @@ describe("imageAwareStorage", () => {
       vi.useRealTimers();
     }
   });
+
+  it("skips a save when no persisted field changed", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = imageAwareStorage<{ a: object; b: number }>(400, 2000);
+      saved.length = 0;
+      const a = {};
+      storage.setItem("same", { state: { a, b: 1 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      storage.setItem("same", { state: { a, b: 1 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(saved.filter((k) => k === "same")).toHaveLength(1);
+      storage.setItem("same", { state: { a, b: 2 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(saved.filter((k) => k === "same")).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("dropAiSettings", () => {

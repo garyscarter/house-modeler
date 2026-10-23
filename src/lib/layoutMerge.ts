@@ -51,7 +51,7 @@ export const STAIRS_NEAR_M = 0.75;
 /** How far off a room edge an opening may sit and still be in that wall (metres). */
 const ON_WALL_M = 0.06;
 
-const metres = (n: number) => `${+n.toFixed(2)} m`;
+export const metres = (n: number) => `${+n.toFixed(2)} m`;
 const degrees = (n: number) => `${+n.toFixed(1)}°`;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -652,7 +652,7 @@ export function applyChanges<T>(mine: T, changes: Change<T>[], selected: Iterabl
   return changes.filter((c) => c.available && ids.has(c.id)).reduce((acc, c) => c.apply(acc), structuredClone(mine));
 }
 
-/** `mine` with the chosen changes from `listingUpdates(mine, latest)`. Rooms, walls and the design's own fixtures are never touched. */
+/** Test convenience: nothing in the app calls this. `mine` with the chosen changes from `listingUpdates(mine, latest)`. Rooms, walls and the design's own fixtures are never touched. */
 export function applyListingUpdates(mine: HouseModel, latest: HouseModel, selected: Iterable<string>): HouseModel {
   return applyChanges(mine, listingUpdates(mine, latest), selected);
 }

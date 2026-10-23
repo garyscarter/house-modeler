@@ -163,12 +163,17 @@ export class RateLimiter {
   }
 }
 
-/** Client address: first entry of x-forwarded-for (Render), else the socket's. */
-export function clientIp(headers, remoteAddress) {
+/**
+ * Client address. With `hops` = 0 the socket's address is used and x-forwarded-for is ignored.
+ * With `hops` = n > 0 (n trusted proxies in front, each appending the address it saw), the
+ * n-th entry from the end of x-forwarded-for is used; earlier entries are client-supplied.
+ */
+export function clientIp(headers, remoteAddress, hops = 0) {
   const forwarded = headers?.["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    const first = forwarded.split(",")[0].trim();
-    if (first && first.length <= 64) return first;
+  if (hops > 0 && typeof forwarded === "string") {
+    const list = forwarded.split(",").map((x) => x.trim());
+    const entry = list[list.length - hops];
+    if (entry && entry.length <= 64) return entry;
   }
   return remoteAddress || "unknown";
 }

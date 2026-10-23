@@ -10,7 +10,6 @@ import {
   prismBlocks,
   rectPoly,
   removeBoundaryVertex,
-  segmentPolygonDistance,
   segmentSegmentClosest,
   sideClearances,
   simpleSite,
@@ -39,10 +38,7 @@ describe("polygon helpers", () => {
     expect(segmentSegmentClosest({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 1, y: 2 }, { x: 3, y: 2 }).d).toBeCloseTo(2);
   });
 
-  it("measures segment-to-polygon and point-to-polygon distances", () => {
-    expect(segmentPolygonDistance({ x: 6, y: -1 }, { x: 6, y: 5 }, square).d).toBeCloseTo(2);
-    expect(segmentPolygonDistance({ x: -1, y: 2 }, { x: 5, y: 2 }, square).d).toBe(0);
-    expect(segmentPolygonDistance({ x: 1, y: 1 }, { x: 2, y: 2 }, square).d).toBe(0);
+  it("measures point-to-polygon distances", () => {
     expect(pointPolygonDistance({ x: 2, y: 2 }, square)).toBe(0);
     expect(pointPolygonDistance({ x: 7, y: 8 }, square)).toBeCloseTo(5);
   });

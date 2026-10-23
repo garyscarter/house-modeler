@@ -1,4 +1,5 @@
 import type { HouseModel, Photo, VariantKey } from "../types";
+import { migrateModel } from "./migrate";
 import { sitesFromImport, type Sites } from "./sites";
 
 /**
@@ -80,7 +81,8 @@ export type SyncStatus =
   | { kind: "saving" }
   | { kind: "offline" }
   | { kind: "signedout" }
-  | { kind: "paused" };
+  | { kind: "paused" }
+  | { kind: "tooLarge" };
 
 export function statusText(s: SyncStatus): string {
   switch (s.kind) {
@@ -96,6 +98,8 @@ export function statusText(s: SyncStatus): string {
       return "Signed out of the server: reload the page and sign in again";
     case "paused":
       return "Not saved: the server has a different version. Tap Sync now to choose";
+    case "tooLarge":
+      return "Too large to sync (over 50 MB): remove some photos, then Sync now";
   }
 }
 
@@ -111,15 +115,19 @@ const looksLikeModel = (m: unknown): m is HouseModel => !!m && Array.isArray((m 
  * Read a project (a server copy or an imported file) into what the store should hold,
  * or null when it is not a House Modeler project. Older files with one shared `site` are accepted.
  */
-export function parseProject(data: unknown, costRatesNow: Record<string, number>): ProjectData | null {
+export function parseProject(data: unknown, costRatesNow: Record<string, number>, opts: { allowEmpty?: boolean } = {}): ProjectData | null {
   if (!data || typeof data !== "object") return null;
   const d = data as { variants?: Record<string, unknown>; photos?: unknown; sites?: unknown; site?: unknown; costRates?: Record<string, number> };
   const current = looksLikeModel(d.variants?.current) ? d.variants?.current : undefined;
   const proposed = looksLikeModel(d.variants?.proposed) ? d.variants?.proposed : undefined;
-  if (!current && !proposed) return null;
+  if (!current && !proposed) {
+    // An emptied project (after Reset) is a valid server copy, but not a valid import.
+    const emptied = opts.allowEmpty && !!d.variants && typeof d.variants === "object" && !Array.isArray(d.variants) && Object.keys(d.variants).length === 0;
+    return emptied ? { variants: {}, photos: [], sites: {}, costRates: d.costRates ?? costRatesNow } : null;
+  }
   const variants: ProjectData["variants"] = {};
-  if (current) variants.current = current;
-  if (proposed) variants.proposed = proposed;
+  if (current) variants.current = migrateModel(current);
+  if (proposed) variants.proposed = migrateModel(proposed);
   return {
     variants,
     photos: Array.isArray(d.photos) ? (d.photos as Photo[]) : [],
