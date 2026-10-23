@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { SITE_EDIT_ID, useStore } from "../store";
 import { buildCommands, defaultCommands, isMacPlatform, rankCommands } from "../lib/commands";
+import { goToSavedView, saveCurrentView } from "./savedViewActions";
 import { usePanelPrefs } from "./panelPrefs";
 import { OPEN_PALETTE } from "../lib/studio";
 import "./CommandPalette.css";
@@ -39,6 +40,7 @@ function Palette({ close }: { close: () => void }) {
       doorsOpen: st.doorsOpen,
       mode: st.mode,
       redo: st.redo,
+      savedViews: st.savedViews,
       selectedRoomId: st.selectedRoomId,
       setMode: st.setMode,
       setSettings: st.setSettings,
@@ -86,6 +88,12 @@ function Palette({ close }: { close: () => void }) {
       undo: s.undo,
       redo: s.redo,
       dispatch: (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail })),
+      savedViews: s.savedViews.map((v) => ({ id: v.id, name: v.name })),
+      saveView: () => void saveCurrentView(),
+      goToView: (id) => {
+        const v = useStore.getState().savedViews.find((x) => x.id === id);
+        if (v) void goToSavedView(v);
+      },
     });
     return query.trim() ? rankCommands(query, all, 30) : defaultCommands(all);
   }, [query, s, look, setPrefs]);

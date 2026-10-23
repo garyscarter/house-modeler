@@ -9,7 +9,7 @@ import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
-import { easeInOut, frameFor, homeView, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { easeInOut, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube } from "./ViewCube";
 import { requestView } from "./viewRequest";
@@ -331,8 +331,10 @@ function Orbit({
   // Every linked view glides to a requested side, and follows another view's camera.
   useEffect(() => {
     const onView = (e: Event) => {
-      const side = (e as CustomEvent<{ side?: ViewRequest }>).detail?.side;
-      if (side) startGlide(poseFor(side));
+      const detail = (e as CustomEvent<{ side?: ViewRequest; pose?: unknown }>).detail;
+      if (detail?.pose !== undefined) {
+        if (isValidPose(detail.pose)) startGlide({ position: { ...detail.pose.position }, target: { ...detail.pose.target } });
+      } else if (detail?.side) startGlide(poseFor(detail.side));
     };
     window.addEventListener("house:view", onView);
     const off = subscribePose((from, pose) => {

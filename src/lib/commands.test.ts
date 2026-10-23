@@ -29,6 +29,9 @@ const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   undo: vi.fn(),
   redo: vi.fn(),
   dispatch: vi.fn(),
+  savedViews: [],
+  saveView: vi.fn(),
+  goToView: vi.fn(),
   ...over,
 });
 
@@ -42,6 +45,21 @@ describe("fuzzyScore", () => {
   });
   it("ranks prefixes above scattered matches", () => {
     expect(fuzzyScore("bed", "Bedroom")).toBeGreaterThan(fuzzyScore("bed", "Cupboard exterior"));
+  });
+});
+
+describe("saved views", () => {
+  it("offers saving only in 3D, and going to a view from any tab", () => {
+    expect(buildCommands(ctx()).some((x) => x.id === "camera:save")).toBe(false);
+    const c = ctx({ tab: "3d", savedViews: [{ id: "v1", name: "Kitchen from the garden" }] });
+    buildCommands(c).find((x) => x.id === "camera:save")!.run();
+    expect(c.saveView).toHaveBeenCalled();
+    const plan = ctx({ savedViews: [{ id: "v1", name: "Kitchen from the garden" }] });
+    const go = buildCommands(plan).find((x) => x.id === "savedview:v1")!;
+    expect(go.title).toBe("Go to view: Kitchen from the garden");
+    go.run();
+    expect(plan.goToView).toHaveBeenCalledWith("v1");
+    expect(rankCommands("kitchen garden", buildCommands(plan))[0].id).toBe("savedview:v1");
   });
 });
 

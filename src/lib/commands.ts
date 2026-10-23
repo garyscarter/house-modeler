@@ -91,6 +91,9 @@ export interface CommandContext {
   redo: () => void;
   /** Dispatches a window event (injected so tests need no DOM). */
   dispatch: (name: string, detail: unknown) => void;
+  savedViews: { id: string; name: string }[];
+  saveView: () => void;
+  goToView: (id: string) => void;
 }
 
 export const isMacPlatform = (): boolean => typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform || "");
@@ -143,7 +146,9 @@ export function buildCommands(c: CommandContext): Command[] {
   if (c.tab === "3d") {
     const sides: [ViewSide, string][] = [["front", "Look at the front"], ["rear", "Look at the rear"], ["left", "Look at the left"], ["right", "Look at the right"], ["top", "Look at the top"], ["home", "Home view"]];
     for (const [side, title] of sides) add(`camera:${side}`, title, "Camera", () => c.dispatch("house:view", { side }), { keywords: ["camera"] });
+    add("camera:save", "Save this camera view", "Camera", c.saveView, { keywords: ["bookmark", "view"] });
   }
+  for (const v of c.savedViews) add(`savedview:${v.id}`, `Go to view: ${v.name}`, "Camera", () => c.goToView(v.id), { keywords: ["camera", "bookmark", "saved"] });
 
   add("review:report", "Open report", "Review", () => c.dispatch("house:open-review", { section: "report" }), { keywords: ["areas", "costs"] });
   add("review:planning", "Open planning check", "Review", () => c.dispatch("house:open-review", { section: "planning" }), { keywords: ["permitted development"] });

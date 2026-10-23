@@ -1,0 +1,8 @@
+.saved-views { display: flex; flex-direction: column; gap: 8px; width: 300px; max-width: 100%; }
+.saved-views .sv-save { display: flex; gap: 6px; }
+.saved-views .sv-save input { flex: 1; min-width: 0; }
+.saved-views .sv-empty { margin: 0; padding: 2px 4px 4px; }
+.saved-views .sv-row { display: flex; align-items: center; gap: 2px; }
+.saved-views .sv-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-views .sv-rename { flex: 1; min-width: 0; }
+.saved-views .sv-update { padding: 4px 8px; font-size: 12px; }

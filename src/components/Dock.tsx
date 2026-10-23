@@ -4,6 +4,7 @@ import { dockFloorActive, dockFloorPick, floorDisplayName, floorsByLevel, tabSwi
 import { usePanelPrefs } from "./panelPrefs";
 import { Popover, ViewToggles } from "./ViewMenu";
 import { Icon } from "./icons";
+import { SavedViewsMenu } from "./SavedViewsMenu";
 import "./Dock.css";
 
 const COMPARE: [ViewMode, string][] = [
@@ -87,6 +88,7 @@ export function Dock() {
           <Popover className="dock-view" label="View">
             <ViewToggles />
           </Popover>
+          <SavedViewsMenu />
         </>
       )}
     </div>

@@ -11,6 +11,8 @@ export interface CaptureTarget {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.Camera;
+  /** Ask the viewer for another frame (after a capture changed its camera or size). */
+  invalidate?: () => void;
 }
 
 const registry = new Map<string, CaptureTarget>();
