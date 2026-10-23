@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, type HouseModel, type FlatRoofSkirt, type PlanSide, type TileStyle, type VariantKey, type WallFinish } from "../types";
 import { chimneyOnRidge, defaultChimney, exteriorOf, planRoofs } from "../lib/roof";
 import { modelBounds } from "../lib/geometry";
+import { Info } from "./Info";
 import "./ExteriorPanel.css";
 
 /** A typical colour for each covering, applied when the covering changes (the user can adjust it after). */
@@ -92,11 +93,10 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
 
   return (
     <div className="panel exterior-panel">
-      <h3>Exterior</h3>
-      <p className="muted small">
-        Roofs are worked out from the floors: the top floor gets a pitched roof, anything on a lower floor with nothing above it gets a
-        flat roof.
-      </p>
+      <h3 className="with-info">
+        Exterior
+        <Info>Roofs are worked out from the floors: the top floor gets a pitched roof, anything on a lower floor with nothing above it gets a flat roof.</Info>
+      </h3>
 
       <section>
         <h4>Roof</h4>
@@ -269,7 +269,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
             <input type="color" value={ext.trimColor} onChange={(e) => set({ trimColor: e.target.value })} />
           </Field>
         </div>
-        <p className="muted small">Rooms can have their own outside finish and colour in Check plan.</p>
+        <p className="muted small">Rooms can have their own outside finish and colour in Plan.</p>
       </section>
 
       <Chimneys model={model} chimneys={ext.chimneys} onChange={(chimneys) => set({ chimneys })} />

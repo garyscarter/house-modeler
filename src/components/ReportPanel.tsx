@@ -19,15 +19,21 @@ import {
   type CostEstimate,
 } from "../lib/report";
 import { changesCsv, downloadBlob, fileDate, planExtent, planScale, planSvg, printHtml, slug } from "../lib/export";
-import { captureImage, exportGlb, useCaptureIds } from "../three/capture";
+import { useCaptureIds } from "../three/captureRegistry";
+
+// Snapshots and model export use three.js, which loads with the 3D view; fetch them when used.
+const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
+const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
+import { floorDisplayName } from "../lib/studio";
+import { openReview } from "./ReviewPage";
 import "./ReportPanel.css";
 
 const KEYS: VariantKey[] = ["current", "proposed"];
 type AreaUnit = "m²" | "ft²";
 
-/** Areas, changes between As listed and Proposed, rough costs, room notes and exports. */
-export function ReportPanel() {
+/** Everything the Report shows, computed once for the sidebar panel and the full-screen Review page. */
+export function useReportData() {
   const variants = useStore((s) => s.variants);
   const rates = useStore((s) => s.costRates);
   const sites = useStore((s) => s.sites);
@@ -41,20 +47,29 @@ export function ReportPanel() {
   const estimate = useMemo(() => changes && estimateCosts(changes, rates), [changes, rates]);
   const notes = useMemo(() => KEYS.flatMap((k) => (variants[k] ? [{ key: k, notes: roomNotes(variants[k]!) }] : [])), [variants]);
   const noteCount = notes.reduce((s, v) => s + v.notes.length, 0);
+  return { variants, areas, changes, estimate, notes, noteCount, both: !!current && !!proposed };
+}
+
+/** Areas, changes between As listed and Proposed, rough costs, room notes and exports. */
+export function ReportPanel() {
+  const { variants, areas, changes, estimate, notes, noteCount, both } = useReportData();
 
   return (
     <div className="panel report-panel">
       <h3>Report</h3>
+      <button className="rp-open-full" onClick={() => openReview("report")}>
+        Open full report
+      </button>
       <details open>
         <summary>Areas</summary>
-        <Areas report={areas} both={!!current && !!proposed} />
+        <Areas report={areas} both={both} />
         <AreaCheck variants={variants} />
       </details>
       <details open>
         <summary>
           Changes{changes && <span className="rp-count">{changes.length}</span>}
         </summary>
-        {changes ? <Changes changes={changes} /> : <p className="muted small">Load or draw a Proposed layout (Floorplans) to list what changes from As listed.</p>}
+        {changes ? <Changes changes={changes} /> : <p className="muted small">Load or draw a Proposed layout (House menu → Layouts) to list what changes from As listed.</p>}
       </details>
       {changes && estimate && (
         <details open>
@@ -76,7 +91,7 @@ export function ReportPanel() {
   );
 }
 
-function Areas({ report, both }: { report: AreaReport; both: boolean }) {
+export function Areas({ report, both }: { report: AreaReport; both: boolean }) {
   const [unit, setUnit] = useState<AreaUnit>("m²");
   const v = (x?: number) => (x === undefined ? "–" : unit === "m²" ? fmtM2(x) : fmtFt2(x));
   const delta = (a?: number, b?: number) => fmtDelta((b ?? 0) - (a ?? 0), unit);
@@ -108,7 +123,7 @@ function Areas({ report, both }: { report: AreaReport; both: boolean }) {
         {report.floors.map((f) => (
           <tbody key={f.key}>
             <tr className="rp-floor">
-              <th colSpan={both ? 4 : 2}>{f.name}</th>
+              <th colSpan={both ? 4 : 2}>{floorDisplayName(f.name)}</th>
             </tr>
             {f.rows.map((r) => (
               <tr key={r.key} className={both && r.current === undefined ? "rp-new" : both && r.proposed === undefined ? "rp-gone" : undefined}>
@@ -162,12 +177,12 @@ function Areas({ report, both }: { report: AreaReport; both: boolean }) {
 }
 
 /** Each variant's area measured as a listing or EPC would, against the listing's printed total. */
-function AreaCheck({ variants }: { variants: Partial<Record<VariantKey, HouseModel>> }) {
+export function AreaCheck({ variants, hideTitle }: { variants: Partial<Record<VariantKey, HouseModel>>; hideTitle?: boolean }) {
   const rows = KEYS.flatMap((k) => (variants[k] ? [{ k, model: variants[k]!, s: areaSummary(variants[k]!) }] : []));
   if (!rows.length) return null;
   return (
     <div className="rp-check">
-      <h4>Measured like the listing</h4>
+      {!hideTitle && <h4>Measured like the listing</h4>}
       {rows.map(({ k, model, s }) => (
         <p key={k} className="small">
           <b>{VARIANT_LABEL[k]}</b>: {fmtM2(s.internal)} m² inside the outside walls
@@ -192,7 +207,7 @@ function AreaCheck({ variants }: { variants: Partial<Record<VariantKey, HouseMod
   );
 }
 
-function Changes({ changes }: { changes: Change[] }) {
+export function Changes({ changes }: { changes: Change[] }) {
   if (!changes.length) return <p className="muted small">No differences between As listed and Proposed.</p>;
   const structural = changes.filter((c) => c.structural).length;
   const floors = [...new Set(changes.map((c) => c.floor))];
@@ -254,7 +269,7 @@ function RateInput({ id, placeholder, label }: { id: string; placeholder: string
   );
 }
 
-function Costs({ estimate }: { estimate: CostEstimate }) {
+export function Costs({ estimate }: { estimate: CostEstimate }) {
   if (!estimate.lines.length) return <p className="muted small">Nothing to price yet: the changes are for information only.</p>;
   return (
     <>
@@ -306,9 +321,9 @@ function Costs({ estimate }: { estimate: CostEstimate }) {
   );
 }
 
-function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<typeof roomNotes> }[] }) {
+export function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<typeof roomNotes> }[] }) {
   if (!notes.some((v) => v.notes.length)) {
-    return <p className="muted small">No room notes yet. Select a room in Check plan and add notes in its inspector; they appear here and in the printed report.</p>;
+    return <p className="muted small">No room notes yet. Select a room in Plan and add notes in its inspector; they appear here and in the printed report.</p>;
   }
   return (
     <>
@@ -346,7 +361,7 @@ const blobToDataUrl = (b: Blob) =>
 /** Caption for a capture id: the variant it shows. */
 const captureLabel = (id: string, active: VariantKey) => (id === "current" || id === "proposed" ? VARIANT_LABEL[id] : VARIANT_LABEL[active]);
 
-function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) {
+export function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) {
   const variants = useStore((s) => s.variants);
   const sites = useStore((s) => s.sites);
   const rates = useStore((s) => s.costRates);
@@ -389,13 +404,13 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
   };
 
   const print = () => {
-    // Open the window inside the tap itself or pop-up blockers stop it; fill it once the snapshots are ready.
+    // Open the window inside the click itself or pop-up blockers stop it; fill it once the snapshots are ready.
     const w = window.open("", "_blank");
     void run("print", async () => {
       const snapshots: { caption: string; src: string }[] = [];
       for (const id of ids) {
         try {
-          snapshots.push({ caption: `3D view: ${captureLabel(id, active)}`, src: await blobToDataUrl(await captureImage(id, 1)) });
+          snapshots.push({ caption: `3D: ${captureLabel(id, active)}`, src: await blobToDataUrl(await captureImage(id, 1)) });
         } catch {
           // A failed snapshot only leaves the picture out.
         }
@@ -445,7 +460,7 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
                 .sort((a, b) => a.level - b.level)
                 .map((f) => (
                   <button key={f.id} onClick={() => plan(k, variants[k]!, f.id)}>
-                    {f.name}
+                    {floorDisplayName(f.name)}
                   </button>
                 ))}
             </div>
@@ -464,7 +479,7 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
         </div>
       </div>
       <div className="rp-export-group">
-        <h4 className="rp-sub">3D view</h4>
+        <h4 className="rp-sub">3D</h4>
         <div className="row">
           <button onClick={() => snapshot(1)} disabled={no3d || busy !== null}>
             {busy === "png1" ? "Saving…" : "Snapshot (PNG)"}
@@ -478,7 +493,7 @@ function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) 
         </div>
         <p className="muted small">
           {no3d
-            ? "Switch to the 3D view to save pictures or the model."
+            ? "Switch to 3D to save pictures or the model."
             : ids.length > 1
               ? "Side by side: a snapshot is saved for each view. The model export uses the selected variant."
               : "Snapshots show the view as it is now, without labels. GLB files open in most 3D apps and online model viewers."}

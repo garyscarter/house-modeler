@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { planningCheck, STATUS_LABEL, type ExtensionPart, type PlanningCheck, type PlanningRule } from "../lib/planning";
 import { siteOf } from "../lib/sites";
+import { openReview } from "./ReviewPage";
 import "./PlanningPanel.css";
 
 const WING_KEY = "house-modeler.planning.wingAfter1948";
@@ -22,35 +23,65 @@ function writeWing(v: boolean) {
   }
 }
 
-/** Whether Proposed fits householder permitted development, rule by rule, and the other consents it needs. */
-export function PlanningPanel() {
+export const PLANNING_TITLE = "Planning check: Proposed vs As listed";
+
+/** The planning check plus the "wing added after 1948" tick, shared by the sidebar panel and the Review page. */
+export function usePlanningCheck() {
   const current = useStore((s) => s.variants.current);
   const proposed = useStore((s) => s.variants.proposed);
   const sites = useStore((s) => s.sites);
-  const [wing, setWing] = useState(readWing);
+  const [wing, setWingState] = useState(readWing);
   const check = useMemo(
     () => (current && proposed ? planningCheck(current, proposed, { current: siteOf(sites, "current"), proposed: siteOf(sites, "proposed") }, { wingAfter1948: wing }) : undefined),
     [current, proposed, sites, wing],
   );
+  const setWing = (v: boolean) => {
+    setWingState(v);
+    writeWing(v);
+  };
+  return { check, wing, setWing };
+}
+
+/** Once, when the planning check is shown on As listed with a Proposed layout available, switch the view to Proposed. */
+export function useSwitchToProposed(active = true) {
+  const done = useRef(false);
+  const hasProposed = useStore((s) => !!s.variants.proposed);
+  useEffect(() => {
+    if (!active || done.current || !hasProposed) return;
+    done.current = true;
+    const s = useStore.getState();
+    if (s.activeVariant === "current") s.setUi({ activeVariant: "proposed" });
+  }, [active, hasProposed]);
+}
+
+/** Whether Proposed fits householder permitted development, rule by rule, and the other consents it needs. */
+export function PlanningPanel() {
+  const { check, wing, setWing } = usePlanningCheck();
+  useSwitchToProposed();
 
   return (
     <div className="panel planning-panel">
-      <h3>Planning check</h3>
+      <h3>{PLANNING_TITLE}</h3>
+      <button className="rp-open-full" onClick={() => openReview("planning")}>
+        Open full report
+      </button>
+      <PlanningBody check={check} wing={wing} onWing={setWing} />
+    </div>
+  );
+}
+
+/** The planning check's content, without a title: used in the sidebar panel and on the Review page. */
+export function PlanningBody({ check, wing, onWing }: { check?: PlanningCheck; wing: boolean; onWing: (v: boolean) => void }) {
+  return (
+    <>
       <p className="muted small pl-intro">Proposed against As listed, under householder permitted development in England. Guidance, not legal advice.</p>
       {!check ? (
-        <p className="muted small">Load or draw a Proposed layout (Floorplans) to check it against the planning rules.</p>
+        <p className="muted small">Load or draw a Proposed layout (House menu → Layouts) to check it against the planning rules.</p>
       ) : (
         <>
           <Verdict check={check} />
           <label className="pl-wing">
-            <input
-              type="checkbox"
-              checked={wing}
-              onChange={(e) => {
-                setWing(e.target.checked);
-                writeWing(e.target.checked);
-              }}
-            />
+            <input type="checkbox" checked={wing} onChange={(e) => onWing(e.target.checked)} />
             <span>
               The single-storey side wing was added after 1 July 1948
               <span className="muted small"> (then it counts as an earlier extension, not part of the original house)</span>
@@ -85,11 +116,11 @@ export function PlanningPanel() {
           </section>
         </>
       )}
-    </div>
+    </>
   );
 }
 
-function Verdict({ check }: { check: PlanningCheck }) {
+export function Verdict({ check }: { check: PlanningCheck }) {
   return (
     <div className={`pl-verdict pl-verdict-${check.verdict}`} role="status">
       <div className="pl-headline">{check.headline}</div>
@@ -115,7 +146,7 @@ function Verdict({ check }: { check: PlanningCheck }) {
 const fmt = (v: number) => `${v.toFixed(1)} m`;
 const fmt2 = (v: number) => `${v.toFixed(2)} m`;
 
-function Parts({ parts }: { parts: ExtensionPart[] }) {
+export function Parts({ parts }: { parts: ExtensionPart[] }) {
   return (
     <section className="pl-section">
       <h4>What it found</h4>
@@ -142,7 +173,7 @@ function Parts({ parts }: { parts: ExtensionPart[] }) {
   );
 }
 
-function Rules({ rules }: { rules: PlanningRule[] }) {
+export function Rules({ rules }: { rules: PlanningRule[] }) {
   const live = rules.filter((r) => r.status !== "na");
   const na = rules.filter((r) => r.status === "na");
   const groups = [...new Set(live.map((r) => r.group))];

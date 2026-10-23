@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSite, useStore } from "../store";
+import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
@@ -19,6 +20,7 @@ import {
   simpleSite,
 } from "../lib/site";
 import { SlopeFields } from "../components/SlopeFields";
+import { PlotPanel } from "../components/PlotPanel";
 import {
   MIN_OPENING,
   defaultOpeningEnd,
@@ -31,6 +33,10 @@ import {
   type SlideAlong,
 } from "../lib/boundaryOpening";
 import { arrowDelta, keyBelongsElsewhere, shiftPts } from "../lib/nudge";
+import { ToolRail } from "./ToolRail";
+import { InspectorCard } from "../components/InspectorCard";
+import { Info } from "../components/Info";
+import { Icon } from "../components/icons";
 import "./SiteEditor.css";
 
 type Tool = "select" | "surface" | "neighbour";
@@ -127,18 +133,29 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     return { x: vb.x + (e.clientX - r.left) * px, y: vb.y + (e.clientY - r.top) * px };
   };
 
-  // Wheel zoom about the cursor (non-passive so the page doesn't scroll).
+  const peeking = useStore((s) => s.peek);
+  /** Zoom about the centre of the view (the zoom buttons and the +/- keys). */
+  const zoomBy = (factor: number) => setView((c) => (c ? { ...c, ppm: Math.max(2, Math.min(400, c.ppm * factor)) } : c));
+
+  // A trackpad two-finger swipe pans; a pinch or a mouse wheel zooms about the cursor (non-passive so the page doesn't scroll).
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
+    const intentOf = wheelClassifier();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const { dx, dy } = wheelPixels(e);
+      if (intentOf(e, e.timeStamp) === "pan") {
+        setView((c) => (c ? { ...c, cx: c.cx + dx / c.ppm, cy: c.cy + dy / c.ppm } : c));
+        return;
+      }
       const r = el.getBoundingClientRect();
       const sx = e.clientX - r.left - r.width / 2;
       const sy = e.clientY - r.top - r.height / 2;
+      const k = e.ctrlKey ? 0.01 : 0.0015;
       setView((c) => {
         if (!c) return c;
-        const ppm = Math.max(2, Math.min(400, c.ppm * Math.exp(-e.deltaY * 0.0015)));
+        const ppm = Math.max(2, Math.min(400, c.ppm * Math.exp(-dy * k)));
         return { cx: c.cx + sx / c.ppm - sx / ppm, cy: c.cy + sy / c.ppm - sy / ppm, ppm };
       });
     };
@@ -212,7 +229,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (keyBelongsElsewhere(e.target, document)) return;
+      if (keyBelongsElsewhere(e.target, document) || useStore.getState().peek) return;
       const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
       if (arrow) {
         if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
@@ -222,6 +239,15 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         setSel(null);
         setDraft(null);
         setTool("select");
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !useStore.getState().peek) {
+        const k = e.key.toLowerCase();
+        if (k === "v" || k === "r" || k === "b") {
+          setTool(k === "v" ? "select" : k === "r" ? "surface" : "neighbour");
+          setDraft(null);
+        } else if (k === "f") setView(fitRef.current(size.w, size.h));
+        else if (k === "+" || k === "=") zoomBy(1.4);
+        else if (k === "-" || k === "_") zoomBy(1 / 1.4);
       }
       if ((e.key === "Delete" || e.key === "Backspace") && sel) {
         e.preventDefault();
@@ -233,7 +259,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // ---- Pointer handling: one finger drags, two fingers pinch-zoom and pan.
+  // ---- Pointer handling: a drag moves or pans; a two-touch trackpad pinch zooms.
   const startPinch = () => {
     const [a, b] = [...pointers.current.values()];
     const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 };
@@ -376,38 +402,13 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
   return (
     <div className="site-editor">
-      <div className="toolbar">
-        <button className={tool === "select" ? "active" : ""} onClick={() => setTool("select")}>
-          Select / move
-        </button>
-        <span className="site-tool">
-          <button className={tool === "surface" ? "active" : ""} onClick={() => setTool("surface")}>
-            Draw surface
-          </button>
-          <select value={drawKind} onChange={(e) => setDrawKind(e.target.value as SurfaceKind)} aria-label="Surface to draw">
-            {(Object.keys(SURFACE_LABEL) as SurfaceKind[]).map((k) => (
-              <option key={k} value={k}>
-                {SURFACE_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </span>
-        <button className={tool === "neighbour" ? "active" : ""} onClick={() => setTool("neighbour")}>
-          Draw building
-        </button>
-        <button onClick={() => setView(fitView(size.w, size.h))}>Fit</button>
-        <span className="hint">
-          {tool === "select"
-            ? "Tap a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan, pinch or scroll to zoom. Arrows nudge the selected corner or shape (Shift ×10)."
-            : "Drag out a rectangle."}
-        </span>
-      </div>
       <div className="site-editor-body">
         <div className="site-canvas">
           <svg
             ref={svgRef}
             viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
             style={{ cursor }}
+            className={peeking ? "peeking" : undefined}
             onPointerDown={onBackgroundDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -546,8 +547,55 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
             <span>{scaleLen} m</span>
           </div>
         </div>
-        <Inspector site={site} sel={sel} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
       </div>
+
+      {!peeking && (
+        <ToolRail
+          groups={[
+            [{ id: "select", icon: "select", label: "Select / move", shortcut: "V", active: tool === "select", onClick: () => setTool("select") }],
+            [
+              { id: "surface", icon: "rect", label: "Draw surface", shortcut: "R", active: tool === "surface", onClick: () => setTool("surface") },
+              { id: "neighbour", icon: "house", label: "Draw building", shortcut: "B", active: tool === "neighbour", onClick: () => setTool("neighbour") },
+            ],
+          ]}
+          footer={
+            <Info label="How this works">
+              Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10).
+            </Info>
+          }
+        />
+      )}
+
+      <div className="site-zoom float-card" role="group" aria-label="Zoom">
+        <button type="button" className="icon-btn" onClick={() => zoomBy(1.4)} aria-label="Zoom in (+)" title="Zoom in (+)">
+          <Icon name="zoomIn" size={20} />
+        </button>
+        <button type="button" className="icon-btn" onClick={() => zoomBy(1 / 1.4)} aria-label="Zoom out (−)" title="Zoom out (−)">
+          <Icon name="zoomOut" size={20} />
+        </button>
+        <button type="button" className="icon-btn" onClick={() => setView(fitView(size.w, size.h))} aria-label="Fit the plot (F)" title="Fit the plot (F)">
+          <Icon name="fit" size={20} />
+        </button>
+      </div>
+
+      {!peeking && tool !== "select" && (
+        <div className="site-status float-card" role="status">
+          <span>Drag out a rectangle.</span>
+          {tool === "surface" && (
+            <select value={drawKind} onChange={(e) => setDrawKind(e.target.value as SurfaceKind)} aria-label="Surface to draw">
+              {(Object.keys(SURFACE_LABEL) as SurfaceKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {SURFACE_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      <InspectorCard className="side site-side" title="Plot">
+        <Inspector site={site} sel={sel} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+      </InspectorCard>
     </div>
   );
 }
@@ -588,7 +636,7 @@ function Inspector({
         return { ...st, boundaryEdges: list };
       });
     return (
-      <div className="site-side inspector">
+      <div className="inspector">
         <h4>Plot boundary</h4>
         <p className="muted small">{areaOf(site.boundary).toFixed(1)} m² inside the boundary.</p>
         {i !== null && edges[i] && (
@@ -656,7 +704,7 @@ function Inspector({
     const s = site.surfaces.find((x) => x.id === sel.id);
     if (!s) return <EmptyInspector clearances={clearances} />;
     return (
-      <div className="site-side inspector">
+      <div className="inspector">
         <h4>Garden surface</h4>
         <label>
           Surface
@@ -685,7 +733,7 @@ function Inspector({
     if (!n) return <EmptyInspector clearances={clearances} />;
     const set = (p: Partial<Neighbour>) => updateSite((st) => ({ ...st, neighbours: st.neighbours.map((x) => (x.id === n.id ? { ...x, ...p } : x)) }));
     return (
-      <div className="site-side inspector">
+      <div className="inspector">
         <h4>Neighbouring building</h4>
         <label>
           Name
@@ -785,9 +833,12 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
           ))}
         </select>
       </label>
-      <p className="muted small">
-        Slides that end along edge {nb + 1} ({edgeLength(site, nb).toFixed(2)} m), so the boundary line stays put. Drive and lawn corners follow.
-        {edgesOf(site)[edge].kind === "open" && " Dragging an end of a selected opening does the same."}
+      <p className="muted small hint-row">
+        Slides along edge {nb + 1} ({edgeLength(site, nb).toFixed(2)} m)
+        <Info>
+          Slides that end along edge {nb + 1}, so the boundary line stays put. Drive and lawn corners follow.
+          {edgesOf(site)[edge].kind === "open" && " Dragging an end of a selected opening does the same."}
+        </Info>
       </p>
     </>
   );
@@ -795,14 +846,14 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
 
 function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
   return (
-    <div className="site-side inspector">
-      <h4>Site plan</h4>
+    <div className="inspector">
+      <h4>
+        Site plan
+        <Info>Click a boundary edge to set its fence, wall or hedge; click a surface or building to edit it. Corners snap to the house and to each other.</Info>
+      </h4>
       <SiteVariantNote />
-      <p className="muted small">
-        Tap a boundary edge to set its fence, wall or hedge; tap a surface or building to edit it. Corners snap to the house and to each
-        other.
-      </p>
       <Clearances clearances={clearances} />
+      <PlotPanel />
     </div>
   );
 }
@@ -811,8 +862,10 @@ function Clearances({ clearances }: { clearances: ReturnType<typeof sideClearanc
   if (!clearances.length) return null;
   return (
     <>
-      <h4>House to boundary</h4>
-      <p className="muted small">Shortest distance from each side of the house (any floor) to the boundary.</p>
+      <h4>
+        House to boundary
+        <Info>Shortest distance from each side of the house (any floor) to the boundary.</Info>
+      </h4>
       <table className="site-clear">
         <tbody>
           {clearances.map((c) => (

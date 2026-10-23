@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 
-/** Swipes shorter than this (pixels) are taps. */
+/** Swipes shorter than this (pixels) are clicks. */
 const SWIPE = 50;
 
 export function PhotoLightbox() {
@@ -22,7 +22,10 @@ export function PhotoLightbox() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") setUi({ selectedPhotoId: photos[(idx - 1 + photos.length) % photos.length].id });
       else if (e.key === "ArrowRight") setUi({ selectedPhotoId: photos[(idx + 1) % photos.length].id });
-      else if (e.key === "Escape") setUi({ selectedPhotoId: null });
+      else if (e.key === "Escape") {
+        e.preventDefault();
+        setUi({ selectedPhotoId: null });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
