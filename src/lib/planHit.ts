@@ -18,6 +18,18 @@ export interface HitSolid {
   corners: Pt[];
 }
 
+/**
+ * "Click again to pick the item under it": the shape under p that comes after currentId going down the stack
+ * (topmost first), wrapping round; the topmost when currentId isn't under p; null when nothing is.
+ */
+export function nextUnder(shapes: HitSolid[], p: Pt, currentId: string | null): string | null {
+  const under: string[] = [];
+  for (let i = shapes.length - 1; i >= 0; i--) if (pointInPolygon(p, shapes[i].corners)) under.push(shapes[i].id);
+  if (!under.length) return null;
+  const at = currentId === null ? -1 : under.indexOf(currentId);
+  return under[(at + 1) % under.length];
+}
+
 /** The nearest edge of a polygon to p within tol, or null. */
 export function nearestEdge(poly: Pt[], p: Pt, tol: number): number | null {
   let best: number | null = null;

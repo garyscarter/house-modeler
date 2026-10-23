@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useStore } from "./store";
+import { holdUndo, useStore } from "./store";
 import { listing91770873 } from "./lib/houses/listing91770873";
 
 const st = () => useStore.getState();
@@ -68,5 +68,18 @@ describe("store: modes", () => {
     expect(st().selectedEdge).toBeNull();
     st().setUi({ selectedRoomId: "c", selectedEdge: { edge: 1, side: "outside" } });
     expect(st().selectedEdge).toEqual({ edge: 1, side: "outside" });
+  });
+
+  it("holdUndo makes one undo step for a whole gesture", () => {
+    st().setVariant("current", listing91770873(""));
+    const before = st().past.length;
+    holdUndo(true);
+    st().updateModel("current", { ceilingHeight: 2.4 });
+    st().updateModel("current", { ceilingHeight: 2.5 });
+    st().updateModel("current", { ceilingHeight: 2.6 });
+    holdUndo(false);
+    expect(st().past.length).toBe(before + 1);
+    st().updateModel("current", { ceilingHeight: 2.7 });
+    expect(st().past.length).toBe(before + 2);
   });
 });

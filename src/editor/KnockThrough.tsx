@@ -25,7 +25,9 @@ export async function confirmKnockThrough(variant: VariantKey, floor: Floor, roo
 
 /** "Knock through into…": lists the rooms on this floor that share a wall with the selected room. */
 export function KnockThrough({ variant, floor, room }: { variant: VariantKey; floor: Floor; room: Room }) {
-  const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor, room.id]);
+  // Only the rooms and scale decide who shares a wall, so a fixture move does not rerun this.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor.rooms, floor.pxPerM, room.id]);
   if (!neighbours.length) return null;
   return (
     <label title="Remove the wall between this room and a neighbour, making one room of the two. Shortcut: select this room, then Shift+click the neighbour on the plan.">

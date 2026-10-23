@@ -1,4 +1,5 @@
 import type { Floor, Opening, Pt, Room, WallOverride } from "../types";
+import { EXT_WALL_T } from "./geometry";
 
 /**
  * Knock through: merge two rooms that share a wall into one, dropping the
@@ -308,8 +309,20 @@ export function mergeRooms(floor: Floor, idA: string, idB: string, keep: "a" | "
 
 /** The other rooms on the floor that `roomId` shares a wall with (so can be knocked through into it). */
 export function knockThroughNeighbours(floor: Floor, roomId: string): Room[] {
+  const me = floor.rooms.find((r) => r.id === roomId);
+  if (!me) return [];
+  const box = (poly: { x: number; y: number }[]) => ({
+    x0: Math.min(...poly.map((p) => p.x)),
+    y0: Math.min(...poly.map((p) => p.y)),
+    x1: Math.max(...poly.map((p) => p.x)),
+    y1: Math.max(...poly.map((p) => p.y)),
+  });
+  const grow = EXT_WALL_T * floor.pxPerM;
+  const a = box(me.polygon);
   return floor.rooms.filter((r) => {
     if (r.id === roomId) return false;
+    const b = box(r.polygon);
+    if (b.x0 > a.x1 + grow || b.x1 < a.x0 - grow || b.y0 > a.y1 + grow || b.y1 < a.y0 - grow) return false;
     const res = mergeRooms(floor, roomId, r.id, "a");
     return res.ok || res.code !== "no-wall";
   });

@@ -576,3 +576,6 @@ export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orien
   const m = marginM * floor.pxPerM;
   return [Math.min(lo + m, c - half), Math.max(hi - m, c + half)];
 }
+
+/** An SVG points attribute for a polygon. */
+export const svgPoints = (poly: Pt[]) => poly.map((p) => `${p.x},${p.y}`).join(" ");

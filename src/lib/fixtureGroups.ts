@@ -73,17 +73,22 @@ export function selectionBounds(fixtures: Fixture[], ids: Iterable<string>, ppm:
   };
 }
 
+/** The centre of the box around the fixtures' positions, or null for none. */
+export function positionsCentre(fixtures: Fixture[]): Pt | null {
+  if (!fixtures.length) return null;
+  const xs = fixtures.map((f) => f.x);
+  const ys = fixtures.map((f) => f.y);
+  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+}
+
 /**
  * Turn the selected items by deg (clockwise on the plan, y down) about the centre of the box around
  * their positions: positions swing round it and each rot gains deg.
  */
 export function rotateFixtures(fixtures: Fixture[], ids: Iterable<string>, deg: number): Fixture[] {
   const want = new Set(ids);
-  const sel = fixtures.filter((f) => want.has(f.id));
-  if (!sel.length) return fixtures;
-  const xs = sel.map((f) => f.x);
-  const ys = sel.map((f) => f.y);
-  const c = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const c = positionsCentre(fixtures.filter((f) => want.has(f.id)));
+  if (!c) return fixtures;
   const r = (deg * Math.PI) / 180;
   const cos = Math.cos(r);
   const sin = Math.sin(r);
