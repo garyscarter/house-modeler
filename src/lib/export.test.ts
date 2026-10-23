@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HouseModel, Opening } from "../types";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
 import { changesCsv, esc, fileDate, planExtent, planScale, planSvg, printHtml, slug, toCsv } from "./export";
+import { MARK } from "./brand";
 import { areaReport, diffModels, roomNotes } from "./report";
 import { floor, rect } from "./testing";
 
@@ -44,6 +45,9 @@ describe("planSvg", () => {
     expect(svg).toContain("Ground Floor · As listed");
     expect(svg).toContain("15 October 2026");
     expect(svg).toContain('class="north-arrow"');
+    // Brand column in the title block.
+    expect(svg).toContain(MARK.roof);
+    expect(svg).toContain(">STOREY<");
     // Areas and printed sizes appear with the names.
     expect(svg).toMatch(/14\.8 m² · 160 ft²/);
     expect(svg).toMatch(/3\.36 × 4\.42 m/);
@@ -125,6 +129,19 @@ describe("printHtml", () => {
     expect(html.match(/<section class="plan">/g)).toHaveLength(4);
     expect(html).not.toContain("<?xml");
     expect(html).toContain('src="data:image/png;base64,AAAA"');
+  });
+
+  it("is branded: mark, wordmark, house name, title, footer and embedded font", () => {
+    const a = listing91770873("");
+    const base = { date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] };
+    const html = printHtml({ ...base, houseName: "Listing 91770873", fontCss: "@font-face{font-family:X;src:url(data:font/woff2;base64,QQ==)}" });
+    expect(html).toContain("Storey");
+    expect(html).toContain(MARK.roof);
+    expect(html).toContain("<h1>Listing 91770873</h1>");
+    expect(html).toContain("<title>Listing 91770873 report · Storey</title>");
+    expect(html).toContain("Made with Storey · Listing 91770873 · d");
+    expect(html).toContain("@font-face{font-family:X;");
+    expect(printHtml(base)).toContain("<title>Report · Storey</title>");
   });
 
   it("works with one variant (areas only)", () => {

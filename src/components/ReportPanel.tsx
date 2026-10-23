@@ -26,7 +26,10 @@ import { renderSavedViews } from "./SavedViews";
 const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
 const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
-import { floorDisplayName } from "../lib/studio";
+import { floorDisplayName, houseName } from "../lib/studio";
+import { downloadPrefix } from "../lib/brand";
+import { stampMark } from "./stampMark";
+import bricolageWoff2 from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?inline";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
 
@@ -308,6 +311,8 @@ export function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<t
   );
 }
 
+const reportFontCss = `@font-face{font-family:"Bricolage Grotesque Variable";src:url(${bricolageWoff2}) format("woff2");font-weight:200 800}`;
+
 const longDate = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 const blobToDataUrl = (b: Blob) =>
@@ -327,6 +332,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const rates = useStore((s) => s.costRates);
   const active = useStore((s) => s.activeVariant);
   const ids = useCaptureIds();
+  const [stamp, setStamp] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const present = KEYS.filter((k) => variants[k]);
@@ -334,6 +340,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const extent = useMemo(() => planExtent(KEYS.flatMap((k) => (variants[k] ? [variants[k]!] : []))), [variants]);
   const scale = planScale(extent);
   const date = fileDate();
+  const prefix = downloadPrefix(slug(houseName(variants[active] ?? present.map((k) => variants[k]).find(Boolean))));
 
   const run = async (key: string, job: () => Promise<string | void>) => {
     setBusy(key);
@@ -351,8 +358,9 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const snapshot = (scaleBy: number) =>
     run(`png${scaleBy}`, async () => {
       for (const id of ids) {
-        const blob = await captureImage(id, scaleBy);
-        downloadBlob(blob, `house-3d-${slug(captureLabel(id, active))}-${date}${scaleBy > 1 ? `@${scaleBy}x` : ""}.png`);
+        const shot = await captureImage(id, scaleBy);
+        const blob = stamp ? await stampMark(shot) : shot;
+        downloadBlob(blob, `${prefix}-3d-${slug(captureLabel(id, active))}-${date}${scaleBy > 1 ? `@${scaleBy}x` : ""}.png`);
       }
       return ids.length > 1 ? "Saved a snapshot of each view." : undefined;
     });
@@ -360,7 +368,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const plan = (k: VariantKey, m: HouseModel, floorId: string) => {
     const f = m.floors.find((x) => x.id === floorId)!;
     const svg = planSvg(m, f, { variant: VARIANT_LABEL[k], date: longDate(), site: siteOf(sites, k), extent, scale });
-    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `plan-${slug(VARIANT_LABEL[k])}-${slug(f.name)}-${date}.svg`);
+    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `${prefix}-plan-${slug(VARIANT_LABEL[k])}-${slug(f.name)}-${date}.svg`);
   };
 
   const print = () => {
@@ -387,6 +395,8 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
       }
       const html = printHtml({
         date: longDate(),
+        houseName: houseName(variants[active] ?? variants[present[0]]),
+        fontCss: reportFontCss,
         variants: present.map((k) => ({ label: VARIANT_LABEL[k], model: variants[k]!, notes: roomNotes(variants[k]!), site: siteOf(sites, k) })),
         areas,
         changes,
@@ -395,7 +405,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         views,
       });
       if (!w) {
-        downloadBlob(new Blob([html], { type: "text/html" }), `house-report-${date}.html`);
+        downloadBlob(new Blob([html], { type: "text/html" }), `${prefix}-report-${date}.html`);
         return "Pop-ups are blocked, so the report was saved as a web page instead. Open it and print from there.";
       }
       w.document.open();
@@ -410,12 +420,12 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
     run("glb", async () => {
       const id = ids.includes(active) ? active : ids[0];
       const blob = await exportGlb(id);
-      downloadBlob(blob, `house-${slug(captureLabel(id, active))}-${date}.glb`);
+      downloadBlob(blob, `${prefix}-3d-${slug(captureLabel(id, active))}-${date}.glb`);
     });
 
   const csv = () => {
     if (!changes) return;
-    downloadBlob(new Blob(["﻿" + changesCsv(changes, rates)], { type: "text/csv;charset=utf-8" }), `house-changes-${date}.csv`);
+    downloadBlob(new Blob(["﻿" + changesCsv(changes, rates)], { type: "text/csv;charset=utf-8" }), `${prefix}-changes-${date}.csv`);
   };
 
   const no3d = ids.length === 0;
@@ -462,6 +472,9 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
             {busy === "glb" ? <><Loader kind="lift" size={14} />Exporting…</> : "3D model (GLB)"}
           </button>
         </div>
+        <label className="small">
+          <input type="checkbox" checked={stamp} onChange={(e) => setStamp(e.target.checked)} /> Add the Storey mark
+        </label>
         <p className="muted small">
           {no3d ? (
             <>

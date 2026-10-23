@@ -5,6 +5,7 @@ import { bifoldLayout, bifoldZigzag } from "./bifold";
 import { bayOutline, frontUnit } from "./openings";
 import { axisRect, DOUBLE_DOOR_M, doorSwing } from "./planMath";
 import { floorFlight, stairTreads } from "./stairs";
+import { BRAND_NAME, BRAND_TEAL, BRAND_DISPLAY_FONT, markSvg } from "./brand";
 import {
   changeCost,
   CONTINGENCY,
@@ -161,7 +162,7 @@ export function planSvg(model: HouseModel, floor: Floor, opts: PlanSvgOptions): 
   // Footer: scale bar on the left, title block on the right.
   const fy = M + planH + 6;
   out.push(scaleBar(scale, k, M, fy + 8));
-  out.push(titleBlock(W - M - 96, fy, 96, footH, [
+  out.push(titleBlock(W - M - 110, fy, 110, footH, [
     opts.title ?? "House plan",
     `${floor.name} · ${opts.variant}`,
     `Floor area ${fmtM2(floorArea(floor))} m² (${fmtFt2(floorArea(floor))} ft²)`,
@@ -415,10 +416,17 @@ function scaleBar(scale: number, k: number, x: number, y: number): string {
 
 function titleBlock(x: number, y: number, w: number, h: number, rows: string[]): string {
   const rh = h / rows.length;
+  const BRAND_W = 16; // brand column at the left of the block
+  const tx = x + BRAND_W + 2.5;
   const text = rows
-    .map((r, i) => `<text x="${f2(x + 2.5)}" y="${f2(y + rh * (i + 0.68))}" font-size="${i === 0 ? 3 : i === rows.length - 1 ? 2 : 2.4}"${i < 2 ? ` font-weight="bold"` : ""}${i === rows.length - 1 ? ` fill="#6b7280"` : ""}>${esc(r)}</text>`)
+    .map((r, i) => `<text x="${f2(tx)}" y="${f2(y + rh * (i + 0.68))}" font-size="${i === 0 ? 3 : i === rows.length - 1 ? 2 : 2.4}"${i < 2 ? ` font-weight="bold"` : ""}${i === rows.length - 1 ? ` fill="#6a736f"` : ""}>${esc(r)}</text>`)
     .join("");
-  return `<g class="title-block" font-family="${FONT}" fill="${INK}"><rect x="${f2(x)}" y="${f2(y)}" width="${f2(w)}" height="${f2(h)}" fill="#fff" stroke="${INK}" stroke-width="0.3"/>${text}</g>`;
+  const mark = 9;
+  const brand =
+    `<g class="title-brand"><svg x="${f2(x + (BRAND_W - mark) / 2)}" y="${f2(y + h / 2 - mark / 2 - 1.5)}" width="${mark}" height="${mark}" viewBox="0 0 64 64">${markSvg(BRAND_TEAL)}</svg>` +
+    `<text x="${f2(x + BRAND_W / 2)}" y="${f2(y + h / 2 + mark / 2 + 1)}" font-size="1.6" letter-spacing="0.35" text-anchor="middle" fill="${BRAND_TEAL}" font-weight="bold">${BRAND_NAME.toUpperCase()}</text></g>` +
+    `<line x1="${f2(x + BRAND_W)}" y1="${f2(y + 2)}" x2="${f2(x + BRAND_W)}" y2="${f2(y + h - 2)}" stroke="#dde1dc" stroke-width="0.3"/>`;
+  return `<g class="title-block" font-family="${FONT}" fill="${INK}"><rect x="${f2(x)}" y="${f2(y)}" width="${f2(w)}" height="${f2(h)}" fill="#fff" stroke="${INK}" stroke-width="0.3"/>${brand}${text}</g>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +470,10 @@ export interface PrintInput {
   site?: Site;
   /** PNG data URLs of the 3D view, with captions. */
   snapshots: { caption: string; src: string }[];
+  /** House name for the heading, title and footer (e.g. "Listing 91770873"). */
+  houseName?: string;
+  /** CSS inserted into the report's style block, e.g. an embedded @font-face. */
+  fontCss?: string;
   /** Saved camera views, each with a picture per layout. */
   views?: { name: string; shots: { label: string; src: string }[] }[];
 }
@@ -472,7 +484,12 @@ export function printHtml(p: PrintInput): string {
   const [la, lb] = [p.variants[0]?.label, p.variants[1]?.label];
   const sec: string[] = [];
 
-  sec.push(`<header><h1>House report</h1><p class="muted">${esc(p.date)} · Areas are internal, measured to the traced wall centre lines.</p></header>`);
+  const mk = (px: number) => `<svg viewBox="0 0 64 64" width="${px}" height="${px}" aria-hidden="true">${markSvg(BRAND_TEAL)}</svg>`;
+  sec.push(
+    `<header><div class="brand">${mk(26)}<span class="wordmark">${BRAND_NAME}</span></div>` +
+      `<p class="eyebrow">Report · ${esc(p.date)}</p>` +
+      `<h1>${esc(p.houseName || "House report")}</h1><p class="muted">Areas are internal, measured to the traced wall centre lines.</p></header>`,
+  );
   if (p.snapshots.length) {
     sec.push(`<section class="shots">${p.snapshots.map((s) => `<figure><img src="${s.src}" alt=""><figcaption>${esc(s.caption)}</figcaption></figure>`).join("")}</section>`);
   }
@@ -557,32 +574,40 @@ export function printHtml(p: PrintInput): string {
     }
   }
 
+  const foot = `<footer class="made">${mk(12)}<span>Made with ${BRAND_NAME}${p.houseName ? ` · ${esc(p.houseName)}` : ""} · ${esc(p.date)}</span></footer>`;
   return `<!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>House report</title>
+<title>${esc(p.houseName ? `${p.houseName} report` : "Report")} · ${BRAND_NAME}</title>
 <style>
+${p.fontCss ?? ""}
 @page { size: A4 portrait; margin: 12mm; }
-body { font: 10.5pt/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2937; margin: 0 auto; max-width: 190mm; padding: 12px; }
-h1 { font-size: 18pt; margin: 0 0 2px; } h2 { font-size: 13pt; margin: 18px 0 6px; border-bottom: 1px solid #1f2937; padding-bottom: 2px; } h3 { font-size: 11pt; margin: 10px 0 4px; }
-.muted { color: #6b7280; } .warn { color: #b45309; font-size: 9pt; } .note { background: #fefce8; border: 1px solid #fde68a; padding: 6px 8px; }
+body { font: 10.5pt/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1d2422; margin: 0 auto; max-width: 190mm; padding: 12px; }
+h1, h2, .wordmark { font-family: ${BRAND_DISPLAY_FONT}; }
+h1 { font-size: 18pt; margin: 0 0 2px; } h2 { font-size: 13pt; margin: 18px 0 6px; border-bottom: 2px solid ${BRAND_TEAL}; padding-bottom: 2px; }
+.brand { display: flex; align-items: center; gap: 7px; } .wordmark { font-size: 12pt; font-weight: 700; color: ${BRAND_TEAL}; }
+.eyebrow { margin: 8px 0 2px; font-size: 8.5pt; letter-spacing: .08em; text-transform: uppercase; color: #6a736f; }
+footer.made { display: flex; align-items: center; gap: 5px; margin-top: 24px; padding-top: 6px; border-top: 1px solid #dde1dc; font-size: 8pt; color: #6a736f; }
+h3 { font-size: 11pt; margin: 10px 0 4px; }
+.muted { color: #6a736f; } .warn { color: #b45309; font-size: 9pt; } .note { background: #fefce8; border: 1px solid #fde68a; padding: 6px 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
-th { background: #f3f4f6; } td.num, .areas td:not(:first-child), .areas th:not(:first-child) { text-align: right; white-space: nowrap; }
-tr.floor th { background: #fff; padding-top: 10px; border-bottom: 1px solid #9ca3af; }
-tr.total td { font-weight: 600; } tr.grand td { font-weight: 700; border-top: 2px solid #1f2937; }
+th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #dde1dc; vertical-align: top; }
+th { background: #f4f5f2; } td.num, .areas td:not(:first-child), .areas th:not(:first-child) { text-align: right; white-space: nowrap; }
+tr.floor th { background: #fff; padding-top: 10px; border-bottom: 1px solid #6a736f; }
+tr.total td { font-weight: 600; } tr.grand td { font-weight: 700; border-top: 2px solid #1d2422; }
 dl { margin: 0; } dt { font-weight: 600; margin-top: 6px; } dd { margin: 0 0 4px; white-space: pre-wrap; }
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(70mm, 1fr)); gap: 6px; margin-top: 10px; }
-.shots figure { margin: 0; } .shots img { width: 100%; border: 1px solid #e5e7eb; } .shots figcaption { font-size: 9pt; color: #6b7280; }
+.shots figure { margin: 0; } .shots img { width: 100%; border: 1px solid #dde1dc; } .shots figcaption { font-size: 9pt; color: #6a736f; }
 section { break-inside: avoid-page; }
-section.views { break-inside: auto; } figure.view { margin: 0 0 12px; break-inside: avoid; } .view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .view-grid img { display: block; width: 100%; border: 1px solid #e5e7eb; } .view-grid .cap { font-size: 9pt; color: #6b7280; }
+section.views { break-inside: auto; } figure.view { margin: 0 0 12px; break-inside: avoid; } .view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .view-grid img { display: block; width: 100%; border: 1px solid #dde1dc; } .view-grid .cap { font-size: 9pt; color: #6a736f; }
 section.plan { break-before: page; text-align: center; padding-top: 6px; }
 section.plan svg { max-width: 100%; height: auto; }
-.bar { position: sticky; top: 0; background: #fff; padding: 8px 0; border-bottom: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: center; }
+.bar { position: sticky; top: 0; background: #fff; padding: 8px 0; border-bottom: 1px solid #dde1dc; display: flex; gap: 8px; align-items: center; }
 .bar button { font: inherit; padding: 6px 12px; border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 6px; }
 @media print { .bar { display: none; } body { padding: 0; max-width: none; } }
 </style></head><body>
 <div class="bar"><button onclick="window.print()">Print / save as PDF</button><span class="muted">Choose "Save as PDF" as the printer to keep a copy. Plans print to scale at 100%.</span></div>
 ${sec.join("\n")}
+${foot}
 </body></html>`;
 }
 
