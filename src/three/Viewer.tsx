@@ -263,18 +263,23 @@ function Orbit({
     const t = controls.current?.target ?? centre;
     return { position: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, target: { x: t.x, y: t.y, z: t.z } };
   };
+  /**
+   * Drop any momentum left from this view's own last drag: with damping, update() would keep adding it after a
+   * jump or glide, and two linked views coasting at once would hand the camera back and forth.
+   */
+  const dropMomentum = () => {
+    const c = controls.current;
+    if (c?.enableDamping) {
+      c.enableDamping = false;
+      c.update();
+      c.enableDamping = true;
+    }
+  };
   /** Move the camera without announcing it. */
   const jump = (pose: CameraPose) => {
     applying.current = true;
     try {
-      const c = controls.current;
-      // Drop any momentum left from this view's own last drag first: with damping, update() would keep adding it
-      // after the jump, and two linked views coasting at once would hand the camera back and forth.
-      if (c?.enableDamping) {
-        c.enableDamping = false;
-        c.update();
-        c.enableDamping = true;
-      }
+      dropMomentum();
       camera.position.set(pose.position.x, pose.position.y, pose.position.z);
       controls.current?.target.set(pose.target.x, pose.target.y, pose.target.z);
       camera.lookAt(pose.target.x, pose.target.y, pose.target.z);
@@ -310,6 +315,12 @@ function Orbit({
       jump(pose);
       settle();
       return;
+    }
+    applying.current = true;
+    try {
+      dropMomentum();
+    } finally {
+      applying.current = false;
     }
     glide.current = { t0: performance.now(), from: spherical(current()), to: spherical(pose) };
     invalidate();
