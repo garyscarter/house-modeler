@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SHORTCUT_GROUPS } from "../lib/shortcuts";
+import { OPEN_SHORTCUTS } from "../lib/studio";
 import "./CommandPalette.css";
 
 /** Overlay listing the keyboard shortcuts; opened with ? when focus is not in a field. */
@@ -15,8 +16,13 @@ export function ShortcutSheet() {
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_SHORTCUTS, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_SHORTCUTS, onOpen);
+    };
   }, []);
   if (!open) return null;
   return (

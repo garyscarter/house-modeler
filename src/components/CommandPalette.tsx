@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "../store";
 import { buildCommands, defaultCommands, isMacPlatform, rankCommands } from "../lib/commands";
+import { usePanelPrefs } from "./panelPrefs";
+import { OPEN_PALETTE } from "../lib/studio";
 import "./CommandPalette.css";
 
 /** Split a hint like "⌘⇧Z" or "Ctrl+Z" into keycaps. */
@@ -17,8 +19,13 @@ export function CommandPalette() {
         setOpen((o) => !o);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener(OPEN_PALETTE, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener(OPEN_PALETTE, onOpen);
+    };
   }, []);
 
   return open ? <Palette close={() => setOpen(false)} /> : null;
@@ -26,6 +33,8 @@ export function CommandPalette() {
 
 function Palette({ close }: { close: () => void }) {
   const s = useStore();
+  const look = usePanelPrefs((p) => p.look);
+  const setPrefs = usePanelPrefs((p) => p.setPrefs);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -36,6 +45,10 @@ function Palette({ close }: { close: () => void }) {
       activeVariant: s.activeVariant,
       tab: s.tab,
       viewMode: s.viewMode,
+      mode: s.mode,
+      setMode: s.setMode,
+      look,
+      setLook: (l) => setPrefs({ look: l }),
       selectedRoomId: s.selectedRoomId,
       showLabels: s.showLabels,
       showCeilings: s.showCeilings,
@@ -53,7 +66,7 @@ function Palette({ close }: { close: () => void }) {
       dispatch: (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail })),
     });
     return query.trim() ? rankCommands(query, all, 30) : defaultCommands(all);
-  }, [query, s]);
+  }, [query, s, look, setPrefs]);
 
   const idx = Math.min(active, Math.max(0, results.length - 1));
   useEffect(() => {

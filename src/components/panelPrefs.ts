@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { isLook, type Look } from "../lib/studio";
 
 /**
  * Per-browser panel layout: which sections are open, the Review tab, the
@@ -13,7 +14,13 @@ interface PanelPrefs {
   reviewTab: "report" | "planning";
   /** Last furniture category chosen in the Add picker ("All" = none). */
   addCategory: string;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "reviewTab" | "addCategory">>) => void;
+  /** The sun study panel is open (toggled from the dock). */
+  sunOpen: boolean;
+  /** The floating inspector card shows only its header. */
+  inspectorCollapsed: boolean;
+  /** Studio (solid) or Glass (translucent floating cards). Per browser, not synced. */
+  look: Look;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "reviewTab" | "addCategory" | "sunOpen" | "inspectorCollapsed" | "look">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -23,12 +30,20 @@ export const usePanelPrefs = create<PanelPrefs>()(
       setOpen: (id, v) => set((s) => (s.open[id] === v ? s : { open: { ...s.open, [id]: v } })),
       reviewTab: "report",
       addCategory: "All",
+      sunOpen: false,
+      inspectorCollapsed: false,
+      look: "studio",
       setPrefs: (p) => set(p),
     }),
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, reviewTab: s.reviewTab, addCategory: s.addCategory }),
+      partialize: (s) => ({ open: s.open, reviewTab: s.reviewTab, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look }),
+      merge: (persisted, current) => {
+        const merged = { ...current, ...((persisted ?? {}) as Partial<PanelPrefs>) };
+        if (!isLook(merged.look)) merged.look = "studio";
+        return merged;
+      },
     },
   ),
 );

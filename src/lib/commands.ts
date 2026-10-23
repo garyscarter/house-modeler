@@ -1,5 +1,7 @@
 import { FLOOR_FINISH_LABEL, VARIANT_LABEL, type Floor, type FloorFinish, type HouseModel, type Room, type VariantKey } from "../types";
 import { PAINT_PALETTE } from "./paintPalette";
+import { MODES, MODE_LABEL, type Mode } from "./modes";
+import { floorDisplayName, type Look } from "./studio";
 
 export interface Command {
   id: string;
@@ -14,7 +16,7 @@ export interface Command {
 
 const words = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
-/** Score one query word against the text's words; 0 = no match. */
+/** Score one query word against the text's words; 0 = no match. Scattered letters only count for queries of 4+ letters. */
 function wordScore(q: string, tw: string[], lower: string): number {
   let best = 0;
   tw.forEach((w, i) => {
@@ -22,14 +24,15 @@ function wordScore(q: string, tw: string[], lower: string): number {
     else if (w.startsWith(q)) best = Math.max(best, 80 - i);
   });
   if (best) return best;
-  // Subsequence within the text (scattered).
+  // Subsequence within the text (scattered): too noisy for short queries.
+  if (q.length < 4) return 0;
   let at = 0;
   for (const ch of q) {
     at = lower.indexOf(ch, at);
     if (at < 0) return 0;
     at++;
   }
-  return 20;
+  return 10;
 }
 
 /**
@@ -67,7 +70,11 @@ export interface CommandContext {
   variants: Partial<Record<VariantKey, HouseModel>>;
   activeVariant: VariantKey;
   tab: "3d" | "plan";
-  viewMode: "single" | "side-by-side" | "overlay";
+  viewMode: "single" | "side-by-side" | "overlay" | "wipe";
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  look: Look;
+  setLook: (l: Look) => void;
   selectedRoomId: string | null;
   showLabels: boolean;
   showCeilings: boolean;
@@ -98,7 +105,7 @@ export function buildCommands(c: CommandContext): Command[] {
 
   for (const f of floors) {
     for (const r of f.rooms) {
-      add(`room:${f.id}:${r.id}`, `Go to ${r.name} · ${f.name}`, f.name, () => c.setUi({ tab: "plan", editFloorId: f.id, selectedRoomId: r.id }), { keywords: ["room"] });
+      add(`room:${f.id}:${r.id}`, `Go to ${r.name} · ${floorDisplayName(f.name)}`, floorDisplayName(f.name), () => c.setUi({ tab: "plan", editFloorId: f.id, selectedRoomId: r.id }), { keywords: ["room"] });
     }
   }
 
@@ -108,17 +115,20 @@ export function buildCommands(c: CommandContext): Command[] {
     if (r) sel = { floor: f, room: r };
   }
 
-  for (const f of floors) add(`plan:${f.id}`, `Plan: ${f.name}`, "Plan", () => c.setUi({ tab: "plan", editFloorId: f.id }), { keywords: ["floor", "edit"] });
-  add("plan:site", "Site plan", "Plan", () => c.setUi({ tab: "plan", editFloorId: c.siteEditId }), { keywords: ["plot", "garden"] });
+  for (const f of floors) add(`plan:${f.id}`, `Plan: ${floorDisplayName(f.name)}`, "Plan", () => c.setUi({ tab: "plan", editFloorId: f.id }), { keywords: ["floor", "edit"] });
+  add("plan:site", "Site plan (Plot)", "Plan", () => {
+    c.setMode("plot");
+    c.setUi({ tab: "plan" });
+  }, { keywords: ["plot", "garden", "site"] });
 
   for (const k of ["current", "proposed"] as VariantKey[]) {
     if (c.variants[k] && k !== c.activeVariant) add(`layout:${k}`, `Switch to ${VARIANT_LABEL[k]}`, "Layout", () => c.setUi({ activeVariant: k }), { keywords: ["layout", "variant"] });
   }
 
-  add("view:3d", "3D view", "View", () => c.setUi({ tab: "3d" }));
-  add("view:plan", "Check plan", "View", () => c.setUi({ tab: "plan" }), { keywords: ["2d", "plan"] });
+  add("view:3d", "3D", "View", () => c.setUi({ tab: "3d" }));
+  add("view:plan", "Plan", "View", () => c.setUi({ tab: "plan" }), { keywords: ["2d", "plan"] });
   if (c.variants.current && c.variants.proposed) {
-    const modes = [["single", "Single"], ["side-by-side", "Side by side"], ["overlay", "Overlay"]] as const;
+    const modes = [["single", "Single"], ["side-by-side", "Side by side"], ["overlay", "Overlay"], ["wipe", "Wipe"]] as const;
     for (const [m, label] of modes) add(`compare:${m}`, `Compare: ${label}`, "View", () => c.setUi({ viewMode: m }), { keywords: ["view mode"] });
   }
 
@@ -137,6 +147,10 @@ export function buildCommands(c: CommandContext): Command[] {
 
   add("review:report", "Open report", "Review", () => c.dispatch("house:open-review", { section: "report" }), { keywords: ["areas", "costs"] });
   add("review:planning", "Open planning check", "Review", () => c.dispatch("house:open-review", { section: "planning" }), { keywords: ["permitted development"] });
+
+  for (const m of MODES) add(`mode:${m}`, `Mode: ${MODE_LABEL[m]}`, "Mode", () => c.setMode(m), { keywords: ["mode"] });
+  const other: Look = c.look === "glass" ? "studio" : "glass";
+  add(`look:${other}`, `Look: ${other === "glass" ? "Glass" : "Studio"}`, "Settings", () => c.setLook(other), { keywords: ["look", "theme", "appearance"] });
 
   add("edit:undo", "Undo", "Edit", c.undo, { hint: `${mod}Z` });
   add("edit:redo", "Redo", "Edit", c.redo, { hint: `${mod}${shift}Z` });

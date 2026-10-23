@@ -10,6 +10,10 @@ const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   activeVariant: "current",
   tab: "plan",
   viewMode: "single",
+  mode: "build",
+  setMode: vi.fn(),
+  look: "studio",
+  setLook: vi.fn(),
   selectedRoomId: null,
   showLabels: true,
   showCeilings: false,
@@ -84,5 +88,36 @@ describe("rankCommands", () => {
     const cmds = buildCommands(ctx());
     expect(rankCommands("bed 2", cmds, 5)[0].title).toContain("Bedroom 2");
     expect(rankCommands("", cmds, 3)).toHaveLength(3);
+  });
+  const both = () => buildCommands(ctx({ variants: { current: model, proposed: model } }));
+  it("short queries match prefixes only, not scattered letters", () => {
+    const titles = rankCommands("bed", both(), 30).map((c) => c.title);
+    expect(titles).toContain("Go to Bedroom 2 · First floor");
+    expect(titles).not.toContain("Render quality: Balanced");
+    expect(titles).not.toContain("Compare: Side by side");
+  });
+  it("still finds a longer prefix, and ranks a word match above a subsequence hit", () => {
+    expect(rankCommands("balan", both(), 30).map((c) => c.title)).toContain("Render quality: Balanced");
+    expect(rankCommands("kitc", both(), 30)[0].title).toBe("Go to Kitchen · Ground floor");
+  });
+  it("scores a subsequence at 10", () => {
+    expect(fuzzyScore("bdrm", "Bedroom")).toBe(10);
+  });
+});
+
+describe("studio commands", () => {
+  it("offers every mode, Wipe, the Plot site plan and the other look", () => {
+    const c = ctx({ variants: { current: model, proposed: model } });
+    const cmds = buildCommands(c);
+    cmds.find((x) => x.title === "Mode: Review")!.run();
+    expect(c.setMode).toHaveBeenCalledWith("review");
+    expect(["Mode: Build", "Mode: Decorate", "Mode: Furnish", "Mode: Plot", "Compare: Wipe", "3D", "Plan", "Look: Glass"].every((t) => cmds.some((x) => x.title === t))).toBe(true);
+    expect(cmds.some((x) => x.title === "Look: Studio")).toBe(false);
+    cmds.find((x) => x.title === "Look: Glass")!.run();
+    expect(c.setLook).toHaveBeenCalledWith("glass");
+    cmds.find((x) => x.title === "Site plan (Plot)")!.run();
+    expect(c.setMode).toHaveBeenCalledWith("plot");
+    expect(c.setUi).toHaveBeenCalledWith({ tab: "plan" });
+    expect(buildCommands(ctx({ look: "glass" })).some((x) => x.title === "Look: Studio")).toBe(true);
   });
 });
