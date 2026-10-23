@@ -114,3 +114,5 @@
   flex-wrap: wrap;
   gap: 2px 12px;
 }
+.plan-distance { font-family: var(--font-mono); }
+.plan-guide { vector-effect: none; }
