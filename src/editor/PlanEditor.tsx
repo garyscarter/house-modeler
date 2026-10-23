@@ -165,11 +165,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const fontSize = px * 13;
   const snapTol = px * 10;
 
-  const lines = useMemo(() => wallLines(floor, WALL_T, EXT_WALL_T), [floor]);
+  // Only the geometry matters for these, so fixture drags and the like do not rebuild them.
+  const { rooms: fRooms, walls: fWalls, openings: fOpenings, pxPerM: fPpm, origin: fOrigin, offset: fOffset } = floor;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const lines = useMemo(() => wallLines(floor, WALL_T, EXT_WALL_T), [fRooms, fPpm]);
   const segs = useMemo(() => lines.map((l) => [l.a, l.b] as Seg), [lines]);
   // The walls as the 3D shell builds them, with real thickness: drawn as the wall layer and used to sit furniture flush on the faces.
-  // Only the geometry matters here, so fixture drags and the like do not rebuild them.
-  const { rooms: fRooms, walls: fWalls, openings: fOpenings, pxPerM: fPpm, origin: fOrigin, offset: fOffset } = floor;
   const wallShapes = useMemo(() => (wallsOn ? planWalls(floor) : []), [wallsOn, fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
   const faceLines = useMemo(() => planWallLines(floor), [fRooms, fWalls, fPpm, fOrigin, fOffset]);
   const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
