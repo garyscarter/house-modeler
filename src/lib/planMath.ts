@@ -1,6 +1,6 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
 import { isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
-import { polygonArea, pointInPolygon } from "./geometry";
+import { EXT_WALL_T, WALL_T, polygonArea, pointInPolygon } from "./geometry";
 
 /**
  * Pure helpers for the plan editor: measuring, snapping, numeric edits and
@@ -526,14 +526,18 @@ export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: 
   return out;
 }
 
+/** A junction on an opening's wall line: where it sits along the line and the segment that leaves the line there. */
+interface Stop {
+  s: number;
+  from: Pt;
+  to: Pt;
+}
+
 /**
- * The free run of wall an opening can grow into, image px along its wall
- * line (x for "h" walls, y for "v"): the stretch of room edges and free walls
- * it sits on, stopped by the nearest junction either side (where another wall
- * meets the line) and by the other openings in that line, less `marginM`
- * metres at each stop. The opening's own span when it sits on no wall.
+ * The stretch of wall an opening sits on (image px along its line, null when
+ * it sits on no wall) and the junctions on that line, unsorted.
  */
-export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orientation" | "widthM">, marginM = 0.1): [number, number] {
+function wallStretch(floor: Floor, o: Pick<Opening, "x" | "y" | "orientation" | "widthM">) {
   const tol = 0.06 * floor.pxPerM;
   const h = o.orientation === "h";
   const line = h ? o.y : o.x;
@@ -547,11 +551,11 @@ export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orien
   const at = (p: Pt) => (h ? p.x : p.y);
   // Stretches along the line, joined where they touch, and junctions where a segment leaves it.
   const along: [number, number][] = [];
-  const stops: number[] = [];
+  const stops: Stop[] = [];
   for (const [a, b] of segs) {
     if (on(a) && on(b)) along.push([Math.min(at(a), at(b)), Math.max(at(a), at(b))]);
-    else if (on(a)) stops.push(at(a));
-    else if (on(b)) stops.push(at(b));
+    else if (on(a)) stops.push({ s: at(a), from: a, to: b });
+    else if (on(b)) stops.push({ s: at(b), from: b, to: a });
   }
   along.sort((p, q) => p[0] - q[0]);
   let run: [number, number] | undefined;
@@ -560,9 +564,22 @@ export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orien
     else if (run && run[0] <= c - half + tol && run[1] >= c + half - tol) break;
     else run = [a, b];
   }
-  if (!run || run[0] > c - half + tol || run[1] < c + half - tol) return [c - half, c + half];
+  if (!run || run[0] > c - half + tol || run[1] < c + half - tol) return { tol, h, line, c, half, run: null, stops };
+  return { tol, h, line, c, half, run, stops };
+}
+
+/**
+ * The free run of wall an opening can grow into, image px along its wall
+ * line (x for "h" walls, y for "v"): the stretch of room edges and free walls
+ * it sits on, stopped by the nearest junction either side (where another wall
+ * meets the line) and by the other openings in that line, less `marginM`
+ * metres at each stop. The opening's own span when it sits on no wall.
+ */
+export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orientation" | "widthM">, marginM = 0.1): [number, number] {
+  const { tol, h, line, c, half, run, stops } = wallStretch(floor, o);
+  if (!run) return [c - half, c + half];
   let [lo, hi] = run;
-  for (const s of stops) {
+  for (const { s } of stops) {
     if (s <= c - half + tol) lo = Math.max(lo, s);
     else if (s >= c + half - tol) hi = Math.min(hi, s);
   }
@@ -575,6 +592,63 @@ export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orien
   }
   const m = marginM * floor.pxPerM;
   return [Math.min(lo + m, c - half), Math.max(hi - m, c + half)];
+}
+
+/**
+ * Where an opening sits between the inside faces of the walls that bound it,
+ * as a builder sets it out: lo and hi are metres from each face to the
+ * opening's near edge; faceLo and faceHi are the faces in image px along the
+ * wall line. Faces are the nearest junction either side (other openings are
+ * ignored; on an external wall only walls leaving to the inside count), pulled
+ * in by half the crossing wall's thickness. Null when the opening is on no wall.
+ */
+export function openingEnds(floor: Floor, o: Pick<Opening, "x" | "y" | "orientation" | "widthM">): { lo: number; hi: number; faceLo: number; faceHi: number } | null {
+  const { tol, h, c, half, run, stops } = wallStretch(floor, o);
+  if (!run) return null;
+  const ppm = floor.pxPerM;
+  const out = outsideSide(o, floor.rooms, 0.3 * ppm);
+  const lines = wallLines(floor, WALL_T, EXT_WALL_T);
+  const halfTOf = (st: Stop) => {
+    const same = (p: Pt, q: Pt) => Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) < 0.5;
+    return lines.find((l) => (same(l.a, st.from) && same(l.b, st.to)) || (same(l.b, st.from) && same(l.a, st.to)))?.halfT ?? 0;
+  };
+  let faceLo = run[0];
+  let faceHi = run[1];
+  let stopLo = -Infinity;
+  let stopHi = Infinity;
+  for (const st of stops) {
+    if (out !== 0) {
+      // Offset of the leaving segment across the line; the inside is opposite the outside side (+y for "h", -x for "v").
+      const across = h ? st.to.y - st.from.y : -(st.to.x - st.from.x);
+      if (Math.sign(across) !== -out) continue;
+    }
+    if (st.s <= c - half + tol) {
+      if (st.s >= stopLo) {
+        stopLo = st.s;
+        faceLo = Math.max(run[0], st.s + halfTOf(st));
+      }
+    } else if (st.s >= c + half - tol) {
+      if (st.s <= stopHi) {
+        stopHi = st.s;
+        faceHi = Math.min(run[1], st.s - halfTOf(st));
+      }
+    }
+  }
+  return { lo: (c - half - faceLo) / ppm, hi: (faceHi - (c + half)) / ppm, faceLo, faceHi };
+}
+
+/**
+ * The opening patch that puts its near edge m metres from the inside face at
+ * `end` ("lo" = left/top), kept between the faces. Empty when the opening is on no wall.
+ */
+export function placeFromEnd(floor: Floor, o: Pick<Opening, "x" | "y" | "orientation" | "widthM">, end: "lo" | "hi", m: number): Partial<Opening> {
+  const e = openingEnds(floor, o);
+  if (!e) return {};
+  const ppm = floor.pxPerM;
+  const half = (o.widthM / 2) * ppm;
+  const raw = end === "lo" ? e.faceLo + m * ppm + half : e.faceHi - m * ppm - half;
+  const c = Math.max(e.faceLo + half, Math.min(e.faceHi - half, raw));
+  return o.orientation === "h" ? { x: c } : { y: c };
 }
 
 /** An SVG points attribute for a polygon. */

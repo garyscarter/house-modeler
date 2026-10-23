@@ -26,6 +26,8 @@ import {
   abutNeighbours,
   turn,
   wallRun,
+  openingEnds,
+  placeFromEnd,
   viewBoxOf,
   wallLines,
   zoomCam,
@@ -261,6 +263,50 @@ describe("wallRun", () => {
 
   it("is just the opening's own span off any wall", () => {
     expect(wallRun(floor(rooms, [], { pxPerM: 100 }), { ...door, y: 100 })).toEqual([455, 545]);
+  });
+});
+
+describe("openingEnds", () => {
+  const door: Opening = { id: "d", kind: "door", x: 150, y: 0, orientation: "h", widthM: 0.9 };
+
+  it("measures from the inside faces of the corners", () => {
+    const f = floor([rect("A", 0, 0, 400, 300)], [door], { pxPerM: 100 });
+    const e = openingEnds(f, door)!;
+    expect(e.lo + e.hi + 0.9).toBeCloseTo(4 - 0.25);
+    expect(e.lo).toBeCloseTo(1.5 - 0.45 - 0.125);
+  });
+
+  it("is null off any wall", () => {
+    expect(openingEnds(floor([rect("A", 0, 0, 400, 300)], [], { pxPerM: 100 }), { ...door, y: 150 })).toBeNull();
+  });
+
+  it("stops at a partition meeting the wall", () => {
+    const f = floor([rect("A", 0, 0, 250, 300), rect("B", 250, 0, 400, 300)], [door], { pxPerM: 100 });
+    const e = openingEnds(f, door)!;
+    expect(e.hi).toBeCloseTo(1 - 0.45 - 0.05);
+    expect(e.faceHi).toBeCloseTo(245);
+  });
+
+  it("ignores a T-junction outside an external wall", () => {
+    // A room above the top wall: the junction at x = 250 leaves to the outside.
+    const f = floor([rect("A", 0, 0, 400, 300), rect("N", 250, -200, 330, 0)], [door], { pxPerM: 100 });
+    const e = openingEnds(f, door)!;
+    expect(e.hi + e.lo + 0.9).toBeCloseTo(4 - 0.25);
+  });
+
+  it("round-trips a typed value", () => {
+    const f = floor([rect("A", 0, 0, 400, 300)], [door], { pxPerM: 100 });
+    const moved = { ...door, ...placeFromEnd(f, door, "lo", 0.4) };
+    expect(openingEnds(f, moved)!.lo).toBeCloseTo(0.4);
+    const moved2 = { ...door, ...placeFromEnd(f, door, "hi", 0.7) };
+    expect(openingEnds(f, moved2)!.hi).toBeCloseTo(0.7);
+  });
+
+  it("works for walls running up and down and clamps inside the faces", () => {
+    const v: Opening = { id: "v", kind: "window", x: 0, y: 150, orientation: "v", widthM: 1 };
+    const f = floor([rect("A", 0, 0, 400, 300)], [v], { pxPerM: 100 });
+    expect(openingEnds(f, { ...v, ...placeFromEnd(f, v, "lo", 0.4) })!.lo).toBeCloseTo(0.4);
+    expect(placeFromEnd(f, v, "lo", -5)).toEqual({ y: 12.5 + 50 });
   });
 });
 
