@@ -714,7 +714,7 @@ function Inspector({
   }
   if (sel?.type === "surface") {
     const s = site.surfaces.find((x) => x.id === sel.id);
-    if (!s) return <EmptyInspector clearances={clearances} />;
+    if (!s) return <EmptyInspector />;
     return (
       <div className="inspector">
         <h4>Garden surface</h4>
@@ -742,7 +742,7 @@ function Inspector({
   }
   if (sel?.type === "neighbour") {
     const n = site.neighbours.find((x) => x.id === sel.id);
-    if (!n) return <EmptyInspector clearances={clearances} />;
+    if (!n) return <EmptyInspector />;
     const set = (p: Partial<Neighbour>) => updateSite((st) => ({ ...st, neighbours: st.neighbours.map((x) => (x.id === n.id ? { ...x, ...p } : x)) }));
     return (
       <div className="inspector">
@@ -798,7 +798,7 @@ function Inspector({
       </div>
     );
   }
-  return <EmptyInspector clearances={clearances} />;
+  return <EmptyInspector />;
 }
 
 /** Typed width of the selected edge. One end slides along the wall next to it, so the boundary line holds. */
@@ -857,7 +857,7 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
 }
 
 // The plot panel below already shows the variant note and the house-to-boundary distances.
-function EmptyInspector(_props: { clearances: ReturnType<typeof sideClearances> }) {
+function EmptyInspector() {
   return (
     <div className="inspector">
       <h4>
