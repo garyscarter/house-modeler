@@ -310,6 +310,8 @@ export interface Fixture {
   label?: string;
   /** Items sharing a groupId are selected, moved, turned and copied together on the plan (a dining table and its chairs). */
   groupId?: string;
+  /** Id of the MyPiece this placement is; its size, colour and label follow the piece. */
+  piece?: string;
 }
 
 export interface Floor {
@@ -658,3 +660,16 @@ export const VARIANT_LABEL: Record<VariantKey, string> = {
 };
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
+
+/** A piece of furniture the owner already has, measured; placed as fixtures with `piece` set. */
+export interface MyPiece {
+  id: string;
+  name: string;
+  /** Catalogue id it draws as. */
+  kind: string;
+  w: number;
+  d: number;
+  h: number;
+  color?: string;
+  note?: string;
+}
