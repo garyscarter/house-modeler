@@ -1,0 +1,103 @@
+.review-page {
+  position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; z-index: var(--z-review); overflow-y: auto; background: var(--bg); color: var(--text);
+  outline: none; font-size: 15px; line-height: 1.5;
+}
+
+/* Sticky bar */
+.review-page .rv-bar { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
+.review-page .rv-bar-inner { box-sizing: border-box; width: 100%; max-width: 1180px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.review-page .rv-bar h1 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 600; }
+.review-page .rv-subtitle { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.review-page .rv-close { font-size: 26px; line-height: 1; width: 40px; height: 40px; padding: 0; border-radius: 50%; }
+
+/* Body */
+.review-page .rv-body { box-sizing: border-box; max-width: 1180px; margin: 0 auto; padding: 28px 32px 72px; }
+
+/* Summary tiles */
+.review-page .rv-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 36px; }
+.review-page .rv-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; min-height: 104px;
+  padding: 16px 20px; background: var(--panel); border: 1px solid transparent; border-radius: var(--radius-l); box-shadow: var(--shadow-card); font: inherit; color: inherit;
+}
+.review-page .rv-tile-link { cursor: pointer; }
+.review-page .rv-tile-link:hover { border-color: var(--accent); }
+.review-page .rv-tile-label { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.review-page .rv-tile-value { font-family: var(--font-display); font-size: 24px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.review-page .rv-tile-cta { color: var(--accent); }
+.review-page .rv-tile-detail { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 21px; }
+.review-page .rv-tile:first-child .rv-tile-detail { color: #15803d; font-weight: 600; font-size: 16px; }
+.review-page .rv-tone-bad { border-left: 5px solid var(--danger); }
+.review-page .rv-tone-bad .rv-tile-value { color: var(--danger); }
+.review-page .rv-tone-warn { border-left: 5px solid #d97706; }
+.review-page .rv-tone-warn .rv-tile-value { color: #b45309; }
+.review-page .rv-tone-good { border-left: 5px solid #16a34a; }
+.review-page .rv-tone-good .rv-tile-value { color: #15803d; }
+
+/* Columns and sections */
+.review-page .rv-columns { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.review-page .rv-col { min-width: 0; }
+.review-page .rv-section { margin: 0 0 24px; padding: 22px 26px 26px; scroll-margin-top: 84px; background: var(--panel); border-radius: var(--radius-l); box-shadow: var(--shadow-card); }
+.review-page .rv-section > h2 {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 16px; padding-bottom: 8px;
+  font-size: 19px; font-weight: 600; letter-spacing: -0.01em; border-bottom: 1px solid var(--line);
+}
+.review-page .rv-count { font-size: 13px; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; }
+.review-page p { margin: 8px 0; }
+.review-page .small { font-size: 14px; }
+.review-page .muted { color: var(--muted); }
+.review-page h4, .review-page .rp-sub { margin: 20px 0 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.review-page h5 { margin: 16px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Areas table */
+.review-page .rp-unit { margin-bottom: 12px; }
+.review-page .rp-table { font-size: 15px; table-layout: auto; }
+.review-page .rp-table th, .review-page .rp-table td { padding: 8px 10px; }
+.review-page .rp-areas thead th { font-size: 13px; width: auto !important; }
+.review-page .rp-areas thead th:not(:first-child) { width: 110px !important; }
+.review-page .rp-areas .rp-floor th { padding-top: 18px; font-size: 14px; }
+.review-page .rp-areas .rp-grand td { padding-top: 10px; font-size: 16px; }
+
+.review-page .rp-check { margin: 0; padding: 0; border: 0; }
+.review-page .rp-check p { font-size: 15px; }
+
+/* Changes */
+.review-page .rp-changes li { font-size: 15px; padding: 10px 0; gap: 4px 12px; }
+.review-page .rp-changes li.rp-structural { margin: 0 -10px; padding: 10px; border-radius: 4px; }
+.review-page .rp-warn { font-size: 13.5px; }
+.review-page .rp-tag { font-size: 11px; padding: 2px 7px; margin-top: 2px; }
+
+/* Costs */
+.review-page .rp-costs { gap: 10px; }
+.review-page .rp-cost { font-size: 15px; padding: 10px 14px; }
+.review-page .rp-cost-row { min-height: 44px; }
+.review-page .rp-money input { width: 120px; min-height: 38px; font-size: 15px; }
+.review-page .rp-cost-total { font-size: 17px; }
+
+/* Notes */
+.review-page .rp-notes dt, .review-page .rp-notes dd { font-size: 15px; }
+
+/* Exports */
+.review-page .rp-export { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+.review-page .rp-export > p { grid-column: 1 / -1; }
+.review-page .rp-export .row button { min-height: 40px; font-size: 14px; }
+.review-page .rp-export-group { margin: 0; }
+.review-page .rp-export-group .rp-sub { margin-top: 0; }
+
+/* Planning */
+.review-page .pl-verdict { padding: 14px 18px; margin: 0 0 16px; }
+.review-page .pl-headline { font-size: 17px; }
+.review-page .pl-verdict .small { font-size: 14px; }
+.review-page .pl-wing { font-size: 14.5px; padding: 8px 0; }
+.review-page .pl-section { padding-top: 12px; margin-top: 20px; }
+.review-page .pl-section h4 { margin-top: 0; font-size: 15px; color: var(--text); }
+.review-page .pl-rule { grid-template-columns: 72px minmax(0, 1fr); gap: 4px 14px; padding: 10px 0; font-size: 14.5px; }
+.review-page .pl-rule-fail { margin: 0 -10px; padding: 10px; }
+.review-page .pl-pill { font-size: 11px; padding: 3px 7px; }
+.review-page .pl-ref { font-size: 12.5px; }
+.review-page .pl-row-head { font-size: 15px; }
+.review-page .pl-consents li { padding: 10px 0; }
+.review-page .pl-parts li, .review-page .pl-caveats li { margin: 6px 0; }
+
+.review-page .rp-table td { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.review-page .rp-table td:first-child, .review-page .rp-table th { font-family: var(--font-ui); }
+.app[data-look="glass"] .review-page { top: calc(var(--topbar-h) + 2 * var(--float-gap)); border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: var(--shadow-pop); }

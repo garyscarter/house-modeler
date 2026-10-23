@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import { usePanelPrefs } from "./panelPrefs";
+import { Icon } from "./icons";
 import { compassPoint, dayOfYear, daysInYear, formatClock, formatDay, sunTimes, ukZone } from "../lib/sun";
 import { SUN_YEAR, useSunInfo } from "../three/useSun";
 import { useViewedSite, useViewedVariant } from "../three/viewedVariant";
@@ -15,13 +17,12 @@ const QUICK_DATES: [string, number][] = [
 ];
 /** Seconds to play through one day, sunrise to sunset. */
 const DAY_SECONDS = 20;
-const OPEN_KEY = "house-modeler-sun-open";
 
 const quarter = (h: number, round: (x: number) => number) => round(h * 4) / 4;
 
 /**
  * Sun study controls overlaid on the 3D view (date, time, play through the
- * day) and a compass rose showing north relative to the camera. Shown only
+ * day). The compass lives in the view cube. Shown only
  * when a site gives the house a location and orientation.
  */
 export function SunControls() {
@@ -29,16 +30,8 @@ export function SunControls() {
   const sun = useStore((s) => s.sun);
   const setSun = useStore((s) => s.setSun);
   const info = useSunInfo();
-  // Remembered per browser; on a phone it starts folded so the view isn't covered.
-  const [open, setOpen] = useState(() => {
-    let saved: string | null = null;
-    try {
-      saved = localStorage.getItem(OPEN_KEY);
-    } catch {
-      // Storage blocked: fall back to the screen-size default.
-    }
-    return saved === null ? !window.matchMedia("(max-width: 600px)").matches : saved === "1";
-  });
+  const open = usePanelPrefs((p) => p.sunOpen);
+  const setPrefs = usePanelPrefs((p) => p.setPrefs);
   const [playing, setPlaying] = useState(false);
   const sunHours = useSiteView((s) => s.sunHours);
   const setSiteView = useSiteView((s) => s.setSiteView);
@@ -50,7 +43,7 @@ export function SunControls() {
 
   // Play through the day: about 20 s from sunrise to sunset, then round again.
   useEffect(() => {
-    if (!playing || !sun.enabled) return;
+    if (!playing || !open || !sun.enabled) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
@@ -62,18 +55,10 @@ export function SunControls() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, sun.enabled, rise, set, setSun]);
+  }, [playing, open, sun.enabled, rise, set, setSun]);
 
-  if (!site || !info) return null;
+  if (!open || !site || !info) return null;
 
-  const toggleOpen = () => {
-    setOpen(!open);
-    try {
-      localStorage.setItem(OPEN_KEY, open ? "0" : "1");
-    } catch {
-      // Private mode: the panel just won't remember.
-    }
-  };
   /** Change the day, keeping the time within that day's daylight. */
   const pickDay = (d: number) => {
     const t = sunTimes(site.latitude, site.longitude, SUN_YEAR, d);
@@ -85,9 +70,9 @@ export function SunControls() {
 
   return (
     <>
-      <div className={`sun-panel${open ? " open" : ""}`}>
+      <div className="sun-panel float-card" role="group" aria-label="Sun study">
         <div className="sun-head">
-          <label className="sun-toggle">
+          <label className="sun-toggle" title="See where the sun and shadows fall on any day, from sunrise to sunset.">
             <input
               type="checkbox"
               checked={sun.enabled}
@@ -98,17 +83,16 @@ export function SunControls() {
             />
             Sun study
           </label>
-          {sun.enabled && !open && (
+          {sun.enabled && (
             <span className="sun-brief">
               {formatDay(SUN_YEAR, sun.dayOfYear)}, {formatClock(sun.hour)}
             </span>
           )}
-          <button className="sun-collapse" onClick={toggleOpen} aria-expanded={open} aria-label={open ? "Hide sun controls" : "Show sun controls"}>
-            {open ? "▾" : "▸"}
+          <button className="icon-btn sun-close" onClick={() => setPrefs({ sunOpen: false })} aria-label="Close sun study" title="Close">
+            <Icon name="close" size={16} />
           </button>
         </div>
-        {open && !sun.enabled && <p className="sun-hint">See where the sun and shadows fall on any day, from sunrise to sunset.</p>}
-        {open && sun.enabled && (
+        {sun.enabled && (
           <div className="sun-body">
             <div className="sun-row">
               <span className="sun-label">Date</span>
@@ -170,7 +154,6 @@ export function SunControls() {
           </div>
         )}
       </div>
-      <CompassRose sunAzimuth={sun.enabled && altitude > 0 ? azimuth : null} />
     </>
   );
 }
@@ -195,33 +178,6 @@ function SunHoursLegend() {
         {share}% of the garden gets 2 hours or more of sun on {formatDay(SUN_YEAR, day)}.
         <span className="muted"> Planning guidance looks for at least half on 21 Mar.</span>
       </p>
-    </div>
-  );
-}
-
-/**
- * North relative to the camera. The ring turns with the view via the
- * --view-bearing CSS variable that the 3D scene keeps up to date, so
- * orbiting doesn't re-render React.
- */
-function CompassRose({ sunAzimuth }: { sunAzimuth: number | null }) {
-  const marks: [string, number][] = [
-    ["N", 0],
-    ["E", 90],
-    ["S", 180],
-    ["W", 270],
-  ];
-  return (
-    <div className="compass-rose" aria-hidden>
-      <div className="compass-ring">
-        {marks.map(([l, a]) => (
-          <span key={l} className={`compass-mark${l === "N" ? " north" : ""}`} style={{ "--a": a } as React.CSSProperties}>
-            {l}
-          </span>
-        ))}
-        <span className="compass-needle" />
-        {sunAzimuth !== null && <span className="compass-sun" style={{ "--a": sunAzimuth } as React.CSSProperties} />}
-      </div>
     </div>
   );
 }

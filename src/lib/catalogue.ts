@@ -52,7 +52,15 @@ export type Symbol =
   | "mirror"
   | "mirror-round"
   | "mirror-cabinet"
-  | "mirror-lit";
+  | "mirror-lit"
+  | "american-fridge"
+  | "handleless"
+  | "drawers"
+  | "oven-pair"
+  | "wine-cooler"
+  | "waterfall"
+  | "chimney-hood"
+  | "shelf";
 
 export interface CatalogueItem {
   id: string;
@@ -72,6 +80,7 @@ export interface CatalogueItem {
 const UNIT = "#e0dccf";
 const WOOD = "#c9a26b";
 const WALNUT = "#6b4a2f";
+const STAINLESS = "#b9bdc2";
 /** Worktop colour of kitchen units unless a fixture sets its own. */
 export const DEFAULT_WORKTOP = "#4a4d52";
 
@@ -159,6 +168,20 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "fridge-freezer", name: "Fridge freezer", category: "Kitchen", w: 0.60, d: 0.65, h: 1.85, color: "#e8e8e8", symbol: "appliance" },
   { id: "cooker", name: "Cooker", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: "#e8e8e8", symbol: "range", note: "Free-standing, oven under a hob" },
   { id: "dishwasher", name: "Dishwasher", category: "Kitchen", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "appliance" },
+  // Modern kitchen: handleless runs, drawers, appliance stacks and a side-by-side fridge
+  { id: "american-fridge", name: "American fridge freezer", category: "Kitchen", w: 0.91, d: 0.72, h: 1.78, color: STAINLESS, symbol: "american-fridge", note: "Side-by-side doors with a water and ice dispenser; allow about 50 mm each side and behind" },
+  { id: "handleless-unit", name: "Handleless base unit (600)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Slab doors with a J-pull rail under the worktop" },
+  { id: "handleless-unit-1000", name: "Handleless base unit (1000)", category: "Kitchen", w: 1.00, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Slab doors with a J-pull rail under the worktop" },
+  { id: "handleless-run", name: "Handleless run (3 m)", category: "Kitchen", w: 3.00, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Handleless units under a worktop; set any length" },
+  { id: "pan-drawers", name: "Pan drawer unit (800)", category: "Kitchen", w: 0.80, d: 0.60, h: 0.9, color: UNIT, symbol: "drawers", note: "Three deep drawers; good under a hob" },
+  { id: "wine-cooler", name: "Wine cooler (600, under counter)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "wine-cooler", note: "Glass-door cooler in a base unit, under the worktop" },
+  { id: "induction-hob", name: "Induction hob (800)", category: "Kitchen", w: 0.80, d: 0.52, h: 0.01, color: "#141518", symbol: "hob", mount: 0.9, note: "Flush black glass; sits on a worktop or pan drawers" },
+  { id: "chimney-hood", name: "Chimney extractor (900)", category: "Kitchen", w: 0.90, d: 0.50, h: 1.0, color: STAINLESS, symbol: "chimney-hood", mount: 1.55, note: "Wall-mounted canopy and chimney; set the height to reach the ceiling" },
+  { id: "oven-pair", name: "Oven tower (oven and combi microwave)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "oven-pair", note: "Single oven with a compact combi microwave above, at eye level" },
+  { id: "fridge-integrated", name: "Integrated fridge freezer (tall)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "tall", note: "Built in behind two cabinet doors" },
+  { id: "island-waterfall", name: "Island, waterfall (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.92, color: UNIT, symbol: "waterfall", note: "Worktop runs down both ends; overhang at the back for stools" },
+  { id: "island-2400", name: "Island (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.9, color: UNIT, symbol: "island" },
+  { id: "floating-shelf", name: "Floating shelf (1 m)", category: "Kitchen", w: 1.00, d: 0.25, h: 0.04, color: WOOD, symbol: "shelf", mount: 1.5, note: "Open shelf in place of wall cabinets; set any width" },
 
   // Utility
   { id: "washing-machine", name: "Washing machine", category: "Utility", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "washer" },
@@ -221,9 +244,19 @@ export function radiatorPanels(d: number): 1 | 2 {
   return d > 0.085 ? 2 : 1;
 }
 
+const WORKTOP_SYMBOLS: Symbol[] = ["worktop", "sink", "island", "cabinet", "handleless", "drawers", "wine-cooler", "waterfall"];
+
 /** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */
 export function hasWorktop(item: CatalogueItem): boolean {
-  return item.category === "Kitchen" && (item.symbol === "worktop" || item.symbol === "sink" || item.symbol === "island" || item.symbol === "cabinet");
+  return item.category === "Kitchen" && WORKTOP_SYMBOLS.includes(item.symbol);
+}
+
+/**
+ * Doors across the front of an American fridge freezer of width `w` metres: the freezer on the left,
+ * narrower than the fridge, as on side-by-side models. Returns the x of the split from the centre.
+ */
+export function sideBySideSplit(w: number): number {
+  return -w * 0.08;
 }
 
 /** Whether an item lies flat on the floor under other furniture (rugs): drawn first on the plan and left out of clash checks. */
@@ -239,3 +272,13 @@ export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount
 
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];
 export const byId = (id: string) => CATALOGUE.find((c) => c.id === id);
+
+/** Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note. */
+export function filterCatalogue(query: string, category: string | "All"): CatalogueItem[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return CATALOGUE.filter((c) => {
+    if (category !== "All" && c.category !== category) return false;
+    const hay = `${c.name} ${c.category} ${c.note ?? ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, byId, chaiseSizes, isFloorCovering, radiatorPanels, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, byId, chaiseSizes, filterCatalogue, hasWorktop, isFloorCovering, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -47,5 +47,61 @@ describe("modern lounge furniture", () => {
     expect(c).toBeLessThan(2.7 / 2);
     expect(c).toBeGreaterThan(arm);
     expect(back).toBeLessThan(s);
+  });
+});
+
+describe("modern kitchen", () => {
+  it("offers an American fridge freezer at a typical side-by-side size, freezer door the narrower", () => {
+    const f = byId("american-fridge")!;
+    expect(f.category).toBe("Kitchen");
+    expect(f.w).toBeGreaterThan(0.85);
+    expect(f.w).toBeLessThan(0.95);
+    expect(f.h).toBeGreaterThan(1.7);
+    const split = sideBySideSplit(f.w);
+    expect(split + f.w / 2).toBeLessThan(f.w / 2 - split);
+    expect(hasWorktop(f)).toBe(false);
+  });
+
+  it("puts a worktop on the new base units and the waterfall island, and keeps ids unique", () => {
+    for (const id of ["handleless-unit", "handleless-run", "pan-drawers", "wine-cooler", "island-waterfall"]) expect(hasWorktop(byId(id)!), id).toBe(true);
+    expect(new Set(CATALOGUE.map((c) => c.id)).size).toBe(CATALOGUE.length);
+  });
+
+  it("hangs the chimney extractor and floating shelf on the wall", () => {
+    expect(byId("chimney-hood")!.mount).toBeGreaterThan(1.4);
+    expect(byId("floating-shelf")!.mount).toBeGreaterThan(1.2);
+  });
+});
+
+describe("filterCatalogue", () => {
+  const first = CATALOGUE[0];
+  it("returns everything for an empty query and All", () => {
+    expect(filterCatalogue("", "All")).toHaveLength(CATALOGUE.length);
+    expect(filterCatalogue("   ", "All")).toHaveLength(CATALOGUE.length);
+  });
+  it("ignores case", () => {
+    expect(filterCatalogue(first.name.toUpperCase(), "All").map((c) => c.id)).toContain(first.id);
+  });
+  it("needs every word to match, in any order", () => {
+    const words = first.name.split(/\s+/);
+    const reversed = [...words].reverse().join("  ");
+    expect(filterCatalogue(reversed, "All").map((c) => c.id)).toContain(first.id);
+    expect(filterCatalogue(`${words[0]} zzzznothing`, "All")).toEqual([]);
+  });
+  it("restricts to a category and matches the category name", () => {
+    const cat = CATEGORIES[0];
+    const inCat = filterCatalogue("", cat);
+    expect(inCat.length).toBeGreaterThan(0);
+    expect(inCat.every((c) => c.category === cat)).toBe(true);
+    expect(filterCatalogue("", "No such category")).toEqual([]);
+    expect(filterCatalogue(cat.toLowerCase(), "All").length).toBeGreaterThanOrEqual(inCat.length);
+  });
+  it("matches the note", () => {
+    const withNote = CATALOGUE.find((c) => c.note)!;
+    const word = withNote.note!.split(/\s+/).find((w) => w.length > 3)!;
+    expect(filterCatalogue(word, "All").map((c) => c.id)).toContain(withNote.id);
+  });
+  it("finds nothing for a nonsense query", () => {
+    expect(filterCatalogue("qqqqxx", "All")).toEqual([]);
   });
 });
