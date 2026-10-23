@@ -29,7 +29,6 @@ import { siteOf } from "../lib/sites";
 import { floorDisplayName, houseName } from "../lib/studio";
 import { downloadPrefix } from "../lib/brand";
 import { stampMark } from "./stampMark";
-import bricolageWoff2 from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?inline";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
 
@@ -311,7 +310,11 @@ export function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<t
   );
 }
 
-const reportFontCss = `@font-face{font-family:"Bricolage Grotesque Variable";src:url(${bricolageWoff2}) format("woff2");font-weight:200 800}`;
+/** The report embeds the display font so it looks right offline; loaded only when a report is made. */
+const reportFontCss = async () => {
+  const { default: woff2 } = await import("@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?inline");
+  return `@font-face{font-family:"Bricolage Grotesque Variable";src:url(${woff2}) format("woff2");font-weight:200 800}`;
+};
 
 const longDate = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
@@ -396,7 +399,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
       const html = printHtml({
         date: longDate(),
         houseName: houseName(variants[active] ?? variants[present[0]]),
-        fontCss: reportFontCss,
+        fontCss: await reportFontCss(),
         variants: present.map((k) => ({ label: VARIANT_LABEL[k], model: variants[k]!, notes: roomNotes(variants[k]!), site: siteOf(sites, k) })),
         areas,
         changes,
