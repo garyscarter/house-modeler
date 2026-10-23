@@ -10,6 +10,7 @@ import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
+import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
@@ -300,6 +301,7 @@ export default function App() {
       <Dialogs />
       <CommandPalette />
       <ShortcutSheet />
+      <ReviewPage />
       <ListingUpdatesDialog />
     </div>
   );
