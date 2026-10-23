@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { useStore } from "../store";
 import { SIDE_AZIMUTH, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { Icon } from "../components/icons";
 import { useSunInfo } from "./useSun";
 import "./ViewCube.css";
 
@@ -9,8 +9,7 @@ export function requestView(side: ViewRequest) {
   window.dispatchEvent(new CustomEvent("house:view", { detail: { side } }));
 }
 
-const SIDES: ViewRequest[] = ["front", "rear", "left", "right", "top", "home"];
-const SHORT: Record<Exclude<ViewSide, "top">, string> = { front: "Fr", rear: "Rr", left: "Lt", right: "Rt" };
+const SHORT: Record<Exclude<ViewSide, "top">, string> = { front: "F", rear: "B", left: "L", right: "R" };
 const MARKS: [string, number][] = [
   ["N", 0],
   ["E", 90],
@@ -19,27 +18,20 @@ const MARKS: [string, number][] = [
 ];
 
 /**
- * Compass ring, five faces and a home button, bottom-right of a viewer. The
- * ring turns with the camera's bearing (--view-bearing) and the faces sit
- * toward their side of the house as seen from the camera (--view-yaw), both
- * kept up to date by the 3D scene so orbiting doesn't re-render React.
+ * Compass ring, four faces, a top button and a home button, bottom-right of a
+ * 3D view. The compass marks sit on an outer ring that turns with the camera's
+ * bearing (--view-bearing); the faces sit inside it, toward their side of the
+ * house as seen from the camera (--view-yaw). Both variables are kept up to
+ * date by the 3D scene so orbiting doesn't re-render React. Every click goes
+ * out through requestView, so linked views move together.
  */
-export function ViewCube({ onView }: { onView: (side: ViewRequest) => void }) {
+export function ViewCube() {
   const sun = useStore((s) => s.sun);
   const info = useSunInfo();
   const sunAzimuth = sun.enabled && info && info.position.altitude > 0 ? info.position.azimuth : null;
 
-  useEffect(() => {
-    const on = (e: Event) => {
-      const side = (e as CustomEvent<{ side?: ViewRequest }>).detail?.side;
-      if (side && SIDES.includes(side)) onView(side);
-    };
-    window.addEventListener("house:view", on);
-    return () => window.removeEventListener("house:view", on);
-  }, [onView]);
-
   return (
-    <div className="view-cube">
+    <div className="view-cube float-card">
       <div className="vc-ring" aria-hidden>
         {MARKS.map(([l, a]) => (
           <span key={l} className={`vc-mark${l === "N" ? " north" : ""}`} style={{ "--a": a } as React.CSSProperties}>
@@ -53,18 +45,18 @@ export function ViewCube({ onView }: { onView: (side: ViewRequest) => void }) {
           key={side}
           className="vc-face"
           style={{ "--s": SIDE_AZIMUTH[side] } as React.CSSProperties}
-          onClick={() => onView(side)}
+          onClick={() => requestView(side)}
           aria-label={`Look at the ${side}`}
           title={`Look at the ${side}`}
         >
-          <span>{SHORT[side]}</span>
+          {SHORT[side]}
         </button>
       ))}
-      <button className="vc-top" onClick={() => onView("top")} aria-label="Look at the top" title="Look at the top">
+      <button className="vc-top" onClick={() => requestView("top")} aria-label="Look at the top" title="Look from above">
         Top
       </button>
-      <button className="vc-home" onClick={() => onView("home")} aria-label="Home view" title="Home view">
-        ⌂
+      <button className="vc-home" onClick={() => requestView("home")} aria-label="Home view" title="Home view">
+        <Icon name="house" size={14} />
       </button>
     </div>
   );

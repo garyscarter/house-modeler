@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { easeInOut, faceDirection, fitDistance, homeView, presetView } from "./cameraViews";
+import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, presetView } from "./cameraViews";
+import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
 
 const project = (pose: ReturnType<typeof homeView>, p: { x: number; y: number; z: number }, fov: number, aspect: number) => {
   const f = { x: pose.target.x - pose.position.x, y: pose.target.y - pose.position.y, z: pose.target.z - pose.position.z };
@@ -76,5 +77,45 @@ describe("faceDirection and easing", () => {
     expect(easeInOut(1)).toBe(1);
     expect(easeInOut(0.5)).toBeCloseTo(0.5);
     expect(easeInOut(0.25)).toBeLessThan(0.25);
+  });
+});
+
+describe("frameFor", () => {
+  const img = "data:,";
+  const A = listing91770873(img);
+  const B = listing91770873Proposed(img);
+  const plot = listingSite().boundary;
+
+  it("contains each model's own box", () => {
+    const u = frameFor([A, B], [plot]);
+    for (const m of [A, B]) {
+      const f = frameFor([m], []);
+      expect(u.x0).toBeLessThanOrEqual(f.x0);
+      expect(u.x1).toBeGreaterThanOrEqual(f.x1);
+      expect(u.y0).toBeLessThanOrEqual(f.y0);
+      expect(u.y1).toBeGreaterThanOrEqual(f.y1);
+      expect(u.height).toBeGreaterThanOrEqual(f.height);
+    }
+  });
+  it("includes plot points", () => {
+    const u = frameFor([A], [[{ x: -50, y: -60 }, { x: 70, y: 80 }]]);
+    expect(u.x0).toBe(-50);
+    expect(u.y1).toBe(80);
+  });
+  it("gives the listing's two layouts one pose whichever is active", () => {
+    const one = homeView(frameFor([A, B], [plot, plot]), 45, 1.6);
+    const two = homeView(frameFor([B, A], [plot, plot]), 45, 1.6);
+    expect(two).toEqual(one);
+  });
+});
+
+describe("isValidPose", () => {
+  const ok = { position: { x: 1, y: 2, z: 3 }, target: { x: 0, y: 0, z: 0 } };
+  it("accepts a good pose", () => expect(isValidPose(ok)).toBe(true));
+  it("rejects non-finite, missing and degenerate poses", () => {
+    expect(isValidPose({ ...ok, position: { x: NaN, y: 0, z: 0 } })).toBe(false);
+    expect(isValidPose({ position: ok.position })).toBe(false);
+    expect(isValidPose(null)).toBe(false);
+    expect(isValidPose({ position: ok.target, target: ok.target })).toBe(false);
   });
 });

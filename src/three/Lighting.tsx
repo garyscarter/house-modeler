@@ -242,7 +242,7 @@ function CompassBridge({ frontBearing }: { frontBearing: number }) {
   const last = useRef(NaN);
   const el = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    el.current = gl.domElement.closest(".viewer");
+    el.current = gl.domElement.closest(".wipe") ?? gl.domElement.closest(".viewer");
     last.current = NaN;
   }, [gl, frontBearing]);
   useFrame(({ camera }) => {
