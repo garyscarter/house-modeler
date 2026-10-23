@@ -66,13 +66,23 @@ const MAHOGANY_DOOR: Partial<Opening> = { style: "glazed-15", color: "#3e2418", 
 const WHITE_DOOR: Partial<Opening> = { style: "six-panel", color: "#f2f0ea" };
 /** Brown uPVC windows have only a thin uPVC sill outside, no stone sill (front-2, rear-1). */
 const UPVC: Partial<Opening> = { sillStyle: "upvc" };
+/** Floor to ceiling on both storeys, metres (see the model's ceilingHeight below). */
+const CEILING = 2.25;
+
 /** Downstairs the window boards are dark tile (hall-front-1, kitchen-1). */
 const TILE_BOARD: Partial<Opening> = { ...UPVC, boardColor: "#3d2e28" };
+/**
+ * First-floor windows: frames about 0.96 m tall with their heads about 1.95 m over the first floor, 0.10 m under the
+ * soffit (cameras fitted to four front photos; NOTES "Storey heights").
+ */
+const FF_WINDOW: Partial<Opening> = { ...UPVC, sill: 0.98, head: 1.95 };
+/** The hall's windows: frames about 1 m tall, sills about 0.95 m up (front-street, front-2, front-3). */
+const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 21 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 21 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 22 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 22 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
-export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 3 };
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 4 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -233,12 +243,13 @@ export function listing91770873(image: string): HouseModel {
       // Two leaded obscure panes over two panels (hall-front-1, front-3).
       op("front", 730, 575, "v", 0.9, { color: "#4f2f22", style: "half-glazed-2" }), // front door (dark brown, glazed)
       // Hall windows: a fixed pane under a top-hung top light (front-2); the side one is barred (galley-1).
-      op("window", 830, 620, "h", 0.85, { glazing: "fixed-top", ...TILE_BOARD }),
-      op("window", 962, 620, "h", 0.9, { glazing: "fixed-top", ...TILE_BOARD }),
-      op("window", 1045, 570, "v", 0.8, { glazing: "fixed-top", ...TILE_BOARD }),
+      op("window", 830, 620, "h", 0.85, { glazing: "fixed-top", ...HALL_WINDOW }),
+      op("window", 962, 620, "h", 0.9, { glazing: "fixed-top", ...HALL_WINDOW }),
+      op("window", 1045, 570, "v", 0.8, { glazing: "fixed-top", ...HALL_WINDOW }),
       // A single up-and-over leaf with 3 x 2 raised panels in a white frame, 2.15 m wide: a cream nib about
       // 0.5 m wide on its left (partly hidden by the porch pier in front-3) and a thin one on its right.
-      op("garage", 635, 515, "h", 2.15, { color: "#b3202e", style: "up-over", frameColor: "#f2efe6" }), // garage door
+      // Its head is about 1.9 m up (front-street, front-2, front-3; the front door beside it reads 2.05 m).
+      op("garage", 635, 515, "h", 2.15, { color: "#b3202e", style: "up-over", frameColor: "#f2efe6", head: 1.9 }), // garage door
     ],
     { x: 865, y: 393.5 }, // centre of the flight (below)
     // Covered porch in front of the garage door and front door.
@@ -369,13 +380,13 @@ export function listing91770873(image: string): HouseModel {
       op("gap", 650, 1110, "h", 1.09), // the flight runs on into the landing: no wall between them
       // Bedroom 1, the bathroom and bedroom 3: one pane under a top light; bedroom 2: side casements
       // either side of a fixed centre pane under a top light (rear-1, front-2).
-      op("window", 720, 795, "h", 1.0, { glazing: "fixed-top", ...UPVC }),
-      op("window", 930, 795, "h", 1.85, { glazing: "casement-fixed-casement", ...UPVC }),
-      // The two front windows share one sill and head (front-2, front-street, front-1), about 0.9 m and 2.1 m
-      // above the floor; the skirt over the hall meets the wall about 0.25 m under their sills.
-      op("window", 750, 1285, "h", 0.65, { glazing: "fixed-top", ...UPVC }),
-      op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...UPVC }),
-      op("window", 610, 1080, "v", 0.6, UPVC),
+      op("window", 720, 795, "h", 1.0, { glazing: "fixed-top", ...FF_WINDOW }),
+      op("window", 930, 795, "h", 1.85, { glazing: "casement-fixed-casement", ...FF_WINDOW }),
+      // The two front windows share one sill and head (front-2, front-street, front-1): frames about 0.96 m tall,
+      // about 1 m and 1.95 m above the floor; the skirt over the hall meets the wall about 0.25 m under their sills.
+      op("window", 750, 1285, "h", 0.65, { glazing: "fixed-top", ...FF_WINDOW }),
+      op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...FF_WINDOW }),
+      op("window", 610, 1080, "v", 0.6, FF_WINDOW),
     ],
     { x: 650, y: 1166.5 }, // where the ground floor's flight arrives (below)
   );
@@ -393,13 +404,13 @@ export function listing91770873(image: string): HouseModel {
   // the east, 270 to the west.
   first.fixtures = [
     // Bedroom 2: light grey, floor to ceiling along the party wall (the grey strip on the plan).
-    { id: uid(), type: "wardrobe-shaker", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, color: "#d3d6da" },
+    { id: uid(), type: "wardrobe-shaker", x: 1044, y: 920, rot: 90, w: 3.15, d: 0.6, h: CEILING, color: "#d3d6da" },
     // Bedroom 3: white, in the strip beside the room door.
-    { id: uid(), type: "wardrobe-fitted", x: 833, y: 1195, rot: 270, w: 2.2, d: 0.55 },
+    { id: uid(), type: "wardrobe-fitted", x: 833, y: 1195, rot: 270, w: 2.2, d: 0.55, h: CEILING },
     // Bedroom 1: blue-grey with cream beading, a double plus a single, in the south-west corner by the door
     // (bedroom-1-1). The desk run's drawer pedestals are in the same colour along the west wall up to the
     // window end (bedroom-1-2); both are shortened a little to fit the 3.3 m room.
-    { id: uid(), type: "wardrobe-shaker", x: 637, y: 981, rot: 270, w: 1.5, d: 0.6, color: "#c9d0d8" },
+    { id: uid(), type: "wardrobe-shaker", x: 637, y: 981, rot: 270, w: 1.5, d: 0.6, h: CEILING, color: "#c9d0d8" },
     { id: uid(), type: "custom", x: 633, y: 862, rot: 270, w: 1.7, d: 0.5, h: 0.75, color: "#c9d0d8", label: "Fitted desk" },
     // Bathroom: rectangular shower with a sliding door in the north-east corner (door side to the west),
     // gloss white vanity and mirror cabinet on the east wall, WC in the west alcove and a chrome ladder rail
@@ -420,8 +431,13 @@ export function listing91770873(image: string): HouseModel {
 
   return {
     floors: [ground, first],
-    ceilingHeight: 2.4,
-    slabThickness: 0.25,
+    // Storeys of 2.25 m with a 0.2 m floor between: the first-floor windows, the eaves and the roof then stand
+    // where the fitted front cameras put them over the ground floor (the front door's threshold, the hall sills,
+    // the drive wall and the front door's head agree), about 0.4 m lower than 2.4 + 0.25 put them. The real
+    // first-floor ceilings are coved up into the roof over the outer walls and higher mid-room (about 2.4 m on the
+    // landing), which one ceiling height for both storeys cannot show (NOTES "Storey heights").
+    ceilingHeight: CEILING,
+    slabThickness: 0.2,
     // From the photos: cream render, brown frames, tiled roof with the ridge
     // parallel to the street (left-right on the plan).
     // Hipped at the garage end; the right-hand side is the party wall with No. 26.
@@ -444,10 +460,12 @@ export function listing91770873(image: string): HouseModel {
       // Brown uPVC fascias and gutters, concrete interlocking tiles (front photos).
       fascia: "trim",
       tileStyle: "concrete",
-      // One brick stack on the party wall near the ridge, shared with No. 26
-      // (chimney breasts are drawn on that wall on both floors of the plan):
-      // flat-topped with no pots, carrying TV aerials, about 1.1 m wide (front-street, front-1, rear-1).
-      chimneys: [{ id: "party-stack", x: 5.75, y: -2.4, w: 1.1, d: 0.6, height: 0.9, pots: 0 }],
+      // One brick stack on the party wall at the ridge, shared with No. 26 (chimney breasts are drawn on that wall on
+      // both floors of the plan): flat-topped with no pots, carrying TV aerials. Triangulated from front-street,
+      // front-2 and front-1: its front face is about 0.85 m wide, mostly on No. 26's side of the party line, starts
+      // at the ridge and stands about 1 m over it; its shaded west face runs back about 1.5 m over the rear slope
+      // (the dark "sloping" side in the front photos is that face's top edge seen in perspective; rear-1, rear-4).
+      chimneys: [{ id: "party-stack", x: 6.2, y: -3.05, w: 0.85, d: 1.5, height: 1.05, pots: 0 }],
       // The single-storey part has a flat roof dressed with a tiled skirt across the
       // front, over the porch, garage and hall, hipped at both ends (front-street,
       // front-2). It rises about 0.9 m, right up to the two-storey wall over the hall
@@ -455,9 +473,9 @@ export function listing91770873(image: string): HouseModel {
       // the corners: on the right all the way back to the two-storey wall, on the left
       // a short way down the garage side (length assumed), since the rear photos show
       // nothing rising above the plain flat edge at the back (rear-1, rear-4).
-      // Its eaves sit on the wall tops, not up at the flat deck: the gutter is about
-      // 2.4 m up and the slope meets the two-storey wall about 3.3 m up, a quarter of
-      // a metre under the first-floor sills (front-2, front-street, front-1).
+      // Its eaves sit on the wall tops, not up at the flat deck: the slope meets the
+      // two-storey wall about 3.14 m up, a quarter of a metre under the first-floor
+      // sills (front-2, front-street, front-1); dropped 0.26 m its eaves are at 2.24 m.
       flatRoofSkirt: { sides: ["front"], depth: 1.8, pitchDeg: 30, returns: 2.0, drop: 0.26 },
       // Downpipes where the photos show them: the front gutter's on the west side wall at the front corner,
       // beside the soil stack (front-3); the rear gutter's between the patio doors and the kitchen window,
@@ -509,8 +527,8 @@ export function listing91770873Proposed(image: string): HouseModel {
     // From the landing (assumed). It opens beside the stair head's winders, so it can't be reached
     // from the landing as drawn: a placeholder until the owner settles the entrance (see NOTES.md).
     op("door", 610, 1075, "v", 0.8, WHITE_DOOR),
-    op("window", 470, 795, "h", 1.8, UPVC), // north (assumed)
-    op("window", 470, 1285, "h", 1.8, UPVC), // south (assumed)
+    op("window", 470, 795, "h", 1.8, FF_WINDOW), // north (assumed; the house's sill and head)
+    op("window", 470, 1285, "h", 1.8, FF_WINDOW), // south (assumed; the house's sill and head)
   );
   return house;
 }
@@ -574,9 +592,9 @@ const DRIVE_RISE = 0.24;
  * Heights of the neighbours' extensions are assumed (single storey).
  */
 export function listingSite(): Site {
-  // Two-storey eaves: two 2.4 m storeys, a 0.25 m slab, and the ground floor
-  // sitting 0.26 m above the garden.
-  const twoStorey = 5.3;
+  // Two-storey eaves, as the house's: two 2.25 m storeys, a 0.2 m floor, and the
+  // ground floor sitting 0.26 m above the garden.
+  const twoStorey = 4.96;
   return {
     preset: { ...LISTING_SITE_PRESET },
     frontBearing: 162,

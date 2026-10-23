@@ -70,6 +70,16 @@ describe("listingUpdates", () => {
     expect(cs[2].note).toMatch(/Not ticked/);
   });
 
+  it("offers new storey heights as one ticked change that sets both the ceiling and the floor depth", () => {
+    const l = latest();
+    l.ceilingHeight = 2.25;
+    const cs = listingUpdates(base(), l).filter((c) => c.id === "model.storeys");
+    expect(cs.map((c) => [c.label, c.defaultSelected])).toEqual([["Storey heights: 2.4 m ceilings, 0.2 m floors → 2.25 m ceilings, 0.2 m floors", true]]);
+    const out = applyListingUpdates(base(), l, ["model.storeys"]);
+    expect([out.ceilingHeight, out.slabThickness]).toEqual([2.25, 0.2]);
+    expect(out.floors).toEqual(base().floors);
+  });
+
   it("applies only what is ticked, and never touches rooms, walls or the design's own fixtures", () => {
     const mine = base();
     mine.floors[0].rooms[1].name = "Utility Room";

@@ -363,7 +363,8 @@ describe("planningCheck: listing 91770873", () => {
     expect(part.levels).toEqual([1]);
     expect(part.storeys).toBe(2);
     expect(part.width).toBeCloseTo(4.05, 1);
-    expect(part.eaves).toBeCloseTo(5.31, 1);
+    // Two 2.25 m storeys and a 0.2 m floor, over a ground floor 0.26 m above the garden.
+    expect(part.eaves).toBeCloseTo(4.96, 1);
     expect(part.boundaryDistance).toBeLessThan(0.05);
     expect(statusOf(r, "side-storeys")).toBe("fail");
     expect(statusOf(r, "side-height")).toBe("fail");
