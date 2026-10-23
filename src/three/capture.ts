@@ -69,7 +69,7 @@ export async function captureImage(id: string | undefined, scale: number): Promi
   // With post-processing on, the composer switches the renderer's tone mapping off and applies it itself; a direct render needs it back.
   const toneMapping = gl.toneMapping;
   try {
-    if (toneMapping === THREE.NoToneMapping) gl.toneMapping = THREE.ACESFilmicToneMapping;
+    if (toneMapping === THREE.NoToneMapping) gl.toneMapping = THREE.NeutralToneMapping;
     gl.setPixelRatio(s);
     gl.setSize(size.x, size.y, false);
     gl.render(scene, camera);

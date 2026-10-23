@@ -73,7 +73,7 @@ function blockPaving(g: CanvasRenderingContext2D, joint: string, cols: number, r
 function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
-  const g = canvas.getContext("2d")!;
+  const g = canvas.getContext("2d", { willReadFrequently: true })!;
   // The finishes that stand in for a kind's usual look share its seed, so they draw the same texture.
   const seedKind = kind === "block-mixed" ? "drive" : kind === "slabs" ? "patio" : kind;
   const r = rng(seedKind.length * 7919 + seedKind.charCodeAt(0));

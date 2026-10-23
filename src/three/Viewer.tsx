@@ -63,6 +63,7 @@ export function Viewer(props: ViewerProps) {
       <SunControls />
       <Canvas
         shadows="percentage"
+        gl={{ toneMapping: THREE.NeutralToneMapping }}
         dpr={DPR[quality]}
         camera={{ position: [centre.x + size * 0.9, size * 0.9, centre.z + size * 0.9], fov: 45, near: 0.05, far: 500 }}
         onPointerMissed={() => {}}
