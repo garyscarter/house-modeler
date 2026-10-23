@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HouseModel, Opening } from "../types";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
 import { changesCsv, esc, fileDate, planExtent, planScale, planSvg, printHtml, slug, toCsv } from "./export";
-import { MARK } from "./brand";
+import { MARK, WORDMARK } from "./brand";
 import { areaReport, diffModels, roomNotes } from "./report";
 import { floor, rect } from "./testing";
 
@@ -47,7 +47,8 @@ describe("planSvg", () => {
     expect(svg).toContain('class="north-arrow"');
     // Brand column in the title block.
     expect(svg).toContain(MARK.roof);
-    expect(svg).toContain(">STOREY<");
+    expect(svg).toContain(WORDMARK.small.d); // the outlined wordmark, not typed text
+    expect(svg).not.toContain(">STOREY<");
     // Areas and printed sizes appear with the names.
     expect(svg).toMatch(/14\.8 m² · 160 ft²/);
     expect(svg).toMatch(/3\.36 × 4\.42 m/);
@@ -137,6 +138,7 @@ describe("printHtml", () => {
     const html = printHtml({ ...base, houseName: "Listing 91770873", fontCss: "@font-face{font-family:X;src:url(data:font/woff2;base64,QQ==)}" });
     expect(html).toContain("Storey");
     expect(html).toContain(MARK.roof);
+    expect(html).toContain(WORDMARK.small.d);
     expect(html).toContain("<h1>Listing 91770873</h1>");
     expect(html).toContain("<title>Listing 91770873 report · Storey</title>");
     expect(html).toContain("Made with Storey · Listing 91770873 · d");

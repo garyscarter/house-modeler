@@ -10,7 +10,8 @@ Three stacked shapes: the roof (a triangle), the first floor and the ground floo
 - In SVG or HTML strings (exports): `markSvg(BRAND_TEAL)`.
 - App icons in `public/` are rendered by `node scripts/make-icons.mjs`; rerun it if the mark changes.
 - `server/page.mjs` (passcode page) and `scripts/make-icons.mjs` keep their own copies of the paths because they are plain `.mjs`. Keep them in step with `brand.ts`.
-- The wordmark is the mark plus "Storey" in the display font, bold, slightly tightened (`letter-spacing: -.01em`).
+- The wordmark is lowercase **storey** in Bricolage Grotesque at weight 250 with 0.05 em letter spacing, always drawn from outlines, never typed: `<Wordmark height={…} />` in React, `wordmarkSvg(color, height)` in exports, `WORDMARK` paths for canvas. It has two optical sizes, chosen by height (`small` under 40 px). Regenerate with `python3 scripts/make-wordmark.py` (needs `pip install fonttools brotli uharfbuzz`) if the weight or spacing changes; it writes `src/lib/wordmark.json`, which the app and `server/page.mjs` both read.
+- Lockup: the teal mark, then the wordmark in ink, with the wordmark's x-height level with the mark. In running text, write the name as "Storey".
 
 ## Colour and type
 

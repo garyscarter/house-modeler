@@ -68,8 +68,8 @@ header.topbar {
   background: var(--panel); border-bottom: 1px solid var(--line);
 }
 .topbar-left { display: flex; align-items: center; min-width: 0; }
-.brand { display: flex; align-items: center; gap: 6px; flex: none; padding: 0 10px 0 2px; margin-right: 6px; border-right: 1px solid var(--line); color: var(--brand); font: 700 16px/1 var(--font-display); letter-spacing: -.01em; }
-.brand-name { color: var(--text); }
+.brand { display: flex; align-items: center; gap: 7px; flex: none; padding: 0 12px 0 2px; margin-right: 6px; border-right: 1px solid var(--line); color: var(--brand); }
+.brand-name { color: var(--text); margin-top: 3px; } /* the wordmark box runs from the t to the y's tail; nudge its x-height level with the mark */
 .topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
 .topbar-right > .seg { margin-right: 4px; }
 .topbar-sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; flex: none; }

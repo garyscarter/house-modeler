@@ -1,4 +1,6 @@
-// The Storey brand in one place: the name, colours and the stacked-floors mark (roof, first floor, ground floor).
+import WORDMARK_DATA from "./wordmark.json";
+
+// The Storey brand in one place: the name, colours, the stacked-floors mark (roof, first floor, ground floor) and the wordmark.
 // The mark is drawn in a 64-unit box. server/page.mjs and scripts/make-icons.mjs keep their own copies (plain .mjs).
 
 export const BRAND_NAME = "Storey";
@@ -25,6 +27,23 @@ export function markSvg(color: string): string {
     `<path d="${MARK.first}" fill="${color}"/>` +
     `<path d="${MARK.roof}" fill="${color}" stroke="${color}" stroke-width="${MARK.roofStroke}" stroke-linejoin="round"/>`
   );
+}
+
+/**
+ * The wordmark: "storey" in Bricolage Grotesque 250, letter spacing 0.05 em, as outlines (scripts/make-wordmark.py).
+ * Two optical sizes: "small" for anything drawn under about 40 px tall, "large" for display. Baseline at y = 0.
+ */
+export type WordmarkCut = "small" | "large";
+export const WORDMARK: Record<WordmarkCut, { d: string; viewBox: number[] }> = { small: WORDMARK_DATA.small, large: WORDMARK_DATA.large };
+export const wordmarkCut = (height: number): WordmarkCut => (height < 40 ? "small" : "large");
+/** Width of the wordmark drawn `height` tall. */
+export const wordmarkWidth = (height: number, cut: WordmarkCut = wordmarkCut(height)) => (height * WORDMARK[cut].viewBox[2]) / WORDMARK[cut].viewBox[3];
+
+/** The wordmark as a standalone SVG element, `height` tall (CSS px, or user units inside another SVG), at (x, y) top-left. */
+export function wordmarkSvg(color: string, height: number, at?: { x: number; y: number }, cut: WordmarkCut = wordmarkCut(height)): string {
+  const { d, viewBox } = WORDMARK[cut];
+  const pos = at ? ` x="${at.x.toFixed(2)}" y="${at.y.toFixed(2)}"` : "";
+  return `<svg${pos} width="${wordmarkWidth(height, cut).toFixed(2)}" height="${height}" viewBox="${viewBox.join(" ")}" role="img" aria-label="${BRAND_NAME}"><path d="${d}" fill="${color}"/></svg>`;
 }
 
 /** File-name prefix for downloads: "storey-listing-91770873" style, from a slug of the house name. */

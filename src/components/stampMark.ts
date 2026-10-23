@@ -1,4 +1,4 @@
-import { BRAND_DISPLAY_FONT, BRAND_INK, BRAND_NAME, BRAND_TEAL, MARK } from "../lib/brand";
+import { BRAND_INK, BRAND_TEAL, MARK, WORDMARK } from "../lib/brand";
 
 /** Draw the stacked-floors mark at (x, y) in a size x size box. */
 function drawMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
@@ -32,7 +32,7 @@ const loadImage = (blob: Blob) =>
     img.src = url;
   });
 
-/** The snapshot with a small "Storey" badge (white rounded rectangle, teal mark, ink wordmark) in its bottom-right corner. */
+/** The snapshot with a small Storey badge (white rounded rectangle, teal mark, ink wordmark) in its bottom-right corner. */
 export async function stampMark(blob: Blob): Promise<Blob> {
   const img = await loadImage(blob);
   const canvas = document.createElement("canvas");
@@ -46,15 +46,11 @@ export async function stampMark(blob: Blob): Promise<Blob> {
   const margin = h;
   const pad = h * 0.22;
   const markSize = h - pad * 2;
-  const fontPx = Math.round(h * 0.5);
-  try {
-    // Make sure the display font is ready if the app has it; otherwise the fallback stack is used.
-    await document.fonts?.load(`700 ${fontPx}px ${BRAND_DISPLAY_FONT}`);
-  } catch {
-    // Fall back silently.
-  }
-  ctx.font = `700 ${fontPx}px ${BRAND_DISPLAY_FONT}`;
-  const textW = ctx.measureText(BRAND_NAME).width;
+  const wm = WORDMARK.small;
+  const [vx, vy, vw, vh] = wm.viewBox;
+  const wmH = markSize * 0.95;
+  const wmK = wmH / vh;
+  const textW = vw * wmK;
   const w = Math.round(pad + markSize + pad * 0.8 + textW + pad * 1.4);
   const x = canvas.width - margin - w;
   const y = canvas.height - margin - h;
@@ -68,9 +64,14 @@ export async function stampMark(blob: Blob): Promise<Blob> {
   ctx.restore();
 
   drawMark(ctx, x + pad, y + pad, markSize, BRAND_TEAL);
+  // The wordmark outline, its box (t ascender to y descender) centred on the badge, nudged down to level its x-height with the mark.
+  ctx.save();
+  ctx.translate(x + pad + markSize + pad * 0.8, y + (h - wmH) / 2 + wmH * 0.08);
+  ctx.scale(wmK, wmK);
+  ctx.translate(-vx, -vy);
   ctx.fillStyle = BRAND_INK;
-  ctx.textBaseline = "middle";
-  ctx.fillText(BRAND_NAME, x + pad + markSize + pad * 0.8, y + h / 2 + h * 0.02);
+  ctx.fill(new Path2D(wm.d));
+  ctx.restore();
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not save the snapshot."))), "image/png"));
 }
