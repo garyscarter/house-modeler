@@ -5,7 +5,8 @@ import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
 import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
-import { glassMaterial } from "./textures";
+import { glassMaterial, inUse } from "./textures";
+import { shade } from "./shell";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
@@ -89,8 +90,7 @@ const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror" | "glow";
 /**
  * Materials by colour and finish, least recently used first. Colours are free-form (every colour-picker step makes
- * a new one), so the cache is bounded and an evicted material is disposed. One still on screen is not harmed by
- * that: three uploads it again on its next draw.
+ * a new one), so the cache is bounded and an evicted material is disposed, unless a tracked scene still draws it.
  */
 const MATERIAL_LIMIT = 96;
 const materials = new Map<string, THREE.Material>();
@@ -108,9 +108,15 @@ function material(color: string, finish: Finish): THREE.Material {
     else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
     materials.set(key, m);
     if (materials.size > MATERIAL_LIMIT) {
-      const oldest = materials.keys().next().value as string;
-      materials.get(oldest)?.dispose();
-      materials.delete(oldest);
+      // Free the oldest ones nothing on screen uses; a used one goes back in as young.
+      const live = inUse().materials;
+      for (const oldest of [...materials.keys()]) {
+        if (materials.size <= MATERIAL_LIMIT) break;
+        const old = materials.get(oldest)!;
+        materials.delete(oldest);
+        if (live.has(old)) materials.set(oldest, old);
+        else old.dispose();
+      }
     }
   }
   return m;
@@ -791,11 +797,3 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
   return out;
 }
 
-/** Lighten (k > 1) or darken (k < 1) a hex colour. */
-function shade(hex: string, k: number): string {
-  const c = new THREE.Color(hex);
-  c.r = Math.min(1, c.r * k);
-  c.g = Math.min(1, c.g * k);
-  c.b = Math.min(1, c.b * k);
-  return "#" + c.getHexString();
-}

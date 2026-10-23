@@ -11,7 +11,8 @@ import { siteOf } from "../lib/sites";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 import { easeInOut, frameFor, homeView, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
-import { ViewCube, requestView } from "./ViewCube";
+import { ViewCube } from "./ViewCube";
+import { requestView } from "./viewRequest";
 import { ContextMenu, type MenuState } from "../components/ContextMenu";
 import { lastPose, publishPose, subscribePose } from "./cameraLink";
 import { loadCameraPose, saveCameraPose } from "./cameraPose";
@@ -21,7 +22,7 @@ import { CaptureBridge } from "./capture";
 import { SunControls } from "../components/SunControls";
 import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
-import { Precompile, ShadowUpdates } from "./frameLoop";
+import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 
 interface ViewerProps {
   model: HouseModel;
@@ -183,9 +184,11 @@ function ViewerImpl(props: ViewerProps) {
             <Effects />
           </Suspense>
         )}
-        <ShadowUpdates />
+        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
         <Precompile token={quality} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
+        <TrackScene />
+        <FrameOnCommit />
       </Canvas>
       <ContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>

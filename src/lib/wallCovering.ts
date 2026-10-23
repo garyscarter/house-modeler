@@ -176,7 +176,7 @@ export interface CoverLayout {
 
 /** Height of the dado/panelling band, and of a kitchen or bathroom splashback. */
 export const DADO_HEIGHT = 1.1;
-export const SPLASHBACK_HEIGHT = 1.2;
+const SPLASHBACK_HEIGHT = 1.2;
 /** Ceiling height the full-height panelling is drawn for. */
 export const FULL_HEIGHT_NOMINAL = 2.4;
 
@@ -192,7 +192,7 @@ export function coverLayout(c: WallCovering): CoverLayout | undefined {
 }
 
 /** A window sill this far (m) or less under the top of a band lowers the band to the sill. */
-export const SILL_SNAP = 0.2;
+const SILL_SNAP = 0.2;
 
 /**
  * Height the covering reaches on a wall: the band's top, or the ceiling for

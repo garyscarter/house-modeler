@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { TileStyle } from "../types";
+import { canvas } from "./textures";
 
 /** A colour map (near white, tinted by the material colour) and a bump map, repeating every `size` metres. */
 export interface RoofTexture {
@@ -18,13 +19,6 @@ function rng(seed: number) {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 4294967296;
   };
-}
-
-function canvas(w: number, h: number) {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  return { c, ctx: c.getContext("2d", { willReadFrequently: true })! };
 }
 
 function texture(c: HTMLCanvasElement, sizeM: [number, number], color: boolean) {
@@ -98,8 +92,8 @@ export function tileTextures(style: TileStyle): RoofTexture {
   if (hit) return hit;
   const L = LAYOUTS[style];
   const S = 512;
-  const col = canvas(S, S);
-  const bmp = canvas(S, S);
+  const [colC, colCtx] = canvas(S, S);
+  const [bmpC, bmpCtx] = canvas(S, S);
   const rand = rng(style.length * 977 + 13);
   const unitW = S / L.across;
   const courseH = S / L.courses;
@@ -116,67 +110,67 @@ export function tileTextures(style: TileStyle): RoofTexture {
       if (L.profile) {
         for (let px = 0; px < w; px++) {
           const p = L.profile(px / w);
-          col.ctx.fillStyle = rgb(b * p * hr, b * p * hg, b * p * hb);
-          wrapRect(col.ctx, x + px, y0, 1, courseH, S);
-          bmp.ctx.fillStyle = grey(0.35 + 0.5 * (p - 0.7));
-          wrapRect(bmp.ctx, x + px, y0, 1, courseH, S);
+          colCtx.fillStyle = rgb(b * p * hr, b * p * hg, b * p * hb);
+          wrapRect(colCtx, x + px, y0, 1, courseH, S);
+          bmpCtx.fillStyle = grey(0.35 + 0.5 * (p - 0.7));
+          wrapRect(bmpCtx, x + px, y0, 1, courseH, S);
         }
       } else {
-        col.ctx.fillStyle = rgb(b * hr, b * hg, b * hb);
-        wrapRect(col.ctx, x, y0, w, courseH, S);
-        bmp.ctx.fillStyle = grey(0.55);
-        wrapRect(bmp.ctx, x, y0, w, courseH, S);
+        colCtx.fillStyle = rgb(b * hr, b * hg, b * hb);
+        wrapRect(colCtx, x, y0, w, courseH, S);
+        bmpCtx.fillStyle = grey(0.55);
+        wrapRect(bmpCtx, x, y0, w, courseH, S);
       }
       // Each unit gets a little lighter towards its exposed lower edge.
-      const grad = col.ctx.createLinearGradient(0, y0, 0, y0 + courseH);
+      const grad = colCtx.createLinearGradient(0, y0, 0, y0 + courseH);
       grad.addColorStop(0, "rgba(0,0,0,0.18)");
       grad.addColorStop(0.5, "rgba(0,0,0,0)");
       grad.addColorStop(1, "rgba(255,255,255,0.06)");
-      col.ctx.fillStyle = grad;
-      wrapRect(col.ctx, x, y0, w, courseH, S);
-      const bgrad = bmp.ctx.createLinearGradient(0, y0, 0, y0 + courseH);
+      colCtx.fillStyle = grad;
+      wrapRect(colCtx, x, y0, w, courseH, S);
+      const bgrad = bmpCtx.createLinearGradient(0, y0, 0, y0 + courseH);
       bgrad.addColorStop(0, "rgba(0,0,0,0.5)");
       bgrad.addColorStop(1, "rgba(255,255,255,0.35)");
-      bmp.ctx.fillStyle = bgrad;
-      wrapRect(bmp.ctx, x, y0, w, courseH, S);
+      bmpCtx.fillStyle = bgrad;
+      wrapRect(bmpCtx, x, y0, w, courseH, S);
       // Joint between units.
-      col.ctx.fillStyle = "rgba(20,12,8,0.55)";
-      wrapRect(col.ctx, x, y0, 2, courseH, S);
-      bmp.ctx.fillStyle = grey(0.05);
-      wrapRect(bmp.ctx, x, y0, 2, courseH, S);
+      colCtx.fillStyle = "rgba(20,12,8,0.55)";
+      wrapRect(colCtx, x, y0, 2, courseH, S);
+      bmpCtx.fillStyle = grey(0.05);
+      wrapRect(bmpCtx, x, y0, 2, courseH, S);
       x += w;
     }
     // Shadow cast by the leading edge of the course above, and that edge's highlight.
-    const sh = col.ctx.createLinearGradient(0, y0, 0, y0 + L.shadow);
+    const sh = colCtx.createLinearGradient(0, y0, 0, y0 + L.shadow);
     sh.addColorStop(0, "rgba(10,6,4,0.75)");
     sh.addColorStop(1, "rgba(10,6,4,0)");
-    col.ctx.fillStyle = sh;
-    col.ctx.fillRect(0, y0, S, L.shadow);
-    col.ctx.fillStyle = "rgba(255,255,255,0.12)";
-    col.ctx.fillRect(0, y0 + courseH - 2, S, 2);
-    bmp.ctx.fillStyle = grey(0.95);
-    bmp.ctx.fillRect(0, y0 + courseH - 3, S, 3);
-    bmp.ctx.fillStyle = grey(0.0);
-    bmp.ctx.fillRect(0, y0, S, 2);
+    colCtx.fillStyle = sh;
+    colCtx.fillRect(0, y0, S, L.shadow);
+    colCtx.fillStyle = "rgba(255,255,255,0.12)";
+    colCtx.fillRect(0, y0 + courseH - 2, S, 2);
+    bmpCtx.fillStyle = grey(0.95);
+    bmpCtx.fillRect(0, y0 + courseH - 3, S, 3);
+    bmpCtx.fillStyle = grey(0.0);
+    bmpCtx.fillRect(0, y0, S, 2);
   }
   // Fine grain and a little weathering.
   for (let i = 0; i < 9000; i++) {
     const a = rand() * 0.12;
-    col.ctx.fillStyle = rand() < 0.5 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a * 0.7})`;
-    col.ctx.fillRect(rand() * S, rand() * S, 1.5, 1.5);
+    colCtx.fillStyle = rand() < 0.5 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a * 0.7})`;
+    colCtx.fillRect(rand() * S, rand() * S, 1.5, 1.5);
   }
   for (let i = 0; i < 14; i++) {
     const r = 10 + rand() * 30;
-    const g = col.ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    const g = colCtx.createRadialGradient(0, 0, 0, 0, 0, r);
     g.addColorStop(0, "rgba(40,45,20,0.10)");
     g.addColorStop(1, "rgba(40,45,20,0)");
-    col.ctx.save();
-    col.ctx.translate(rand() * S, rand() * S);
-    col.ctx.fillStyle = g;
-    col.ctx.fillRect(-r, -r, 2 * r, 2 * r);
-    col.ctx.restore();
+    colCtx.save();
+    colCtx.translate(rand() * S, rand() * S);
+    colCtx.fillStyle = g;
+    colCtx.fillRect(-r, -r, 2 * r, 2 * r);
+    colCtx.restore();
   }
-  const out = { map: texture(col.c, L.size, true), bump: texture(bmp.c, L.size, false), roughness: L.roughness };
+  const out = { map: texture(colC, L.size, true), bump: texture(bmpC, L.size, false), roughness: L.roughness };
   cache.set(style, out);
   return out;
 }
@@ -186,7 +180,7 @@ export function membraneTexture(): THREE.CanvasTexture {
   const hit = plain.get("membrane");
   if (hit) return hit;
   const S = 128;
-  const { c, ctx } = canvas(S, S);
+  const [c, ctx] = canvas(S, S);
   const rand = rng(7);
   ctx.fillStyle = grey(0.9);
   ctx.fillRect(0, 0, S, S);
@@ -204,7 +198,7 @@ export function brickTexture(): THREE.CanvasTexture {
   const hit = plain.get("brick");
   if (hit) return hit;
   const S = 256;
-  const { c, ctx } = canvas(S, S);
+  const [c, ctx] = canvas(S, S);
   const rand = rng(11);
   ctx.fillStyle = "rgb(186,176,160)";
   ctx.fillRect(0, 0, S, S);

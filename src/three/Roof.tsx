@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { HouseModel } from "../types";
@@ -6,16 +7,9 @@ import { GUTTER_R, PIPE_R, exteriorOf, planRoofs, type P3 } from "../lib/roof";
 import { SOIL_R, roofParts, type RoofParts } from "../lib/roofParts";
 import { useStore } from "../store";
 import { roofStructure } from "../lib/structure";
+import { shade } from "./shell";
+import { triangles } from "./geometryUtil";
 import { brickTexture, membraneTexture, tileTextures } from "./roofTextures";
-
-/** BufferGeometry from flat xyz triangle soup (and optional uv pairs), with flat normals. */
-export function triangles(pos: number[], uv?: number[]): THREE.BufferGeometry {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  if (uv && uv.length) g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  g.computeVertexNormals();
-  return g;
-}
 
 /** uPVC white for fascias, soffits and rainwater goods. */
 const WHITE_TRIM = "#f2f1ec";
@@ -168,13 +162,6 @@ function buildGeometry(p: RoofParts): RoofGeometry {
   };
 }
 
-/** Lighten (>1) or darken (<1) a hex colour. */
-function shade(hex: string, f: number): string {
-  const c = new THREE.Color(hex);
-  c.multiplyScalar(f);
-  return "#" + c.getHexString();
-}
-
 /**
  * Pitched and flat roofs planned from the floors, with fascias, soffits,
  * bargeboards, gutters and downpipes, ridge and hip tiles, lean-to porch
@@ -194,22 +181,22 @@ export function Roof({ model }: { model: HouseModel }) {
   useEffect(() => () => Object.values(geo).forEach((g) => g?.dispose()), [geo]);
 
   const fascia = ext.fascia === "trim" ? ext.trimColor : WHITE_TRIM;
+  // Made once per tile style and quality; a colour change only sets .color below, so no material or program is recreated.
   const mats = useMemo(() => {
     const tex = tileTextures(ext.tileStyle);
     return {
       tiles: new THREE.MeshStandardMaterial({
-        color: ext.roofColor,
         map: tex.map,
         bumpMap: low ? null : tex.bump,
         bumpScale: 2,
         roughness: tex.roughness,
         side: THREE.DoubleSide,
       }),
-      caps: new THREE.MeshStandardMaterial({ color: shade(ext.roofColor, 0.9), roughness: 0.8 }),
-      gable: new THREE.MeshStandardMaterial({ color: ext.wallColor, roughness: 0.9, side: THREE.DoubleSide }),
-      trim: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.55, side: THREE.DoubleSide }),
+      caps: new THREE.MeshStandardMaterial({ roughness: 0.8 }),
+      gable: new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide }),
+      trim: new THREE.MeshStandardMaterial({ roughness: 0.55, side: THREE.DoubleSide }),
       ceiling: new THREE.MeshStandardMaterial({ color: CEILING, roughness: 0.9, side: THREE.DoubleSide }),
-      rainwater: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.4, side: THREE.DoubleSide }),
+      rainwater: new THREE.MeshStandardMaterial({ roughness: 0.4, side: THREE.DoubleSide }),
       membrane: new THREE.MeshStandardMaterial({ color: "#55585d", map: membraneTexture(), roughness: 0.95 }),
       edgeTrim: new THREE.MeshStandardMaterial({ color: "#2f3236", roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide }),
       flashing: new THREE.MeshStandardMaterial({ color: "#8b9096", roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide }),
@@ -218,8 +205,17 @@ export function Roof({ model }: { model: HouseModel }) {
       pot: new THREE.MeshStandardMaterial({ color: "#b5603f", roughness: 0.85 }),
       vent: new THREE.MeshStandardMaterial({ color: "#c9cbcc", roughness: 0.6 }),
     };
-  }, [ext.tileStyle, ext.roofColor, ext.wallColor, fascia, low]);
+  }, [ext.tileStyle, low]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  const invalidate = useThree((s) => s.invalidate);
+  useLayoutEffect(() => {
+    mats.tiles.color.set(ext.roofColor);
+    mats.caps.color.set(shade(ext.roofColor, 0.9));
+    mats.gable.color.set(ext.wallColor);
+    mats.trim.color.set(fascia);
+    mats.rainwater.color.set(fascia);
+    invalidate();
+  }, [mats, ext.roofColor, ext.wallColor, fascia, invalidate]);
 
   const solid = (g: THREE.BufferGeometry | null, m: THREE.Material, key: string, shadow = true) =>
     g && <mesh key={key} geometry={g} material={m} castShadow={shadow} receiveShadow />;

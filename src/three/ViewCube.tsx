@@ -1,13 +1,9 @@
 import { useStore } from "../store";
-import { SIDE_AZIMUTH, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { SIDE_AZIMUTH, type ViewSide } from "../lib/cameraViews";
 import { Icon } from "../components/icons";
 import { useSunInfo } from "./useSun";
+import { requestView } from "./viewRequest";
 import "./ViewCube.css";
-
-/** Ask every 3D view to look at a side or go home; the same as clicking that face of the view cube. */
-export function requestView(side: ViewRequest) {
-  window.dispatchEvent(new CustomEvent("house:view", { detail: { side } }));
-}
 
 const SHORT: Record<Exclude<ViewSide, "top">, string> = { front: "F", rear: "B", left: "L", right: "R" };
 const MARKS: [string, number][] = [

@@ -14,10 +14,11 @@ import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
 import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightShape } from "../lib/stairs";
-import { flightStructure, floorsStructure, modelStructure } from "../lib/structure";
+import { flightStructure, floorStructure, floorsStructure, modelStructure, shellLooks } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { getMaterial, type MatSpec } from "./textures";
+import { floorBaseY } from "./floorBase";
 import { finishColour, floorAngle, groutColour } from "../lib/floorFinish";
 import { floorUv } from "../lib/floorPattern";
 import {
@@ -33,10 +34,6 @@ import {
 } from "../lib/geometry";
 
 export { WALL_T, roomColor };
-
-export function floorBaseY(model: HouseModel, floor: Floor) {
-  return floor.level * (model.ceilingHeight + model.slabThickness);
-}
 
 interface HouseProps {
   model: HouseModel;
@@ -182,7 +179,10 @@ function FloorGroupInner({
   const flightSig = flightStructure(model, floor);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const flight = useMemo(() => (hasAbove ? floorFlight(model, floor) : null), [hasAbove, flightSig]);
-  const allWalls = useMemo(() => buildWalls(floor), [floor]);
+  // Keyed on what the shell reads, so moving a fixture or recolouring a floor keeps the walls (and the shell built from them).
+  const looks = shellLooks(floor);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allWalls = useMemo(() => buildWalls(floor), [looks]);
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
@@ -296,13 +296,15 @@ function FloorShell({
         doorsOpen,
         flight,
       }),
-    [floor, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen, flight],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen, flight],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 
   const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
   // Each room's floor, as pieces when a stairwell opening is cut out of it.
-  const polys = useMemo(() => floor.rooms.map((r) => cutWells(roomWorldPolygon(floor, r), holes)), [floor, holes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const polys = useMemo(() => floor.rooms.map((r) => cutWells(roomWorldPolygon(floor, r), holes)), [floorStructure(floor, false), holes]);
 
   // One slab under all the rooms so nothing floats.
   const slabGeom = useMemo(() => {

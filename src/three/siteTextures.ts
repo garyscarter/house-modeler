@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { SurfaceFinish, SurfaceKind } from "../types";
+import { rng } from "./textures";
 
 /**
  * Procedural textures for the garden, boundaries and street, drawn once on
@@ -18,17 +19,6 @@ const SIZE = 512;
 const cache = new Map<TextureKind, SiteTexture>();
 
 /** Small deterministic PRNG so textures look the same on every load. */
-function rng(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const hsl = (h: number, s: number, l: number, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
 
 /** Fine speckle so flat areas don't look like plastic. */

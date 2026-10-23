@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Floor, HouseModel } from "../types";
-import { floorStructure, flightStructure, modelStructure, roofStructure } from "./structure";
+import { floorStructure, flightStructure, modelStructure, roofStructure, shellLooks } from "./structure";
 
 const floor = (): Floor => ({
   id: "g",
@@ -60,5 +60,37 @@ describe("structure signatures", () => {
     const ext = floor();
     ext.rooms[0] = { ...ext.rooms[0], exteriorColor: "#900" };
     expect(floorStructure(ext)).not.toBe(floorStructure(base));
+  });
+});
+
+describe("shellLooks", () => {
+  it("ignores fixtures, floor colours and finishes, names and the plan image", () => {
+    const a = floor();
+    const b = floor();
+    b.rooms[0] = { ...b.rooms[0], name: "Diner", color: "#123", floorFinish: "oak" as never, floorAngle: 45, floorGrout: "#999", notes: "x" };
+    b.fixtures = [{ id: "f", type: "sofa", x: 1, y: 1, rot: 0 }];
+    b.image = "data:image/png;base64,BBBB";
+    expect(shellLooks(b)).toBe(shellLooks(a));
+    b.fixtures = [{ id: "f", type: "sofa", x: 9, y: 4, rot: 90 }];
+    expect(shellLooks({ ...b })).toBe(shellLooks(a));
+  });
+
+  it("changes with wall paint, skirting, exterior colour, opening colours and opening position", () => {
+    const base = shellLooks(floor());
+    const paint = floor();
+    paint.rooms[0] = { ...paint.rooms[0], wallPaint: "#abc" };
+    expect(shellLooks(paint)).not.toBe(base);
+    const skirt = floor();
+    skirt.rooms[0] = { ...skirt.rooms[0], skirtingColor: "#333" };
+    expect(shellLooks(skirt)).not.toBe(base);
+    const ext = floor();
+    ext.rooms[0] = { ...ext.rooms[0], exteriorColor: "#a33" };
+    expect(shellLooks(ext)).not.toBe(base);
+    const moved = floor();
+    moved.openings[0] = { ...moved.openings[0], x: 30 };
+    expect(shellLooks(moved)).not.toBe(base);
+    const tinted = floor();
+    tinted.openings[0] = { ...tinted.openings[0], frameColor: "#222" };
+    expect(shellLooks(tinted)).not.toBe(base);
   });
 });

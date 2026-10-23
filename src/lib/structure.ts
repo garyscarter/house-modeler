@@ -40,6 +40,31 @@ export function floorStructure(floor: Floor, withOpenings = true): string {
   return sig;
 }
 
+// What only the room's floor surface (or the UI) reads; the wall shell and walls ignore these. The wall
+// coverings, skirting and exterior colour are read by the shell and so are not listed.
+const ROOM_SURFACE_ONLY = new Set(["name", "color", "notes", "floorPhotoId", "floorFinish", "floorAngle", "floorGrout", "unheated"]);
+const SHELL_SKIPPED = new Set(["image", "name", "fixtures"]);
+const looksCache = new WeakMap<Floor, string>();
+
+/**
+ * Signature of everything the wall shell reads from a floor: the geometry plus
+ * the wall, opening and skirting looks. Unlike `floorStructure` it counts wall
+ * paint and opening colours, but still ignores fixtures and floor-surface
+ * fields, so moving a sofa or recolouring a floor does not rebuild the walls.
+ */
+export function shellLooks(floor: Floor): string {
+  const hit = looksCache.get(floor);
+  if (hit !== undefined) return hit;
+  const sig = JSON.stringify({
+    ...without(floor, SHELL_SKIPPED),
+    imageW: floor.imageW,
+    imageH: floor.imageH,
+    rooms: floor.rooms.map((r) => without(r, ROOM_SURFACE_ONLY)),
+  });
+  looksCache.set(floor, sig);
+  return sig;
+}
+
 export function floorsStructure(floors: Floor[], withOpenings = true): string {
   return floors.map((f) => floorStructure(f, withOpenings)).join("|");
 }

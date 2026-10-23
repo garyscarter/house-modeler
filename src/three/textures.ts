@@ -1489,7 +1489,7 @@ let plaster: THREE.CanvasTexture | null = null;
 const materials = new Map<string, THREE.Material>();
 const MAX_MATERIALS = 256;
 /** Outside finishes and wall coverings each own a large canvas texture. */
-const MAX_TEXTURED = 48;
+const MAX_TEXTURED = 16;
 const ownsMap = (key: string) => key.startsWith("ext|") || key.startsWith("cover|");
 
 /** Every glass material made, so a change of quality or a lit night can update them in place. */
@@ -1624,11 +1624,42 @@ function create(s: MatSpec): THREE.Material {
   }
 }
 
-/** Free the oldest floor colour maps beyond the cap, with the cached materials drawn with them. */
+/** Scenes being drawn, so the caches never dispose what is still on screen. */
+const liveScenes = new Set<THREE.Scene>();
+export function trackScene(s: THREE.Scene): () => void {
+  liveScenes.add(s);
+  return () => {
+    liveScenes.delete(s);
+  };
+}
+
+/** The materials, and the textures they hold (any slot), that the tracked scenes draw right now. */
+export function inUse(): { materials: Set<THREE.Material>; textures: Set<THREE.Texture> } {
+  const mats = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  const add = (m: THREE.Material) => {
+    if (mats.has(m)) return;
+    mats.add(m);
+    for (const v of Object.values(m)) if (v && (v as THREE.Texture).isTexture) textures.add(v as THREE.Texture);
+  };
+  for (const scene of liveScenes)
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(m)) m.forEach(add);
+      else if (m) add(m);
+    });
+  return { materials: mats, textures };
+}
+
+/** Free the oldest floor colour maps beyond the cap, with the cached materials drawn with them. Maps on screen stay. */
 function dropOldFloorMaps() {
   const colourKeys = [...floorMaps.keys()].filter((k) => !k.endsWith("|h"));
-  for (const k of colourKeys.slice(0, Math.max(0, colourKeys.length - MAX_FLOOR_MAPS))) {
+  const excess = colourKeys.slice(0, Math.max(0, colourKeys.length - MAX_FLOOR_MAPS));
+  if (!excess.length) return;
+  const live = inUse();
+  for (const k of excess) {
     const tex = floorMaps.get(k)!;
+    if (live.textures.has(tex)) continue;
     floorMaps.delete(k);
     for (const [mk, m] of materials)
       if ((m as THREE.MeshStandardMaterial).map === tex) {
@@ -1653,11 +1684,21 @@ export function getMaterial(s: MatSpec): THREE.Material {
   materials.set(key, m);
   // Outside finishes and wall coverings own their colour map, and dragging a
   // colour picker makes one per step: keep only a few. Shared maps stay.
-  for (const oldKey of overflow([...materials.keys()], MAX_MATERIALS, ownsMap, MAX_TEXTURED)) {
-    const old = materials.get(oldKey)!;
-    materials.delete(oldKey);
-    if (ownsMap(oldKey)) (old as THREE.MeshStandardMaterial).map?.dispose();
-    old.dispose();
+  const evict = overflow([...materials.keys()], MAX_MATERIALS, ownsMap, MAX_TEXTURED);
+  if (evict.length) {
+    // Only the materials nothing on screen uses are freed; an old one still drawn goes back in as young.
+    const live = inUse();
+    for (const oldKey of evict) {
+      const old = materials.get(oldKey)!;
+      materials.delete(oldKey);
+      if (live.materials.has(old)) {
+        materials.set(oldKey, old);
+        continue;
+      }
+      const map = ownsMap(oldKey) ? (old as THREE.MeshStandardMaterial).map : null;
+      if (map && !live.textures.has(map)) map.dispose();
+      old.dispose();
+    }
   }
   return m;
 }
