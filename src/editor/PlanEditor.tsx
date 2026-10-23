@@ -5,6 +5,8 @@ import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../typ
 import { CATALOGUE, CATEGORIES, byId, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
+import { confirmKnockThrough } from "./KnockThrough";
+import { knockThroughNeighbours } from "../lib/mergeRooms";
 import { CanopyInspector, FixtureInspector, FloorInspector, NumberField, OpeningInspector, RoomInspector, WallInspector } from "./Inspectors";
 import { useCoarsePointer, usePlanCamera } from "./usePlanCamera";
 import { uid } from "../types";
@@ -559,6 +561,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     } else {
       // Rooms sit over canopies, so they win where the two overlap.
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
+      // Shift+click a neighbour of the selected room: knock the two through.
+      const from = floor.rooms.find((r) => r.id === selectedRoomId);
+      if (e.shiftKey && from && hit && hit.id !== from.id && knockThroughNeighbours(floor, from.id).some((r) => r.id === hit.id)) {
+        void confirmKnockThrough(variant, floor, from, hit);
+        return;
+      }
       const roof = hit ? -1 : canopyAt(canopies, raw);
       select(roof >= 0 ? { canopy: roof } : { room: hit?.id });
     }

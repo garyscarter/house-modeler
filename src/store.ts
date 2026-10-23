@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, Photo, Room, Site, VariantKey } from "./types";
 import { imageAwareStorage } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
+import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
 
@@ -82,6 +83,11 @@ interface State {
   copyVariant: (from: VariantKey, to: VariantKey) => void;
   updateFloor: (k: VariantKey, floorId: string, patch: Partial<Floor> | ((f: Floor) => Floor)) => void;
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
+  /**
+   * Knock two rooms that share a wall through into one (see lib/mergeRooms.ts), as one undo step.
+   * The kept room ("a" or "b") survives and is selected; photos of the other room follow it.
+   */
+  knockThrough: (k: VariantKey, floorId: string, aId: string, bId: string, keep: "a" | "b") => MergeResult;
   updateModel: (k: VariantKey, patch: Partial<HouseModel>) => void;
   /** Set (or clear) a variant's plot; the active variant's when `k` is left out. */
   setSite: (site: Site | undefined, k?: VariantKey) => void;
@@ -222,6 +228,26 @@ export const useStore = create<State>()(
             if (!m) return {};
             return { variants: { ...st.variants, [k]: { ...m, ...patch } } };
           }),
+        knockThrough: (k, floorId, aId, bId, keep) => {
+          const st = get();
+          const floor = st.variants[k]?.floors.find((f) => f.id === floorId);
+          if (!floor) return { ok: false, code: "unknown-room", reason: "That floor is gone." };
+          const res = mergeRooms(floor, aId, bId, keep);
+          if (!res.ok) return res;
+          setState((s) => {
+            const m = s.variants[k];
+            if (!m) return {};
+            const floors = m.floors.map((f) => (f.id === floorId ? res.floor : f));
+            // Photos of the room that went follow the merged room, unless a third room shares either name.
+            const clash = res.floor.rooms.some((r) => r.id !== res.room.id && (r.name === res.removed.name || r.name === res.room.name));
+            const photos =
+              photoSource(s.variants) === k && !clash && res.removed.name !== res.room.name
+                ? renamePhotos(s.photos, floor.name, { room: res.removed.name }, { room: res.room.name })
+                : s.photos;
+            return { variants: { ...s.variants, [k]: { ...m, floors } }, ...(photos !== s.photos ? { photos } : {}), selectedRoomId: res.room.id };
+          });
+          return res;
+        },
         updateFloor: (k, floorId, patch) =>
           setState((st) => {
             const m = st.variants[k];
