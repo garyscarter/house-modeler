@@ -73,6 +73,31 @@ export function styleOptions(kind: OpeningKind): { value: OpeningStyle; label: s
   return [];
 }
 
+/**
+ * A front door unit along its wall (local x, -w/2 to w/2, metres): the
+ * door's span and each full-height side light's, split at the mullion
+ * centres. The door gets what the lights leave, 0.75 to 0.98 m; a unit too
+ * narrow for a light at least 0.2 m wide is all door. A light "by the hinges"
+ * is on the hinge jamb's side (see doorSwing), "by the handle" the other.
+ */
+export function frontUnit(o: Pick<Opening, "sidelight" | "flipHinge">, w: number): { door: [number, number]; lights: [number, number][] } {
+  const n = o.sidelight === "both" ? 2 : o.sidelight ? 1 : 0;
+  const d = Math.max(0.75, Math.min(0.98, w - 0.4 * n));
+  const l = (w - d) / Math.max(1, n);
+  if (!n || l < 0.2) return { door: [-w / 2, w / 2], lights: [] };
+  if (n === 2)
+    return {
+      door: [-w / 2 + l, w / 2 - l],
+      lights: [
+        [-w / 2, -w / 2 + l],
+        [w / 2 - l, w / 2],
+      ],
+    };
+  const hinge = o.flipHinge ? 1 : -1;
+  const side = o.sidelight === "hinge" ? hinge : -hinge;
+  return side < 0 ? { door: [-w / 2 + l, w / 2], lights: [[-w / 2, -w / 2 + l]] } : { door: [-w / 2, w / 2 - l], lights: [[w / 2 - l, w / 2]] };
+}
+
 /** The look of an opening with no style: panelled internal doors, glazed external doors, the classic front door, a panel-grid garage door. */
 export function defaultStyle(kind: OpeningKind, external: boolean): OpeningStyle | undefined {
   if (kind === "door") return external ? "glazed" : "panel";
@@ -355,6 +380,8 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
     const pane = (x0: number, x1: number, y0: number, y1: number, mat: PartMat = "glass") =>
       b.push({ mat, p: [(x0 + x1) / 2, (y0 + y1) / 2, 0], s: [x1 - x0, y1 - y0, 0.012] });
     let letterY = 0.78;
+    /** Contemporary styles get a long pull bar outside instead of a knob. */
+    let bar = false;
     switch (style) {
       case "glazed":
         return glazedLeaf(h, t, !front)(len).concat(front ? frontFurniture(len, t, show, 0.08) : []);
@@ -437,6 +464,56 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
         for (const y of [0.25, h / 2, h - 0.25]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024] });
         break;
       }
+      case "strip": {
+        // Contemporary composite: a flat leaf with a tall, narrow glazed strip towards the hinge side.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const sw = Math.min(0.14, len * 0.17);
+        const x0 = Math.max(0.1, len * 0.14);
+        b.push({ mat: "obscure", p: [x0 + sw / 2, h / 2 + 0.05, 0], s: [sw, h - 0.6, t + 0.01] });
+        bar = true;
+        break;
+      }
+      case "squares": {
+        // Contemporary composite: three small square lights, one above another, in a flat leaf.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const q = Math.min(0.2, len * 0.24);
+        for (let i = 0; i < 3; i++) b.push({ mat: "obscure", p: [len / 2, h - 0.42 - i * (q + 0.12), 0], s: [q, q, t + 0.01] });
+        letterY = h - 0.42 - 2 * (q + 0.12) - q / 2 - 0.2;
+        bar = true;
+        break;
+      }
+      case "grooved": {
+        // Contemporary aluminium look: a flat leaf with routed horizontal grooves on both faces.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const k = Math.max(4, Math.round((h - 0.5) / 0.2));
+        for (let j = 0; j <= k; j++)
+          for (const side of [1, -1]) b.push({ mat: "groove", p: [len / 2, 0.27 + (j * (h - 0.5)) / k, side * (t / 2 + 0.001)], s: [len - 0.16, 0.012, 0.003] });
+        letterY = 0.27 + (h - 0.5) / k / 2;
+        bar = true;
+        break;
+      }
+      case "cottage": {
+        // Vertical planks with a four-pane window in the top, ledged on the back below it.
+        lb(len / 2, 0.012 + h / 2, len, h);
+        const gy0 = h - 0.62;
+        const gy1 = h - 0.16;
+        const gx0 = 0.13;
+        const gx1 = len - 0.13;
+        const k = Math.max(3, Math.round(len / 0.11));
+        for (let j = 1; j < k; j++)
+          for (const side of [1, -1]) {
+            const x = (j * len) / k;
+            const through = x > gx0 && x < gx1;
+            for (const [y0, y1] of through ? [[0.017, gy0], [gy1, h + 0.007]] : [[0.017, h + 0.007]])
+              b.push({ mat: "groove", p: [x, (y0 + y1) / 2, side * (t / 2 + 0.001)], s: [0.008, y1 - y0, 0.003] });
+          }
+        b.push({ mat: "glass", p: [len / 2, (gy0 + gy1) / 2, 0], s: [gx1 - gx0, gy1 - gy0, t + 0.01] });
+        const gb = 0.03;
+        lb(len / 2, (gy0 + gy1) / 2, gb, gy1 - gy0, "leaf", t + 0.014);
+        lb(len / 2, (gy0 + gy1) / 2, gx1 - gx0, gb, "leaf", t + 0.014);
+        for (const y of [0.25, gy0 - 0.2]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024] });
+        break;
+      }
       case "front": {
         // The classic front door: four panels under a glazed top light.
         lb(len / 2, 0.012 + h / 2, len, h);
@@ -449,18 +526,21 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
         break;
       }
     }
-    b.push(...(front ? frontFurniture(len, t, show, letterY) : levers(len, t)));
+    b.push(...(front ? frontFurniture(len, t, show, letterY, bar) : levers(len, t)));
     return b;
   };
 }
 
-/** Letter plate on the face `show` at height y, and a knob on each face near the far edge. */
-function frontFurniture(len: number, t: number, show: number, y: number): Box[] {
-  return [
-    { mat: "metal", p: [len / 2, y, show * (t / 2 + 0.007)], s: [0.28, 0.05, 0.012] },
-    { mat: "metal", p: [len - 0.1, 1.0, show * (t / 2 + 0.02)], s: [0.05, 0.05, 0.05] },
-    { mat: "metal", p: [len - 0.1, 1.0, -show * (t / 2 + 0.02)], s: [0.03, 0.03, 0.05] },
-  ];
+/** Letter plate on the face `show` at height y, and a knob on each face near the far edge (or, with `bar`, a long pull bar outside). */
+function frontFurniture(len: number, t: number, show: number, y: number, bar = false): Box[] {
+  const b: Box[] = [{ mat: "metal", p: [len / 2, y, show * (t / 2 + 0.007)], s: [0.28, 0.05, 0.012] }];
+  if (bar) {
+    const z = show * (t / 2 + 0.05);
+    b.push({ mat: "metal", p: [len - 0.1, 1.05, z], s: [0.03, 0.9, 0.03] });
+    for (const dy of [-0.35, 0.35]) b.push({ mat: "metal", p: [len - 0.1, 1.05 + dy, show * (t / 2 + 0.02)], s: [0.02, 0.02, 0.04] });
+  } else b.push({ mat: "metal", p: [len - 0.1, 1.0, show * (t / 2 + 0.02)], s: [0.05, 0.05, 0.05] });
+  b.push({ mat: "metal", p: [len - 0.1, 1.0, -show * (t / 2 + 0.02)], s: [0.03, 0.03, 0.05] });
+  return b;
 }
 
 /** A glazed leaf or panel: stiles, rails, a kick rail and glass. */
@@ -563,15 +643,30 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       break;
     }
     case "front": {
-      // Front door, shut unless openDeg says otherwise (and doors are shown open), with a letter plate and knob.
+      // Front door, shut unless openDeg says otherwise (and doors are shown open), with a letter plate and
+      // knob, and any full-height side lights in the same frame, each past a mullion.
       boxes.push(...doorFrame(w, y1, zf));
-      const lw = w - 2 * FW;
+      const unit = frontUnit(op, w);
+      /** Inner edge of a span's end: inside the outer jamb, or half a mullion from its centre. */
+      const inner = (x: number, dir: number) => x + dir * (Math.abs(Math.abs(x) - w / 2) < 1e-9 ? FW : FW / 2);
+      for (const [a, b] of unit.lights) {
+        const m = Math.abs(Math.abs(a) - w / 2) < 1e-9 ? b : a;
+        boxes.push({ mat: "frame", p: [m, y1 / 2, zf], s: [FW, y1, FD] });
+        const ga = inner(a, 1);
+        const gb = inner(b, -1);
+        const rail = 0.03 + FW;
+        boxes.push({ mat: "frame", p: [(ga + gb) / 2, rail / 2 + 0.015, zf], s: [gb - ga, rail - 0.03, FD] });
+        boxes.push({ mat: "glass", p: [(ga + gb) / 2, (rail + y1 - FW) / 2, zf], s: [gb - ga, y1 - FW - rail, 0.012] });
+      }
+      const la = inner(unit.door[0], 1);
+      const lb = inner(unit.door[1], -1);
+      const lw = lb - la;
       const lh = y1 - FW - 0.02;
       const f = out || 1;
       const s = swingSide(op, out);
       const ang = openAngle(op, 0, doorsOpen);
       const style = resolvedStyle(op, true) as DoorStyle;
-      boxes.push(...leaf(hinge * (lw / 2), ang ? zf + s * (FD / 2) : zf, lw, -hinge, s, ang, doorLeaf(style, lh, 0.05, f * -hinge, true)));
+      boxes.push(...leaf((la + lb) / 2 + hinge * (lw / 2), ang ? zf + s * (FD / 2) : zf, lw, -hinge, s, ang, doorLeaf(style, lh, 0.05, f * -hinge, true)));
       break;
     }
     case "garage": {

@@ -393,7 +393,7 @@ function stairChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
 // Doors and windows
 
 /** Appearance and size fields of an opening that follow the listing. Hinge side, swing and how far it is drawn open are the owner's. */
-const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "frameColor"] as const;
+const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "frameColor", "sidelight"] as const;
 type OpeningField = (typeof OPENING_FIELDS)[number];
 const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   widthM: "width",
@@ -407,6 +407,7 @@ const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   boardColor: "window board colour",
   liningColor: "lining colour",
   frameColor: "frame colour",
+  sidelight: "side lights",
 };
 
 function openingValue(o: Opening, k: OpeningField): unknown {

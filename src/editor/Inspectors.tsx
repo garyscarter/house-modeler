@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
-import { DEFAULT_EXTERIOR, FLOOR_FINISH_LABEL, GLAZING_LABEL, OPENING_KIND_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type GlazingPattern, type OpeningStyle, type SillStyle, type StairsDir } from "../types";
+import { DEFAULT_EXTERIOR, FLOOR_FINISH_LABEL, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
 import { DEFAULT_WORKTOP, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
@@ -497,6 +497,20 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
             {styles.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {k === "front" && (
+        <label>
+          Side lights
+          <small className="muted">Full-height glazing in the same frame as the door. The width covers the whole unit: about 1.3 m for one side light, 1.8 m for two.</small>
+          <select value={opening.sidelight ?? ""} onChange={(e) => onChange({ sidelight: (e.target.value || undefined) as Sidelight | undefined })}>
+            <option value="">None</option>
+            {(Object.keys(SIDELIGHT_LABEL) as Sidelight[]).map((s) => (
+              <option key={s} value={s}>
+                {SIDELIGHT_LABEL[s]}
               </option>
             ))}
           </select>

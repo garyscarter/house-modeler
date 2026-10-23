@@ -197,10 +197,33 @@ export interface Opening {
   frameColor?: string;
   /** Swing and French doors: how far the leaves are drawn open in 3D, degrees (default 75, French 80; 0 = shut). */
   openDeg?: number;
+  /** Front doors: full-height side lights in the same frame, beside the leaf (unset: none). widthM covers the whole unit. */
+  sidelight?: Sidelight;
 }
 
+/** Where a front door's full-height side light goes: by the handle, by the hinges, or one each side. */
+export type Sidelight = "latch" | "hinge" | "both";
+export const SIDELIGHT_LABEL: Record<Sidelight, string> = {
+  latch: "Side light by the handle",
+  hinge: "Side light by the hinges",
+  both: "Side lights both sides",
+};
+
 /** Looks for door leaves (doors and front doors). */
-export type DoorStyle = "panel" | "flush" | "glazed" | "glazed-15" | "six-panel" | "half-glazed" | "half-glazed-2" | "ledged" | "front";
+export type DoorStyle =
+  | "panel"
+  | "flush"
+  | "glazed"
+  | "glazed-15"
+  | "six-panel"
+  | "half-glazed"
+  | "half-glazed-2"
+  | "ledged"
+  | "front"
+  | "strip"
+  | "squares"
+  | "grooved"
+  | "cottage";
 export const DOOR_STYLE_LABEL: Record<DoorStyle, string> = {
   panel: "Two shallow panels",
   flush: "Flush",
@@ -211,6 +234,10 @@ export const DOOR_STYLE_LABEL: Record<DoorStyle, string> = {
   "half-glazed-2": "Half-glazed, two panes over two panels",
   ledged: "Ledged planks",
   front: "Panelled with a glazed top light",
+  strip: "Contemporary, tall glazed strip",
+  squares: "Contemporary, three square lights",
+  grooved: "Contemporary, horizontal grooves",
+  cottage: "Cottage planks with a glazed top",
 };
 /** Looks for garage doors. */
 export type GarageStyle = "panel-grid" | "up-over";
