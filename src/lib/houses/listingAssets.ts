@@ -68,8 +68,10 @@ export function listingFloorplan(): Promise<string> {
   return toDataUrl(floorplanUrl);
 }
 
-export async function listingPhotos(): Promise<Photo[]> {
+export async function listingPhotos(onProgress?: (done: number, total: number) => void): Promise<Photo[]> {
   const entries = Object.entries(PHOTO_URLS).sort(([a], [b]) => a.localeCompare(b));
+  let done = 0;
+  onProgress?.(0, entries.length);
   return Promise.all(
     entries.map(async ([path, url]) => {
       const name = path.split("/").pop()!.replace(/\.jpg$/, "");
@@ -77,6 +79,7 @@ export async function listingPhotos(): Promise<Photo[]> {
       const photo: Photo = { id: uid(), name, dataUrl: await toDataUrl(url), description: place?.description };
       if (place && "room" in place) Object.assign(photo, { floorName: place.floor, roomName: place.room });
       else if (place) photo.elevation = place.elevation;
+      onProgress?.(++done, entries.length);
       return photo;
     }),
   );

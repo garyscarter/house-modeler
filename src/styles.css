@@ -25,7 +25,41 @@
 html, body, #root { margin: 0; height: 100%; background: var(--bg); overflow: hidden; overscroll-behavior: none; }
 body { -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
 .app { position: relative; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-.loading { padding: 40px; color: var(--muted); }
+.loading { height: 100vh; height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); }
+
+/* ---- Loader (components/Loader.tsx): the Storey mark, animated ---- */
+.loader { display: inline-block; flex: none; vertical-align: -0.2em; overflow: visible; color: var(--brand); }
+button .loader { margin-right: 6px; }
+button.primary .loader { color: currentColor; }
+.loader .ld-part { fill: currentColor; stroke: currentColor; stroke-width: 0; stroke-linejoin: round; }
+.loader .ld-roof { stroke-width: 3; }
+/* Blueprint: each part is drawn in outline, then filled, then the whole mark clears. */
+.loader-blueprint .ld-part { fill-opacity: 0; stroke-width: 2.4; stroke-dasharray: 1; stroke-dashoffset: 1; animation: ld-blueprint 2.2s ease-in-out infinite both; }
+.loader-blueprint .ld-first { animation-delay: .12s; }
+.loader-blueprint .ld-roof { animation-delay: .24s; }
+@keyframes ld-blueprint {
+  0% { stroke-dashoffset: 1; fill-opacity: 0; opacity: 1; }
+  45% { stroke-dashoffset: 0; fill-opacity: 0; }
+  62%, 82% { stroke-dashoffset: 0; fill-opacity: 1; opacity: 1; }
+  96%, 100% { stroke-dashoffset: 0; fill-opacity: 1; opacity: 0; }
+}
+/* Lift: a light runs up the floors, like a lift's floor indicator. */
+.loader-lift .ld-part { animation: ld-lift 1.2s ease-in-out infinite both; }
+.loader-lift .ld-first { animation-delay: .15s; }
+.loader-lift .ld-roof { animation-delay: .3s; }
+@keyframes ld-lift { 0%, 70%, 100% { opacity: .22; } 35% { opacity: 1; } }
+/* Fill: the mark fills from the ground up, to a given progress or on a loop. */
+.loader-fill .ld-ghost { opacity: .2; }
+.loader-fill .ld-level { fill: currentColor; transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); transition: transform .25s ease-out; }
+.loader-fill.loader-loop .ld-level { animation: ld-fill 1.8s cubic-bezier(.45,0,.25,1) infinite both; }
+@keyframes ld-fill { 0% { transform: scaleY(0); opacity: 1; } 70% { transform: scaleY(1); opacity: 1; } 88%, 100% { transform: scaleY(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .loader .ld-part, .loader .ld-level { animation: none !important; opacity: 1 !important; stroke-dashoffset: 0 !important; fill-opacity: 1 !important; transition: none; }
+  .loader-fill .ld-ghost { opacity: .2 !important; }
+  .loader-fill.loader-loop .ld-level { transform: scaleY(1); }
+  .loader:not(.loader-fill), .loader-fill.loader-loop { animation: ld-pulse 2.4s ease-in-out infinite; }
+  @keyframes ld-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+}
 
 /* ---- Top bar ---- */
 header.topbar {
@@ -79,7 +113,7 @@ main[data-tab="3d"] { --card-clear: 196px; }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }
-.viewer-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+.viewer-loading { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); pointer-events: none; }
 .split { display: flex; flex: 1; min-width: 0; }
 .split .viewer + .viewer { border-left: 2px solid var(--panel); }
 .viewer { position: relative; flex: 1; min-width: 0; }

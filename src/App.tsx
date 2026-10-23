@@ -26,6 +26,7 @@ import { floorAtLevel } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
+import { Loader } from "./components/Loader";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -138,7 +139,13 @@ export default function App() {
   const [opened3d, setOpened3d] = useState(show3d);
   if (show3d && !opened3d) setOpened3d(true);
 
-  if (!hydrated) return <div className="loading">Loading…</div>;
+  if (!hydrated)
+    return (
+      <div className="loading" role="status">
+        <Loader kind="blueprint" size={56} />
+        Opening your project
+      </div>
+    );
 
   const showInspector = tab === "3d" && mode !== "review" && (!!model || mode === "plot");
 
@@ -159,7 +166,14 @@ export default function App() {
         )}
         {model && opened3d && (
           <div className="view3d" hidden={!show3d}>
-            <Suspense fallback={<div className="viewer-loading">Loading the 3D view…</div>}>
+            <Suspense
+              fallback={
+                <div className="viewer-loading" role="status">
+                  <Loader kind="blueprint" size={40} />
+                  Loading the 3D view
+                </div>
+              }
+            >
               {effectiveViewMode === "single" && (
                 <Viewer
                   active={show3d}

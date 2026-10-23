@@ -23,6 +23,7 @@ import { SunControls } from "../components/SunControls";
 import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
+import { Loader } from "../components/Loader";
 
 interface ViewerProps {
   model: HouseModel;
@@ -144,7 +145,12 @@ function ViewerImpl(props: ViewerProps) {
       {chrome && <ViewCube />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
-      {compiled === null && <div className="viewer-loading">Preparing the 3D view…</div>}
+      {compiled === null && (
+        <div className="viewer-loading" role="status">
+          <Loader kind="blueprint" size={40} />
+          Preparing the 3D view
+        </div>
+      )}
       <Canvas
         shadows="percentage"
         gl={{ toneMapping: THREE.NeutralToneMapping }}
