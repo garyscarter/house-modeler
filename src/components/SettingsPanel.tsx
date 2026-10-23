@@ -2,6 +2,7 @@ import { useStore } from "../store";
 import { ask } from "./Dialogs";
 import { applyProject, syncNow, useSyncStatus } from "../lib/sync";
 import { statusText } from "../lib/syncLogic";
+import { Loader } from "./Loader";
 
 const QUALITY: [string, string, string][] = [
   ["high", "High", "Ambient occlusion and soft shadows"],
@@ -96,7 +97,10 @@ export function SyncStatus() {
   if (sync.kind === "off") return null;
   return (
     <p className="small muted sync-status" role="status">
-      <span>{statusText(sync)}</span>
+      <span>
+        {sync.kind === "saving" && <Loader kind="lift" size={14} />}
+        {statusText(sync)}
+      </span>
       <button onClick={syncNow} disabled={sync.kind === "saving"}>
         Sync now
       </button>

@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 import { listingPhotos } from "../lib/houses/listingAssets";
+import { Loader } from "./Loader";
 import { floorDisplayName } from "../lib/studio";
 
 export function PhotosPanel() {
@@ -12,7 +13,7 @@ export function PhotosPanel() {
   const updatePhoto = useStore((s) => s.updatePhoto);
   const removePhoto = useStore((s) => s.removePhoto);
   const setUi = useStore((s) => s.setUi);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const onFiles = async (files: FileList) => {
@@ -45,20 +46,27 @@ export function PhotosPanel() {
         </label>
         {isListing && !photos.some((p) => p.name === "front-1") && (
           <button
-            disabled={!!busy}
+            disabled={!!loading}
             title="Add the listing's 37 photos, already placed in their rooms or beside the right side of the house"
             onClick={async () => {
-              setBusy("Loading listing photos");
+              setLoading({ done: 0, total: 0 });
               try {
-                addPhotos(await listingPhotos());
+                addPhotos(await listingPhotos((done, total) => setLoading({ done, total })));
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not load the photos.");
               } finally {
-                setBusy(null);
+                setLoading(null);
               }
             }}
           >
-            Load listing 91770873 photos
+            {loading ? (
+              <>
+                <Loader kind="fill" size={14} progress={loading.total ? loading.done / loading.total : 0} />
+                Loading photos {loading.done} of {loading.total}
+              </>
+            ) : (
+              "Load listing 91770873 photos"
+            )}
           </button>
         )}
       </div>

@@ -27,6 +27,7 @@ const exportGlb = async (...a: Parameters<typeof import("../three/capture").expo
 import { siteOf } from "../lib/sites";
 import { floorDisplayName } from "../lib/studio";
 import "./ReportPanel.css";
+import { Loader } from "./Loader";
 
 const KEYS: VariantKey[] = ["current", "proposed"];
 type AreaUnit = "m²" | "ft²";
@@ -429,7 +430,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         <h4 className="rp-sub">Report</h4>
         <div className="row">
           <button className="primary" onClick={print} disabled={busy !== null}>
-            {busy === "print" ? "Preparing…" : "Print / save as PDF"}
+            {busy === "print" ? <><Loader kind="lift" size={14} />Preparing…</> : "Print / save as PDF"}
           </button>
           <button onClick={csv} disabled={!changes?.length}>
             Changes and costs (CSV)
@@ -440,13 +441,13 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         <h4 className="rp-sub">3D</h4>
         <div className="row">
           <button onClick={() => snapshot(1)} disabled={no3d || busy !== null}>
-            {busy === "png1" ? "Saving…" : "Snapshot (PNG)"}
+            {busy === "png1" ? <><Loader kind="lift" size={14} />Saving…</> : "Snapshot (PNG)"}
           </button>
           <button onClick={() => snapshot(2)} disabled={no3d || busy !== null}>
-            {busy === "png2" ? "Saving…" : "Snapshot 2× (PNG)"}
+            {busy === "png2" ? <><Loader kind="lift" size={14} />Saving…</> : "Snapshot 2× (PNG)"}
           </button>
           <button onClick={glb} disabled={no3d || busy !== null}>
-            {busy === "glb" ? "Exporting…" : "3D model (GLB)"}
+            {busy === "glb" ? <><Loader kind="lift" size={14} />Exporting…</> : "3D model (GLB)"}
           </button>
         </div>
         <p className="muted small">
