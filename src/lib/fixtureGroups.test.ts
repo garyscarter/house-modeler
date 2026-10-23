@@ -63,6 +63,10 @@ describe("duplicateFixtures", () => {
     expect(copy[0].id).not.toBe("a");
     expect([copy[0].x, copy[0].y, copy[1].x]).toEqual([10, 20, 110]);
   });
+  it("drops the lock on copies", () => {
+    const c = duplicateFixtures([{ ...base[0], locked: true }], ["a"], 5, 5, () => "x");
+    expect(c[0].locked).toBeUndefined();
+  });
   it("does not leave a lone grouped copy", () => {
     const g = groupFixtures(base, ["a", "b"], "G");
     expect(duplicateFixtures(g, ["a"], 0, 0, () => "x")[0].groupId).toBeUndefined();

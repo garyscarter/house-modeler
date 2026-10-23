@@ -109,6 +109,7 @@ export function duplicateFixtures(fixtures: Fixture[], ids: Iterable<string>, dx
   for (const f of fixtures) {
     if (!want.has(f.id)) continue;
     const copy: Fixture = { ...f, id: newId(), x: f.x + dx, y: f.y + dy };
+    delete copy.locked; // a copy starts free to move
     if (f.groupId) {
       if (!groups.has(f.groupId)) groups.set(f.groupId, newId());
       copy.groupId = groups.get(f.groupId);

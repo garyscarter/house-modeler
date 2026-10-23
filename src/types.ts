@@ -9,6 +9,8 @@ export interface Room {
   name: string;
   /** Polygon in image pixel coordinates. */
   polygon: Pt[];
+  /** Selects but can't be moved, resized or reshaped on the plan. */
+  locked?: boolean;
   /** Printed dimensions from the plan, in metres, if any. */
   dims?: { w: number; h: number };
   /** Photo used as the floor texture, if any. */
@@ -310,6 +312,8 @@ export interface Fixture {
   label?: string;
   /** Items sharing a groupId are selected, moved, turned and copied together on the plan (a dining table and its chairs). */
   groupId?: string;
+  /** Selects but can't be moved, resized or reshaped on the plan. */
+  locked?: boolean;
 }
 
 export interface Floor {
