@@ -13,7 +13,12 @@ export const isLook = (v: unknown): v is Look => v === "studio" || v === "glass"
  * Display name for a floor: "Ground Floor" reads "Ground floor". Names that are not one of the
  * stock floor names are left as typed. Display only: the model keeps the raw name (photos match on it).
  */
+const NUMBERED_FLOOR = ["First", "Second", "Third"];
+
 export function floorDisplayName(name: string): string {
+  // The built-in listing calls its upper storey "Floor 1"; read it as a person would.
+  const n = /^floor (\d)$/i.exec(name.trim());
+  if (n && NUMBERED_FLOOR[+n[1] - 1]) return `${NUMBERED_FLOOR[+n[1] - 1]} floor`;
   if (!/^(lower ground|ground|first|second|third|top) floor$/i.test(name)) return name;
   return name[0].toUpperCase() + name.slice(1).toLowerCase();
 }

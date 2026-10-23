@@ -10,6 +10,9 @@ describe("floorDisplayName", () => {
     expect(floorDisplayName("Ground Floor")).toBe("Ground floor");
     expect(floorDisplayName("First Floor")).toBe("First floor");
     expect(floorDisplayName("LOWER GROUND FLOOR")).toBe("Lower ground floor");
+    expect(floorDisplayName("Floor 1")).toBe("First floor");
+    expect(floorDisplayName("Floor 2")).toBe("Second floor");
+    expect(floorDisplayName("Floor 7")).toBe("Floor 7");
     expect(floorDisplayName("Loft")).toBe("Loft");
     expect(floorDisplayName("Annexe Floor")).toBe("Annexe Floor");
   });
