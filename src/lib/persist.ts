@@ -55,6 +55,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** When the oldest unsaved change was made, so a stream of updates (the sun animation) can't hold off saving for ever. */
   let since: number | null = null;
+  let lastState: Record<string, unknown> | null = null; // the fields of the last value accepted, to skip unchanged saves
   let chain: Promise<void> = Promise.resolve();
 
   const idOf = (url: string) => {
@@ -126,6 +127,11 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
       return rehydrate(raw, (id) => byId.get(id)) as StorageValue<S>;
     },
     setItem: (name, value) => {
+      // zustand calls this on every set, including hover and selection that change nothing we save.
+      const state = value.state as Record<string, unknown>;
+      const keys = Object.keys(state);
+      if (lastState && keys.length === Object.keys(lastState).length && keys.every((k) => k in lastState! && state[k] === lastState![k])) return;
+      lastState = state;
       pending = { name, value };
       if (timer) clearTimeout(timer);
       since ??= Date.now();
@@ -133,6 +139,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
     },
     removeItem: async (name) => {
       pending = null;
+      lastState = null;
       await del(name);
     },
   };
