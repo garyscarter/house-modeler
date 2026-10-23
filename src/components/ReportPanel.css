@@ -79,3 +79,5 @@
 .rp-check { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
 .rp-check h4 { margin: 0 0 4px; font-size: 13px; }
 .rp-check p { margin: 4px 0; }
+
+.rp-open-full { width: 100%; min-height: 36px; margin: 2px 0 8px; }

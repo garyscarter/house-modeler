@@ -543,6 +543,10 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
 const NEIGHBOUR_WALL = "#f7f7f5";
 const NEIGHBOUR_ROOF = "#aca7a2";
 const FLAT_ROOF = "#9a9894";
+/** Quiet "card model" massing, used unless the neighbours are shown in their own colours. */
+const CARD_WALL = "#eef0ee";
+const CARD_ROOF = "#cfd3d1";
+const CARD_FLAT_ROOF = "#c4c8c6";
 
 /** Neighbours sit in the background: their colours are pulled toward grey and their relief eased. */
 const WALL_DESAT = 0.35;
@@ -581,6 +585,9 @@ function neighbourRoofBase(color: string): THREE.MeshStandardMaterial {
     const tex = tileTextures("plain");
     return new THREE.MeshStandardMaterial({ color: mixToGrey(color, ROOF_DESAT), map: tex.map, bumpMap: tex.bump, bumpScale: 2 * NEIGHBOUR_BUMP, roughness: tex.roughness, side: THREE.DoubleSide });
   });
+}
+function cardBase(color: string): THREE.MeshStandardMaterial {
+  return neighbourBase(`card|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.92 }));
 }
 function neighbourFlatBase(): THREE.MeshStandardMaterial {
   return neighbourBase("flat", () => new THREE.MeshStandardMaterial({ color: FLAT_ROOF, map: membraneTexture(), roughness: 0.95 }));
@@ -651,6 +658,7 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
   const outline = useMemo(() => new THREE.LineBasicMaterial({ color: "#5d6269", transparent: true, opacity: 0.3, depthWrite: false }), []);
   useEffect(() => () => outline.dispose(), [outline]);
   const outlineRef = useRef<THREE.Group>(null);
+  const trueColours = useSiteView((s) => s.trueNeighbourColours);
   const mats = useMemo(() => {
     const make = (base: THREE.MeshStandardMaterial, side?: THREE.Side) => {
       const m = base.clone();
@@ -662,11 +670,15 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
       }
       return m;
     };
+    // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
+    if (!trueColours) {
+      // Quiet "card model": plain pale massing, no textures.
+      return [make(cardBase(CARD_FLAT_ROOF)), make(cardBase(CARD_WALL)), make(cardBase(CARD_ROOF), THREE.DoubleSide), make(cardBase(CARD_WALL), THREE.DoubleSide)];
+    }
     const wall = neighbourWallBase(n.color ?? NEIGHBOUR_WALL);
     const roof = neighbourRoofBase(n.roofColor ?? NEIGHBOUR_ROOF);
-    // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
     return [make(neighbourFlatBase()), make(wall), make(roof, THREE.DoubleSide), make(wall, THREE.DoubleSide)];
-  }, [n.color, n.roofColor, ghost]);
+  }, [n.color, n.roofColor, ghost, trueColours]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
 
   const box = useMemo(() => {
