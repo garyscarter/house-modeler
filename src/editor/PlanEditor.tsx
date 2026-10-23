@@ -105,6 +105,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const selectedRoomId = useStore((s) => s.selectedRoomId);
   const selectedEdge = useStore((s) => s.selectedEdge);
   const mode = useStore((s) => s.mode);
+  const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
   const setMode = useStore((s) => s.setMode);
   const build = mode === "build";
   const decorate = mode === "decorate";
@@ -1486,6 +1487,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 <FixtureInspector
                   fixture={selectedFixture}
                   item={selectedFixtureItem}
+                  ceiling={ceilingHeight}
                   clash={clashes.has(selectedFixture.id)}
                   groupSize={selectedFixture.groupId ? allFixtures.filter((x) => x.groupId === selectedFixture.groupId).length : undefined}
                   onSelectGroup={() => select({ fixtures: expandToGroups([selectedFixture.id], allFixtures) })}

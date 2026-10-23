@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fixtureBox,
   areaM2,
   axisRect,
   comparePrinted,
@@ -348,5 +349,20 @@ describe("camera", () => {
     expect(p.x + 130 * p.s).toBeCloseTo(c.x + 100 * c.s);
     expect(p.y + 100 * p.s).toBeCloseTo(c.y + 100 * c.s);
     expect(panCam(c, 10, -5)).toEqual({ x: -10, y: 30, s: 2 });
+  });
+});
+
+describe("fixtureBox", () => {
+  const wardrobe: CatalogueItem = { id: "w", name: "Fitted wardrobe", category: "Bedroom", w: 1.8, d: 0.6, h: 2.4, color: "#fff", symbol: "fitted-wardrobe", toCeiling: true };
+  const chest: CatalogueItem = { ...wardrobe, id: "c", h: 1.2, toCeiling: undefined, symbol: "box" };
+  const at = (h?: number) => ({ id: "f", type: "w", x: 0, y: 0, rot: 0, h });
+  it("makes a floor-to-ceiling item as tall as the room, never taller", () => {
+    expect(fixtureBox(at(), wardrobe, 2.25).h).toBe(2.25);
+    expect(fixtureBox(at(2.4), wardrobe, 2.25).h).toBe(2.25);
+    expect(fixtureBox(at(2.0), wardrobe, 2.25).h).toBe(2.0);
+  });
+  it("leaves other items, and a wardrobe with no ceiling given, as they were", () => {
+    expect(fixtureBox(at(), chest, 2.25).h).toBe(1.2);
+    expect(fixtureBox(at(), wardrobe).h).toBe(2.4);
   });
 });

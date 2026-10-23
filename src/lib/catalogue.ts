@@ -73,6 +73,8 @@ export interface CatalogueItem {
   symbol: Symbol;
   /** Height of the item's base above the floor, metres, for wall-hung and worktop items. */
   mount?: number;
+  /** Floor-to-ceiling items (fitted wardrobes): as tall as the room unless set lower, and never taller. */
+  toCeiling?: boolean;
   note?: string;
 }
 
@@ -100,8 +102,8 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bedside", name: "Bedside table", category: "Bedroom", w: 0.45, d: 0.40, h: 0.55, color: WOOD, symbol: "box" },
   { id: "wardrobe-double", name: "Double wardrobe", category: "Bedroom", w: 1.00, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-triple", name: "Triple wardrobe", category: "Bedroom", w: 1.50, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
-  { id: "wardrobe-fitted", name: "Fitted wardrobe", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#f5f5f5", symbol: "fitted-wardrobe", note: "Floor to ceiling, with top boxes; set any width" },
-  { id: "wardrobe-shaker", name: "Fitted wardrobe (shaker)", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#cfd2d6", symbol: "shaker-wardrobe", note: "Floor to ceiling, framed doors with knobs; set any width" },
+  { id: "wardrobe-fitted", name: "Fitted wardrobe", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#f5f5f5", symbol: "fitted-wardrobe", toCeiling: true, note: "Floor to ceiling, with top boxes; set any width" },
+  { id: "wardrobe-shaker", name: "Fitted wardrobe (shaker)", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#cfd2d6", symbol: "shaker-wardrobe", toCeiling: true, note: "Floor to ceiling, framed doors with knobs; set any width" },
   { id: "chest", name: "Chest of drawers", category: "Bedroom", w: 0.80, d: 0.45, h: 0.9, color: WOOD, symbol: "box" },
   { id: "dressing-table", name: "Dressing table", category: "Bedroom", w: 1.00, d: 0.45, h: 0.76, color: WOOD, symbol: "dresser", note: "With a mirror above" },
 

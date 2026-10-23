@@ -25,6 +25,7 @@ import {
   comparePrinted,
   defaultHead,
   defaultSill,
+  fixtureBox,
   formatArea,
   resizeRect,
   turn,
@@ -639,9 +640,12 @@ export function FixtureInspector({
   onCopy,
   onPaste,
   onRemove,
+  ceiling,
 }: {
   fixture: Fixture;
   item: CatalogueItem;
+  /** The room's ceiling height, for floor-to-ceiling items. */
+  ceiling?: number;
   clash: boolean;
   /** Members of the group this item belongs to (shown when it was picked alone). */
   groupSize?: number;
@@ -678,11 +682,11 @@ export function FixtureInspector({
         <div className="size-row">
           <NumberField value={fixture.w ?? item.w} label="Width" onCommit={(w) => onChange({ w })} />
           <NumberField value={fixture.d ?? item.d} label="Depth" onCommit={(d) => onChange({ d })} />
-          <NumberField value={fixture.h ?? item.h} label="Height" onCommit={(h) => onChange({ h })} />
+          <NumberField value={fixtureBox(fixture, item, ceiling).h} label="Height" onCommit={(h) => onChange({ h })} />
         </div>
         {resized && (
           <button className="link" onClick={() => onChange({ w: undefined, d: undefined, h: undefined })}>
-            Reset to {item.w.toFixed(2)} × {item.d.toFixed(2)} × {item.h.toFixed(2)} m
+            Reset to {item.w.toFixed(2)} × {item.d.toFixed(2)} × {item.toCeiling && ceiling ? `${ceiling.toFixed(2)} (the ceiling)` : item.h.toFixed(2)} m
           </button>
         )}
       </div>

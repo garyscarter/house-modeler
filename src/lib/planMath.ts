@@ -505,8 +505,13 @@ export function inwardNormals(poly: Pt[]): Pt[] {
 export const turn = (rot: number, delta: number) => Math.round(normDeg(rot + delta) * 1e6) / 1e6;
 
 /** A fixture's size in metres (custom or catalogue) and the height of its base above the floor. */
-export function fixtureBox(fx: Fixture, item: CatalogueItem): { w: number; d: number; h: number; z0: number } {
-  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h, z0: mountOf(fx, item) };
+/**
+ * A fixture's size and base height in metres. Given the room's ceiling height, a floor-to-ceiling item
+ * (`toCeiling`) is as tall as the ceiling unless its own height is lower, so it follows the ceiling when that changes.
+ */
+export function fixtureBox(fx: Fixture, item: CatalogueItem, ceiling?: number): { w: number; d: number; h: number; z0: number } {
+  const h = item.toCeiling && ceiling ? Math.min(fx.h ?? ceiling, ceiling) : fx.h ?? item.h;
+  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h, z0: mountOf(fx, item) };
 }
 
 /** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids and rugs are skipped. */

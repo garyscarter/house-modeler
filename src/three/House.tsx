@@ -219,7 +219,7 @@ function FloorGroupInner({
       {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
 
       <group onClick={onPickWall ? block : undefined}>
-        <Fixtures floor={floor} />
+        <Fixtures floor={floor} ceiling={H} />
       </group>
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}

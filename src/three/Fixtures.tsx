@@ -12,12 +12,12 @@ import { glassMaterial } from "./textures";
  * A floor's fixtures are a few hundred small parts, so they are merged into one mesh per material (see
  * buildFixtureMeshes) rather than drawn one mesh each. Fixtures have no 3D click handling, so nothing is lost.
  */
-export function Fixtures({ floor }: { floor: Floor }) {
-  // Rebuilt only when the fixtures, or the floor's placement, change: not for a room colour or a wall.
+export function Fixtures({ floor, ceiling }: { floor: Floor; ceiling: number }) {
+  // Rebuilt only when the fixtures, the floor's placement or the ceiling change: not for a room colour or a wall.
   const meshes = useMemo(
-    () => buildFixtureMeshes(floor),
+    () => buildFixtureMeshes(floor, ceiling),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [floor.fixtures, floor.origin, floor.offset, floor.pxPerM],
+    [floor.fixtures, floor.origin, floor.offset, floor.pxPerM, ceiling],
   );
   useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
   return (
@@ -46,13 +46,13 @@ const _yaw = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 
 /** Every part of every fixture on the floor in world space, merged into one geometry per material. */
-function buildFixtureMeshes(floor: Floor): FixtureMesh[] {
+function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
   const groups = new Map<string, { color: string; finish: Finish; geoms: THREE.BufferGeometry[] }>();
   for (const f of floor.fixtures ?? []) {
     const item = byId(f.type);
     if (!item) continue;
     const p = toWorld(floor, { x: f.x, y: f.y });
-    const b = fixtureBox(f, item);
+    const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
