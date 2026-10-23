@@ -120,6 +120,7 @@ export function House({
           photos={photos}
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
+          roofOver={!!showExterior && !ghost && ext.showRoof}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
@@ -138,6 +139,7 @@ function FloorGroup({
   photos,
   ghost,
   showLabels,
+  roofOver,
   showCeilings,
   doorsOpen,
   selectedRoomId,
@@ -150,6 +152,8 @@ function FloorGroup({
   photos: Photo[];
   ghost: boolean;
   showLabels: boolean;
+  /** The roof is drawn over this floor, so only the selected room is labelled. */
+  roofOver: boolean;
   showCeilings: boolean;
   doorsOpen: boolean;
   selectedRoomId?: string | null;
@@ -206,7 +210,7 @@ function FloorGroup({
 
       <Fixtures floor={floor} />
 
-      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} />}
+      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
 
       {floor.rooms.map((room) => (
         <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />

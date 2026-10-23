@@ -32,30 +32,3 @@
 .sun-legend { margin-top: 6px; }
 .sun-legend-bar { height: 10px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.1); }
 .sun-legend-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-.compass-rose {
-  position: absolute; right: 10px; bottom: 10px; z-index: 12; width: 66px; height: 66px; pointer-events: none;
-  border-radius: 50%; background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-}
-.compass-ring { position: absolute; inset: 0; transform: rotate(calc(var(--view-bearing, 0) * -1deg)); }
-/* Marks sit on the ring but turn back upright so they stay readable. */
-.compass-mark {
-  position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px;
-  text-align: center; line-height: 16px; font-size: 11px; font-weight: 700; color: var(--muted);
-  transform: rotate(calc(var(--a) * 1deg)) translateY(-23px) rotate(calc(var(--view-bearing, 0) * 1deg - var(--a) * 1deg));
-}
-.compass-mark.north { color: var(--danger); }
-.compass-needle {
-  position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin-left: -4px;
-  border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 13px solid var(--danger);
-  transform: translateY(-100%);
-}
-.compass-needle::after {
-  content: ""; position: absolute; left: -4px; top: 13px; width: 0; height: 0;
-  border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 13px solid #9ca3af;
-}
-.compass-sun {
-  position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%;
-  background: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
-  transform: rotate(calc(var(--a) * 1deg)) translateY(-31px);
-}
