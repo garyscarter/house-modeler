@@ -11,7 +11,7 @@ import { DEFAULT_WORKTOP, hasWorktop, mountOf, type CatalogueItem } from "../lib
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
-import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, styleOptions } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
 import { floorDisplayName } from "../lib/studio";
@@ -28,6 +28,7 @@ import {
   formatArea,
   resizeRect,
   turn,
+  wallRun,
   type Corner,
 } from "../lib/planMath";
 
@@ -367,7 +368,7 @@ function OptionalColour({ label, value, fallback, onChange }: { label: string; v
 }
 
 /** Style, glazing, sill and trim colours of an opening, where its kind has them. */
-function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Partial<Opening>) => void }) {
+function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Floor; onChange: (p: Partial<Opening>) => void }) {
   const k = opening.kind;
   const styles = styleOptions(k);
   const glazed = k === "window" || k === "bay";
@@ -397,8 +398,13 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
       {k === "front" && (
         <label>
           Side lights
-          <small className="muted">Full-height glazing in the same frame as the door. The width covers the whole unit: about 1.3 m for one side light, 1.8 m for two.</small>
-          <select value={opening.sidelight ?? ""} onChange={(e) => onChange({ sidelight: (e.target.value || undefined) as Sidelight | undefined })}>
+          <small className="muted">
+            Full-height glazing in the same frame as the door. The width covers the whole unit, so a narrow door is widened to fit (1.3 m for one side light, 1.8 m for two), as far as its wall allows.
+          </small>
+          <select
+            value={opening.sidelight ?? ""}
+            onChange={(e) => onChange(withSidelight(opening, (e.target.value || undefined) as Sidelight | undefined, floor.pxPerM, wallRun(floor, opening)))}
+          >
             <option value="">None</option>
             {(Object.keys(SIDELIGHT_LABEL) as Sidelight[]).map((s) => (
               <option key={s} value={s}>
@@ -406,6 +412,9 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
               </option>
             ))}
           </select>
+          {opening.sidelight && frontUnit(opening, opening.widthM).lights.length === 0 && (
+            <small className="warn">No room for a side light: the door needs to be at least 1 m wide (1.3 m looks right). Widen it, or move it along the wall first.</small>
+          )}
         </label>
       )}
       {(k === "door" || k === "front" || k === "french") && (
@@ -460,12 +469,15 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
 export function OpeningInspector({
   opening,
   pair,
+  floor,
   onChange,
   onDelete,
 }: {
   opening: Opening;
   /** Drawn as a pair of leaves (a wide internal door), so there is no hinge side to flip. */
   pair?: boolean;
+  /** The opening's floor, to fit a front door's side lights into its wall. */
+  floor: Floor;
   onChange: (p: Partial<Opening>) => void;
   onDelete: () => void;
 }) {
@@ -559,7 +571,7 @@ export function OpeningInspector({
         </div>
       )}
       <Section id="build.opening.look" title="Look" summary={openingLookSummary(opening)}>
-        <OpeningLook opening={opening} onChange={onChange} />
+        <OpeningLook opening={opening} floor={floor} onChange={onChange} />
       </Section>
       <button className="danger" onClick={onDelete}>
         Delete opening

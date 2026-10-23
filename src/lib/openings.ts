@@ -1,4 +1,4 @@
-import type { DoorStyle, GarageStyle, GlazingPattern, Opening, OpeningKind, OpeningStyle, SillStyle } from "../types";
+import type { DoorStyle, GarageStyle, GlazingPattern, Opening, OpeningKind, OpeningStyle, Sidelight, SillStyle } from "../types";
 import { DOOR_STYLE_LABEL, GARAGE_STYLE_LABEL } from "../types";
 import type { OpeningPlacement, V2 } from "./geometry";
 import { bifoldLayout, type BifoldLayout } from "./bifold";
@@ -96,6 +96,40 @@ export function frontUnit(o: Pick<Opening, "sidelight" | "flipHinge">, w: number
   const hinge = o.flipHinge ? 1 : -1;
   const side = o.sidelight === "hinge" ? hinge : -hinge;
   return side < 0 ? { door: [-w / 2 + l, w / 2], lights: [[-w / 2, -w / 2 + l]] } : { door: [-w / 2, w / 2 - l], lights: [[w / 2 - l, w / 2]] };
+}
+
+/** Width a front door unit is widened to when it is given side lights it has no room for, metres. */
+export const SIDELIGHT_UNIT_M = { one: 1.3, both: 1.8 };
+
+/**
+ * The change that gives a front door the side lights `sidelight` (or takes
+ * them away), keeping the door leaf where it is. A unit too narrow to show
+ * them is widened to SIDELIGHT_UNIT_M, the lights growing out from the leaf;
+ * taking them away shrinks the unit back to the leaf. `run` is the free run
+ * of wall the unit may use, image px along its wall (see wallRun): a unit
+ * that would run past it is narrowed to fit and slid back inside it, so the
+ * leaf moves only when it has to. `pxPerM` converts metres to image px.
+ */
+export function withSidelight(o: Opening, sidelight: Sidelight | undefined, pxPerM: number, run?: [number, number]): Partial<Opening> {
+  const [d0, d1] = frontUnit(o, o.widthM).door;
+  const c = o.orientation === "h" ? o.x : o.y;
+  let widthM = d1 - d0;
+  let centre = c + ((d0 + d1) / 2) * pxPerM;
+  if (sidelight) {
+    const next = { ...o, sidelight };
+    const want = sidelight === "both" ? 2 : 1;
+    widthM = frontUnit(next, o.widthM).lights.length === want ? o.widthM : Math.max(o.widthM, sidelight === "both" ? SIDELIGHT_UNIT_M.both : SIDELIGHT_UNIT_M.one);
+    if (run) widthM = Math.max(o.widthM, Math.min(widthM, (run[1] - run[0]) / pxPerM));
+    // Where the leaf's centre would land in the new unit, from the unit's centre.
+    const [n0, n1] = frontUnit(next, widthM).door;
+    centre = widthM === o.widthM ? c : c + ((d0 + d1) / 2 - (n0 + n1) / 2) * pxPerM;
+    if (run) {
+      const half = (widthM / 2) * pxPerM;
+      centre = Math.min(Math.max(centre, run[0] + half), run[1] - half);
+    }
+  }
+  const r = (v: number) => Math.round(v * 1000) / 1000;
+  return { sidelight, widthM: r(widthM), ...(o.orientation === "h" ? { x: centre } : { y: centre }) };
 }
 
 /** The look of an opening with no style: panelled internal doors, glazed external doors, the classic front door, a panel-grid garage door. */

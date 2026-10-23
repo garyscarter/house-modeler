@@ -3,6 +3,8 @@ import { applyChanges, applyListingUpdates, defaultSelection, isBasedOnListing, 
 import { floor, rect } from "./testing";
 import { DEFAULT_EXTERIOR, type Fixture, type HouseModel, type Opening } from "../types";
 import { LISTING_PRESET, PRESETS } from "./houses/listing91770873";
+import { frontUnit, withSidelight } from "./openings";
+import { wallRun } from "./planMath";
 
 // 1 px = 1 cm. Ground: Kitchen (0-400 × 0-300) beside Hall (400-600 × 0-300). First: Bedroom over both.
 const door = (x: number, y: number, o: "h" | "v", extra: Partial<Opening> = {}): Opening => ({ id: `d${x}-${y}`, kind: "door", x, y, orientation: o, widthM: 0.8, ...extra });
@@ -284,5 +286,27 @@ describe("listing 91770873", () => {
     const out = applyListingUpdates(mine, latestModel, defaultSelection(cs));
     expect(listingUpdates(out, latestModel)).toEqual([]);
     expect(out.exterior).toEqual(latestModel.exterior);
+  });
+
+  it("leaves a front door's side lights, and the width they need, to the owner", () => {
+    const latestModel = PRESETS[LISTING_PRESET.id].build("");
+    const mine = PRESETS[LISTING_PRESET.id].build("");
+    const ground = mine.floors.find((f) => f.level === 0)!;
+    const i = ground.openings.findIndex((o) => o.kind === "front");
+    const door = ground.openings[i];
+    ground.openings[i] = { ...door, ...withSidelight(door, "latch", ground.pxPerM, wallRun(ground, door)) };
+    // The porch wall is 1.44 m between the garage and the front corner, so the unit is narrowed and slid to fit.
+    const unit = ground.openings[i];
+    expect(unit.widthM).toBeGreaterThan(1.1);
+    expect(unit.widthM).toBeLessThan(1.3);
+    expect(onWall(ground, unit)).toBe(true);
+    const [lo, hi] = [unit.y - (unit.widthM / 2) * ground.pxPerM, unit.y + (unit.widthM / 2) * ground.pxPerM];
+    expect(lo).toBeGreaterThanOrEqual(515);
+    expect(hi).toBeLessThanOrEqual(620);
+    expect(frontUnit(unit, unit.widthM).lights).toHaveLength(1);
+    expect(listingUpdates(mine, latestModel).filter((c) => c.group === "openings")).toEqual([]);
+    // A plain change of colour on it is still offered.
+    ground.openings[i].color = "#123456";
+    expect(listingUpdates(mine, latestModel).filter((c) => c.group === "openings")).toHaveLength(1);
   });
 });

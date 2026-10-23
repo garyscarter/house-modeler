@@ -392,8 +392,11 @@ function stairChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
 // ---------------------------------------------------------------------------------------------------------
 // Doors and windows
 
-/** Appearance and size fields of an opening that follow the listing. Hinge side, swing and how far it is drawn open are the owner's. */
-const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "frameColor", "sidelight"] as const;
+/**
+ * Appearance and size fields of an opening that follow the listing. Hinge side, swing, how far it is drawn
+ * open and a front door's side lights are the owner's, and so is the width of a front door given side lights.
+ */
+const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "frameColor"] as const;
 type OpeningField = (typeof OPENING_FIELDS)[number];
 const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   widthM: "width",
@@ -407,7 +410,6 @@ const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   boardColor: "window board colour",
   liningColor: "lining colour",
   frameColor: "frame colour",
-  sidelight: "side lights",
 };
 
 function openingValue(o: Opening, k: OpeningField): unknown {
@@ -499,7 +501,7 @@ function openingChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
     lf.openings.forEach((lo, i) => {
       const mo = matched.get(i);
       if (mo) {
-        const diffs = OPENING_FIELDS.filter((k) => !same(openingValue(mo, k), openingValue(lo, k)));
+        const diffs = OPENING_FIELDS.filter((k) => !same(openingValue(mo, k), openingValue(lo, k)) && !(k === "widthM" && mo.kind === "front" && mo.sidelight));
         if (!diffs.length) return;
         const resized = { ...mo, widthM: lo.widthM };
         const widthNote =

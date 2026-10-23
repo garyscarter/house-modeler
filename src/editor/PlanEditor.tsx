@@ -1388,6 +1388,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               <OpeningInspector
                 opening={selectedOpening}
                 pair={selectedOpening.kind === "door" && selectedOpening.widthM > DOUBLE_DOOR_M && outsideSide(selectedOpening, floor.rooms, 0.3 * ppm) === 0}
+                floor={floor}
                 onChange={(p) => updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.map((o) => (o.id === selectedOpening.id ? { ...o, ...p } : o)) }))}
                 onDelete={removeSelected}
               />

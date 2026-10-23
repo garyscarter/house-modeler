@@ -520,3 +520,54 @@ export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: 
   }
   return out;
 }
+
+/**
+ * The free run of wall an opening can grow into, image px along its wall
+ * line (x for "h" walls, y for "v"): the stretch of room edges and free walls
+ * it sits on, stopped by the nearest junction either side (where another wall
+ * meets the line) and by the other openings in that line, less `marginM`
+ * metres at each stop. The opening's own span when it sits on no wall.
+ */
+export function wallRun(floor: Floor, o: Pick<Opening, "id" | "x" | "y" | "orientation" | "widthM">, marginM = 0.1): [number, number] {
+  const tol = 0.06 * floor.pxPerM;
+  const h = o.orientation === "h";
+  const line = h ? o.y : o.x;
+  const c = h ? o.x : o.y;
+  const half = (o.widthM / 2) * floor.pxPerM;
+  const segs: [Pt, Pt][] = [
+    ...floor.rooms.flatMap((r) => r.polygon.map((a, i) => [a, r.polygon[(i + 1) % r.polygon.length]] as [Pt, Pt])),
+    ...(floor.walls ?? []).map((w) => [w.a, w.b] as [Pt, Pt]),
+  ];
+  const on = (p: Pt) => Math.abs((h ? p.y : p.x) - line) <= tol;
+  const at = (p: Pt) => (h ? p.x : p.y);
+  // Stretches along the line, joined where they touch, and junctions where a segment leaves it.
+  const along: [number, number][] = [];
+  const stops: number[] = [];
+  for (const [a, b] of segs) {
+    if (on(a) && on(b)) along.push([Math.min(at(a), at(b)), Math.max(at(a), at(b))]);
+    else if (on(a)) stops.push(at(a));
+    else if (on(b)) stops.push(at(b));
+  }
+  along.sort((p, q) => p[0] - q[0]);
+  let run: [number, number] | undefined;
+  for (const [a, b] of along) {
+    if (run && a <= run[1] + tol) run[1] = Math.max(run[1], b);
+    else if (run && run[0] <= c - half + tol && run[1] >= c + half - tol) break;
+    else run = [a, b];
+  }
+  if (!run || run[0] > c - half + tol || run[1] < c + half - tol) return [c - half, c + half];
+  let [lo, hi] = run;
+  for (const s of stops) {
+    if (s <= c - half + tol) lo = Math.max(lo, s);
+    else if (s >= c + half - tol) hi = Math.min(hi, s);
+  }
+  for (const p of floor.openings) {
+    if (p.id === o.id || p.orientation !== o.orientation || Math.abs((h ? p.y : p.x) - line) > tol) continue;
+    const pc = h ? p.x : p.y;
+    const ph = (p.widthM / 2) * floor.pxPerM;
+    if (pc < c) lo = Math.max(lo, pc + ph);
+    else hi = Math.min(hi, pc - ph);
+  }
+  const m = marginM * floor.pxPerM;
+  return [Math.min(lo + m, c - half), Math.max(hi - m, c + half)];
+}

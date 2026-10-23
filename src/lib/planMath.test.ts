@@ -23,6 +23,7 @@ import {
   snapToWall,
   abutNeighbours,
   turn,
+  wallRun,
   viewBoxOf,
   wallLines,
   zoomCam,
@@ -31,6 +32,7 @@ import {
 } from "./planMath";
 import { floor, rect } from "./testing";
 import type { CatalogueItem } from "./catalogue";
+import type { Opening } from "../types";
 
 // 100 px per metre throughout, so coordinates read as centimetres.
 const PX = 100;
@@ -237,6 +239,26 @@ describe("walls for snapping", () => {
     expect(shared.halfT).toBeCloseTo(5);
     expect(lines[0].halfT).toBeCloseTo(15);
     expect(lines[8].halfT).toBeCloseTo(5);
+  });
+});
+
+describe("wallRun", () => {
+  // Two rooms side by side along y = 0 (100 px/m): a junction at x = 300 where their shared wall meets the line.
+  const rooms = [rect("A", 0, 0, 300, 200), rect("B", 300, 0, 800, 200)];
+  const door: Opening = { id: "d", kind: "front", x: 500, y: 0, orientation: "h", widthM: 0.9 };
+
+  it("stops at the nearest junction and the wall's end, less a margin", () => {
+    const f = floor(rooms, [door], { pxPerM: 100 });
+    expect(wallRun(f, door)).toEqual([310, 790]);
+  });
+
+  it("stops at the other openings in the line", () => {
+    const win: Opening = { id: "w", kind: "window", x: 700, y: 0, orientation: "h", widthM: 0.6 };
+    expect(wallRun(floor(rooms, [door, win], { pxPerM: 100 }), door)).toEqual([310, 660]);
+  });
+
+  it("is just the opening's own span off any wall", () => {
+    expect(wallRun(floor(rooms, [], { pxPerM: 100 }), { ...door, y: 100 })).toEqual([455, 545]);
   });
 });
 

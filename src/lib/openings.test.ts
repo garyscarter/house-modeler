@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -265,6 +265,30 @@ describe("front door units and contemporary styles", () => {
     // A mullion runs the full height between them.
     expect(unit.filter((b) => b.mat === "frame" && b.s[1] > 2 && Math.abs(b.p[0] - 0.25) < 1e-6)).toHaveLength(1);
     expect(glass(openingParts(place("front", 1.8, { style: "flush", sidelight: "both" }, 2.05), T, 1).boxes)).toHaveLength(2);
+  });
+
+  it("widens a door too narrow for its side lights, keeping the leaf where it was", () => {
+    const door: Opening = { id: "f", kind: "front", x: 100, y: 200, orientation: "h", widthM: 0.9 };
+    const ppm = 50;
+    const one = withSidelight(door, "latch", ppm);
+    expect(one.widthM).toBe(1.3);
+    const unit = { ...door, ...one };
+    const [d0, d1] = frontUnit(unit, unit.widthM).door;
+    // The leaf's centre, in image px along the wall, has not moved.
+    expect(unit.x + ((d0 + d1) / 2) * ppm).toBeCloseTo(100);
+    expect(unit.y).toBe(200);
+    expect(frontUnit(unit, unit.widthM).lights).toHaveLength(1);
+    expect(withSidelight({ ...door, orientation: "v" }, "both", ppm)).toMatchObject({ widthM: 1.8, y: 200 });
+    // Wide enough already: it stays put; taking the light away shrinks it back to the leaf.
+    expect(withSidelight({ ...door, widthM: 1.5 }, "hinge", ppm)).toEqual({ sidelight: "hinge", widthM: 1.5, x: 100 });
+    const back = withSidelight(unit, undefined, ppm);
+    expect(back.sidelight).toBeUndefined();
+    expect(back.widthM).toBeCloseTo(0.9);
+    expect(back.x).toBeCloseTo(100);
+    // A short run of wall narrows the unit and slides it back inside.
+    const fitted = withSidelight(door, "latch", ppm, [70, 132]);
+    expect(fitted.widthM).toBeCloseTo(1.24);
+    expect(fitted.x! - (fitted.widthM! / 2) * ppm).toBeCloseTo(70);
   });
 
   it("draws the contemporary and cottage styles", () => {
