@@ -52,7 +52,27 @@ export const WALL_FINISH_LABEL: Record<WallFinish, string> = {
   cladding: "Timber cladding",
 };
 
-export type WallCovering = "paint" | "stripe" | "floral" | "rose" | "trail" | "sprig" | "tiles" | "squares" | "brick";
+export type WallCovering =
+  | "paint"
+  | "stripe"
+  | "floral"
+  | "rose"
+  | "trail"
+  | "sprig"
+  | "tiles"
+  | "squares"
+  | "brick"
+  | "panelling"
+  | "panellingFull"
+  | "batten"
+  | "tongue"
+  | "metro"
+  | "metroSplash"
+  | "zellige"
+  | "limewash"
+  | "deco"
+  | "leaves"
+  | "microcement";
 export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   paint: "Paint",
   stripe: "Striped wallpaper",
@@ -63,6 +83,17 @@ export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   tiles: "Wall tiles",
   squares: "Small square tiles",
   brick: "Exposed brick",
+  panelling: "Shaker panelling (half height)",
+  panellingFull: "Shaker panelling (full height)",
+  batten: "Board and batten (full height)",
+  tongue: "Tongue and groove (half height)",
+  metro: "Metro tiles (full height)",
+  metroSplash: "Metro tiles (splashback)",
+  zellige: "Zellige tiles",
+  limewash: "Limewash plaster",
+  deco: "Geometric deco wallpaper",
+  leaves: "Botanical leaf wallpaper",
+  microcement: "Microcement",
 };
 
 /**

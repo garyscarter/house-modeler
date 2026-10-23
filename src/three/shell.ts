@@ -10,7 +10,7 @@ import {
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
 import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
-import { interiorFinish, outsideLook } from "../lib/wallCovering";
+import { coverLayout, coverTop, coverV, interiorFinish, outsideLook, splitFinish, splitQuadAtY, type InteriorFinish } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { skirtingColour } from "../lib/skirting";
 import { clipUnderFlight, type FlightShape } from "../lib/stairs";
@@ -169,12 +169,33 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
     const look = outsideLook(roomId ? roomsById.get(roomId) : undefined, edge, { finish: inp.wallFinish, color: inp.wallColor });
     return { kind: "ext", finish: look.finish, color: color ?? look.color };
   };
+  const finishSpec = (f: InteriorFinish): MatSpec => (f.covering === "paint" ? { kind: "paint", color: f.color } : { kind: "cover", ...f });
+  /**
+   * Add a wall face. A covering that stops part-way up the wall (panelling,
+   * boards, splashback tiles) cuts the face at the top of the band: covering
+   * below, the wall's paint above. Fitted ones are stretched to the band, and
+   * start at the wall's end so panels begin at a corner.
+   */
+  const addFace = (q: FaceQuad, wall: WallSeg | null, op: Opening | null, sills: number[], u0: number) => {
+    const room = q.slot.kind === "inside" && wall && !wall.color ? roomsById.get(q.slot.roomId) : undefined;
+    if (q.slot.kind !== "inside" || !room) return batch.add(q, slotSpec(q.slot, wall, op));
+    const fin = interiorFinish(room, undefined, q.slot.edge);
+    const layout = fin.covering === "paint" ? undefined : coverLayout(fin.covering);
+    if (!layout) return batch.add(q, finishSpec(fin));
+    const top = coverTop(layout, H, sills);
+    const { lower, upper } = splitFinish(fin);
+    const [lo, hi] = layout.band === null ? [q, null] : splitQuadAtY(q, top);
+    if (lo) {
+      // Texture v follows the height above the floor (not the storey's base) so panels and courses start at the floor.
+      const uv = lo.uv.map(([u, v], i): [number, number] => [layout.fit ? u - u0 : u, lo.n[1] === 0 ? coverV(layout, lo.v[i][1], top) : v]);
+      batch.add({ ...lo, uv }, finishSpec(lower));
+    }
+    if (hi) batch.add(hi, finishSpec(upper ?? lower));
+  };
   const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null): MatSpec => {
     switch (slot.kind) {
-      case "inside": {
-        const f = interiorFinish(roomsById.get(slot.roomId), wall?.color, slot.edge);
-        return f.covering === "paint" ? { kind: "paint", color: f.color } : { kind: "cover", ...f };
-      }
+      case "inside":
+        return finishSpec(interiorFinish(roomsById.get(slot.roomId), wall?.color, slot.edge));
       case "outside":
         return outsideSpec(slot.roomId, wall?.color, slot.edge);
       case "top":
@@ -205,7 +226,11 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       baseY: inp.baseY,
       skirting: wall.height === undefined,
     });
-    for (const q of quads) batch.add(q, slotSpec(q.slot, wall, null));
+    // Sills of the wall's windows: a splashback or dado stops at a sill just under its top.
+    const sills = placements.filter((pl) => pl.opening.kind === "window" || pl.opening.kind === "bay").map((pl) => pl.y0);
+    const wallLen = Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y) || 1;
+    const u0 = (wall.a.x * (wall.b.x - wall.a.x) + wall.a.y * (wall.b.y - wall.a.y)) / wallLen;
+    for (const q of quads) addFace(q, wall, null, sills, u0);
 
     for (const s of skirting) {
       const dx = s.b.x - s.a.x;
@@ -239,8 +264,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       // A bay on an internal wall makes no sense; draw it as a window.
       parts = openingParts({ ...pl, y0: Math.min(windowSill(op), pl.y1 - 0.1), opening: { ...op, kind: "window" } }, wallT, out);
     } else parts = openingParts(pl, wallT, out, inp.doorsOpen);
-    for (const q of boxQuads(parts.boxes, frame)) batch.add(q, slotSpec(q.slot, null, op));
-    for (const q of quadsToWorld(parts.quads, frame)) batch.add(q, slotSpec(q.slot, null, op));
+    for (const q of boxQuads(parts.boxes, frame)) addFace(q, null, op, [], 0);
+    for (const q of quadsToWorld(parts.quads, frame)) addFace(q, null, op, [], 0);
   }
 
   return { meshes: batch.build(), bayFloors };
