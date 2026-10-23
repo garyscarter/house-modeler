@@ -1,22 +1,19 @@
 .sun-panel {
-  position: absolute; left: 10px; bottom: 10px; z-index: 12; /* above the 3D labels (drei Html uses 0-10) */
-  width: min(320px, calc(100% - 96px));
-  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12); padding: 4px 6px 4px 10px; font-size: 13px;
+  position: absolute; left: var(--float-gap, 12px); bottom: 76px; z-index: 12; /* above the 3D labels (drei Html uses 0-10) */
+  width: min(320px, calc(100% - 156px));
+  padding: 4px 6px 4px 12px; font-size: 13px;
 }
-.sun-panel:not(.open) { width: auto; max-width: calc(100% - 96px); }
-.sun-panel.open { padding-bottom: 8px; }
 /* Side by side: one set of controls drives both views. */
 .split .viewer + .viewer .sun-panel { display: none; }
 
 .sun-head { display: flex; align-items: center; gap: 8px; min-height: 34px; }
-.sun-toggle { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sun-toggle { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-family: var(--font-display); font-weight: 600; cursor: pointer; white-space: nowrap; }
 .sun-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-.sun-brief { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.sun-collapse { margin-left: auto; border: 0; background: transparent; min-width: 34px; min-height: 34px; padding: 0; font-size: 14px; color: var(--muted); }
+.sun-brief { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; }
+.sun-close { margin-left: auto; }
 .sun-hint { margin: 2px 0 4px; font-size: 12px; color: var(--muted); }
 
-.sun-body { padding-right: 4px; }
+.sun-body { padding: 0 4px 8px 0; }
 .sun-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin: 4px 0; }
 .sun-label { color: var(--muted); }
 .sun-row input[type="range"] { width: 100%; min-width: 0; height: 30px; margin: 0; accent-color: var(--accent); }

@@ -5,6 +5,8 @@
  */
 
 import { elevationFraming } from "./viewFraming";
+import type { HouseModel } from "../types";
+import { modelBounds, type V2 } from "./geometry";
 
 export interface V3 {
   x: number;
@@ -25,6 +27,45 @@ export interface FrameBox {
 }
 export type ViewSide = "front" | "rear" | "left" | "right" | "top";
 export type ViewRequest = ViewSide | "home";
+
+/** Allowance for the roof above the top storey when framing the house, metres. */
+export const ROOF_ALLOWANCE = 3.5;
+
+/**
+ * The box the opening view frames: every floor of every model given (with its
+ * roof allowance) and every plot boundary. Passing both layouts and both plots
+ * makes As listed and Proposed open on the same camera.
+ */
+export function frameFor(models: HouseModel[], boundaries: V2[][], roofAllowance = ROOF_ALLOWANCE): FrameBox {
+  const b = modelBounds(models.flatMap((m) => m.floors));
+  const box = { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 };
+  let height = roofAllowance;
+  for (const m of models) {
+    if (!m.floors.length) continue;
+    const top = Math.max(...m.floors.map((f) => f.level));
+    height = Math.max(height, (top + 1) * (m.ceilingHeight + m.slabThickness) + roofAllowance);
+  }
+  for (const poly of boundaries)
+    for (const p of poly) {
+      box.x0 = Math.min(box.x0, p.x);
+      box.x1 = Math.max(box.x1, p.x);
+      box.y0 = Math.min(box.y0, p.y);
+      box.y1 = Math.max(box.y1, p.y);
+    }
+  return { ...box, height };
+}
+
+/** A camera pose that is safe to apply: every coordinate finite and the camera not on its target. */
+export function isValidPose(p: unknown): p is CameraPose {
+  if (!p || typeof p !== "object") return false;
+  const { position, target } = p as Partial<CameraPose>;
+  const ok = (v: unknown) => {
+    const q = v as Partial<V3> | undefined;
+    return !!q && [q.x, q.y, q.z].every((n) => typeof n === "number" && Number.isFinite(n));
+  };
+  if (!ok(position) || !ok(target)) return false;
+  return Math.hypot(position!.x - target!.x, position!.y - target!.y, position!.z - target!.z) > 1e-6;
+}
 
 export const HOME_AZIMUTH_DEG = 35;
 export const HOME_ELEVATION_DEG = 28;

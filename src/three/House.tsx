@@ -1,7 +1,7 @@
 import { Suspense, memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
-import { useLoader } from "@react-three/fiber";
+import { useLoader, useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
@@ -48,7 +48,9 @@ interface HouseProps {
   doorsOpen?: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
-  /** Decorate: a tap on a wall face (hit point and face normal in the plan frame: world x, z). */
+  /** Right-click on a room's floor, with the pointer position in the window. */
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
+  /** Decorate: a click on a wall face (hit point and face normal in the plan frame: world x, z). */
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Only render these floor levels (used to hide floors above the walk floor). */
   visibleLevels?: number[] | null;
@@ -62,7 +64,7 @@ interface HouseProps {
   showExterior?: boolean;
 }
 
-/** Decorate: furniture, ceilings and the roof swallow clicks so a tap never reaches the wall or floor behind them. */
+/** Decorate: furniture, ceilings and the roof swallow clicks so a click never reaches the wall or floor behind them. */
 const block = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 export function House({
@@ -74,6 +76,7 @@ export function House({
   doorsOpen = false,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
   onPickWall,
   visibleLevels,
   diffAgainst,
@@ -105,6 +108,7 @@ export function House({
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onContextRoom={ghost ? undefined : onContextRoom}
           onPickWall={onPickWall}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
@@ -136,6 +140,7 @@ function FloorGroupInner({
   doorsOpen,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
   onPickWall,
   otherFloor,
   wells,
@@ -151,6 +156,7 @@ function FloorGroupInner({
   doorsOpen: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   otherFloor?: Floor | null;
   wells: Stairwell[];
@@ -195,7 +201,7 @@ function FloorGroupInner({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} flight={flight} />
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onContextRoom={onContextRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} flight={flight} />
       {showCeilings && (
         <group onClick={onPickWall ? block : undefined}>
           {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
@@ -237,6 +243,7 @@ function FloorShell({
   photos,
   selectedRoomId,
   onSelectRoom,
+  onContextRoom,
   onPickWall,
   holes,
   doorsOpen,
@@ -250,6 +257,7 @@ function FloorShell({
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
@@ -316,6 +324,7 @@ function FloorShell({
           photos={photos}
           selected={room.id === selectedRoomId}
           onSelect={() => onSelectRoom?.(floor, room)}
+          onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
         />
       ))}
       {shell.bayFloors.map((b, i) => {
@@ -328,9 +337,11 @@ function FloorShell({
             photos={photos}
             selected={room.id === selectedRoomId}
             onSelect={() => onSelectRoom?.(floor, room)}
+            onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
           />
         ) : null;
       })}
+      {onContextRoom && <RoomHover floor={floor} holes={holes} />}
       {shell.meshes.map((m) => (
         <mesh
           key={m.key}
@@ -371,7 +382,20 @@ function floorSpec(room: Room, selected: boolean): MatSpec {
   return { kind: "floor", finish, color: finishColour(room)!, selected, grout: room.floorGrout && groutColour(room) };
 }
 
-function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
+/** Where the last pointer press landed, to tell a right-click from a right-drag (which pans the view). */
+const lastDown = { x: 0, y: 0 };
+if (typeof window !== "undefined")
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      lastDown.x = e.clientX;
+      lastDown.y = e.clientY;
+    },
+    true,
+  );
+
+function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void; onContext?: (x: number, y: number) => void }) {
+  const setUi = useUiSetter();
   // Shape coordinates are metres, so the UVs keep boards and tiles at their real size;
   // a floor angle turns them about the plan's origin, so rooms laid the same way line up.
   const angle = floorAngle(room);
@@ -401,6 +425,29 @@ function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; po
         e.stopPropagation();
         onSelect();
       }}
+      onPointerOver={
+        onContext &&
+        ((e) => {
+          e.stopPropagation();
+          setUi({ hoveredRoomId: room.id });
+        })
+      }
+      onPointerOut={
+        onContext &&
+        (() => {
+          if (useStore.getState().hoveredRoomId === room.id) setUi({ hoveredRoomId: null });
+        })
+      }
+      onPointerUp={
+        onContext &&
+        ((e) => {
+          // A right-click that did not drag (a right-drag pans the view).
+          const n = e.nativeEvent;
+          if (e.button !== 2 || Math.hypot(n.clientX - lastDown.x, n.clientY - lastDown.y) >= 4) return;
+          e.stopPropagation();
+          onContext(n.clientX, n.clientY);
+        })
+      }
     >
       {photo && (
         <Suspense fallback={<primitive object={material} attach="material" />}>
@@ -408,6 +455,43 @@ function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; po
         </Suspense>
       )}
     </mesh>
+  );
+}
+
+/**
+ * The room under the pointer (here or in the plan), drawn on its floor. It
+ * subscribes to the hovered room itself, so hovering never re-renders the floor.
+ */
+function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
+  const id = useStore((s) => s.hoveredRoomId);
+  const invalidate = useThree((s) => s.invalidate);
+  // Frames are drawn on demand: ask for one when the hovered room changes.
+  useEffect(() => invalidate(), [id, invalidate]);
+  const room = id ? floor.rooms.find((r) => r.id === id) : undefined;
+  const polys = useMemo(() => (room ? cutWells(roomWorldPolygon(floor, room), holes) : []), [floor, room, holes]);
+  const geom = useMemo(() => (polys.length ? new THREE.ShapeGeometry(polys.map(shapeFrom)) : null), [polys]);
+  const outline = useMemo(
+    () =>
+      polys.map((p) => {
+        const g = new THREE.BufferGeometry().setFromPoints(p.map((q) => new THREE.Vector3(q.x, 0.024, q.y)));
+        return g;
+      }),
+    [polys],
+  );
+  useEffect(() => () => geom?.dispose(), [geom]);
+  useEffect(() => () => outline.forEach((g) => g.dispose()), [outline]);
+  if (!geom) return null;
+  return (
+    <group>
+      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2} raycast={() => null}>
+        <meshBasicMaterial color="#14a89b" toneMapped={false} transparent opacity={0.34} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} />
+      </mesh>
+      {outline.map((g, i) => (
+        <lineLoop key={i} geometry={g} renderOrder={3} raycast={() => null}>
+          <lineBasicMaterial color="#14a89b" toneMapped={false} />
+        </lineLoop>
+      ))}
+    </group>
   );
 }
 
@@ -569,7 +653,6 @@ function ExteriorPins({ model, photos }: { model: HouseModel; photos: Photo[] })
   );
 }
 
-// Small indirection so House doesn't import the store at module top (keeps it testable).
 import { useStore } from "../store";
 function useUiSetter() {
   return useStore((s) => s.setUi);
