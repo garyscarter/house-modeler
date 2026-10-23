@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ask, askText, choose } from "../components/Dialogs";
 import { flightWinders, STAIRS_VECTOR } from "../lib/stairs";
-import type { Fixture, Floor, Opening, Pt, Room, VariantKey, Wall } from "../types";
+import type { Fixture, Floor, JoineryConfig, Opening, Pt, Room, VariantKey, Wall } from "../types";
 import { byId, isFloorCovering, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
@@ -64,6 +64,8 @@ import {
 } from "../lib/planMath";
 import { roomColor } from "../lib/roomColor";
 import { planWallLines, planWalls } from "../lib/planWalls";
+import { defaultFit, fitProblem, fitRecess, fitWindow, floorFaces, refitFixture } from "../lib/recess";
+import { tidyJoinery } from "../lib/joinery";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";
 import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/nudge";
@@ -190,8 +192,45 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   // The walls as the 3D shell builds them, with real thickness: drawn as the wall layer and used to sit furniture flush on the faces.
   const wallShapes = useMemo(() => (wallsOn ? planWalls(floor) : []), [wallsOn, fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
   const faceLines = useMemo(() => planWallLines(floor), [fRooms, fWalls, fPpm, fOrigin, fOffset]);
+  const faces = useMemo(() => floorFaces(floor), [fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
   const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
   const clashes = useMemo(() => overlappingIds(solids, 0.5), [solids]);
+  // Fitted joinery that no longer fits its recess or window, with why.
+  const misfits = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const fx of floor.fixtures ?? []) {
+      if (!fx.joinery?.fit) continue;
+      const item = byId(fx.type);
+      const why = item && fitProblem(floor, fx, item, faces);
+      if (why) out.set(fx.id, why);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floor.fixtures, faces]);
+  /**
+   * A built-in or window seat fitted to the recess or window under c (a placed unit takes the recess's width and depth);
+   * null for other items, when Alt is held, or when nothing is in reach (a built-in then places like any unit).
+   */
+  const fitPlacing = (c: Pt, item: CatalogueItem, free: boolean): (Placement & { w: number; d?: number; h?: number; joinery?: JoineryConfig }) | null => {
+    if (free) return null;
+    if (item.symbol === "built-in") {
+      const f = fitRecess(floor, c, { defaultW: item.w, defaultD: item.d }, faces);
+      if (!f) return null;
+      return { x: f.x, y: f.y, rot: f.rot, w: f.w, d: f.d, ...(f.sides >= 1 ? { joinery: { fit: "recess" as const } } : {}) };
+    }
+    if (item.symbol === "window-seat") {
+      const f = fitWindow(floor, c, { defaultD: item.d, h: item.h }, faces);
+      if (!f) return null;
+      return { x: f.x, y: f.y, rot: f.rot, w: f.w, d: f.d, ...(f.h !== undefined ? { h: f.h } : {}), joinery: { fit: "window" as const } };
+    }
+    return null;
+  };
+  /** Put a fitted unit back in its recess (or at its window), undoably. */
+  const refit = (fx: Fixture) => {
+    const item = byId(fx.type);
+    const p = item && refitFixture(floor, fx, item, faces);
+    if (p) patchFixture(fx.id, p);
+  };
   // Rugs draw under everything, and wall-hung and worktop items over the units below them, whatever order they were placed in.
   const mountedAt = (fx: Fixture) => { const it = byId(fx.type); return !it ? 0 : isFloorCovering(it) ? -1 : mountOf(fx, it); };
   const drawOrder = useMemo(() => [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b)), [floor.fixtures]);
@@ -715,6 +754,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     const raw = toImage(e);
     if (tool === "place" && placing) {
       const fx: Fixture = { id: uid(), type: placing.item.id, x: raw.x, y: raw.y, rot: placing.rot, ...pieceFixtureFields(placing.item) };
+      const fitted = fitPlacing(raw, placing.item, e.altKey);
+      if (fitted) {
+        setFixtures((all) => [...all, { ...fx, ...fitted, joinery: tidyJoinery({ ...fx.joinery, ...fitted.joinery }) }]);
+        return;
+      }
       const snapped = snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, e.altKey);
       setFixtures((all) => [...all, { ...fx, ...snapped }]);
       return; // stay in place mode for the next one
@@ -854,6 +898,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         ...(ids.length >= 2 && !exactGroup(allFixtures, ids) ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); groupSelected(ids); } } satisfies MenuItem] : []),
         ...(grouped ? [{ label: "Ungroup", hint: "Ctrl Shift G", run: () => { select({ fixtures: group }); setFixtures((all) => ungroupFixtures(all, [id])); } } satisfies MenuItem] : []),
         ...(grouped && group.some((g) => !liveIds.includes(g)) && liveIds.length === 1 && liveIds[0] === id ? [{ label: "Select group", run: () => select({ fixtures: group }) } satisfies MenuItem] : []),
+        ...(() => {
+          const one = ids.length === 1 ? allFixtures.find((x) => x.id === id) : undefined;
+          const it = one && byId(one.type);
+          if (!one || !it || one.locked || !defaultFit(it)) return [];
+          const toWindow = one.joinery?.fit === "window" || it.symbol === "window-seat";
+          return [{ label: toWindow ? "Fit to window" : "Refit to recess", run: () => { select({ fixtures: ids }); refit(one); } } satisfies MenuItem];
+        })(),
         "sep",
         { label: "Remove", hint: "Del", danger: true, run: () => { setFixtures((all) => all.filter((x) => !ids.includes(x.id))); select({}); } },
       ];
@@ -1086,10 +1137,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const vb = cam && size ? viewBoxOf(cam, size) : { x: 0, y: 0, w: floor.imageW, h: floor.imageH };
   const measureEnd = measure.length === 1 ? hover : measure[1];
   // Where the item being placed would land: snapped to a wall like a drag, unless Alt is held.
+  const ghostFit = tool === "place" && placing && hover ? fitPlacing(hover, placing.item, altHeld) : null;
   const ghost =
-    tool === "place" && placing && hover
+    ghostFit ??
+    (tool === "place" && placing && hover
       ? snapFixture(hover, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, altHeld) ?? { ...hover, rot: placing.rot }
-      : null;
+      : null);
   const halo = { paintOrder: "stroke" as const, stroke: "#fff", strokeWidth: px * 3, strokeLinejoin: "round" as const };
 
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
@@ -1182,6 +1235,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       case "calibrate":
         return `Click two points a known distance apart (${calib.length}/2).`;
       case "place":
+        if (placing?.item.symbol === "built-in") return "Click in an alcove to fit it between the walls, floor to ceiling (Alt places freely). R turns 90°, Esc finishes.";
+        if (placing?.item.symbol === "window-seat") return "Click in front of a window to fit the seat to it (Alt places freely). R turns 90°, Esc finishes.";
         return placing ? `Click to place ${placing.item.name}; it snaps to walls (Alt places freely). R turns 90°, Shift+R 15°, Esc finishes.` : null;
       default:
         return null;
@@ -1354,7 +1409,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     stroke={stroke}
                     color={fx.color}
                     selected={liveIds.includes(fx.id)}
-                    clash={clashes.has(fx.id)}
+                    clash={clashes.has(fx.id) || misfits.has(fx.id)}
+                    fixture={fx}
                   />
                   <title>
                     {fx.label ?? item.name} ({b.w.toFixed(2)} × {b.d.toFixed(2)} m)
@@ -1423,7 +1479,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             })}
             {ghost && placing && (
               <g transform={`translate(${ghost.x} ${ghost.y}) rotate(${ghost.rot})`} style={{ pointerEvents: "none" }}>
-                <FixtureSymbol item={placing.item} w={placing.item.w * ppm} d={placing.item.d * ppm} m={ppm} stroke={stroke} ghost />
+                <FixtureSymbol
+                  item={placing.item}
+                  w={(ghostFit?.w ?? placing.item.w) * ppm}
+                  d={(ghostFit?.d ?? placing.item.d) * ppm}
+                  m={ppm}
+                  stroke={stroke}
+                  fixture={{ joinery: ghostFit?.joinery }}
+                  ghost
+                />
               </g>
             )}
 
@@ -1722,6 +1786,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   item={selectedFixtureItem}
                   ceiling={ceilingHeight}
                   clash={clashes.has(selectedFixture.id)}
+                  misfit={misfits.get(selectedFixture.id)}
+                  onRefit={defaultFit(selectedFixtureItem) && !selectedFixture.locked ? () => refit(selectedFixture) : undefined}
                   groupSize={selectedFixture.groupId ? allFixtures.filter((x) => x.groupId === selectedFixture.groupId).length : undefined}
                   onSelectGroup={() => select({ fixtures: expandToGroups([selectedFixture.id], allFixtures) })}
                   onChange={(p) => patchFixture(selectedFixture.id, p)}
