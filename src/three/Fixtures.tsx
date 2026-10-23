@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 
 /** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
@@ -115,6 +115,17 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       const cx = -w / 2 + ((i + 0.5) * w) / n;
       box(cx, handleAtTop ? y1 - 0.06 : y0 + 0.06, z + 0.012, Math.min(0.16, w / n - 0.1), 0.012, 0.02, CHROME, "metal");
     }
+  };
+  /** Handleless slab fronts: joints only, one door per ~0.6 m across `width`, under a J-pull shadow rail when `rail`. */
+  const slabs = (y0: number, y1: number, z: number, width = w, rail = true) => {
+    const n = Math.max(1, Math.round(width / 0.6));
+    for (let i = 1; i < n; i++) box(-width / 2 + (i * width) / n, (y0 + y1) / 2, z, 0.004, y1 - y0, 0.012, DARK);
+    if (rail) box(0, y1 - 0.02, z + 0.002, width, 0.035, 0.008, DARK, "satin");
+  };
+  /** A built-in appliance face: dark glass door with a handle bar near its top. */
+  const appliance = (yc: number, hh: number, z: number) => {
+    box(0, yc, z + 0.005, w - 0.04, hh, 0.01, "#2a2d31", "gloss");
+    box(0, yc + hh / 2 - 0.05, z + 0.03, w - 0.16, 0.02, 0.03, CHROME, "metal");
   };
   /**
    * Radiator valves at the bottom corners, on tails from the side tappings: a thermostatic head on the
@@ -341,6 +352,97 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, 0.04, 0, w - 0.02, 0.08, d - 0.04, PLINTH);
       break;
     }
+    case "handleless":
+      slabs(0.1, h - 0.06, base(h));
+      break;
+    case "drawers": {
+      // Three drawers, deepest at the bottom, each with a long bar handle.
+      const front = base(h);
+      const ys = [0.1, 0.1 + (h - 0.16) * 0.42, 0.1 + (h - 0.16) * 0.76, h - 0.06];
+      for (let i = 1; i < 3; i++) box(0, ys[i], front, w - 0.01, 0.006, 0.012, DARK);
+      for (let i = 0; i < 3; i++) box(0, ys[i + 1] - 0.05, front + 0.012, Math.min(0.5, w * 0.6), 0.012, 0.02, CHROME, "metal");
+      break;
+    }
+    case "wine-cooler": {
+      // Rows of bottle ends behind a glass door framed in black, in a base unit under the worktop.
+      const front = base(h);
+      const y0 = 0.14;
+      const y1 = h - 0.08;
+      box(0, (y0 + y1) / 2, front + 0.002, w - 0.04, y1 - y0 + 0.02, 0.006, DARK, "gloss");
+      const rows = Math.max(2, Math.floor((y1 - y0) / 0.13));
+      const cols = Math.max(1, Math.floor((w - 0.1) / 0.085));
+      for (let r = 0; r < rows; r++) {
+        const y = y0 + ((r + 0.5) * (y1 - y0)) / rows;
+        box(0, y - 0.045, front + 0.006, w - 0.08, 0.006, 0.006, "#6b6f75", "metal");
+        for (let c = 0; c < cols; c++) cyl(-((cols - 1) * 0.085) / 2 + c * 0.085, y, front + 0.015, 0.07, 0.016, (r + c) % 3 ? "#5a1f2b" : "#2f5a3a", "gloss", "z");
+      }
+      box(0, (y0 + y1) / 2, front + 0.032, w - 0.04, y1 - y0 + 0.02, 0.004, "#2a3238", "glass");
+      box(w / 2 - 0.05, (y0 + y1) / 2, front + 0.05, 0.015, (y1 - y0) * 0.6, 0.025, CHROME, "metal");
+      break;
+    }
+    case "waterfall": {
+      // Worktop over the top and down both ends to the floor; handleless units between, set forward
+      // so the back overhangs for stools.
+      const t = 0.04;
+      const over = Math.min(0.3, d * 0.3);
+      const iw = w - t * 2;
+      box(0, h - t / 2, 0, w, t, d, worktopColor, "satin");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), (h - t) / 2, 0, t, h - t, d, worktopColor, "satin");
+      box(0, 0.05, over / 2 + 0.02, iw - 0.02, 0.1, d - over - 0.08, PLINTH);
+      box(0, (0.1 + h - t) / 2, over / 2 + 0.005, iw, h - t - 0.1, d - over - 0.03, color, "satin");
+      slabs(0.1, h - t - 0.02, d / 2 - 0.02, iw);
+      break;
+    }
+    case "american-fridge": {
+      // Side-by-side: a narrower freezer door on the left with the dispenser, the fridge on the right,
+      // long bar handles either side of the split, and a vent grille along the plinth.
+      const split = sideBySideSplit(w);
+      const z = d / 2;
+      box(0, h / 2 + 0.03, -0.02, w, h - 0.06, d - 0.04, color, "metal");
+      box(0, 0.04, -0.02, w - 0.02, 0.08, d - 0.08, DARK);
+      box(0, 0.05, z - 0.035, w - 0.06, 0.05, 0.01, "#2a2d31", "satin");
+      for (const [x0, x1] of [
+        [-w / 2, split],
+        [split, w / 2],
+      ]) {
+        box((x0 + x1) / 2, h / 2 + 0.04, z - 0.02, x1 - x0 - 0.006, h - 0.08, 0.04, color, "metal");
+      }
+      for (const sx of [-1, 1]) box(split + sx * 0.04, h * 0.55, z + 0.03, 0.022, h * 0.55, 0.03, CHROME, "metal");
+      const fx = (-w / 2 + split) / 2;
+      box(fx, h * 0.6, z + 0.003, Math.min(0.2, split + w / 2 - 0.12), 0.3, 0.008, "#1d1f23", "gloss");
+      box(fx, h * 0.6 + 0.11, z + 0.008, 0.08, 0.04, 0.004, "#5f8fb0", "glow");
+      break;
+    }
+    case "chimney-hood": {
+      // Canopy across the bottom, tapering into a chimney against the wall that runs to the top.
+      const can = 0.06;
+      const cd = Math.min(0.26, d * 0.55);
+      box(0, can / 2, 0, w, can, d, color, "metal");
+      box(0, 0.005, 0.02, w - 0.08, 0.01, d - 0.1, "#55595f", "metal");
+      box(0, can + 0.07, -d / 2 + (d * 0.6) / 2, w * 0.45, 0.14, d * 0.6, color, "metal");
+      box(0, (can + 0.14 + h) / 2, -d / 2 + cd / 2, Math.min(0.28, w * 0.35), h - can - 0.14, cd, color, "metal");
+      box(-w / 2 + 0.12, can / 2, d / 2 + 0.002, 0.12, 0.016, 0.004, "#2a2d31", "satin");
+      break;
+    }
+    case "oven-pair":
+      box(0, 0.05, -0.03, w - 0.02, 0.1, d - 0.08, PLINTH);
+      box(0, (0.1 + h) / 2, 0, w, h - 0.1, d, color, "satin");
+      // Drawer below, oven, then a compact combi microwave at eye level and a door above.
+      appliance(1.0, 0.58, d / 2);
+      appliance(1.53, 0.44, d / 2);
+      for (const y of [0.7, 1.8]) box(0, y, d / 2, w - 0.02, 0.006, 0.012, DARK);
+      box(0, 0.64, d / 2 + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
+      box(0, 1.86, d / 2 + 0.012, 0.16, 0.012, 0.02, CHROME, "metal");
+      break;
+    case "shelf":
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      // A few things on it so it reads as an open shelf.
+      if (w > 0.4) {
+        cyl(-w * 0.3, h + 0.09, 0, 0.1, 0.18, "#e9e4da", "gloss");
+        cyl(-w * 0.18, h + 0.06, 0, 0.08, 0.12, "#e9e4da", "gloss");
+        box(w * 0.25, h + 0.11, -0.02, 0.24, 0.22, 0.03, "#7f8b78", "satin");
+      }
+      break;
     case "wall-cabinet":
       box(0, h / 2, 0, w, h, d, color, "satin");
       doors(0.01, h - 0.01, d / 2, 0.6, false);

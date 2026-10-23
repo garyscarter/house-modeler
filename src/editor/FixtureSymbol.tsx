@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, radiatorPanels, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 
 /**
  * Plan symbol for a catalogue item, drawn in a local frame centred on (0,0)
@@ -209,6 +209,46 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         ...burners(w / m).map(([fx, fy], i) => <circle key={i} cx={fx * w} cy={fy * d} r={0.07 * m} stroke={burnerInk} strokeWidth={sw * 0.6} fill="none" />),
         front(0.03 * m),
       );
+    case "handleless":
+      // Door joints only, with the J-pull rail drawn just inside the front edge.
+      return g(body(r * 0.3), front(0.03 * m), front(0.06 * m), ...dividers(0.6, y1 - 0.06 * m, y1));
+    case "drawers":
+      return g(body(r * 0.3), front(0.03 * m), <rect key="h" x={x0 + w * 0.2} y={y1 - 0.06 * m} width={w * 0.6} height={0.02 * m} {...thin} />);
+    case "wine-cooler":
+      return g(
+        body(r * 0.3),
+        front(0.03 * m),
+        <rect key="g" x={x0 + 0.04 * m} y={y0 + 0.06 * m} width={w - 0.08 * m} height={d - 0.14 * m} {...thin} strokeDasharray={`${stroke * 3} ${stroke * 2}`} />,
+      );
+    case "waterfall": {
+      // An island whose worktop drops to the floor at both ends.
+      const over = Math.min(0.3 * m, d * 0.3);
+      const t = 0.04 * m;
+      return g(
+        body(0),
+        <line key="o" x1={x0 + t} y1={y0 + over} x2={x1 - t} y2={y0 + over} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        ...[x0, x1 - t].map((x) => <rect key={x} x={x} y={y0} width={t} height={d} fill={outline} fillOpacity={0.5} stroke="none" />),
+        front(0.03 * m),
+      );
+    }
+    case "american-fridge": {
+      const sx = sideBySideSplit(w / m) * m;
+      return g(
+        body(r * 0.3),
+        <line key="s" x1={sx} y1={y0 + d * 0.15} x2={sx} y2={y1} {...line} />,
+        front(0.04 * m),
+        <rect key="d" x={(x0 + sx) / 2 - 0.08 * m} y={y1 - 0.035 * m} width={0.16 * m} height={0.025 * m} {...thin} />,
+      );
+    }
+    case "chimney-hood": {
+      // Canopy (dashed, overhead) with the chimney against the wall.
+      const cw = Math.min(0.28 * m, w * 0.35);
+      const cd = Math.min(0.26 * m, d * 0.55);
+      return g(body(0), <rect key="c" x={-cw / 2} y={y0} width={cw} height={cd} {...line} strokeDasharray={dash} />);
+    }
+    case "shelf":
+      return body(0);
+    case "oven-pair":
     case "oven":
       return g(
         body(0),
