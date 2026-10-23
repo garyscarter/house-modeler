@@ -7,7 +7,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
-import { DEFAULT_WORKTOP, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, byId, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -632,6 +632,8 @@ export function FixtureInspector({
   fixture,
   item,
   clash,
+  groupSize,
+  onSelectGroup,
   onChange,
   onDuplicate,
   onCopy,
@@ -641,6 +643,10 @@ export function FixtureInspector({
   fixture: Fixture;
   item: CatalogueItem;
   clash: boolean;
+  /** Members of the group this item belongs to (shown when it was picked alone). */
+  groupSize?: number;
+  onSelectGroup?: () => void;
+
   onChange: (p: Partial<Fixture>) => void;
   onDuplicate: () => void;
   onCopy: () => void;
@@ -655,6 +661,14 @@ export function FixtureInspector({
       <h4>{item.name}</h4>
       {item.note && <p className="muted small">{item.note}</p>}
       {clash && <p className="small warn">Overlaps another item.</p>}
+      {groupSize !== undefined && groupSize > 1 && onSelectGroup && (
+        <p className="muted small">
+          Part of a group of {groupSize} ·{" "}
+          <button className="link" onClick={onSelectGroup}>
+            Select group
+          </button>
+        </p>
+      )}
       <label>
         Label
         <input value={fixture.label ?? ""} placeholder="Shown on the plan" onChange={(e) => onChange({ label: e.target.value || undefined })} />
@@ -733,6 +747,84 @@ export function FixtureInspector({
       <p className="muted small hint-row">
         Moving furniture
         <Info>Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). Click it again to pick the item under it. R turns 90°, Shift+R 15°.</Info>
+      </p>
+    </div>
+  );
+}
+
+/** Two or more pieces of furniture selected (often one group): list them and act on all together. */
+export function MultiFixtureInspector({
+  fixtures,
+  isGroup,
+  onPick,
+  onGroup,
+  onUngroup,
+  onTurn,
+  onDuplicate,
+  onCopy,
+  onRemove,
+  onColour,
+}: {
+  fixtures: Fixture[];
+  /** The selection is exactly one group. */
+  isGroup: boolean;
+  onPick: (id: string) => void;
+  onGroup: () => void;
+  onUngroup: () => void;
+  onTurn: () => void;
+  onDuplicate: () => void;
+  onCopy: () => void;
+  onRemove: () => void;
+  onColour: (color: string) => void;
+}) {
+  const anyGrouped = fixtures.some((f) => f.groupId);
+  const first = fixtures[0];
+  const firstItem = first ? byId(first.type) : undefined;
+  return (
+    <div className="inspector fixture-inspector">
+      <h4>{isGroup ? `Group · ${fixtures.length} items` : `${fixtures.length} items`}</h4>
+      <ul className="multi-list small">
+        {fixtures.map((f) => (
+          <li key={f.id}>
+            <button className="link" onClick={() => onPick(f.id)} title="Select just this one">
+              {f.label ?? byId(f.type)?.name ?? "Item"}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <label>
+        Colour
+        <span className="colour-pick">
+          <input type="color" value={first?.color ?? firstItem?.color ?? "#cccccc"} onChange={(e) => onColour(e.target.value)} />
+        </span>
+      </label>
+      <div className="row">
+        {!isGroup && (
+          <button onClick={onGroup} title="Ctrl+G or Cmd+G">
+            Group
+          </button>
+        )}
+        {anyGrouped && (
+          <button onClick={onUngroup} title="Ctrl+Shift+G or Cmd+Shift+G">
+            Ungroup
+          </button>
+        )}
+        <button onClick={onTurn} title="R">
+          Turn 90°
+        </button>
+        <button onClick={onDuplicate} title="Ctrl+D or Cmd+D">
+          Duplicate
+        </button>
+        <button onClick={onCopy} title="Ctrl+C or Cmd+C">
+          Copy
+        </button>
+        <button className="danger" onClick={onRemove} title="Delete">
+          Remove
+        </button>
+      </div>
+      <p className="muted small hint-row">
+        Moving several
+        <Info>Drag any of them to move the lot. R turns them about their centre. Shift+click adds or removes an item; Ctrl/Cmd+click picks one item inside a group.</Info>
       </p>
     </div>
   );

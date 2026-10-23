@@ -31,10 +31,10 @@ describe("modes", () => {
   });
 
   it("pruneSelection keeps only what the mode can select", () => {
-    const all = { room: "r", opening: "o", wall: "w", fixture: "f", canopy: 0 };
+    const all = { room: "r", opening: "o", wall: "w", fixtures: ["f"], canopy: 0 };
     expect(pruneSelection("build", all)).toEqual({ room: "r", opening: "o", wall: "w", canopy: 0 });
     expect(pruneSelection("decorate", all)).toEqual({ room: "r", wall: "w" });
-    expect(pruneSelection("furnish", all)).toEqual({ fixture: "f" });
+    expect(pruneSelection("furnish", all)).toEqual({ fixtures: ["f"] });
     expect(pruneSelection("review", all)).toEqual({});
   });
 

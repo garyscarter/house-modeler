@@ -7,7 +7,7 @@ import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
 import { confirmKnockThrough } from "./KnockThrough";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
-import { BuildRoomPanel, CanopyInspector, FixtureInspector, NumberField, OpeningInspector, WallInspector } from "./Inspectors";
+import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, NumberField, OpeningInspector, WallInspector } from "./Inspectors";
 import { AddPopover } from "./AddItem";
 import { ToolRail, type RailItem } from "./ToolRail";
 import { takePendingTool, PLAN_TOOL_EVENT } from "./planTool";
@@ -62,7 +62,8 @@ import { planWallLines, planWalls } from "../lib/planWalls";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, removeCanopy, resizeCanopy, snapShift } from "../lib/canopy";
 import { insertCorner, removeCorner } from "../lib/featureWalls";
 import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/nudge";
-import { getClipboardFixture, setClipboardFixture, useClipboardFixture } from "../lib/clipboard";
+import { getClipboardFixtures, setClipboardFixtures, useClipboardFixtures } from "../lib/clipboard";
+import { duplicateFixtures, exactGroup, expandToGroups, fixturesInRect, groupFixtures, moveFixtures, rotateFixtures, selectionBounds, ungroupFixtures } from "../lib/fixtureGroups";
 import "./PlanEditor.css";
 
 type Drag =
@@ -74,12 +75,14 @@ type Drag =
   | { kind: "stairs" }
   | { kind: "wallEnd"; wallId: string; end: "a" | "b" }
   /** Moves once the press wanders beyond a few pixels; a click on an item that was already selected picks the next item under it. */
-  | { kind: "fixture"; fixtureId: string; dx: number; dy: number; x0: number; y0: number; moved: boolean; wasSelected: boolean }
+  | { kind: "fixture"; fixtureId: string; ids: string[]; dx: number; dy: number; x0: number; y0: number; moved: boolean; wasSelected: boolean }
+  /** Shift+drag on empty canvas in Furnish: a rubber band that selects the furniture inside it. */
+  | { kind: "marquee"; a: Pt; moved: boolean }
   /** Background drag: pans once it moves beyond a few pixels, otherwise it is a click. */
   | { kind: "pan"; x0: number; y0: number; cam0: Cam; moved: boolean }
   | { kind: "pinch"; cam0: Cam; m0: Pt; d0: number };
 
-type Selection = { room?: string; opening?: string; wall?: string; fixture?: string; canopy?: number };
+type Selection = { room?: string; opening?: string; wall?: string; fixtures?: string[]; canopy?: number };
 
 /** Real-thickness walls in the plan: near-black fill with a lighter edge so they read on the floorplan image and on white. */
 const WALL_FILL = "#27272a";
@@ -120,12 +123,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [litEdge, setLitEdge] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
-  const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
+  /** Selected furniture; always whole groups unless an item was picked alone (Ctrl/Cmd+click). */
+  const [selectedFixtureIds, setSelectedFixtureIds] = useState<string[]>([]);
+  /** The group under the pointer in Furnish, outlined faintly so groups can be found. */
+  const [hoverGroup, setHoverGroup] = useState<string | null>(null);
+  /** The rubber band being dragged, in image px. */
+  const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null);
   /** Canopies have no ids, so the selected one is its index in floor.canopies. */
   const [selectedCanopy, setSelectedCanopy] = useState<number | null>(null);
   /** The room corner last clicked or dragged: the one the arrow keys move. */
   const [activeCorner, setActiveCorner] = useState<{ roomId: string; idx: number } | null>(null);
-  const clipboard = useClipboardFixture();
+  const clipboard = useClipboardFixtures();
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
@@ -215,7 +223,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const select = (s: Selection) => {
     setSelectedOpeningId(s.opening ?? null);
     setSelectedWallId(s.wall ?? null);
-    setSelectedFixtureId(s.fixture ?? null);
+    setSelectedFixtureIds(s.fixtures ?? []);
     setSelectedCanopy(s.canopy ?? null);
     setLitEdge(null);
     setUi({ selectedRoomId: s.room ?? null, selectedEdge: null });
@@ -225,26 +233,45 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const setFixtures = (fn: (fx: Fixture[]) => Fixture[]) => updateFloor(variant, floor.id, (f) => ({ ...f, fixtures: fn(f.fixtures ?? []) }));
   const patchFixture = (id: string, p: Partial<Fixture>) => setFixtures((all) => all.map((x) => (x.id === id ? { ...x, ...p } : x)));
-  const duplicateFixture = (id: string) => {
-    const src = (floor.fixtures ?? []).find((x) => x.id === id);
-    if (!src) return;
-    const copy: Fixture = { ...src, id: uid(), x: src.x + 0.2 * ppm, y: src.y + 0.2 * ppm };
-    setFixtures((all) => [...all, copy]);
-    select({ fixture: copy.id });
+  const allFixtures = floor.fixtures ?? [];
+  /** The selection without ids that no longer exist (deleted, or undone away). */
+  const liveIds = useMemo(() => selectedFixtureIds.filter((id) => allFixtures.some((x) => x.id === id)), [selectedFixtureIds, allFixtures]);
+  const selectedFixtureId = liveIds.length === 1 ? liveIds[0] : null;
+  /** What a command aimed at one fixture acts on: the selection when it is in it, else its whole group. */
+  const targetIds = (id: string) => (liveIds.includes(id) ? liveIds : expandToGroups([id], allFixtures));
+  const duplicateFixtureIds = (ids: string[]) => {
+    const copies = duplicateFixtures(allFixtures, ids, 0.2 * ppm, 0.2 * ppm, uid);
+    if (!copies.length) return;
+    setFixtures((all) => [...all, ...copies]);
+    select({ fixtures: copies.map((c) => c.id) });
   };
-  const copyFixture = (id: string) => {
-    const src = (floor.fixtures ?? []).find((x) => x.id === id);
-    if (src) setClipboardFixture(src);
+  const copyFixtureIds = (ids: string[]) => {
+    const src = allFixtures.filter((x) => ids.includes(x.id));
+    if (src.length) setClipboardFixtures(src);
   };
-  /** Paste the clipboard's fixture onto this floor (any layout or floor), selecting the copy. */
-  const pasteFixture = (where?: Pt) => {
-    const src = getClipboardFixture();
-    if (!src || !byId(src.type)) return;
-    const centre = where ?? (cam && size ? { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 } : { x: floor.imageW / 2, y: floor.imageH / 2 });
-    const at = pasteAt(src, floor.fixtures ?? [], { w: floor.imageW, h: floor.imageH }, centre, ppm);
-    const copy: Fixture = { ...src, id: uid(), x: at.x, y: at.y };
-    setFixtures((all) => [...all, copy]);
-    select({ fixture: copy.id });
+  /** Paste the clipboard onto this floor (any layout or floor), keeping its layout and selecting the copies. */
+  const pasteFixtures = (where?: Pt) => {
+    const src = getClipboardFixtures().filter((f) => byId(f.type));
+    if (!src.length) return;
+    let dx = 0;
+    let dy = 0;
+    if (where) {
+      const c = { x: (Math.min(...src.map((f) => f.x)) + Math.max(...src.map((f) => f.x))) / 2, y: (Math.min(...src.map((f) => f.y)) + Math.max(...src.map((f) => f.y))) / 2 };
+      dx = where.x - c.x;
+      dy = where.y - c.y;
+    } else {
+      const centre = cam && size ? { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 } : { x: floor.imageW / 2, y: floor.imageH / 2 };
+      const at = pasteAt(src[0], allFixtures, { w: floor.imageW, h: floor.imageH }, centre, ppm);
+      dx = at.x - src[0].x;
+      dy = at.y - src[0].y;
+    }
+    const copies = duplicateFixtures(src, src.map((f) => f.id), dx, dy, uid);
+    setFixtures((all) => [...all, ...copies]);
+    select({ fixtures: copies.map((c) => c.id) });
+  };
+  const groupSelected = (ids: string[]) => {
+    if (ids.length < 2) return;
+    setFixtures((all) => groupFixtures(all, ids, uid()));
   };
   const canopies = floor.canopies ?? [];
   const setCanopies = (fn: (c: Pt[][]) => Pt[][]) => updateFloor(variant, floor.id, (f) => ({ ...f, canopies: fn(f.canopies ?? []) }));
@@ -252,9 +279,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     if (selectedCanopy !== null) {
       setCanopies((all) => removeCanopy(all, selectedCanopy));
       setSelectedCanopy(null);
-    } else if (selectedFixtureId) {
-      setFixtures((all) => all.filter((x) => x.id !== selectedFixtureId));
-      setSelectedFixtureId(null);
+    } else if (liveIds.length) {
+      setFixtures((all) => all.filter((x) => !liveIds.includes(x.id)));
+      setSelectedFixtureIds([]);
     } else if (selectedOpeningId) {
       updateFloor(variant, floor.id, (f) => ({ ...f, openings: f.openings.filter((o) => o.id !== selectedOpeningId) }));
       setSelectedOpeningId(null);
@@ -270,10 +297,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     if (selectedCanopy !== null) {
       if (!canopies[selectedCanopy]) return false;
       setCanopies((all) => moveCanopy(all, selectedCanopy, dx, dy));
-    } else if (selectedFixtureId) {
-      const fx = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
-      if (!fx) return false;
-      patchFixture(fx.id, { x: fx.x + dx, y: fx.y + dy });
+    } else if (liveIds.length) {
+      setFixtures((all) => moveFixtures(all, liveIds, dx, dy));
     } else if (selectedOpeningId) {
       const o = floor.openings.find((x) => x.id === selectedOpeningId);
       if (!o) return false;
@@ -302,18 +327,25 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const onKey = (e: KeyboardEvent) => {
     if (keyBelongsElsewhere(e.target, document) || useStore.getState().peek) return;
     const mod = e.ctrlKey || e.metaKey;
-    const act = planKeyAction(e, { mode, fixtureSelected: !!selectedFixtureId, placing: !!placing });
+    const act = planKeyAction(e, { mode, fixtureSelected: liveIds.length > 0, placing: !!placing });
     const arrow = !mod && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
     if (arrow) {
       if (!placing && tool === "select" && nudgeSelection(arrow.x * ppm, arrow.y * ppm)) e.preventDefault();
-    } else if (mod && e.key.toLowerCase() === "c" && selectedFixtureId) {
+    } else if (mod && e.key.toLowerCase() === "c" && liveIds.length) {
       e.preventDefault();
-      copyFixture(selectedFixtureId);
-    } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixture()) {
+      copyFixtureIds(liveIds);
+    } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixtures().length) {
       e.preventDefault();
       // Furniture only lives in Furnish: switch there, then paste.
       if (!furnish) setMode("furnish");
-      pasteFixture();
+      pasteFixtures();
+    } else if (mod && e.key.toLowerCase() === "g" && furnish) {
+      e.preventDefault();
+      if (e.shiftKey) setFixtures((all) => ungroupFixtures(all, liveIds));
+      else groupSelected(liveIds);
+    } else if (mod && e.key.toLowerCase() === "a" && furnish) {
+      e.preventDefault();
+      select({ fixtures: allFixtures.filter((f) => byId(f.type)).map((f) => f.id) });
     } else if (e.key === "Escape" && !e.defaultPrevented) {
       setDraft([]);
       setCalib([]);
@@ -323,18 +355,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         setPlacing(null);
         setTool("select");
       }
-    } else if (mod && e.key.toLowerCase() === "d" && selectedFixtureId) {
+    } else if (mod && e.key.toLowerCase() === "d" && liveIds.length) {
       e.preventDefault();
-      duplicateFixture(selectedFixtureId);
+      duplicateFixtureIds(liveIds);
     } else if (act) {
       e.preventDefault();
       if ("tool" in act) pick(act.tool);
       else if ("rotate" in act) {
         if (placing) setPlacing({ ...placing, rot: turn(placing.rot, act.rotate) });
-        else if (selectedFixtureId) {
-          const fx = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
-          if (fx) patchFixture(fx.id, { rot: turn(fx.rot, act.rotate) });
-        }
+        else if (liveIds.length) setFixtures((all) => rotateFixtures(all, liveIds, act.rotate));
       } else if ("image" in act) setUi({ planImage: { ...planImage, show: !planImage.show } });
       else if ("zoom" in act) zoomBy(act.zoom > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
       else if ("fit" in act) fit();
@@ -382,6 +411,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     // Only presses on the background or a room get here; handles stop propagation.
     if (e.button !== 0 || !cam) return;
     suppressClick.current = false;
+    if (furnish && tool === "select" && e.shiftKey && e.pointerType === "mouse") {
+      const a = toImage(e);
+      drag.current = { kind: "marquee", a, moved: false };
+      return;
+    }
     drag.current = { kind: "pan", x0: e.clientX, y0: e.clientY, cam0: cam, moved: false };
   };
 
@@ -396,7 +430,16 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         setHover(tool === "place" ? raw : snapMeasure(raw));
       return;
     }
-    if (d.kind === "fixture" || d.kind === "canopy") {
+    if (d.kind === "fixture" || d.kind === "canopy" || d.kind === "marquee") {
+      if (d.kind === "marquee") {
+        const a = toScreen(d.a);
+        const bs = toScreen(raw);
+        if (!d.moved && Math.hypot(a.x - bs.x, a.y - bs.y) < CLICK_SLOP) return;
+        d.moved = true;
+        setMarquee({ a: d.a, b: raw });
+        suppressClick.current = true;
+        return;
+      }
       if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < CLICK_SLOP) return;
       d.moved = true;
     }
@@ -423,6 +466,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         const item = fx && byId(fx.type);
         if (!fx || !item) return;
         const target = { x: raw.x + d.dx, y: raw.y + d.dy };
+        if (d.ids.length > 1) {
+          // Several items move rigidly by the same step, with no wall snapping.
+          const mx = target.x - fx.x;
+          const my = target.y - fx.y;
+          if (mx || my) setFixtures((all) => moveFixtures(all, d.ids, mx, my));
+          return;
+        }
         const b = fixtureBox(fx, item);
         patchFixture(fx.id, snapFixture(target, b, fx.rot, e.altKey, fx.id) ?? target);
         return;
@@ -477,7 +527,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         .filter((fx) => solids.find((s) => s.id === fx.id && pointInPolygon(p, s.corners)))
         .map((fx) => fx.id);
       const i = under.indexOf(d.fixtureId);
-      if (under.length > 1 && i >= 0) select({ fixture: under[(i + 1) % under.length] });
+      if (under.length > 1 && i >= 0) select({ fixtures: expandToGroups([under[(i + 1) % under.length]], allFixtures) });
+    }
+    if (d?.kind === "marquee") {
+      if (d.moved && e.type === "pointerup" && marquee) {
+        const hit = expandToGroups(fixturesInRect(allFixtures.filter((f) => byId(f.type)), { x0: marquee.a.x, y0: marquee.a.y, x1: marquee.b.x, y1: marquee.b.y }), allFixtures);
+        if (hit.length) select({ fixtures: [...new Set([...liveIds, ...hit])] });
+      }
+      setMarquee(null);
     }
     if (d?.kind === "pinch") {
       if (pointers.current.size < 2) drag.current = null;
@@ -596,7 +653,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         if (hit.edge === null) usePanelPrefs.getState().setOpen("decorate.floor", true);
       }
     } else if (furnish) {
-      select({});
+      if (!e.shiftKey) select({});
     } else if (build) {
       // Rooms sit over canopies, so they win where the two overlap.
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
@@ -637,14 +694,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const toggleImage = () => setUi({ planImage: { ...planImage, show: !planImage.show } });
   const menuItemsFor = (t: PlanTarget, raw: Pt): MenuItem[] => {
     const empty: MenuItem[] = [
-      ...(clipboard && (build || furnish)
+      ...(clipboard.length && (build || furnish)
         ? [
             {
-              label: `Paste ${byId(clipboard.type)?.name ?? "item"} here`,
+              label: `${pasteLabel} here`,
               hint: "Ctrl V",
               run: () => {
                 if (!furnish) setMode("furnish");
-                pasteFixture(raw);
+                pasteFixtures(raw);
               },
             } satisfies MenuItem,
           ]
@@ -654,12 +711,18 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     ];
     if (t.kind === "fixture" && furnish) {
       const id = t.id;
+      const ids = targetIds(id);
+      const grouped = !!allFixtures.find((x) => x.id === id)?.groupId;
+      const group = expandToGroups([id], allFixtures);
       return [
-        { label: "Turn 90°", hint: "R", run: () => { select({ fixture: id }); const fx = (floor.fixtures ?? []).find((x) => x.id === id); if (fx) patchFixture(id, { rot: turn(fx.rot, 90) }); } },
-        { label: "Duplicate", hint: "Ctrl D", run: () => duplicateFixture(id) },
-        { label: "Copy", hint: "Ctrl C", run: () => { select({ fixture: id }); copyFixture(id); } },
+        { label: "Turn 90°", hint: "R", run: () => { select({ fixtures: ids }); setFixtures((all) => rotateFixtures(all, ids, 90)); } },
+        { label: "Duplicate", hint: "Ctrl D", run: () => duplicateFixtureIds(ids) },
+        { label: "Copy", hint: "Ctrl C", run: () => { select({ fixtures: ids }); copyFixtureIds(ids); } },
+        ...(ids.length >= 2 ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); groupSelected(ids); } } satisfies MenuItem] : []),
+        ...(grouped ? [{ label: "Ungroup", hint: "Ctrl Shift G", run: () => { select({ fixtures: group }); setFixtures((all) => ungroupFixtures(all, [id])); } } satisfies MenuItem] : []),
+        ...(grouped && group.some((g) => !liveIds.includes(g)) && liveIds.length === 1 && liveIds[0] === id ? [{ label: "Select group", run: () => select({ fixtures: group }) } satisfies MenuItem] : []),
         "sep",
-        { label: "Remove", hint: "Del", danger: true, run: () => { setFixtures((all) => all.filter((x) => x.id !== id)); select({}); } },
+        { label: "Remove", hint: "Del", danger: true, run: () => { setFixtures((all) => all.filter((x) => !ids.includes(x.id))); select({}); } },
       ];
     }
     if (t.kind === "opening" && build) {
@@ -761,6 +824,16 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const selectedOpening = floor.openings.find((o) => o.id === selectedOpeningId);
   const selectedWall = (floor.walls ?? []).find((w) => w.id === selectedWallId);
   const selectedFixture = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
+  /** Dashed box around a multi-item or group selection, and around the group under the pointer. */
+  const selBox = useMemo(() => {
+    const grouped = liveIds.length === 1 && allFixtures.find((x) => x.id === liveIds[0])?.groupId;
+    return liveIds.length >= 2 || grouped ? selectionBounds(allFixtures, liveIds, ppm) : null;
+  }, [allFixtures, liveIds, ppm]);
+  const hoverBox = useMemo(() => {
+    if (!hoverGroup || drag.current) return null;
+    const members = allFixtures.filter((x) => x.groupId === hoverGroup).map((x) => x.id);
+    return members.length && !members.every((id) => liveIds.includes(id)) ? selectionBounds(allFixtures, members, ppm) : null;
+  }, [hoverGroup, allFixtures, liveIds, ppm]);
   const selectedFixtureItem = selectedFixture ? byId(selectedFixture.type) : undefined;
   // Draw the selected room last so its outline and drag handles sit above its neighbours.
   const orderedRooms = [...floor.rooms.filter((r) => r.id !== selectedRoomId), ...(selected ? [selected] : [])];
@@ -785,7 +858,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       room: selectedRoomId ?? undefined,
       opening: selectedOpeningId ?? undefined,
       wall: selectedWallId ?? undefined,
-      fixture: selectedFixtureId ?? undefined,
+      fixtures: liveIds,
       canopy: selectedCanopy ?? undefined,
     });
     select(keep);
@@ -857,6 +930,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const has = (t: Tool) => PLAN_TOOLS[mode].includes(t);
   const toolItems = (list: [Tool, IconName][]): RailItem[] =>
     list.filter(([t]) => has(t)).map(([t, icon]) => ({ id: t, icon, label: TOOL_LABEL[t], shortcut: TOOL_KEY[t], active: tool === t, onClick: () => pick(t) }));
+  const pasteLabel = clipboard.length > 1 ? `Paste ${clipboard.length} items` : `Paste ${byId(clipboard[0]?.type ?? "")?.name ?? "item"}`;
   const railGroups: RailItem[][] = [
     furnish
       ? [
@@ -869,8 +943,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             onClick: () => setAddOpen(!addOpen),
             extra: <AddPopover activeId={placing?.item.id} onPick={startPlacing} open={addOpen} onOpenChange={setAddOpen} />,
           },
-          ...(clipboard
-            ? [{ id: "paste", icon: "paste" as const, label: `Paste ${byId(clipboard.type)?.name ?? "item"}`, shortcut: "Ctrl V", onClick: () => pasteFixture() }]
+          ...(clipboard.length
+            ? [{ id: "paste", icon: "paste" as const, label: pasteLabel, shortcut: "Ctrl V", onClick: () => pasteFixtures() }]
             : []),
         ]
       : [],
@@ -951,7 +1025,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       : mode === "decorate"
         ? "Click a floor, or a wall near its edge, to decorate it. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Right-click for actions."
         : mode === "furnish"
-          ? "Click an item to edit it; drag to move. Arrows nudge (Shift ×10) · R turns 90°, Shift+R 15° · Ctrl/⌘C, V copy and paste · Ctrl/⌘D duplicates · Delete removes. Right-click for actions."
+          ? "Click an item to edit it; drag to move; Shift+click adds to the selection, Shift+drag selects an area, Ctrl/⌘G groups. Arrows nudge (Shift ×10) · R turns 90°, Shift+R 15° · Ctrl/⌘C, V copy and paste · Ctrl/⌘D duplicates · Delete removes. Right-click for actions."
           : "Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Use Measure to check a distance.";
   const hovered = hoveredRoomId && hoveredRoomId !== selectedRoomId ? floor.rooms.find((r) => r.id === hoveredRoomId) : undefined;
 
@@ -1069,10 +1143,21 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   style={furnish ? undefined : { pointerEvents: "none", opacity: 0.55 }}
                   onPointerDown={(e) => {
                     if (!furnish || tool !== "select") return;
-                    const wasSelected = fx.id === selectedFixtureId;
-                    select({ fixture: fx.id });
+                    if (e.button !== 0) return;
+                    if (e.shiftKey && !(e.ctrlKey || e.metaKey)) {
+                      // Shift+click: toggle this item's whole group in or out of the selection.
+                      e.stopPropagation();
+                      suppressClick.current = true;
+                      const set = expandToGroups([fx.id], allFixtures);
+                      select({ fixtures: liveIds.includes(fx.id) ? liveIds.filter((id) => !set.includes(id)) : [...new Set([...liveIds, ...set])] });
+                      return;
+                    }
+                    const wasSelected = liveIds.length === 1 && liveIds[0] === fx.id;
+                    // Ctrl/Cmd+click picks the item alone, even inside a group; a plain click takes its whole group.
+                    const ids = e.ctrlKey || e.metaKey ? [fx.id] : liveIds.includes(fx.id) ? liveIds : expandToGroups([fx.id], allFixtures);
+                    if (ids !== liveIds) select({ fixtures: ids });
                     const p = toImage(e);
-                    startDrag(e, { kind: "fixture", fixtureId: fx.id, dx: fx.x - p.x, dy: fx.y - p.y, x0: e.clientX, y0: e.clientY, moved: false, wasSelected });
+                    startDrag(e, { kind: "fixture", fixtureId: fx.id, ids, dx: fx.x - p.x, dy: fx.y - p.y, x0: e.clientX, y0: e.clientY, moved: false, wasSelected });
                   }}
                   onClick={(e) => {
                     if (furnish && tool === "select") e.stopPropagation();
@@ -1080,8 +1165,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   onDoubleClick={(e) => {
                     if (!furnish) return;
                     e.stopPropagation();
-                    patchFixture(fx.id, { rot: turn(fx.rot, 90) });
+                    const ids = targetIds(fx.id);
+                    select({ fixtures: ids });
+                    setFixtures((all) => rotateFixtures(all, ids, 90));
                   }}
+                  onPointerEnter={() => furnish && tool === "select" && setHoverGroup(fx.groupId ?? null)}
+                  onPointerLeave={() => setHoverGroup(null)}
                 >
                   <FixtureSymbol
                     item={item}
@@ -1090,7 +1179,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     m={ppm}
                     stroke={stroke}
                     color={fx.color}
-                    selected={fx.id === selectedFixtureId}
+                    selected={liveIds.includes(fx.id)}
                     clash={clashes.has(fx.id)}
                   />
                   <title>
@@ -1099,6 +1188,49 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 </g>
               );
             })}
+            {furnish && tool === "select" && selBox && (
+              <rect
+                x={selBox.x0 - px * 6}
+                y={selBox.y0 - px * 6}
+                width={selBox.x1 - selBox.x0 + px * 12}
+                height={selBox.y1 - selBox.y0 + px * 12}
+                rx={px * 6}
+                fill="none"
+                stroke="#d97706"
+                strokeWidth={px * 1.5}
+                strokeDasharray={`${px * 6} ${px * 4}`}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
+            {furnish && hoverBox && (
+              <rect
+                x={hoverBox.x0 - px * 4}
+                y={hoverBox.y0 - px * 4}
+                width={hoverBox.x1 - hoverBox.x0 + px * 8}
+                height={hoverBox.y1 - hoverBox.y0 + px * 8}
+                rx={px * 5}
+                fill="none"
+                stroke="#d97706"
+                strokeOpacity={0.45}
+                strokeWidth={px}
+                strokeDasharray={`${px * 4} ${px * 4}`}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
+            {marquee && (
+              <rect
+                x={Math.min(marquee.a.x, marquee.b.x)}
+                y={Math.min(marquee.a.y, marquee.b.y)}
+                width={Math.abs(marquee.a.x - marquee.b.x)}
+                height={Math.abs(marquee.a.y - marquee.b.y)}
+                fill="#d97706"
+                fillOpacity={0.08}
+                stroke="#d97706"
+                strokeWidth={px * 1.25}
+                strokeDasharray={`${px * 5} ${px * 3}`}
+                style={{ pointerEvents: "none" }}
+              />
+            )}
             {(floor.fixtures ?? []).map(
               (fx) =>
                 fx.label && (
@@ -1337,19 +1469,34 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         {mode !== "review" && (
           <InspectorCard className="side">
             {furnish ? (
-              selectedFixture && selectedFixtureItem ? (
+              liveIds.length >= 2 ? (
+                <MultiFixtureInspector
+                  fixtures={allFixtures.filter((x) => liveIds.includes(x.id))}
+                  isGroup={exactGroup(allFixtures, liveIds) !== null}
+                  onPick={(id) => select({ fixtures: [id] })}
+                  onGroup={() => groupSelected(liveIds)}
+                  onUngroup={() => setFixtures((all) => ungroupFixtures(all, liveIds))}
+                  onTurn={() => setFixtures((all) => rotateFixtures(all, liveIds, 90))}
+                  onDuplicate={() => duplicateFixtureIds(liveIds)}
+                  onCopy={() => copyFixtureIds(liveIds)}
+                  onRemove={removeSelected}
+                  onColour={(color) => setFixtures((all) => all.map((x) => (liveIds.includes(x.id) ? { ...x, color } : x)))}
+                />
+              ) : selectedFixture && selectedFixtureItem ? (
                 <FixtureInspector
                   fixture={selectedFixture}
                   item={selectedFixtureItem}
                   clash={clashes.has(selectedFixture.id)}
+                  groupSize={selectedFixture.groupId ? allFixtures.filter((x) => x.groupId === selectedFixture.groupId).length : undefined}
+                  onSelectGroup={() => select({ fixtures: expandToGroups([selectedFixture.id], allFixtures) })}
                   onChange={(p) => patchFixture(selectedFixture.id, p)}
-                  onDuplicate={() => duplicateFixture(selectedFixture.id)}
-                  onCopy={() => copyFixture(selectedFixture.id)}
-                  onPaste={clipboard ? pasteFixture : undefined}
+                  onDuplicate={() => duplicateFixtureIds([selectedFixture.id])}
+                  onCopy={() => copyFixtureIds([selectedFixture.id])}
+                  onPaste={clipboard.length ? pasteFixtures : undefined}
                   onRemove={removeSelected}
                 />
               ) : (
-                <FurnishSummary floor={floor} clashes={clashes.size} onAdd={() => setAddOpen(true)} onPaste={clipboard ? pasteFixture : undefined} />
+                <FurnishSummary floor={floor} clashes={clashes.size} onAdd={() => setAddOpen(true)} onPaste={clipboard.length ? pasteFixtures : undefined} />
               )
             ) : decorate ? (
               selected ? (

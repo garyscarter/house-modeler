@@ -41,7 +41,7 @@ export interface PlanSelection {
   room?: string;
   opening?: string;
   wall?: string;
-  fixture?: string;
+  fixtures?: string[];
   canopy?: number;
 }
 
@@ -51,7 +51,7 @@ export function pruneSelection(mode: Mode, s: PlanSelection): PlanSelection {
   if (s.room !== undefined && canSelect(mode, "room")) out.room = s.room;
   if (s.opening !== undefined && canSelect(mode, "opening")) out.opening = s.opening;
   if (s.wall !== undefined && canSelect(mode, "wall")) out.wall = s.wall;
-  if (s.fixture !== undefined && canSelect(mode, "fixture")) out.fixture = s.fixture;
+  if (s.fixtures?.length && canSelect(mode, "fixture")) out.fixtures = s.fixtures;
   if (s.canopy !== undefined && canSelect(mode, "canopy")) out.canopy = s.canopy;
   return out;
 }
