@@ -1,0 +1,119 @@
+.cmdk-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 18vh;
+}
+.cmdk-panel {
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.3), 0 4px 16px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+.cmdk-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  padding: 16px 18px;
+}
+.cmdk-list {
+  border-top: 1px solid var(--line);
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 6px;
+  margin: 0;
+  list-style: none;
+}
+.cmdk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.cmdk-row.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.cmdk-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-group {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cmdk-empty {
+  padding: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  border-top: 1px solid var(--line);
+}
+.keycap {
+  display: inline-block;
+  min-width: 20px;
+  box-sizing: border-box;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-family: inherit;
+  text-align: center;
+}
+.shortcuts-panel {
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.3), 0 4px 16px rgba(15, 23, 42, 0.12);
+  padding: 8px 22px 18px;
+  box-sizing: border-box;
+}
+.shortcuts-panel h2 {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.shortcuts-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.shortcuts-keys {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
