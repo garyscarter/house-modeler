@@ -1376,7 +1376,9 @@ function placeChimney(c: Chimney, blocks: RoofBlock[], flatRoofs: FlatRoof[], gr
     [c.x - c.w / 2, c.y + c.d / 2],
   ];
   const ridges = blocks.map((b) => roofGeometry(b).ridgeY);
-  const onBlock = blocks.findIndex((b) => roofHeightAt(b, c.x, c.y) !== null);
+  // The roof under the stack's centre, or else one the stack overlaps (a shared stack centred over the neighbour's side of the party wall).
+  let onBlock = blocks.findIndex((b) => roofHeightAt(b, c.x, c.y) !== null);
+  if (onBlock < 0) onBlock = blocks.findIndex((b) => corners.some(([x, z]) => roofHeightAt(b, x, z) !== null));
   const highest = ridges.length ? Math.max(...ridges) : groundY + 3;
   const y1 = (onBlock >= 0 ? ridges[onBlock] : highest) + c.height;
   let y0: number;

@@ -381,6 +381,16 @@ describe("chimneys and downpipes", () => {
     expect(moved.x).toBeCloseTo(4);
   });
 
+  it("seats a shared stack centred over the neighbour's side of the party wall on the house's roof, not the ground", () => {
+    const m = listing91770873("");
+    const main = planRoofs(m).blocks[0];
+    m.exterior = { ...m.exterior!, chimneys: [{ id: "c", x: main.x1 + 0.3, y: -3, w: 0.8, d: 1.2, height: 1, pots: 0 }] };
+    const plan = planRoofs(m);
+    const s = plan.chimneys[0];
+    expect(s.y1).toBeCloseTo(roofGeometry(plan.blocks[0]).ridgeY + 1);
+    expect(s.y0).toBeGreaterThan(main.y - 0.5);
+  });
+
   it("drops downpipes onto a flat roof below, or to the ground", () => {
     const plan = planRoofs(listing91770873(""));
     expect(footAt(plan, -2, 0, 5)).toBeCloseTo(plan.flatRoofs[0].top);

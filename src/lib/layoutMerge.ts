@@ -581,8 +581,33 @@ function openingChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
  *   with no counterpart is offered unticked, and can't be ticked off a wall or over an opening. Openings
  *   the design has and the latest hasn't are never removed.
  */
+/**
+ * The storeys' ceiling height and floor depth, as one ticked change: they are measured from the photos, and the
+ * listing's window heads and eaves are set to go with them.
+ */
+function storeyChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
+  if (mine.ceilingHeight === latest.ceilingHeight && mine.slabThickness === latest.slabThickness) return [];
+  const show = (m: HouseModel) => `${metres(m.ceilingHeight)} ceilings, ${metres(m.slabThickness)} floors`;
+  return [
+    {
+      id: "model.storeys",
+      group: "exterior",
+      label: `Storey heights: ${show(mine)} → ${show(latest)}`,
+      defaultSelected: true,
+      available: true,
+      apply: (model) => ({ ...model, ceilingHeight: latest.ceilingHeight, slabThickness: latest.slabThickness }),
+    },
+  ];
+}
+
 export function listingUpdates(mine: HouseModel, latest: HouseModel): LayoutChange[] {
-  return [...exteriorChanges(mine, latest), ...fixtureChanges(mine, latest), ...stairChanges(mine, latest), ...openingChanges(mine, latest)];
+  return [
+    ...storeyChanges(mine, latest),
+    ...exteriorChanges(mine, latest),
+    ...fixtureChanges(mine, latest),
+    ...stairChanges(mine, latest),
+    ...openingChanges(mine, latest),
+  ];
 }
 
 /** Apply the chosen changes (by id) in order to a copy of `mine`; ids that are not on offer, or can't be applied, are ignored. */
