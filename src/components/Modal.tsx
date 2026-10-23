@@ -9,7 +9,7 @@ export function Modal({ title, onClose, width = 760, className = "", children }:
     panel.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       // A confirm dialog opened from here answers Esc itself.
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".dialog-backdrop")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".dialog-backdrop, .lightbox")) {
         e.preventDefault();
         onClose();
       }
