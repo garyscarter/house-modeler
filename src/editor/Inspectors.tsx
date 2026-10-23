@@ -804,8 +804,3 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
     </div>
   );
 }
-
-/** Older name, kept for the plan editor until it switches over. */
-export const FloorInspector = FloorSettings;
-/** Older name, kept for the plan editor until it switches over. */
-export const RoomInspector = BuildRoomPanel;
