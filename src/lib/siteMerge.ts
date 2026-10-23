@@ -1,5 +1,7 @@
-import type { BoundaryEdge, Site, WPt } from "../types";
-import { edgesOf, pointSegmentDistance } from "./site";
+import type { BoundaryEdge, Neighbour, Site, WPt } from "../types";
+import { uid } from "../types";
+import type { Change } from "./layoutMerge";
+import { areaOf, edgesOf, pointSegmentDistance } from "./site";
 
 /**
  * Bring a plot's boundary treatments (fence, wall, hedge, heights, tops) up to date with another plot's
@@ -157,4 +159,129 @@ export function describeBoundaryChanges(parts: { name?: string; changes: Boundar
   const intro = "Update the plot's fences, walls and hedges to the latest for listing 91770873? Your corners, drive opening and other plot edits stay as they are. You can undo it.";
   if (!lines.length) return "The boundary walls and fences already match the latest for listing 91770873. Mark the plot as up to date?";
   return `${intro}\n\nThese change:\n${lines.join("\n")}`;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Neighbouring buildings
+
+export type PlotChange = Change<Site>;
+
+/** A neighbour moved by no more than this (metres, outline unchanged) is taken to be a correction to the listing's, and ticked. */
+export const NEIGHBOUR_NUDGE_M = 0.5;
+
+const NEIGHBOUR_FIELDS = ["eaves", "roof", "pitchDeg", "overhang", "ridgeAxis", "partySide", "color", "roofColor"] as const;
+type NeighbourField = (typeof NEIGHBOUR_FIELDS)[number];
+const NEIGHBOUR_WORD: Record<NeighbourField, string> = {
+  eaves: "eaves height",
+  roof: "roof",
+  pitchDeg: "roof pitch",
+  overhang: "eaves overhang",
+  ridgeAxis: "ridge direction",
+  partySide: "party wall side",
+  color: "wall colour",
+  roofColor: "roof colour",
+};
+
+/** A field with the renderer's defaults filled in (see three/Site.tsx), so "unset" and the default don't differ. */
+function neighbourValue(n: Neighbour, k: NeighbourField): unknown {
+  const pitched = n.roof !== "flat";
+  switch (k) {
+    case "pitchDeg":
+      return pitched ? (n.pitchDeg ?? 35) : undefined;
+    case "overhang":
+      return pitched ? (n.overhang ?? 0.35) : undefined;
+    case "ridgeAxis":
+      return pitched ? (n.ridgeAxis ?? "auto") : undefined;
+    case "partySide":
+      return n.partySide ?? "none";
+    default:
+      return n[k];
+  }
+}
+function showNeighbourValue(k: NeighbourField, v: unknown): string {
+  if (v === undefined) return "default";
+  if (k === "pitchDeg") return `${+(v as number).toFixed(1)}°`;
+  if (k === "roof") return v === "hip" ? "hipped" : v === "gable" ? "gabled" : "flat";
+  return typeof v === "number" ? metres(v) : String(v);
+}
+
+/** The common shift of every corner from `a` to `b`, or null when the outline itself changed. */
+function shiftOf(a: WPt[], b: WPt[]): WPt | null {
+  if (a.length !== b.length || !a.length) return null;
+  const d = { x: b[0].x - a[0].x, y: b[0].y - a[0].y };
+  return a.every((p, i) => Math.abs(b[i].x - p.x - d.x) < 0.01 && Math.abs(b[i].y - p.y - d.y) < 0.01) ? d : null;
+}
+const directionWords = (d: WPt) =>
+  Math.abs(d.x) >= Math.abs(d.y) ? (d.x > 0 ? "to the right" : "to the left") : d.y > 0 ? "towards the street" : "towards the back";
+
+/** Change the neighbour named `name` (the first of that name) in a copy of `site`; unchanged when there is none. */
+function withNeighbour(site: Site, name: string, edit: (n: Neighbour) => Neighbour): Site {
+  const i = site.neighbours.findIndex((n) => n.name === name);
+  if (i < 0) return site;
+  return { ...site, neighbours: site.neighbours.map((n, j) => (j === i ? edit(structuredClone(n)) : n)) };
+}
+
+/**
+ * Changes to bring the neighbouring buildings of plot `mine` in line with `latest`, matched by name.
+ *
+ * Roof pitch, overhang, eaves height, roof shape, ridge, party side and colours that differ are offered
+ * ticked (they are measurements of a building next door, which a design doesn't change). A building moved
+ * by up to half a metre with its outline unchanged is ticked too; a bigger move or a new outline is offered
+ * unticked, since the owner may have redrawn it. Buildings of `latest` missing from `mine` are offered,
+ * unticked, to add back. Buildings only `mine` has, the boundary, surfaces and everything else are never
+ * touched.
+ */
+export function neighbourUpdates(mine: Site, latest: Site): PlotChange[] {
+  const out: PlotChange[] = [];
+  for (const ln of latest.neighbours) {
+    const mn = mine.neighbours.find((n) => n.name === ln.name);
+    const name = ln.name;
+    if (!mn) {
+      out.push({
+        id: `neighbour.${name}.add`,
+        group: "neighbours",
+        label: `Add ${name} (${+areaOf(ln.polygon).toFixed(1)} m², ${ln.roof === "flat" ? "flat roof" : `${ln.roof === "hip" ? "hipped" : "gabled"} roof`})`,
+        note: "Not ticked: your plot doesn't have it, which may be on purpose.",
+        defaultSelected: false,
+        available: true,
+        apply: (site) => ({ ...site, neighbours: [...site.neighbours, { ...structuredClone(ln), id: uid() }] }),
+      });
+      continue;
+    }
+    for (const k of NEIGHBOUR_FIELDS) {
+      const from = neighbourValue(mn, k);
+      const to = neighbourValue(ln, k);
+      if (from === to) continue;
+      out.push({
+        id: `neighbour.${name}.${k}`,
+        group: "neighbours",
+        label: `${name}: ${NEIGHBOUR_WORD[k]} ${showNeighbourValue(k, from)} → ${showNeighbourValue(k, to)}`,
+        defaultSelected: true,
+        available: true,
+        apply: (site) =>
+          withNeighbour(site, name, (n) => {
+            if (ln[k] === undefined) delete n[k];
+            else (n as unknown as Record<string, unknown>)[k] = ln[k];
+            return n;
+          }),
+      });
+    }
+    if (JSON.stringify(mn.polygon) !== JSON.stringify(ln.polygon)) {
+      const d = shiftOf(mn.polygon, ln.polygon);
+      const far = d ? Math.hypot(d.x, d.y) : Infinity;
+      const tick = far <= NEIGHBOUR_NUDGE_M;
+      out.push({
+        id: `neighbour.${name}.polygon`,
+        group: "neighbours",
+        label: d
+          ? `${name}: moved ${metres(far)} ${directionWords(d)}`
+          : `${name}: new outline (${+areaOf(mn.polygon).toFixed(1)} m² → ${+areaOf(ln.polygon).toFixed(1)} m²)`,
+        ...(tick ? {} : { note: "Not ticked: it replaces this building's outline on your plot, in case you redrew it yourself." }),
+        defaultSelected: tick,
+        available: true,
+        apply: (site) => withNeighbour(site, name, (n) => ({ ...n, polygon: structuredClone(ln.polygon) })),
+      });
+    }
+  }
+  return out;
 }

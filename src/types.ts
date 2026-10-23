@@ -398,6 +398,11 @@ export interface HouseModel {
   exterior?: Exterior;
   /** Set on built-in models so the app can offer an update when the tracing improves. */
   preset?: { id: string; version: number };
+  /**
+   * A design started from a built-in house (`id`, as in `preset`): the version of it the design was copied
+   * from or last brought up to date with (see lib/layoutMerge.ts). Not a built-in itself, so never replaced.
+   */
+  basedOn?: { id: string; version: number };
   /** Total floor area printed on the listing's floorplan (m²), to check the tracing against. */
   listedArea?: number;
 }

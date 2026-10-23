@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { listingSite } from "./houses/listing91770873";
 import { setOpeningWidth } from "./boundaryOpening";
-import { describeBoundaryChanges, mergeBoundaryTreatments } from "./siteMerge";
+import { describeBoundaryChanges, mergeBoundaryTreatments, neighbourUpdates } from "./siteMerge";
+import { applyChanges, defaultSelection } from "./layoutMerge";
 import { insertBoundaryVertex } from "./site";
 import type { BoundaryEdge, Site } from "../types";
 
@@ -164,5 +165,80 @@ describe("labels", () => {
     expect(text).toContain("• Rear boundary: fence 1.8 m → brick wall 1.8 m");
     expect(text).toContain("stay as they are");
     expect(describeBoundaryChanges([{ changes: [] }])).toContain("already match");
+  });
+});
+
+describe("neighbourUpdates", () => {
+  /** The listing's plot with its buildings under plain names (attached house, its conservatory, side extension, west neighbour, outbuilding). */
+  const NAMES = ["Attached house", "Conservatory", "Side extension", "West neighbour", "Outbuilding"];
+  function plot(): Site {
+    const s = listingSite();
+    expect(s.neighbours).toHaveLength(NAMES.length);
+    s.neighbours = s.neighbours.map((n, i) => ({ ...n, name: NAMES[i] }));
+    return s;
+  }
+  /** The listing's plot as an owner's copy from before the attached house's roof was measured, with edits of their own. */
+  function ownCopy(): Site {
+    const s = plot();
+    const shift = (dx: number) => (p: { x: number; y: number }) => ({ x: p.x + dx, y: p.y });
+    s.neighbours = s.neighbours
+      .filter((n) => n.name !== "Outbuilding")
+      .map((n) => {
+        if (n.name === "Attached house") {
+          const { overhang: _o, ...rest } = n;
+          return { ...rest, pitchDeg: 28 };
+        }
+        if (n.name === "Conservatory") return { ...n, polygon: n.polygon.map(shift(-0.24)) };
+        return n;
+      });
+    s.neighbours.push({ id: "shed", name: "My shed", polygon: [{ x: 0, y: -12 }, { x: 2, y: -12 }, { x: 2, y: -10 }, { x: 0, y: -10 }], eaves: 2, roof: "flat" });
+    s.surfaces = s.surfaces.slice(1);
+    return s;
+  }
+
+  it("offers nothing when the buildings match", () => {
+    expect(neighbourUpdates(plot(), plot())).toEqual([]);
+  });
+
+  it("offers the attached house's roof and a small move ticked, and a missing building unticked", () => {
+    const cs = neighbourUpdates(ownCopy(), plot());
+    expect(cs.map((c) => [c.label, c.defaultSelected])).toEqual([
+      ["Attached house: roof pitch 28° → 32°", true],
+      ["Attached house: eaves overhang 0.35 m → 0.25 m", true],
+      ["Conservatory: moved 0.24 m to the right", true],
+      [expect.stringMatching(/^Add Outbuilding \(\d+(\.\d)? m², flat roof\)$/), false],
+    ]);
+    expect(cs[3].note).toContain("may be on purpose");
+  });
+
+  it("applies only the ticked ones, keeping the owner's own buildings, surfaces and boundary", () => {
+    const mine = ownCopy();
+    const before = structuredClone(mine);
+    const latest = plot();
+    const cs = neighbourUpdates(mine, latest);
+    const out = applyChanges(mine, cs, defaultSelection(cs));
+    const byName = (s: Site, n: string) => s.neighbours.find((x) => x.name === n)!;
+    expect(byName(out, "Attached house")).toEqual({ ...byName(latest, "Attached house"), id: byName(mine, "Attached house").id });
+    expect(byName(out, "Conservatory").polygon).toEqual(byName(latest, "Conservatory").polygon);
+    expect(out.neighbours.map((n) => n.name)).toEqual(mine.neighbours.map((n) => n.name));
+    expect({ ...out, neighbours: [] }).toEqual({ ...mine, neighbours: [] });
+    const all = applyChanges(mine, cs, cs.map((c) => c.id));
+    expect(all.neighbours.map((n) => n.name)).toContain("Outbuilding");
+    expect(neighbourUpdates(all, latest)).toEqual([]);
+    expect(mine).toEqual(before);
+  });
+
+  it("leaves a big move or a redrawn outline unticked", () => {
+    const mine = plot();
+    const latest = plot();
+    const n = latest.neighbours.find((x) => x.name === "West neighbour")!;
+    n.polygon = n.polygon.map((p) => ({ x: p.x - 1, y: p.y }));
+    const c = neighbourUpdates(mine, latest)[0];
+    expect(c.label).toBe("West neighbour: moved 1 m to the left");
+    expect(c.defaultSelected).toBe(false);
+    n.polygon = n.polygon.slice(0, 3);
+    const r = neighbourUpdates(mine, latest)[0];
+    expect(r.label).toMatch(/^West neighbour: new outline/);
+    expect(r.defaultSelected).toBe(false);
   });
 });

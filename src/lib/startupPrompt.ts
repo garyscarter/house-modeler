@@ -1,5 +1,6 @@
 import { VARIANT_LABEL, type HouseModel, type VariantKey } from "../types";
 import type { SiteUpdate } from "./sitePreset";
+import { reviewedVersion } from "./layoutMerge";
 
 /** What the startup prompt should offer, or nothing. */
 export type StartupPrompt =
@@ -12,10 +13,15 @@ export type StartupPrompt =
       variants: VariantKey[];
       /** The plot update on offer, if any. */
       site?: SiteUpdate;
+      /**
+       * The listing version Proposed's review of updates is on offer for, when Proposed is the owner's design
+       * started from As listed and hasn't been brought up to it (see lib/layoutMerge.ts).
+       */
+      review?: number;
     };
 
 /** Versions of each prompt kind the user has already answered "not now" / "keep mine" to. */
-export type Remembered = { load?: number; update?: number; site?: number };
+export type Remembered = { load?: number; update?: number; site?: number; review?: number };
 
 type Registry = Record<string, { version: number }>;
 
@@ -29,9 +35,13 @@ type Registry = Record<string, { version: number }>;
  * (`siteUpdate`, from decideSiteUpdate) is offered in the same prompt. A
  * remembered answer silences each part until the version it was given for is
  * superseded.
+ *
+ * A Proposed design started from As listed (a copy still carrying As listed's tag, or one that records the
+ * version it is `basedOn`) is never replaced, but when the listing is newer than the version it was copied
+ * at or last reviewed against, reviewing the listing's updates for it is offered too (`review`).
  */
 export function decideStartupPrompt(
-  variants: Partial<Record<VariantKey, Pick<HouseModel, "preset">>>,
+  variants: Partial<Record<VariantKey, Pick<HouseModel, "preset" | "basedOn">>>,
   registry: Registry,
   listingPresetId: string,
   remembered: Remembered,
@@ -57,17 +67,23 @@ export function decideStartupPrompt(
   }
   const layoutsDue = stale.length > 0 && (remembered.update ?? 0) < version;
   const siteDue = !!siteUpdate && (siteUpdate.current || !!siteUpdate.proposed) && (remembered.site ?? 0) < siteUpdate.version;
-  if (!layoutsDue && !siteDue) return null;
+  const latestListing = registry[listingPresetId]?.version;
+  const reviewed = reviewedVersion(variants.proposed, listingPresetId);
+  // A Proposed with another built-in's tag is that built-in, updated above; it is not a design to review.
+  const isDesign = !variants.proposed?.preset || variants.proposed.preset.id === listingPresetId;
+  const reviewDue = isDesign && latestListing !== undefined && reviewed !== undefined && reviewed < latestListing && (remembered.review ?? 0) < latestListing;
+  if (!layoutsDue && !siteDue && !reviewDue) return null;
   return {
     kind: "update",
     version: layoutsDue ? version : 0,
     variants: layoutsDue ? stale : [],
     ...(siteDue ? { site: siteUpdate } : {}),
+    ...(reviewDue ? { review: latestListing } : {}),
   };
 }
 
 type UpdatePrompt = Extract<StartupPrompt, { kind: "update" }>;
-type Answer = "update" | "site";
+type Answer = "update" | "site" | "review";
 
 /** What accepting a choice does: layouts to refresh, plots to replace, and which answers to remember afterwards. */
 export type UpdatePlan = {
@@ -76,18 +92,51 @@ export type UpdatePlan = {
   sites: VariantKey[];
   /** Plots that keep their edits and take only the latest boundary treatments (walls, fences, hedges). */
   boundaries?: VariantKey[];
+  /** Afterwards, open the review of the listing's updates for Proposed. */
+  review?: boolean;
   remember: Answer[];
 };
 export type UpdateChoice = { label: string; plan: UpdatePlan | null };
 
 /** The answers a "not now" remembers: one per part that was on offer. */
-export const notNowRemembers = (p: UpdatePrompt): Answer[] => [...(p.variants.length ? (["update"] as const) : []), ...(p.site ? (["site"] as const) : [])];
+export const notNowRemembers = (p: UpdatePrompt): Answer[] => [
+  ...(p.variants.length ? (["update"] as const) : []),
+  ...(p.site ? (["site"] as const) : []),
+  ...(p.review ? (["review"] as const) : []),
+];
+
+const REVIEW_LABEL = "review updates for my Proposed";
+const REVIEW_NOTE =
+  " Your Proposed design is your own and is never replaced, but you can review the listing's newer changes (roof, radiators, stairs and so on) and choose which to bring into it.";
 
 /**
  * The question and buttons for an "update" prompt. A choice with a null plan does nothing and remembers
  * `notNowRemembers`. Proposed's own edited plot is only replaced by the choice that says so.
  */
 export function describeUpdate(prompt: UpdatePrompt): { message: string; choices: UpdateChoice[] } {
+  if (!prompt.review) return describeLayoutUpdate(prompt);
+  if (!prompt.variants.length && !prompt.site) {
+    return {
+      message: `Listing 91770873 has changed since your Proposed design was copied from it.${REVIEW_NOTE} You can undo it.`,
+      choices: [
+        { label: "Review updates for my Proposed", plan: { layouts: [], sites: [], review: true, remember: [] } },
+        { label: "Not now", plan: null },
+      ],
+    };
+  }
+  // The review goes with the update that keeps the owner's plot edits when there is one (the same spirit), else
+  // with the plain update. Choosing another update leaves the review to be offered on its own next time.
+  const { message, choices } = describeLayoutUpdate(prompt);
+  const base = Math.max(0, choices.findIndex((c) => !!c.plan?.boundaries?.length));
+  const plan = choices[base].plan!;
+  const label = plan.boundaries?.length ? `Update, keep my plot edits, and ${REVIEW_LABEL}` : `${choices[base].label}, and ${REVIEW_LABEL}`;
+  return {
+    message: `${message.replace(/ You can undo it\.$/, "")}${REVIEW_NOTE} You can undo it.`,
+    choices: [...choices.slice(0, base + 1), { label, plan: { ...plan, review: true } }, ...choices.slice(base + 1)],
+  };
+}
+
+function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices: UpdateChoice[] } {
   const { variants: layouts, site } = prompt;
   const names = layouts.map((k) => VARIANT_LABEL[k]).join(" and ");
   if (!site) {
@@ -149,13 +198,13 @@ export function readRemembered(storage: Pick<Storage, "getItem"> | undefined = s
     const raw = storage?.getItem(KEY);
     const v = raw ? (JSON.parse(raw) as Remembered) : {};
     const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : undefined);
-    return { load: num(v.load), update: num(v.update), site: num(v.site) };
+    return { load: num(v.load), update: num(v.update), site: num(v.site), review: num(v.review) };
   } catch {
     return {};
   }
 }
 
-export function remember(kind: "load" | "update" | "site", version: number, storage: Pick<Storage, "getItem" | "setItem"> | undefined = safeStorage()) {
+export function remember(kind: keyof Remembered, version: number, storage: Pick<Storage, "getItem" | "setItem"> | undefined = safeStorage()) {
   try {
     storage?.setItem(KEY, JSON.stringify({ ...readRemembered(storage), [kind]: version }));
   } catch {

@@ -1,0 +1,15 @@
+.review-dialog { width: min(560px, 100%); max-height: calc(100dvh - 32px); }
+.review-dialog h3 { margin: 0; font-size: 15px; }
+.review-groups { overflow-y: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; margin: 0 -4px; padding: 0 4px; }
+.review-group header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+.review-group h4 { margin: 0; font-size: 13px; }
+.review-all { display: flex; gap: 6px; }
+.review-all .link { border: none; background: none; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+.review-all .link:disabled { color: var(--muted); cursor: default; }
+.review-group ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.review-group label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 2px; line-height: 1.35; cursor: pointer; font-size: 13px; }
+.review-group label input { margin-top: 2px; flex: none; }
+.review-group small { display: block; font-size: 12px; }
+.review-group details { margin-top: 4px; font-size: 12px; }
+.review-group summary { cursor: pointer; }
+.review-left li { padding: 3px 0 3px 22px; line-height: 1.35; }
