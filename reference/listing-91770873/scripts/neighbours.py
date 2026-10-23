@@ -21,6 +21,6 @@ def profile(sel, label, step=10):
         runs.append((start, prev))
         rs = "; ".join(f"z {Z(a):6.2f}..{Z(b):6.2f}" for a, b in runs if b - a > 4)
         print(f"x {X(b0):6.2f}..{X(b0+step):6.2f}: {rs}")
-profile(t > 402, "east of party wall (No. 26)", 15)
+profile(t > 402, "east of party wall (attached neighbour)", 15)
 profile(t < 45, "west of plot (west neighbour)", 15)
 profile((s < 260) & (t > 40) & (t < 420), "behind plot", 15)

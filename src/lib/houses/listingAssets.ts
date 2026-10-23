@@ -48,7 +48,7 @@ const PLACES: Record<string, Place> = {
   "front-street": { elevation: "front", description: "Street view with the neighbouring houses." },
   "rear-1": { elevation: "rear", description: "Rear elevation and patio." },
   "rear-2": { elevation: "rear", description: "Rear of the single-storey part with its flat roof." },
-  "rear-3": { elevation: "rear", description: "Rear towards No. 26 and its conservatory." },
+  "rear-3": { elevation: "rear", description: "Rear towards the attached neighbour and its conservatory." },
   "rear-4": { elevation: "rear", description: "Rear elevation from the garden." },
   "rear-garden": { elevation: "rear", description: "Rear garden looking towards the house." },
 };

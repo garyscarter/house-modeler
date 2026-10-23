@@ -440,7 +440,7 @@ export function listing91770873(image: string): HouseModel {
     slabThickness: 0.2,
     // From the photos: cream render, brown frames, tiled roof with the ridge
     // parallel to the street (left-right on the plan).
-    // Hipped at the garage end; the right-hand side is the party wall with No. 26.
+    // Hipped at the garage end; the right-hand side is the party wall with the attached neighbour.
     exterior: {
       ...DEFAULT_EXTERIOR,
       roofStyle: "hip",
@@ -460,9 +460,9 @@ export function listing91770873(image: string): HouseModel {
       // Brown uPVC fascias and gutters, concrete interlocking tiles (front photos).
       fascia: "trim",
       tileStyle: "concrete",
-      // One brick stack on the party wall at the ridge, shared with No. 26 (chimney breasts are drawn on that wall on
+      // One brick stack on the party wall at the ridge, shared with the attached neighbour (chimney breasts are drawn on that wall on
       // both floors of the plan): flat-topped with no pots, carrying TV aerials. Triangulated from front-street,
-      // front-2 and front-1: its front face is about 0.85 m wide, mostly on No. 26's side of the party line, starts
+      // front-2 and front-1: its front face is about 0.85 m wide, mostly on the attached neighbour's side of the party line, starts
       // at the ridge and stands about 1 m over it; its shaded west face runs back about 1.5 m over the rear slope
       // (the dark "sloping" side in the front photos is that face's top edge seen in perspective; rear-1, rear-4).
       chimneys: [{ id: "party-stack", x: 6.2, y: -3.05, w: 0.85, d: 1.5, height: 1.05, pots: 0 }],
@@ -603,7 +603,7 @@ export function listingSite(): Site {
     boundary: w([
       [-4.44, -11.24], // 0 rear-west
       [5.84, -12.05], // 1 rear-east
-      // East side: brick wall with a pierced block panel beside No. 26's
+      // East side: brick wall with a pierced block panel beside the attached neighbour's
       // conservatory (rear-3), then the house's party wall.
       [5.81, -9.41], // 2
       [5.78, -5.59], // 3
@@ -630,7 +630,7 @@ export function listingSite(): Site {
       // 1 east, back garden: the wall beside the conservatory carries on past its far end at the
       // same height (rear-3); further back it is not visible (owner).
       { kind: "wall", height: 1.4, top: "brick", piers: false },
-      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside No. 26's conservatory (rear-3)
+      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside the attached neighbour's conservatory (rear-3)
       { kind: "wall", height: 1.4, top: "brick", piers: false }, // 3 east, along the party wall (hidden by the buildings)
       // A low brick wall like the front one, from the house front to the pavement (owner; front-garden).
       { kind: "wall", height: 0.95, top: "brick", piers: false }, // 4 east, front garden
@@ -650,11 +650,11 @@ export function listingSite(): Site {
     ],
     neighbours: [
       // Pale render with a brick band, under one continuous roof with ours: the same 32 degree pitch and eaves.
-      block("No. 26 (attached)", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 32, overhang: 0.25, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
+      block("Attached neighbour", 5.82, -5.59, 12.2, 1.12, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 32, overhang: 0.25, partySide: "left", color: "#e6e3dc", roofColor: "#6e4a3c" }),
       // A white uPVC conservatory (rear photos). It stands just behind the boundary wall, whose top and
       // pierced panel show in front of its glazing (rear-3); set 0.24 m off the line so the wall is drawn.
-      block("No. 26 conservatory", 6.06, -9.41, 8.88, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
-      block("No. 26 side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),
+      block("Attached neighbour's conservatory", 6.06, -9.41, 8.88, -5.59, { eaves: 2.4, roof: "flat", color: "#eef1f1", roofColor: "#dfe6e8" }),
+      block("Attached neighbour's side extension", 12.2, -5.59, 15.2, -1.98, { eaves: 2.6, roof: "flat" }),
       // Red brick with a red clay-tile hipped roof (front photos). Measured with the front-street camera it rises a
       // little more than ours over a similar depth, so it stays at 35 degrees.
       block("West neighbour", -12.8, -6.15, -6.36, 0.78, { eaves: twoStorey, roof: "hip", ridgeAxis: "x", pitchDeg: 35, partySide: "left", color: "#a5583f", roofColor: "#a14e36" }),

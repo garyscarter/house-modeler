@@ -1,5 +1,5 @@
 import type { HouseModel, Photo, VariantKey } from "../types";
-import { migrateModel } from "./migrate";
+import { migrateModel, migratePhotos, migrateSites } from "./migrate";
 import { sitesFromImport, type Sites } from "./sites";
 
 /**
@@ -130,8 +130,8 @@ export function parseProject(data: unknown, costRatesNow: Record<string, number>
   if (proposed) variants.proposed = migrateModel(proposed);
   return {
     variants,
-    photos: Array.isArray(d.photos) ? (d.photos as Photo[]) : [],
-    sites: sitesFromImport({ sites: d.sites, site: d.site, variants }),
+    photos: Array.isArray(d.photos) ? migratePhotos(d.photos as Photo[]) : [],
+    sites: migrateSites(sitesFromImport({ sites: d.sites, site: d.site, variants })),
     costRates: d.costRates ?? costRatesNow,
   };
 }

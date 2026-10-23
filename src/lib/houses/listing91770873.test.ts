@@ -384,9 +384,9 @@ describe("the main roof (fitted to the front photos)", () => {
     expect(g.ridgeY - g.eavesY).toBeLessThan(2.45);
   });
 
-  it("is one continuous roof with No. 26: the attached neighbour has the same pitch and eaves overhang", () => {
-    const n26 = listingSite().neighbours.find((n) => n.name.startsWith("No. 26 (attached)"))!;
-    expect(n26.pitchDeg).toBe(house.exterior!.pitchDeg);
-    expect(n26.overhang).toBe(house.exterior!.overhang);
+  it("is one continuous roof with the attached neighbour has the same pitch and eaves overhang", () => {
+    const attached = listingSite().neighbours.find((n) => n.name === "Attached neighbour")!;
+    expect(attached.pitchDeg).toBe(house.exterior!.pitchDeg);
+    expect(attached.overhang).toBe(house.exterior!.overhang);
   });
 });
