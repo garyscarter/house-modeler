@@ -8,6 +8,8 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
+import { CommandPalette } from "./components/CommandPalette";
+import { ShortcutSheet } from "./components/ShortcutSheet";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
@@ -257,6 +259,8 @@ export default function App() {
       </div>
       <PhotoLightbox />
       <Dialogs />
+      <CommandPalette />
+      <ShortcutSheet />
       <ListingUpdatesDialog />
     </div>
   );
