@@ -37,6 +37,7 @@ import { ToolRail } from "./ToolRail";
 import { InspectorCard } from "../components/InspectorCard";
 import { Info } from "../components/Info";
 import { Icon } from "../components/icons";
+import { BrandMark } from "../components/BrandMark";
 import "./SiteEditor.css";
 
 type Tool = "select" | "surface" | "neighbour";
@@ -77,6 +78,7 @@ function NoSite({ model }: { model?: HouseModel }) {
   const setSite = useStore((s) => s.setSite);
   return (
     <div className="empty">
+      <BrandMark outline size={72} />
       <h2>No site yet</h2>
       <p>The site plan holds the plot boundary, garden surfaces and neighbouring buildings around the house.</p>
       <div className="row" style={{ justifyContent: "center" }}>
