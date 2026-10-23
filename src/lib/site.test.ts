@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   areaOf,
+  boundaryPrisms,
   clipSegmentOutside,
   defaultDepths,
   gardenArea,
@@ -191,5 +192,35 @@ describe("sun hours", () => {
     expect(grid.hours[9]).toBe(0);
     expect(grid.hours[10 + 3]).toBe(8);
     expect(grid.hours[10 + 6]).toBe(0);
+  });
+});
+
+describe("boundary prisms", () => {
+  const boundary = rectPoly(0, 0, 10, 10);
+  const site = {
+    boundary,
+    boundaryEdges: [
+      { kind: "fence" as const, height: 1.8 },
+      { kind: "open" as const, height: 1.8 },
+      { kind: "wall" as const, height: 0.9 },
+      { kind: "hedge" as const, height: 2 },
+    ],
+  };
+
+  it("makes a thin prism per edge that is not open", () => {
+    const ps = boundaryPrisms(site);
+    expect(ps).toHaveLength(3);
+    expect(ps.every((p) => p.kind === "boundary")).toBe(true);
+    expect(ps.map((p) => p.height)).toEqual([1.8, 0.9, 2]);
+    expect(areaOf(ps[0].poly)).toBeCloseTo(10 * 0.1);
+  });
+
+  it("shades the garden without blanking the cells beside it", () => {
+    const sun = () => ({ x: 0, y: -1, altitude: 20 }); // from the rear fence at y = 0
+    const grid = sunHoursGrid(boundary, boundaryPrisms(site), sun, 8, 12, 1, 0.5);
+    expect(grid.hours.some((h) => Number.isNaN(h))).toBe(false);
+    // A 1.8 m fence at 20 degrees shades 1.8 / tan(20) = 4.9 m.
+    expect(grid.hours[0]).toBe(0);
+    expect(grid.hours[7 * grid.nx + 5]).toBe(4);
   });
 });
