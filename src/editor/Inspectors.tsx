@@ -1,21 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Section } from "../components/Section";
+import type { Mode } from "../lib/modes";
+import { knockThroughNeighbours } from "../lib/mergeRooms";
+import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, shapeSummary, stairsSummary } from "../lib/modeSummary";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
-import type { Fixture, Floor, FloorFinish, Opening, OpeningKind, Pt, Room, VariantKey, Wall, WallFinish } from "../types";
-import { DEFAULT_EXTERIOR, FLOOR_FINISH_LABEL, GLAZING_LABEL, OPENING_KIND_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, WALL_FINISH_LABEL, type GlazingPattern, type OpeningStyle, type SillStyle, type StairsDir } from "../types";
+import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
+import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type SillStyle, type StairsDir } from "../types";
 import { DEFAULT_WORKTOP, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, styleOptions } from "../lib/openings";
-import { WALL_COVERING_LABEL, type WallCovering } from "../types";
-import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../lib/wallCovering";
-import { ColourSwatches } from "./ColourSwatches";
-import { skirtingColour } from "../lib/skirting";
-import { roomColor } from "../three/House";
-import { finishColour, floorAngle, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
-import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
-import { FeatureWalls } from "./FeatureWalls";
 import { KnockThrough } from "./KnockThrough";
 import {
   COLOUR_KINDS,
@@ -39,7 +35,7 @@ const fmt2 = (v: number | undefined) => (v === undefined || !Number.isFinite(v) 
  * the edit), so a rename is one undo step and photos follow the room or floor
  * from its old name to the new one, never to a half-typed name on the way.
  */
-function NameField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+export function NameField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
   const [text, setText] = useState(value);
   const [focused, setFocused] = useState(false);
   useEffect(() => {
@@ -143,18 +139,18 @@ const CORNERS: [Corner, string, string][] = [
   ["br", "↘", "bottom-right"],
 ];
 
-export function RoomInspector({
+/** Build's panel for a picked room: its name, shape and size, details, knock-through and delete. Finishes live in Decorate. */
+export function BuildRoomPanel({
   variant,
   floor,
   room,
   onChange,
-  onHighlightEdge,
 }: {
   variant: VariantKey;
   floor: Floor;
   room: Room;
   onChange: (p: Partial<Room>) => void;
-  /** Light one of the room's edges on the plan (null: none). */
+  /** Light one of the room's edges on the plan (null: none). Unused in Build. */
   onHighlightEdge?: (edge: number | null) => void;
 }) {
   const updateFloor = useStore((s) => s.updateFloor);
@@ -162,6 +158,7 @@ export function RoomInspector({
   const setUi = useStore((s) => s.setUi);
   const [anchor, setAnchor] = useState<Corner>("tl");
   const roomPhotos = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
+  const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor, room.id]);
   const ppm = floor.pxPerM;
   const r = axisRect(room.polygon, 0.5);
   const b = bbox(room.polygon);
@@ -177,223 +174,77 @@ export function RoomInspector({
         Name
         <NameField value={room.name} onCommit={(name) => onChange({ name })} />
       </label>
-      <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
 
-      {r ? (
-        <div className="field">
-          <span className="field-label">Traced size, width × depth (m)</span>
-          <div className="size-row">
-            <NumberField value={tracedW} label="Width" onCommit={(w) => resize(w, tracedH)} />
-            <span>×</span>
-            <NumberField value={tracedH} label="Depth" onCommit={(h) => resize(tracedW, h)} />
-            <div className="anchor-grid" role="group" aria-label="Corner that stays put">
-              {CORNERS.map(([c, arrow, name]) => (
-                <button key={c} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
-                  {arrow}
-                </button>
-              ))}
+      <Section id="build.room.shape" title="Shape & size" summary={shapeSummary(room, ppm)} defaultOpen>
+        <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
+        {r ? (
+          <div className="field">
+            <span className="field-label">Traced size, width × depth (m)</span>
+            <div className="size-row">
+              <NumberField value={tracedW} label="Width" onCommit={(w) => resize(w, tracedH)} />
+              <span>×</span>
+              <NumberField value={tracedH} label="Depth" onCommit={(h) => resize(tracedW, h)} />
+              <div className="anchor-grid" role="group" aria-label="Corner that stays put">
+                {CORNERS.map(([c, arrow, name]) => (
+                  <button key={c} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
+                    {arrow}
+                  </button>
+                ))}
+              </div>
             </div>
+            <p className="muted small">The highlighted corner stays put. Tap an edge length on the plan to type a new one.</p>
           </div>
-          <p className="muted small">The highlighted corner stays put. Tap an edge length on the plan to type a new one.</p>
-        </div>
-      ) : (
-        <p className="muted small">
-          Traced extent {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m. Tap an edge length on the plan to type a new one.
-        </p>
-      )}
-
-      <div className="field">
-        <span className="field-label">Printed size on the plan (m)</span>
-        <div className="size-row">
-          <NumberField value={room.dims?.w} placeholder="w" label="Printed width" onCommit={(w) => onChange({ dims: { w, h: room.dims?.h ?? 0 } })} />
-          <span>×</span>
-          <NumberField value={room.dims?.h} placeholder="d" label="Printed depth" onCommit={(h) => onChange({ dims: { w: room.dims?.w ?? 0, h } })} />
-        </div>
-        {cmp && (
-          <p className={`small ${cmp.worst > 5 ? "warn" : "muted"}`}>
-            Traced {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m against printed {room.dims!.w.toFixed(2)} × {room.dims!.h.toFixed(2)} m: {pct(cmp.w)} / {pct(cmp.h)}
-            {cmp.swapped ? " (printed the other way round)" : ""}.
-            {cmp.worst > 5 && " More than 5% out: check the tracing or the floor's scale."}
+        ) : (
+          <p className="muted small">
+            Traced extent {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m. Tap an edge length on the plan to type a new one.
           </p>
         )}
-      </div>
 
-      <label>
-        Notes
-        <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
-      </label>
-
-      <label className="check">
-        <input type="checkbox" checked={isUnheated(room)} onChange={(e) => onChange({ unheated: e.target.checked })} /> Not heated (garage, store): left out of
-        the heated area
-      </label>
-
-      <label>
-        Floor finish
-        <select
-          value={room.floorFinish ?? "plain"}
-          onChange={(e) => {
-            const f = e.target.value as FloorFinish;
-            // A new textured finish starts in its own typical colour (light oak for herringbone);
-            // pick a colour after choosing the finish to change it.
-            onChange({ floorFinish: f === "plain" ? undefined : f, ...(f !== "plain" && room.color ? { color: undefined } : {}) });
-          }}
-        >
-          {(Object.keys(FLOOR_FINISH_LABEL) as FloorFinish[]).map((k) => (
-            <option key={k} value={k}>
-              {FLOOR_FINISH_LABEL[k]}
-            </option>
-          ))}
-        </select>
-      </label>
-      {takesAngle(room.floorFinish) && (
         <div className="field">
-          <span className="field-label">Pattern direction (degrees)</span>
-          <div className="size-row floor-angle">
-            <NumberField value={room.floorAngle ?? 0} min={-361} max={360} step={5} label="Floor pattern angle" onCommit={(a) => onChange({ floorAngle: normaliseAngle(a) || undefined })} />
-            {[0, 45, 90].map((a) => (
-              <button key={a} className={floorAngle(room) === a ? "active" : ""} onClick={() => onChange({ floorAngle: a || undefined })}>
-                {a}°
-              </button>
-            ))}
-            <button title="Run the pattern along the room's longest wall" onClick={() => onChange({ floorAngle: longAxisAngle(room.polygon) || undefined })}>
-              Along room
-            </button>
+          <span className="field-label">Printed size on the plan (m)</span>
+          <div className="size-row">
+            <NumberField value={room.dims?.w} placeholder="w" label="Printed width" onCommit={(w) => onChange({ dims: { w, h: room.dims?.h ?? 0 } })} />
+            <span>×</span>
+            <NumberField value={room.dims?.h} placeholder="d" label="Printed depth" onCommit={(h) => onChange({ dims: { w: room.dims?.w ?? 0, h } })} />
           </div>
-        </div>
-      )}
-      {takesGrout(room.floorFinish) && (
-        <div className="colour-row">
-          <label>
-            Grout colour
-            <span className="colour-pick">
-              <input type="color" value={groutColour(room)} onChange={(e) => onChange({ floorGrout: e.target.value })} />
-              {room.floorGrout && (
-                <button className="link" onClick={() => onChange({ floorGrout: undefined })}>
-                  Clear
-                </button>
-              )}
-            </span>
-          </label>
-        </div>
-      )}
-      <div className="colour-row">
-        <label>
-          Floor colour
-          <span className="colour-pick">
-            <input type="color" value={finishColour(room) ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
-            {room.color && room.floorFinish && room.floorFinish !== "plain" && (
-              <button className="link" title="Back to the finish's own colour" onClick={() => onChange({ color: undefined })}>
-                Clear
-              </button>
-            )}
-          </span>
-        </label>
-        <label>
-          {BASE_LABEL[room.wallCovering ?? "paint"]}
-          <span className="colour-pick">
-            <input type="color" value={wallBase(room)} onChange={(e) => onChange({ wallPaint: e.target.value })} />
-            {room.wallPaint && (
-              <button className="link" onClick={() => onChange({ wallPaint: undefined })}>
-                Clear
-              </button>
-            )}
-          </span>
-        </label>
-      </div>
-      <div className="colour-row">
-        <label>
-          Skirting colour
-          <span className="colour-pick">
-            <input type="color" value={skirtingColour(room)} onChange={(e) => onChange({ skirtingColor: e.target.value })} />
-            {room.skirtingColor && (
-              <button className="link" onClick={() => onChange({ skirtingColor: undefined })}>
-                Clear
-              </button>
-            )}
-          </span>
-        </label>
-      </div>
-      <label>
-        Wall covering
-        <select
-          value={room.wallCovering ?? "paint"}
-          onChange={(e) => onChange({ wallCovering: e.target.value === "paint" ? undefined : (e.target.value as WallCovering) })}
-        >
-          {(Object.keys(WALL_COVERING_LABEL) as WallCovering[]).map((k) => (
-            <option key={k} value={k}>
-              {WALL_COVERING_LABEL[k]}
-            </option>
-          ))}
-        </select>
-      </label>
-      {room.wallCovering && room.wallCovering !== "paint" && hasAccent(room.wallCovering) && (
-        <label>
-          {ACCENT_LABEL[room.wallCovering]}
-          <span className="colour-pick">
-            <input type="color" value={wallAccent(room) ?? wallBase(room)} onChange={(e) => onChange({ wallAccent: e.target.value })} />
-            {room.wallAccent && (
-              <button className="link" onClick={() => onChange({ wallAccent: undefined })}>
-                {room.wallCovering === "tiles" ? "None" : "Clear"}
-              </button>
-            )}
-          </span>
-        </label>
-      )}
-      <span className="swatch-label">{BASE_LABEL[room.wallCovering ?? "paint"]}: quick colours</span>
-      <ColourSwatches label={BASE_LABEL[room.wallCovering ?? "paint"]} value={wallBase(room)} onPick={(hex) => onChange({ wallPaint: hex })} />
-      {room.wallCovering && room.wallCovering !== "paint" && hasAccent(room.wallCovering) && (
-        <>
-          <span className="swatch-label">{ACCENT_LABEL[room.wallCovering]}: quick colours</span>
-          <ColourSwatches label={ACCENT_LABEL[room.wallCovering]} value={wallAccent(room) ?? wallBase(room)} onPick={(hex) => onChange({ wallAccent: hex })} />
-        </>
-      )}
-      <FeatureWalls variant={variant} floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
-      <label>
-        Floor texture from photo
-        <select value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>
-          <option value="">None</option>
-          {photos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Outside wall finish
-        <select value={room.exteriorFinish ?? ""} onChange={(e) => onChange({ exteriorFinish: (e.target.value || undefined) as WallFinish | undefined })}>
-          <option value="">House default</option>
-          {(Object.keys(WALL_FINISH_LABEL) as WallFinish[]).map((k) => (
-            <option key={k} value={k}>
-              {WALL_FINISH_LABEL[k]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label title="Colour of this room's external walls; blank uses the house's wall colour">
-        Outside wall colour
-        <span className="colour-pick">
-          <input type="color" value={room.exteriorColor ?? "#efe9d8"} onChange={(e) => onChange({ exteriorColor: e.target.value })} />
-          {room.exteriorColor && (
-            <button className="link" onClick={() => onChange({ exteriorColor: undefined })}>
-              House colour
-            </button>
+          {cmp && (
+            <p className={`small ${cmp.worst > 5 ? "warn" : "muted"}`}>
+              Traced {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m against printed {room.dims!.w.toFixed(2)} × {room.dims!.h.toFixed(2)} m: {pct(cmp.w)} / {pct(cmp.h)}
+              {cmp.swapped ? " (printed the other way round)" : ""}.
+              {cmp.worst > 5 && " More than 5% out: check the tracing or the floor's scale."}
+            </p>
           )}
-        </span>
-      </label>
-      <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
-        <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Part of
-        an extension (separate roof)
-      </label>
-      {roomPhotos.length > 0 && (
-        <div className="thumbs">
-          {roomPhotos.map((p) => (
-            <img key={p.id} src={p.dataUrl} title={p.description} onClick={() => setUi({ selectedPhotoId: p.id })} />
-          ))}
         </div>
+      </Section>
+
+      <Section id="build.room.details" title="Details" summary={detailsSummary(room, roomPhotos.length)}>
+        <label>
+          Notes
+          <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={isUnheated(room)} onChange={(e) => onChange({ unheated: e.target.checked })} /> Not heated (garage, store): left out of
+          the heated area
+        </label>
+        <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
+          <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Part of
+          an extension (separate roof)
+        </label>
+        {roomPhotos.length > 0 && (
+          <div className="thumbs">
+            {roomPhotos.map((p) => (
+              <img key={p.id} src={p.dataUrl} title={p.description} onClick={() => setUi({ selectedPhotoId: p.id })} />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {neighbours.length > 0 && (
+        <Section id="build.room.knock" title="Knock through" summary={knockSummary(neighbours.length)}>
+          <KnockThrough variant={variant} floor={floor} room={room} />
+        </Section>
       )}
-      <KnockThrough variant={variant} floor={floor} room={room} />
+
       <button
         className="danger"
         onClick={async () => {
@@ -489,6 +340,12 @@ function OpeningLook({ opening, onChange }: { opening: Opening; onChange: (p: Pa
   const trim = useModel()?.exterior?.trimColor ?? DEFAULT_EXTERIOR.trimColor;
   return (
     <>
+      {COLOUR_KINDS.includes(k) && (
+        <label>
+          Colour
+          <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
+        </label>
+      )}
       {styles.length > 0 && (
         <label>
           Style
@@ -649,13 +506,9 @@ export function OpeningInspector({
           )}
         </div>
       )}
-      {COLOUR_KINDS.includes(k) && (
-        <label>
-          Colour
-          <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
-        </label>
-      )}
-      <OpeningLook opening={opening} onChange={onChange} />
+      <Section id="build.opening.look" title="Look" summary={openingLookSummary(opening)}>
+        <OpeningLook opening={opening} onChange={onChange} />
+      </Section>
       <p className="muted small">Drag it along the wall on the plan; it snaps onto the nearest wall.</p>
       <button className="danger" onClick={onDelete}>
         Delete opening
@@ -666,18 +519,20 @@ export function OpeningInspector({
 
 export function WallInspector({
   wall,
+  mode,
   onChange,
   onDelete,
 }: {
   wall: Wall;
-  /** Which mode the panel is for (Build: height and delete; Decorate: colour). Ignored until Chunk C. */
-  mode?: import("../lib/modes").Mode;
+  /** Which mode the panel is for (Build: height and delete; Decorate: colour). */
+  mode?: Mode;
   onChange: (p: Partial<Wall>) => void;
   onDelete: () => void;
 }) {
   return (
     <div className="inspector">
       <h4>Wall</h4>
+      {mode !== "decorate" && (
       <label>
         Height (m, blank = full height)
         <input
@@ -689,14 +544,21 @@ export function WallInspector({
           onChange={(e) => onChange({ height: e.target.value === "" ? undefined : parseFloat(e.target.value) || undefined })}
         />
       </label>
-      <label>
-        Colour
-        <input type="color" value={wall.color ?? "#f4f1ea"} onChange={(e) => onChange({ color: e.target.value })} />
-      </label>
-      <p className="muted small">Doors, windows and gaps can be placed on it like any other wall.</p>
-      <button className="danger" onClick={onDelete}>
-        Delete wall
-      </button>
+      )}
+      {mode === "decorate" && (
+        <label>
+          Colour
+          <input type="color" value={wall.color ?? "#f4f1ea"} onChange={(e) => onChange({ color: e.target.value })} />
+        </label>
+      )}
+      {mode !== "decorate" && (
+        <>
+          <p className="muted small">Doors, windows and gaps can be placed on it like any other wall.</p>
+          <button className="danger" onClick={onDelete}>
+            Delete wall
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -810,7 +672,7 @@ export function FixtureInspector({
   );
 }
 
-export function FloorInspector({ variant, floor }: { variant: VariantKey; floor: Floor }) {
+export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: Floor }) {
   const updateFloor = useStore((s) => s.updateFloor);
   const setVariant = useStore((s) => s.setVariant);
   const model = useStore((s) => s.variants[variant]);
@@ -818,6 +680,7 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
   const withDims = floor.rooms.filter((r) => r.dims && r.dims.w > 0 && r.dims.h > 0).length;
   return (
     <div className="inspector">
+      <Section id="build.floor.settings" title="Floor settings" summary={floorSettingsSummary(floor)}>
       <label>
         Floor name
         <NameField value={floor.name} onCommit={(name) => updateFloor(variant, floor.id, { name })} />
@@ -847,7 +710,32 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
           <input type="number" step="0.1" value={floor.offset.y} onChange={(e) => updateFloor(variant, floor.id, { offset: { ...floor.offset, y: parseFloat(e.target.value) || 0 } })} />
         </span>
       </label>
-      <h4>Stairs</h4>
+      <div className="row">
+        <button
+          disabled={floor.rooms.length === 0}
+          title="Put the centre of this floor's rooms at the model origin so floors stack"
+          onClick={() => {
+            const b = bbox(floor.rooms.flatMap((r) => r.polygon));
+            updateFloor(variant, floor.id, { origin: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }, offset: { x: 0, y: 0 } });
+          }}
+        >
+          Re-centre floor
+        </button>
+        <button
+          className="danger"
+          onClick={async () => {
+            if (!model || !(await ask(`Delete ${floor.name} and its rooms?`, { ok: "Delete", danger: true }))) return;
+            const floors = model.floors.filter((f) => f.id !== floor.id);
+            if (floors.length) setVariant(variant, { ...model, floors });
+            else setVariant(variant, undefined);
+            setUi({ editFloorId: floors[0]?.id ?? null, selectedRoomId: null, tab: floors.length ? "plan" : "3d" });
+          }}
+        >
+          Delete floor
+        </button>
+      </div>
+      </Section>
+      <Section id="build.floor.stairs" title="Stairs" summary={stairsSummary(floor)}>
       {floor.stairs ? (
         <>
           <label>
@@ -912,35 +800,7 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
           Add stairs (drag to place)
         </button>
       )}
-      <h4>Floor</h4>
-      <div className="row">
-        <button
-          disabled={floor.rooms.length === 0}
-          title="Put the centre of this floor's rooms at the model origin so floors stack"
-          onClick={() => {
-            const b = bbox(floor.rooms.flatMap((r) => r.polygon));
-            updateFloor(variant, floor.id, { origin: { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }, offset: { x: 0, y: 0 } });
-          }}
-        >
-          Re-centre floor
-        </button>
-        <button
-          className="danger"
-          onClick={async () => {
-            if (!model || !(await ask(`Delete ${floor.name} and its rooms?`, { ok: "Delete", danger: true }))) return;
-            const floors = model.floors.filter((f) => f.id !== floor.id);
-            if (floors.length) setVariant(variant, { ...model, floors });
-            else setVariant(variant, undefined);
-            setUi({ editFloorId: floors[0]?.id ?? null, selectedRoomId: null, tab: floors.length ? "plan" : "3d" });
-          }}
-        >
-          Delete floor
-        </button>
-      </div>
+      </Section>
     </div>
   );
 }
-
-/** Stable names for the modes redesign: Build's room panel and floor settings (Chunk C replaces these with the real ones). */
-export const BuildRoomPanel = RoomInspector;
-export const FloorSettings = FloorInspector;
