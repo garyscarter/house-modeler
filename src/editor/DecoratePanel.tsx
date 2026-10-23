@@ -12,7 +12,7 @@ import { roomColor } from "../three/House";
 import { useSite, useStore } from "../store";
 import { ColourSwatches } from "./ColourSwatches";
 import { FeatureWalls, WallFinishRow } from "./FeatureWalls";
-import { NumberField } from "./Inspectors";
+import { hoverRoom, NumberField } from "./Inspectors";
 
 /**
  * Decorate's panel for a picked room: its floor and walls, or one wall face
@@ -69,7 +69,9 @@ export function DecoratePanel({
 
   return (
     <div className="inspector decorate-panel">
-      <h4 className="decor-head">{room.name}</h4>
+      <h4 className="decor-head" {...hoverRoom(room.id)}>
+        {room.name}
+      </h4>
       <p className="muted small">Floor area {formatArea(areaM2(room.polygon, floor.pxPerM))}</p>
 
       <Section id="decorate.floor" title="Floor" summary={floorSummary(room)} defaultOpen>

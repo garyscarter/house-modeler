@@ -1,8 +1,9 @@
-/* Plan editor: canvas, overlays and inspector details. Layout of .editor-body and .side lives in styles.css. */
+/* Plan editor: the canvas fills the editor; the tool rail, zoom cluster, status line and inspector card float over it. */
 
-.plan-hint { padding: 4px 10px; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--line); min-height: 24px; }
+.plan-editor { position: relative; flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
+.plan-editor .inspector label { margin: 6px 0; font-size: 13px; }
 
-.plan-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: #fff; touch-action: none; }
+.plan-canvas { position: absolute; inset: 0; overflow: hidden; background: #fff; touch-action: none; }
 .plan-canvas svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
 .plan-canvas svg.tool-select { cursor: default; }
 .plan-canvas svg.tool-select .plan-fixture,
@@ -10,14 +11,45 @@
 .plan-handle { cursor: move; }
 .plan-handle.add { cursor: copy; }
 .plan-hit, .plan-canopy { cursor: pointer; }
+/* While Space is held the plan shows the other layout and ignores the pointer. */
+.plan-canvas svg.peeking { pointer-events: none; }
+.plan-text, .plan-edge-label text { font-family: var(--font-mono); }
 .plan-text { pointer-events: none; }
 .plan-edge-label { cursor: text; }
 
-.plan-zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
-.plan-zoom button { min-width: 34px; padding: 5px 8px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+/* Tool rail (left): 36 px icon buttons in groups divided by hairlines. */
+.tool-rail { position: absolute; top: var(--float-top); left: var(--float-gap); z-index: var(--z-float); width: 46px; padding: 5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tool-rail .icon-btn, .plan-zoom .icon-btn { color: var(--muted); transition: background 0.12s, color 0.12s; }
+.tool-rail .icon-btn { width: 36px; height: 36px; }
+.tool-rail .icon-btn:hover:not(:disabled), .plan-zoom .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.tool-rail .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
+.tool-rail .icon-btn:focus-visible, .plan-zoom .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rail-sep { width: 20px; height: 0; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.rail-slot { position: relative; }
+.rail-chev { position: absolute; right: -1px; bottom: -1px; width: 14px; height: 14px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+.rail-chev:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.rail-pop { top: 0; left: calc(100% + 12px); width: 232px; display: flex; flex-direction: column; gap: 10px; padding: 12px; font-size: 13px; }
+.rail-opacity { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin: 0; }
+.rail-opacity input[type="range"] { grid-column: 1 / -1; width: 100%; margin: 0; padding: 0; border: 0; accent-color: var(--accent); }
+.rail-opacity .num { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.rail-check { display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
+.rail-check input { width: auto; margin: 0; accent-color: var(--accent); }
+.rail-footer { display: flex; justify-content: center; padding: 2px 0 3px; }
+.tool-rail .info-pop { top: auto; bottom: -6px; left: calc(100% + 18px); width: 280px; }
+
+/* Zoom cluster (bottom left) */
+.plan-zoom { position: absolute; left: var(--float-gap); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
+
+/* Status line: what the tool in hand wants next, centred above the dock. */
+.plan-status { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float); display: flex; align-items: center; gap: 12px; max-width: min(620px, calc(100% - 140px)); padding: 8px 8px 8px 14px; border-radius: var(--pill); font-size: 12px; line-height: 1.35; color: var(--text); }
+.plan-status > span { min-width: 0; }
+.plan-status button { flex: none; padding: 4px 12px; border-radius: var(--pill); font-size: 12px; }
+
+.hint-row { display: flex; align-items: center; gap: 6px; }
+.inspector h4 .info, .field-label .info { margin-left: 6px; }
 
 .edge-input { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border: 1px solid #d97706; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); font-size: 13px; }
-.edge-input input { width: 80px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.edge-input input { width: 80px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; font: inherit; font-family: var(--font-mono); }
 
 .side .field { margin: 8px 0; }
 .side .field-label { display: block; font-size: 13px; margin-bottom: 3px; }
@@ -54,27 +86,8 @@
 .side .swatches .swatch { flex: none; width: 22px; min-width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.25); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
 .side .swatches .swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
 .side .swatch-label { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
-@media (pointer: coarse) {
-  .side .swatches { gap: 8px; }
-  .side .swatches .swatch { width: 30px; min-width: 30px; height: 30px; min-height: 30px; }
-}
-
-@media (pointer: coarse) {
-  .plan-zoom button { min-width: 44px; min-height: 40px; font-size: 16px; }
-  .side .anchor-grid { grid-template-columns: repeat(2, 34px); }
-  .side .anchor-grid button { height: 32px; font-size: 15px; }
-  .side .inspector button { min-height: 38px; }
-  .edge-input input { width: 96px; font-size: 16px; }
-}
-
 /* Add furniture popover (Furnish) */
-.add-item { position: relative; display: inline-block; }
-.add-pop {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
-  width: 320px; max-height: 60vh; overflow: hidden; display: flex; flex-direction: column;
-  padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
-}
+.add-pop { top: 0; left: calc(100% + 12px); width: 320px; max-height: min(60vh, 520px); overflow: hidden; display: flex; flex-direction: column; padding: 10px; }
 .catalogue-picker { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .catalogue-picker > input { width: 100%; padding: 6px 8px; font: inherit; }
 .catalogue-picker .chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -82,19 +95,7 @@
 .catalogue-picker .chip.active, .picker-rows button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .picker-rows { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; }
 .picker-rows button { display: flex; justify-content: space-between; gap: 6px; padding: 4px 8px; text-align: left; font-size: 12px; }
-.picker-rows button.active .muted { color: #dbe4ff; }
-
-/* Narrow screens: one scrolling row of tools rather than a tall wrapped block. */
-@media (max-width: 700px) {
-  .plan-editor .plan-toolbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .plan-editor .plan-toolbar button { flex: none; }
-  .plan-editor .plan-toolbar .hint.right { display: none; }
-  .plan-editor .plan-toolbar .plan-image-ctl { order: -1; }
-  .plan-hint { font-size: 11px; }
-}
-
-.plan-editor .plan-image-ctl { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-.plan-editor .plan-image-ctl input[type="range"] { width: 90px; margin: 0; }
+.picker-rows button.active .muted { color: var(--accent-soft); }
 
 /* Panels (chunk C) */
 .side .decorate-panel .decor-head { margin: 0 0 2px; font-size: 15px; }
