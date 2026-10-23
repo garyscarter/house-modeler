@@ -212,6 +212,9 @@ const DPR: Record<"high" | "balanced" | "low", [number, number]> = { high: [1, 1
 export type { ViewSide };
 
 const GLIDE_MS = 650;
+/** How much of the drag the camera catches up each frame. The controls' 0.05 trails the pointer and coasts for about 1.5 s after
+ *  release, which reads as drift; this settles in about half a second and still eases out. */
+const DAMPING = 0.12;
 
 const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -254,6 +257,10 @@ function Orbit({
   /** The pose waiting to be saved, so an unmount inside the debounce still saves it. */
   const unsaved = useRef<CameraPose | null>(null);
   const lastYaw = useRef(NaN);
+  /** After a drag ends, until the controls' damping has run down; then whatever momentum is left is dropped. */
+  const coasting = useRef(false);
+  /** Did the controls move the camera during this frame? */
+  const moved = useRef(false);
   const aspect = canvasSize.width && canvasSize.height ? canvasSize.width / canvasSize.height : 1.6;
   const maxDistance = Math.max(size * 6, 60);
   const latest = useRef({ aspect, frame, bounds, size, centre, heightOf, maxDistance });
@@ -377,8 +384,14 @@ function Orbit({
     if (!c) return;
     const cancel = () => {
       glide.current = null;
+      coasting.current = false;
+    };
+    const onEnd = () => {
+      coasting.current = true;
+      settle();
     };
     const onChange = () => {
+      moved.current = true;
       if (applying.current || glide.current) return;
       const p = current();
       publishPose(linkId, p);
@@ -386,11 +399,11 @@ function Orbit({
     };
     c.addEventListener("start", cancel);
     c.addEventListener("change", onChange);
-    c.addEventListener("end", settle);
+    c.addEventListener("end", onEnd);
     return () => {
       c.removeEventListener("start", cancel);
       c.removeEventListener("change", onChange);
-      c.removeEventListener("end", settle);
+      c.removeEventListener("end", onEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
@@ -433,6 +446,14 @@ function Orbit({
   useFrame(() => {
     const g = glide.current;
     const c = controls.current;
+    // The controls stop asking for frames once a coast slows below a millimetre a frame, but keep the rest of the
+    // momentum, so any later redraw (a hover, a save, a shadow update) would nudge the camera on. Drop it then.
+    // (This runs after the controls' own update, which drei schedules first.)
+    if (coasting.current && !moved.current && !g) {
+      coasting.current = false;
+      dropMomentum();
+    }
+    moved.current = false;
     if (g && c) {
       const k = easeInOut((performance.now() - g.t0) / GLIDE_MS);
       tmp.t.copy(g.from.target).lerp(g.to.target, k);
@@ -466,6 +487,6 @@ function Orbit({
   });
 
   return (
-    <OrbitControls ref={controls} makeDefault maxPolarAngle={Math.PI / 2 - 0.02} minDistance={1.5} maxDistance={maxDistance} />
+    <OrbitControls ref={controls} makeDefault dampingFactor={DAMPING} maxPolarAngle={Math.PI / 2 - 0.02} minDistance={1.5} maxDistance={maxDistance} />
   );
 }
