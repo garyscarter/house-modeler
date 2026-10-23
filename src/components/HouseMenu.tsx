@@ -8,7 +8,7 @@ import { useListingUpdateCount } from "./ImportPanel";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
 import { openPhotos } from "./PhotosDialog";
-import { ProjectActions, RenderQuality, SyncStatus } from "./SettingsPanel";
+import { ProjectActions, AboutLine, RenderQuality, SyncStatus } from "./SettingsPanel";
 import "./HouseMenu.css";
 
 /** The house name in the top bar; opens everything that is about the project rather than the view. */
@@ -94,11 +94,10 @@ export function HouseMenu({ name }: { name: string }) {
             <ProjectActions onDone={() => setOpen(false)} />
           </div>
 
-          {!syncOff && (
-            <div className="hm-foot">
-              <SyncStatus />
-            </div>
-          )}
+          <div className="hm-foot">
+            {!syncOff && <SyncStatus />}
+            <AboutLine />
+          </div>
         </div>
       )}
     </div>

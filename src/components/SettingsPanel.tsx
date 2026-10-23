@@ -3,6 +3,10 @@ import { ask } from "./Dialogs";
 import { applyProject, syncNow, useSyncStatus } from "../lib/sync";
 import { statusText } from "../lib/syncLogic";
 import { Loader } from "./Loader";
+import { BrandMark } from "./BrandMark";
+import { BRAND_NAME, downloadPrefix } from "../lib/brand";
+import { fileDate, slug } from "../lib/export";
+import { houseName } from "../lib/studio";
 
 const QUALITY: [string, string, string][] = [
   ["high", "High", "Ambient occlusion and soft shadows"],
@@ -40,7 +44,8 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
     const blob = new Blob([JSON.stringify({ variants, photos, sites, costRates, pieces, savedViews }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "house-model.json";
+    const model = variants[useStore.getState().activeVariant] ?? variants.current ?? variants.proposed;
+    a.download = `${downloadPrefix(model ? slug(houseName(model)) : "")}-project-${fileDate()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -105,6 +110,20 @@ export function SyncStatus() {
       <button onClick={syncNow} disabled={sync.kind === "saving"}>
         Sync now
       </button>
+    </p>
+  );
+}
+
+const BUILD_DATE = new Date(__BUILD_DATE__).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** A small muted "Storey · built date · commit" line for the bottom of Settings. */
+export function AboutLine() {
+  return (
+    <p className="about-line">
+      <BrandMark size={14} />
+      <span>
+        {BRAND_NAME} · built {BUILD_DATE} · {__BUILD_COMMIT__}
+      </span>
     </p>
   );
 }
