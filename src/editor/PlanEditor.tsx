@@ -718,7 +718,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         { label: "Turn 90°", hint: "R", run: () => { select({ fixtures: ids }); setFixtures((all) => rotateFixtures(all, ids, 90)); } },
         { label: "Duplicate", hint: "Ctrl D", run: () => duplicateFixtureIds(ids) },
         { label: "Copy", hint: "Ctrl C", run: () => { select({ fixtures: ids }); copyFixtureIds(ids); } },
-        ...(ids.length >= 2 ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); groupSelected(ids); } } satisfies MenuItem] : []),
+        ...(ids.length >= 2 && !exactGroup(allFixtures, ids) ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); groupSelected(ids); } } satisfies MenuItem] : []),
         ...(grouped ? [{ label: "Ungroup", hint: "Ctrl Shift G", run: () => { select({ fixtures: group }); setFixtures((all) => ungroupFixtures(all, [id])); } } satisfies MenuItem] : []),
         ...(grouped && group.some((g) => !liveIds.includes(g)) && liveIds.length === 1 && liveIds[0] === id ? [{ label: "Select group", run: () => select({ fixtures: group }) } satisfies MenuItem] : []),
         "sep",
