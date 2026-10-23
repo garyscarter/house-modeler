@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react";
+import { Icon } from "./icons";
 import { useSectionOpen } from "./panelPrefs";
 
 /**
@@ -28,7 +29,7 @@ export function Section({
         <span className="sect-title">{title}</span>
         {!open && summary && <span className="sect-sum">{summary}</span>}
         <span className="sect-chev" aria-hidden="true">
-          {open ? "▾" : "▸"}
+          <Icon name={open ? "chevronDown" : "chevronRight"} size={14} />
         </span>
       </button>
       {open && (

@@ -12,7 +12,7 @@ export function PhotosDialog() {
   if (!open) return null;
   return (
     <Modal title="Photos" onClose={close} width="min(1100px, 92vw)" className="modal-photos">
-      <PhotosPanel inDialog />
+      <PhotosPanel />
     </Modal>
   );
 }

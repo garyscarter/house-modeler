@@ -4,9 +4,8 @@ import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 import { listingPhotos } from "../lib/houses/listingAssets";
 import { floorDisplayName } from "../lib/studio";
-import { Info } from "./Info";
 
-export function PhotosPanel({ inDialog = false }: { inDialog?: boolean } = {}) {
+export function PhotosPanel() {
   const photos = useStore((s) => s.photos);
   const model = useStore((s) => s.variants.current ?? s.variants.proposed);
   const addPhotos = useStore((s) => s.addPhotos);
@@ -31,12 +30,6 @@ export function PhotosPanel({ inDialog = false }: { inDialog?: boolean } = {}) {
 
   return (
     <div className="panel">
-      {!inDialog && (
-        <h3 className="with-info">
-          Photos
-          <Info>Load the listing photos or add your own, then pick the room or side of the house each one shows. They appear as pins in the 3D view and can be used as floor textures.</Info>
-        </h3>
-      )}
       <div className="row">
         <label className="file">
           Add photos
@@ -70,6 +63,7 @@ export function PhotosPanel({ inDialog = false }: { inDialog?: boolean } = {}) {
         )}
       </div>
       {error && <p className="error">{error}</p>}
+      {photos.length === 0 && <p className="muted">No photos yet. Load the listing's photos or add your own, then pick the room each one shows.</p>}
       <div className="photo-grid">
         {photos.map((p) => (
           <div key={p.id} className="photo-card">

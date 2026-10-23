@@ -26,7 +26,6 @@ const captureImage = async (...a: Parameters<typeof import("../three/capture").c
 const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
 import { floorDisplayName } from "../lib/studio";
-import { openReview } from "./ReviewPage";
 import "./ReportPanel.css";
 
 const KEYS: VariantKey[] = ["current", "proposed"];
@@ -48,47 +47,6 @@ export function useReportData() {
   const notes = useMemo(() => KEYS.flatMap((k) => (variants[k] ? [{ key: k, notes: roomNotes(variants[k]!) }] : [])), [variants]);
   const noteCount = notes.reduce((s, v) => s + v.notes.length, 0);
   return { variants, areas, changes, estimate, notes, noteCount, both: !!current && !!proposed };
-}
-
-/** Areas, changes between As listed and Proposed, rough costs, room notes and exports. */
-export function ReportPanel() {
-  const { variants, areas, changes, estimate, notes, noteCount, both } = useReportData();
-
-  return (
-    <div className="panel report-panel">
-      <h3>Report</h3>
-      <button className="rp-open-full" onClick={() => openReview("report")}>
-        Open full report
-      </button>
-      <details open>
-        <summary>Areas</summary>
-        <Areas report={areas} both={both} />
-        <AreaCheck variants={variants} />
-      </details>
-      <details open>
-        <summary>
-          Changes{changes && <span className="rp-count">{changes.length}</span>}
-        </summary>
-        {changes ? <Changes changes={changes} /> : <p className="muted small">Load or draw a Proposed layout (House menu → Layouts) to list what changes from As listed.</p>}
-      </details>
-      {changes && estimate && (
-        <details open>
-          <summary>Rough costs</summary>
-          <Costs estimate={estimate} />
-        </details>
-      )}
-      <details open={noteCount > 0}>
-        <summary>
-          Notes<span className="rp-count">{noteCount}</span>
-        </summary>
-        <Notes notes={notes} />
-      </details>
-      <details open>
-        <summary>Export</summary>
-        <Exports areas={areas} changes={changes} />
-      </details>
-    </div>
-  );
 }
 
 export function Areas({ report, both }: { report: AreaReport; both: boolean }) {
@@ -470,7 +428,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
       <div className="rp-export-group">
         <h4 className="rp-sub">Report</h4>
         <div className="row">
-          <button className="rp-primary" onClick={print} disabled={busy !== null}>
+          <button className="primary" onClick={print} disabled={busy !== null}>
             {busy === "print" ? "Preparing…" : "Print / save as PDF"}
           </button>
           <button onClick={csv} disabled={!changes?.length}>
@@ -492,9 +450,20 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
           </button>
         </div>
         <p className="muted small">
-          {no3d
-            ? "Switch to 3D to save pictures or the model."
-            : ids.length > 1
+          {no3d ? (
+            <>
+              <button
+                className="link"
+                onClick={() => {
+                  useStore.getState().leaveReview();
+                  useStore.getState().setUi({ tab: "3d" });
+                }}
+              >
+                Open the 3D view
+              </button>{" "}
+              <span className="muted">to save pictures or the model.</span>
+            </>
+          ) : ids.length > 1
               ? "Side by side: a snapshot is saved for each view. The model export uses the selected variant."
               : "Snapshots show the view as it is now, without labels. GLB files open in most 3D apps and online model viewers."}
         </p>

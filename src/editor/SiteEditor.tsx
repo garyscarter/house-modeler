@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { holdUndo, useSite, useStore } from "../store";
 import { svgPoints } from "../lib/planMath";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
-import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
@@ -857,15 +856,14 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
   );
 }
 
-function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
+// The plot panel below already shows the variant note and the house-to-boundary distances.
+function EmptyInspector(_props: { clearances: ReturnType<typeof sideClearances> }) {
   return (
     <div className="inspector">
       <h4>
         Site plan
         <Info>Click a boundary edge to set its fence, wall or hedge; click a surface or building to edit it. Corners snap to the house and to each other.</Info>
       </h4>
-      <SiteVariantNote />
-      <Clearances clearances={clearances} />
       <PlotPanel />
     </div>
   );
