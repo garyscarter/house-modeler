@@ -34,6 +34,7 @@
 .rp-tag-door { background: #fef3c7; color: #92400e; }
 .rp-tag-window { background: #e0f2fe; color: #075985; }
 .rp-tag-site { background: #ecfccb; color: #3f6212; }
+.rp-tag-joinery { background: var(--accent-soft); color: var(--brand); }
 
 /* Costs */
 .rp-costs { display: flex; flex-direction: column; gap: 6px; }

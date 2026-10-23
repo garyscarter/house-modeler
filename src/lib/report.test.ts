@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { HouseModel, Opening } from "../types";
+import type { Fixture, HouseModel, Opening } from "../types";
 import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
 import {
   areaReport,
@@ -240,5 +240,62 @@ describe("archway between the living rooms", () => {
     expect(b.floors[0].openings.find((o) => o.x === arch.x && o.y === arch.y)?.kind).toBe("archway");
     const text = diffModels(a, b).map((c) => c.description).join("\n");
     expect(text).not.toMatch(/archway|bi-fold/i);
+  });
+});
+
+describe("joinery costs", () => {
+  const room = () => rect("Study", 0, 0, 600, 400);
+  const withFx = (...fixtures: Fixture[]) => model(floor([room()], [], { fixtures }));
+  const fx = (id: string, type: string, extra: Partial<Fixture> = {}): Fixture => ({ id, type, x: 100, y: 100, rot: 0, ...extra });
+  const joinery = (a: HouseModel, b: HouseModel) => diffModels(a, b).filter((c) => c.category === "Joinery");
+  const none = withFx();
+
+  it("prices a new built-in as cupboard fronts and open shelving", () => {
+    const ch = joinery(none, withFx(fx("a", "built-in-alcove")));
+    expect(ch.map((c) => [c.costLine, c.quantity, c.unit])).toEqual([
+      ["joineryClosed", 0.6, "m²"],
+      ["joineryOpen", 1.4, "m²"],
+    ]);
+    expect(ch[0].description).toBe("New built-in alcove unit in the Study, 0.90 × 2.40 m: cupboard fronts");
+  });
+
+  it("ignores unchanged, moved and repainted units", () => {
+    const base = withFx(fx("a", "built-in-alcove"));
+    expect(joinery(base, base)).toEqual([]);
+    expect(joinery(base, withFx(fx("a", "built-in-alcove", { x: 200 })))).toEqual([]);
+    expect(joinery(base, withFx(fx("a", "built-in-alcove", { color: "#123456", worktop: "#654321", joinery: { carcass: "#111111" } })))).toEqual([]);
+  });
+
+  it("prices a resized unit again", () => {
+    const ch = joinery(withFx(fx("a", "built-in-alcove")), withFx(fx("a", "built-in-alcove", { w: 1.2 })));
+    expect(ch.map((c) => c.costLine)).toEqual(["joineryClosed", "joineryOpen"]);
+    expect(ch[0].description).toContain("remade, now 1.20 × 2.40 m");
+  });
+
+  it("notes a removed unit without pricing it", () => {
+    const ch = joinery(withFx(fx("a", "built-in-alcove")), none);
+    expect(ch).toHaveLength(1);
+    expect(ch[0].costLine).toBeUndefined();
+    expect(ch[0].description).toBe("Built-in alcove unit in the Study removed");
+  });
+
+  it("counts floating shelves and window seat metres", () => {
+    const shelf = joinery(none, withFx(fx("s", "floating-shelves")));
+    expect(shelf.map((c) => [c.costLine, c.quantity])).toEqual([["floatingShelf", 3]]);
+    expect(shelf[0].description).toBe("New floating shelves in the Study: 3 × 1.00 m");
+    const seat = joinery(none, withFx(fx("w", "window-seat")));
+    expect(seat.map((c) => [c.costLine, c.quantity])).toEqual([["windowSeat", 1.2]]);
+  });
+
+  it("estimates from joinery rates and lists unpriced lines", () => {
+    const ch = joinery(none, withFx(fx("a", "built-in-alcove"), fx("w", "window-seat", { x: 400 })));
+    const est = estimateCosts(ch, { joineryClosed: 600, joineryOpen: 300, windowSeat: 900 });
+    expect(est.subtotal).toBeCloseTo(0.6 * 600 + 1.4 * 300 + 1.2 * 900);
+    expect(est.missing).toEqual([]);
+    expect(estimateCosts(ch, { windowSeat: 900 }).missing).toEqual(["joineryClosed", "joineryOpen"]);
+  });
+
+  it("finds no joinery changes between the listing variants", () => {
+    expect(diffModels(listing91770873(""), listing91770873Proposed("")).filter((c) => c.category === "Joinery")).toEqual([]);
   });
 });

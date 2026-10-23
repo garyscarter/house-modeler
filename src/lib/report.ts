@@ -1,7 +1,9 @@
-import type { Floor, HouseModel, Opening, OpeningKind, Room, Site } from "../types";
+import type { Fixture, Floor, HouseModel, Opening, OpeningKind, Room, Site } from "../types";
 import { FLOOR_FINISH_LABEL, type FloorFinish } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
-import { M2_TO_FT2 } from "./planMath";
+import { byId } from "./catalogue";
+import { frontAreas, isJoinery, joineryOf, shelfStack } from "./joinery";
+import { fixtureBox, M2_TO_FT2 } from "./planMath";
 import { diffSites } from "./siteDiff";
 
 /**
@@ -177,7 +179,7 @@ export function areaReport(current?: HouseModel, proposed?: HouseModel): AreaRep
 // Changes
 
 export type Unit = "m²" | "m" | "each";
-export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Site";
+export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site";
 export type CostLineId =
   | "newFloorArea"
   | "removeWall"
@@ -189,7 +191,11 @@ export type CostLineId =
   | "blockOpening"
   | "removeGardenWall"
   | "newPaving"
-  | "newFlooring";
+  | "newFlooring"
+  | "joineryClosed"
+  | "joineryOpen"
+  | "floatingShelf"
+  | "windowSeat";
 
 export interface Change {
   key: string;
@@ -371,6 +377,89 @@ export function pairOpenings(fa: Floor | undefined, fb: Floor | undefined): { a?
  * Everything that differs between As listed (`a`) and Proposed (`b`), floor
  * by floor, then (given each layout's plot) the plot under "Site".
  */
+// ---------------------------------------------------------------------------
+// Fitted joinery
+
+type JoineryChange = Omit<Change, "level" | "floor" | "key"> & { key: string };
+
+const mm = (v: number) => Math.round(v * 1000) / 1000;
+
+/** What makes a unit a different job: size and construction. Colour (a repaint), fit and position (free to move) are left out. */
+function joinerySignature(fx: Fixture, ceiling: number): string {
+  const item = byId(fx.type)!;
+  const box = fixtureBox(fx, item, ceiling);
+  const { carcass: _c, topColor: _t, cushion: _k, fit: _f, ...j } = joineryOf(fx, item, box);
+  return JSON.stringify({ w: mm(box.w), d: mm(box.d), h: mm(box.h), j });
+}
+
+/** Costed changes to fitted joinery (built-ins, wall boxes, shelf stacks, window seats) on one floor. */
+export function joineryChanges(fa: Floor | undefined, fb: Floor, ceilA: number, ceilB: number): JoineryChange[] {
+  const list = (f: Floor | undefined) => (f?.fixtures ?? []).filter((fx) => isJoinery(byId(fx.type)));
+  const A = list(fa);
+  const B = list(fb);
+  const taken = new Set<string>();
+  const partnerOf = new Map<string, Fixture>();
+  for (const fx of B) {
+    const hit = A.find((x) => x.id === fx.id);
+    if (hit) {
+      partnerOf.set(fx.id, hit);
+      taken.add(hit.id);
+    }
+  }
+  for (const fx of B) {
+    if (partnerOf.has(fx.id)) continue;
+    const w = toWorld(fb, fx);
+    const hit = A.find((x) => {
+      if (taken.has(x.id) || x.type !== fx.type) return false;
+      const p = toWorld(fa!, x);
+      return Math.hypot(p.x - w.x, p.y - w.y) <= 0.3;
+    });
+    if (hit) {
+      partnerOf.set(fx.id, hit);
+      taken.add(hit.id);
+    }
+  }
+
+  const inRoom = (f: Floor, fx: Fixture) => {
+    const p = toWorld(f, fx);
+    const n = f.rooms.find((r) => pointInPolygon(p, roomWorldPolygon(f, r)))?.name;
+    return n ? ` in the ${n}` : "";
+  };
+  const out: JoineryChange[] = [];
+  for (const fx of B) {
+    const item = byId(fx.type)!;
+    const old = partnerOf.get(fx.id);
+    if (old && joinerySignature(old, ceilA) === joinerySignature(fx, ceilB)) continue;
+    const box = fixtureBox(fx, item, ceilB);
+    const j = joineryOf(fx, item, box);
+    const name = item.name.toLowerCase();
+    const where = inRoom(fb, fx);
+    const w2 = box.w.toFixed(2);
+    if (item.symbol === "built-in" || item.symbol === "wall-box") {
+      const lead = old ? `${item.name}${where} remade, now` : `New ${name}${where},`;
+      const size = `${w2} × ${box.h.toFixed(2)} m`;
+      const { closed, open } = frontAreas(item, j, box.w, box.h);
+      if (closed >= 0.05) out.push({ key: `joinery:${fx.id}:closed`, category: "Joinery", description: `${lead} ${size}: cupboard fronts`, quantity: m1(closed), unit: "m²", costLine: "joineryClosed" });
+      if (open >= 0.05) out.push({ key: `joinery:${fx.id}:open`, category: "Joinery", description: `${lead} ${size}: open shelving`, quantity: m1(open), unit: "m²", costLine: "joineryOpen" });
+    } else if (item.symbol === "shelf") {
+      const n = shelfStack(j, box.h).n;
+      const lead = old ? `${item.name}${where} remade, now` : `New ${n === 1 ? "floating shelf" : "floating shelves"}${where}:`;
+      out.push({ key: `joinery:${fx.id}:shelf`, category: "Joinery", description: `${lead} ${n} × ${w2} m`, quantity: n, unit: "each", costLine: "floatingShelf" });
+    } else if (item.symbol === "window-seat") {
+      const text = old ? `${item.name}${where} remade, now ${w2} m` : `New ${name}${where}, ${w2} m`;
+      out.push({ key: `joinery:${fx.id}:seat`, category: "Joinery", description: text, quantity: m1(box.w), unit: "m", costLine: "windowSeat" });
+    }
+  }
+  if (fa) {
+    const kept = new Set([...partnerOf.values()].map((x) => x.id));
+    for (const fx of A) {
+      if (kept.has(fx.id)) continue;
+      out.push({ key: `joinery:${fx.id}:removed`, category: "Joinery", description: `${byId(fx.type)!.name}${inRoom(fa, fx)} removed`, quantity: 1, unit: "each" });
+    }
+  }
+  return out;
+}
+
 export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?: Site }): Change[] {
   const out: Change[] = [];
   for (const { level, a: fa, b: fb } of pairFloors(a, b)) {
@@ -531,6 +620,9 @@ export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?:
         });
       }
     }
+
+    // Fitted joinery.
+    for (const c of joineryChanges(fa, fb!, a.ceilingHeight, b.ceilingHeight)) push(c);
   }
   if (sites) out.push(...diffSites(sites.a, sites.b));
   return out;
@@ -559,6 +651,10 @@ export const COST_LINES: CostLineDef[] = [
   { id: "removeGardenWall", label: "Remove garden wall", unit: "m", example: 100 },
   { id: "newPaving", label: "New paving", unit: "m²", example: 80 },
   { id: "newFlooring", label: "New floor finish", unit: "m²", example: 70 },
+  { id: "joineryClosed", label: "Fitted joinery: cupboard fronts", unit: "m²", example: 650 },
+  { id: "joineryOpen", label: "Fitted joinery: open shelving", unit: "m²", example: 350 },
+  { id: "floatingShelf", label: "Floating shelf", unit: "each", example: 120 },
+  { id: "windowSeat", label: "Window seat or banquette", unit: "m", example: 900 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */
