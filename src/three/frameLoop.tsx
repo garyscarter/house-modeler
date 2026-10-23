@@ -3,6 +3,7 @@ import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
+import { trackScene } from "./textures";
 
 /** Frames to redraw the shadow map for after mounting, while the scene settles. */
 const MOUNT_FRAMES = 3;
@@ -78,6 +79,13 @@ export function FrameOnCommit() {
   useLayoutEffect(() => {
     queueMicrotask(() => invalidate());
   });
+  return null;
+}
+
+/** Tells the material caches which scene is on screen, so they never dispose what it still draws. */
+export function TrackScene() {
+  const scene = useThree((s) => s.scene);
+  useEffect(() => trackScene(scene), [scene]);
   return null;
 }
 

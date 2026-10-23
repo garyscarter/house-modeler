@@ -21,7 +21,7 @@ import { CaptureBridge } from "./capture";
 import { SunControls } from "../components/SunControls";
 import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
-import { FrameOnCommit, Precompile, ShadowUpdates } from "./frameLoop";
+import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 
 interface ViewerProps {
   model: HouseModel;
@@ -186,6 +186,7 @@ function ViewerImpl(props: ViewerProps) {
         <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
         <Precompile token={quality} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
+        <TrackScene />
         <FrameOnCommit />
       </Canvas>
       <ContextMenu menu={menu} onClose={() => setMenu(null)} />
