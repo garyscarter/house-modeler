@@ -3,7 +3,9 @@ import type { Floor, VariantKey } from "../types";
 import { buildSummary, decorateSummary, furnishSummary } from "../lib/modeSummary";
 import { byId } from "../lib/catalogue";
 import { fixtureSolids, overlappingIds } from "../lib/planMath";
-import { FloorSettings } from "./Inspectors";
+import { FloorSettings, NumberField } from "./Inspectors";
+import { Section } from "../components/Section";
+import { useStore } from "../store";
 
 /** How many furniture items on the floor overlap another (the plan's red outlines). */
 export function useClashCount(floor: Floor): number {
@@ -13,9 +15,19 @@ export function useClashCount(floor: Floor): number {
 
 /** Build, nothing selected: a line about the floor, then its settings and stairs. */
 export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: Floor }) {
+  const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
+  const updateModel = useStore((s) => s.updateModel);
   return (
     <div className="mode-summary">
       <p className="summary-line">{buildSummary(floor)}</p>
+      <div className="inspector">
+        <Section id="build.house" title="House" summary={`Ceiling ${(ceilingHeight ?? 0).toFixed(2)} m`}>
+          <label>
+            Ceiling height (m)
+            <NumberField value={ceilingHeight} step={0.05} min={2} max={4} label="Ceiling height" onCommit={(h) => updateModel(variant, { ceilingHeight: h })} />
+          </label>
+        </Section>
+      </div>
       <FloorSettings variant={variant} floor={floor} />
     </div>
   );
@@ -26,7 +38,7 @@ export function DecorateSummary({ floor }: { floor: Floor }) {
   return (
     <div className="mode-summary">
       <p className="summary-line">{decorateSummary(floor)}</p>
-      <p className="muted small">Tap a floor or a wall to decorate it.</p>
+      <p className="muted small">Click a floor, or a wall near its edge, to decorate it.</p>
     </div>
   );
 }

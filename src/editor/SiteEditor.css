@@ -1,12 +1,14 @@
-.site-editor { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
-.site-editor .toolbar .site-tool { display: inline-flex; gap: 4px; align-items: center; }
-.site-editor .toolbar select { font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
-.site-editor .toolbar .hint { font-size: 12px; flex: 1 1 260px; }
-
-.site-editor-body { display: flex; flex: 1; min-height: 0; }
-.site-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; }
+/* Site editor: like the plan, the canvas fills the editor and the rail, zoom cluster, status line and inspector card float over it. */
+.site-editor { position: relative; flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
+.site-editor-body { position: absolute; inset: 0; }
+.site-canvas { position: absolute; inset: 0; }
 .site-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; background: #fbfbf9; user-select: none; touch-action: none; display: block; }
-.site-side { width: 270px; flex: none; border-left: 1px solid var(--line); background: var(--panel); padding: 10px 12px; overflow-y: auto; }
+.site-canvas > svg.peeking { pointer-events: none; }
+.site-zoom { position: absolute; left: var(--float-gap); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
+.site-zoom .icon-btn { color: var(--muted); }
+.site-zoom .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.site-status { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float); display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; border-radius: var(--pill); font-size: 12px; }
+.site-status select { font: inherit; padding: 3px 6px; border-radius: var(--pill); }
 .site-side h4 { margin: 4px 0 6px; font-size: 13px; }
 .site-side h4 + p { margin-top: 0; }
 
@@ -30,12 +32,12 @@
 .site-draft { fill: rgba(37, 99, 235, 0.12); stroke: #2563eb; }
 
 .site-north {
-  position: absolute; top: 10px; right: 10px; width: 40px; height: 52px; pointer-events: none;
+  position: absolute; top: var(--float-top); right: calc(var(--float-gap) + 332px); width: 40px; height: 52px; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; font-weight: 700; color: var(--danger); font-size: 12px;
   background: rgba(255, 255, 255, 0.85); border: 1px solid var(--line); border-radius: 20px; padding-top: 2px;
 }
 .site-scale {
-  position: absolute; left: 10px; bottom: 10px; pointer-events: none; font-size: 11px; color: var(--text);
+  position: absolute; left: 150px; bottom: 20px; pointer-events: none; font-size: 11px; color: var(--text);
   background: rgba(255, 255, 255, 0.85); padding: 3px 6px 2px; border-radius: 4px;
 }
 .site-scale div { height: 6px; border: 1.5px solid var(--text); border-top: 0; }
@@ -43,10 +45,3 @@
 .site-clear { width: 100%; border-collapse: collapse; font-size: 13px; }
 .site-clear td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .site-clear td + td { text-align: right; font-weight: 600; }
-
-@media (max-width: 700px) {
-  .site-editor-body { flex-direction: column; }
-  .site-canvas { flex: 1 1 60%; }
-  .site-side { width: auto; max-height: 40%; border-left: 0; border-top: 1px solid var(--line); }
-  .site-editor .toolbar .hint { display: none; }
-}

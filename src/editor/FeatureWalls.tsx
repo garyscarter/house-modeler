@@ -5,13 +5,14 @@ import { ColourSwatches } from "./ColourSwatches";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
 import { useSite, useStore } from "../store";
+import { Info } from "../components/Info";
 
 /**
  * One edge's finish controls: the inside covering select, colour, accent and
  * quick swatches, and (on an outside wall) the outside finish and colour.
  * `side` limits it to one face; omitted, both faces show. `alwaysSwatches`
  * shows the inside swatches even before the wall has its own finish, so one
- * tap gives it one ({ paint: hex }).
+ * click gives it one ({ paint: hex }).
  */
 export function WallFinishRow({
   floor,
@@ -149,7 +150,13 @@ export function FeatureWalls({
 
   return (
     <div className="field feature-walls">
-      <span className="field-label">Walls</span>
+      <span className="field-label">
+        Walls
+        <Info>
+          Give any wall its own covering, such as a feature wall or a tiled splashback, and any outside wall its own finish, such as a rendered panel in a brick wall.
+          Point at or click a wall to find it on the plan.
+        </Info>
+      </span>
       <ul>
         {lens.map((len, i) => (
           <li
@@ -168,7 +175,6 @@ export function FeatureWalls({
           </li>
         ))}
       </ul>
-      <p className="muted small">Give any wall its own covering, such as a feature wall or a tiled splashback, and any outside wall its own finish, such as a rendered panel in a brick wall. Point at or tap a wall to find it on the plan.</p>
     </div>
   );
 }
