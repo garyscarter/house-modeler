@@ -8,7 +8,7 @@ import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../li
 import { skirtingColour } from "../lib/skirting";
 import { finishColour, floorAngle, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
 import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
-import { roomColor } from "../three/House";
+import { roomColor } from "../lib/roomColor";
 import { useSite, useStore } from "../store";
 import { ColourSwatches } from "./ColourSwatches";
 import { FeatureWalls, WallFinishRow } from "./FeatureWalls";

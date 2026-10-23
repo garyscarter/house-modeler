@@ -54,13 +54,27 @@ describe("fitDistance", () => {
 describe("presetView", () => {
   const bounds = { x0: 0, x1: 10, y0: 0, y1: 8 };
   const centre = { x: 5, y: 1, z: 4 };
-  it("matches the elevation positions", () => {
-    expect(presetView("front", bounds, 10, centre).position).toEqual({ x: 5, y: 2.2, z: 24 });
-    expect(presetView("rear", bounds, 10, centre).position).toEqual({ x: 5, y: 2.2, z: -16 });
-    expect(presetView("left", bounds, 10, centre).position).toEqual({ x: -16, y: 2.2, z: 4 });
-    expect(presetView("right", bounds, 10, centre).position).toEqual({ x: 26, y: 2.2, z: 4 });
-    expect(presetView("top", bounds, 10, centre).position.y).toBe(22);
-    expect(presetView("top", bounds, 10, centre).target).toEqual({ x: 5, y: 1.6, z: 4 });
+  const lens = { height: 7, fovDeg: 45, aspect: 1.5 };
+  const tanV = Math.tan((22.5 * Math.PI) / 180);
+  it("stands at eye level, aims at half the height and fits the house", () => {
+    const front = presetView("front", bounds, 10, centre, lens);
+    expect(front.position.y).toBe(1.7);
+    expect(front.target).toEqual({ x: 5, y: 3.5, z: 4 });
+    // Whichever of the 7 m height and 10 m width needs more room.
+    const d = Math.max((3.5 / tanV) * 1.15, (5 / (tanV * 1.5)) * 1.15);
+    expect(front.position.z).toBeCloseTo(8 + d);
+    expect(presetView("rear", bounds, 10, centre, lens).position.z).toBeCloseTo(-d);
+    // Side views fit the 8 m depth.
+    const side = Math.max((3.5 / tanV) * 1.15, (4 / (tanV * 1.5)) * 1.15);
+    expect(presetView("left", bounds, 10, centre, lens).position.x).toBeCloseTo(-side);
+    expect(presetView("right", bounds, 10, centre, lens).position.x).toBeCloseTo(10 + side);
+  });
+  it("is much closer than the old 1.6 × size street view", () => {
+    expect(presetView("front", bounds, 10, centre, lens).position.z - 8).toBeLessThan(16);
+  });
+  it("keeps the plan view", () => {
+    expect(presetView("top", bounds, 10, centre, lens).position.y).toBe(22);
+    expect(presetView("top", bounds, 10, centre, lens).target).toEqual({ x: 5, y: 1.6, z: 4 });
   });
 });
 

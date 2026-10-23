@@ -19,7 +19,11 @@ import {
   type CostEstimate,
 } from "../lib/report";
 import { changesCsv, downloadBlob, fileDate, planExtent, planScale, planSvg, printHtml, slug } from "../lib/export";
-import { captureImage, exportGlb, useCaptureIds } from "../three/capture";
+import { useCaptureIds } from "../three/captureRegistry";
+
+// Snapshots and model export use three.js, which loads with the 3D view; fetch them when used.
+const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
+const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
 import { openReview } from "./ReviewPage";
 import "./ReportPanel.css";

@@ -55,6 +55,10 @@ aside { width: 340px; flex: none; display: flex; flex-direction: column; border-
 aside .seg.vertical { margin: 10px; flex: none; }
 .side-content { overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 main { flex: 1; min-width: 0; position: relative; display: flex; }
+/* The 3D view stays mounted on the Plan tab, hidden. */
+.view3d { display: flex; flex: 1; min-width: 0; }
+.view3d[hidden] { display: none; }
+.viewer-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
 .split { display: flex; flex: 1; }
 .split .viewer + .viewer { border-left: 2px solid var(--line); }
 .viewer { position: relative; flex: 1; min-width: 0; }

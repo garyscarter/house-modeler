@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
-import { Viewer } from "./three/Viewer";
 import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
 import { PhotosPanel } from "./components/PhotosPanel";
@@ -29,7 +28,10 @@ import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
-import { VARIANT_LABEL, type Floor, type VariantKey } from "./types";
+import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
+
+// three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
+const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
 
 type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "planning" | "settings";
 
@@ -115,23 +117,52 @@ export default function App() {
     if (tab === "plan" && mode === "plot" && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
   }, [tab, mode, editFloorId, setUi]);
 
-  const onSelectRoom = (floor: { id: string }, room: { id: string }) => {
-    if (mode === "plot") return;
-    if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
-    else if (mode === "decorate") {
-      setUi({ selectedRoomId: room.id, selectedEdge: null, editFloorId: floor.id });
-      usePanelPrefs.getState().setOpen("decorate.floor", true);
-    } else setUi({ editFloorId: floor.id });
-  };
+  // Stable callbacks, so the 3D view's memoised floors don't re-render on every App render.
+  const onSelectRoom = useCallback(
+    (floor: Floor, room: Room) => {
+      if (mode === "plot") return;
+      if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
+      else if (mode === "decorate") {
+        setUi({ selectedRoomId: room.id, selectedEdge: null, editFloorId: floor.id });
+        usePanelPrefs.getState().setOpen("decorate.floor", true);
+      } else setUi({ editFloorId: floor.id });
+    },
+    [mode, setUi],
+  );
 
   // Decorate: a tap on a wall in 3D picks that wall face of the room behind it.
-  const onPickWall = (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays: { id: string; poly: { x: number; y: number }[] }[] = []) => {
-    const rooms = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
-    const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: EXT_WALL_T / 2 + 0.1, maxDist: 0.5 }, bays);
-    if (!pick || pick.edge === null) return;
-    setUi({ selectedRoomId: pick.roomId, selectedEdge: { edge: pick.edge, side: pick.side }, editFloorId: floor.id });
-  };
+  const onPickWall = useCallback(
+    (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays: { id: string; poly: { x: number; y: number }[] }[] = []) => {
+      const rooms = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
+      const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: EXT_WALL_T / 2 + 0.1, maxDist: 0.5 }, bays);
+      if (!pick || pick.edge === null) return;
+      setUi({ selectedRoomId: pick.roomId, selectedEdge: { edge: pick.edge, side: pick.side }, editFloorId: floor.id });
+    },
+    [setUi],
+  );
   const pickWall = mode === "decorate" ? onPickWall : undefined;
+  // Side by side: a pick in either view also makes that layout the active one.
+  const pickIn = useMemo(() => {
+    const per = (k: VariantKey) => ({
+      select: (floor: Floor, room: Room) => {
+        setUi({ activeVariant: k });
+        onSelectRoom(floor, room);
+      },
+      wall:
+        pickWall &&
+        ((floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }) => {
+          setUi({ activeVariant: k });
+          pickWall(floor, hit, normal);
+        }),
+    });
+    return { current: per("current"), proposed: per("proposed") };
+  }, [setUi, onSelectRoom, pickWall]);
+
+  // The 3D view stays mounted once opened, hidden on the Plan tab, so coming back doesn't rebuild it.
+  const show3d = tab === "3d";
+  const [opened3d, setOpened3d] = useState(show3d);
+  if (show3d && !opened3d) setOpened3d(true);
+
 
   if (!hydrated) return <div className="loading">Loading…</div>;
 
@@ -227,70 +258,70 @@ export default function App() {
               {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
             </div>
           )}
-          {model && tab === "3d" && viewMode === "single" && (
-            <Viewer
-              model={model}
-              photos={photos}
-              showLabels={showLabels}
-              showCeilings={showCeilings}
-              doorsOpen={doorsOpen}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              onPickWall={pickWall}
-              title={VARIANT_LABEL[activeVariant]}
-              maxLevel={maxLevel}
-              showExterior={showExterior}
-              variant={activeVariant}
-            />
-          )}
-          {model && tab === "3d" && viewMode === "side-by-side" && both && (
-            <div className="split">
-              {(["current", "proposed"] as VariantKey[]).map((k) => (
-                <Viewer
-                  key={k}
-                  captureId={k}
-                  variant={k}
-                  model={variants[k]!}
-                  photos={photos}
-                  showLabels={showLabels}
-                  showCeilings={showCeilings}
-                  doorsOpen={doorsOpen}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={(f, r) => {
-                    setUi({ activeVariant: k });
-                    onSelectRoom(f, r);
-                  }}
-                  onPickWall={
-                    pickWall &&
-                    ((f, h, n) => {
-                      setUi({ activeVariant: k });
-                      pickWall(f, h, n);
-                    })
-                  }
-                  title={VARIANT_LABEL[k]}
-                  maxLevel={maxLevel}
-                  showExterior={showExterior}
-                />
-              ))}
+          {model && opened3d && (
+            <div className="view3d" hidden={!show3d}>
+              <Suspense fallback={<div className="viewer-loading">Loading the 3D view…</div>}>
+                {viewMode === "single" && (
+                  <Viewer
+                    active={show3d}
+                    model={model}
+                    photos={photos}
+                    showLabels={showLabels}
+                    showCeilings={showCeilings}
+                    doorsOpen={doorsOpen}
+                    selectedRoomId={selectedRoomId}
+                    onSelectRoom={onSelectRoom}
+                    onPickWall={pickWall}
+                    title={VARIANT_LABEL[activeVariant]}
+                    maxLevel={maxLevel}
+                    showExterior={showExterior}
+                    variant={activeVariant}
+                  />
+                )}
+                {viewMode === "side-by-side" && both && (
+                  <div className="split">
+                    {(["current", "proposed"] as VariantKey[]).map((k) => (
+                      <Viewer
+                        key={k}
+                        active={show3d}
+                        captureId={k}
+                        variant={k}
+                        model={variants[k]!}
+                        photos={photos}
+                        showLabels={showLabels}
+                        showCeilings={showCeilings}
+                        doorsOpen={doorsOpen}
+                        selectedRoomId={selectedRoomId}
+                        onSelectRoom={pickIn[k].select}
+                        onPickWall={pickIn[k].wall}
+                        title={VARIANT_LABEL[k]}
+                        maxLevel={maxLevel}
+                        showExterior={showExterior}
+                      />
+                    ))}
+                  </div>
+                )}
+                {viewMode === "overlay" && both && otherModel && (
+                  <Viewer
+                    active={show3d}
+                    model={model}
+                    ghost={otherModel}
+                    variant={activeVariant}
+                    ghostVariant={other}
+                    photos={photos}
+                    showLabels={showLabels}
+                    showCeilings={showCeilings}
+                    doorsOpen={doorsOpen}
+                    selectedRoomId={selectedRoomId}
+                    onSelectRoom={onSelectRoom}
+                    onPickWall={pickWall}
+                    title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
+                    maxLevel={maxLevel}
+                    showExterior={showExterior}
+                  />
+                )}
+              </Suspense>
             </div>
-          )}
-          {model && tab === "3d" && viewMode === "overlay" && both && otherModel && (
-            <Viewer
-              model={model}
-              ghost={otherModel}
-              variant={activeVariant}
-              ghostVariant={other}
-              photos={photos}
-              showLabels={showLabels}
-              showCeilings={showCeilings}
-              doorsOpen={doorsOpen}
-              selectedRoomId={selectedRoomId}
-              onSelectRoom={onSelectRoom}
-              onPickWall={pickWall}
-              title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
-              maxLevel={maxLevel}
-              showExterior={showExterior}
-            />
           )}
           {model && tab === "plan" && editingSite && <SiteEditor />}
           {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={editFloor.id} variant={activeVariant} floor={editFloor} />}
