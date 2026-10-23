@@ -9,7 +9,8 @@ import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, styleOptions } from "../lib/openings";
 import { WALL_COVERING_LABEL, type WallCovering } from "../types";
-import { ACCENT_LABEL, BASE_LABEL, wallAccent, wallBase } from "../lib/wallCovering";
+import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../lib/wallCovering";
+import { ColourSwatches } from "./ColourSwatches";
 import { skirtingColour } from "../lib/skirting";
 import { roomColor } from "../three/House";
 import { FeatureWalls } from "./FeatureWalls";
@@ -278,7 +279,7 @@ export function RoomInspector({
           ))}
         </select>
       </label>
-      {room.wallCovering && room.wallCovering !== "paint" && (
+      {room.wallCovering && room.wallCovering !== "paint" && hasAccent(room.wallCovering) && (
         <label>
           {ACCENT_LABEL[room.wallCovering]}
           <span className="colour-pick">
@@ -290,6 +291,14 @@ export function RoomInspector({
             )}
           </span>
         </label>
+      )}
+      <span className="swatch-label">{BASE_LABEL[room.wallCovering ?? "paint"]}: quick colours</span>
+      <ColourSwatches label={BASE_LABEL[room.wallCovering ?? "paint"]} value={wallBase(room)} onPick={(hex) => onChange({ wallPaint: hex })} />
+      {room.wallCovering && room.wallCovering !== "paint" && hasAccent(room.wallCovering) && (
+        <>
+          <span className="swatch-label">{ACCENT_LABEL[room.wallCovering]}: quick colours</span>
+          <ColourSwatches label={ACCENT_LABEL[room.wallCovering]} value={wallAccent(room) ?? wallBase(room)} onPick={(hex) => onChange({ wallAccent: hex })} />
+        </>
       )}
       <FeatureWalls variant={variant} floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
       <label>

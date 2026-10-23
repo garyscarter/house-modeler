@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
-import { ACCENT_LABEL, BASE_LABEL, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
+import { ACCENT_LABEL, BASE_LABEL, hasAccent, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
+import { ColourSwatches } from "./ColourSwatches";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
 import { useSite, useStore } from "../store";
@@ -86,7 +87,7 @@ export function FeatureWalls({
                     onChange={(e) => set(setWallOverride(room, i, { ...o, paint: e.target.value }))}
                   />
                 )}
-                {inside && covering !== "paint" && (
+                {inside && covering !== "paint" && hasAccent(covering) && (
                   <input
                     type="color"
                     aria-label={`Wall ${i + 1} ${ACCENT_LABEL[covering].toLowerCase()}`}
@@ -96,6 +97,13 @@ export function FeatureWalls({
                   />
                 )}
               </div>
+              {inside && (
+                <ColourSwatches
+                  label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`}
+                  value={wallBase(look)}
+                  onPick={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))}
+                />
+              )}
               {outside && (
                 <div className="wall-finish">
                   <select

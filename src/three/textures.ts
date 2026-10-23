@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { FloorFinish, WallFinish } from "../types";
 import { overflow } from "../lib/cache";
 import type { Pattern } from "../lib/wallCovering";
+import { drawModern, isModern, modernBump, modernRoughness, modernTile } from "./wallTextures";
 
 /**
  * Procedural finishes drawn on canvases once and cached. Each texture covers
@@ -10,7 +11,7 @@ import type { Pattern } from "../lib/wallCovering";
  * Every finish has a matching height map used as a bump map for relief.
  */
 
-type Ctx = CanvasRenderingContext2D;
+export type Ctx = CanvasRenderingContext2D;
 
 /** Size of one texture repeat, metres (width along u, height along v). */
 const WALL_TILE: Record<WallFinish, [number, number]> = {
@@ -95,13 +96,18 @@ function coverTile(p: Pattern, strip: boolean): [number, number] {
       return [SQUARES * SQUARE, SQUARES * SQUARE];
     case "brick":
       return WALL_TILE.brick;
+    default:
+      return modernTile(p);
   }
 }
-const COVER_PX: Record<Exclude<Pattern, "brick">, number> = { stripe: 512, floral: 900, rose: 900, trail: 900, sprig: 900, tiles: 512, squares: 700 };
-const COVER_ROUGHNESS: Record<Pattern, number> = { stripe: 0.8, floral: 0.88, rose: 0.85, trail: 0.88, sprig: 0.88, tiles: 0.28, squares: 0.3, brick: WALL_ROUGHNESS.brick };
+const COVER_PX: Record<"stripe" | "floral" | "rose" | "trail" | "sprig" | "tiles" | "squares", number> = { stripe: 512, floral: 900, rose: 900, trail: 900, sprig: 900, tiles: 512, squares: 700 };
+const COVER_ROUGHNESS = { stripe: 0.8, floral: 0.88, rose: 0.85, trail: 0.88, sprig: 0.88, tiles: 0.28, squares: 0.3, brick: WALL_ROUGHNESS.brick };
+/** Roughness and bump strength of a wall covering (the modern ones are defined with their generators). */
+const coverRoughness = (p: Pattern) => (isModern(p) ? modernRoughness(p) : COVER_ROUGHNESS[p]);
+const coverBump = (p: Pattern) => (isModern(p) ? modernBump(p) : p === "brick" ? 2 : 1);
 
 /** Small deterministic PRNG so textures look the same on every load. */
-function rng(seed: number) {
+export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -112,7 +118,7 @@ function rng(seed: number) {
   };
 }
 
-function canvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
+export function canvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
@@ -120,7 +126,7 @@ function canvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
 }
 
 /** Base colour varied in lightness (and a touch of hue), as a CSS colour. */
-function vary(base: THREE.Color, rnd: () => number, light: number, hue = 0): string {
+export function vary(base: THREE.Color, rnd: () => number, light: number, hue = 0): string {
   const hsl = { h: 0, s: 0, l: 0 };
   base.getHSL(hsl);
   const c = new THREE.Color().setHSL(
@@ -132,16 +138,16 @@ function vary(base: THREE.Color, rnd: () => number, light: number, hue = 0): str
 }
 
 /** A colour shifted in hue and scaled in saturation and lightness. */
-function tint(base: THREE.Color, dh: number, sMul: number, lMul: number): THREE.Color {
+export function tint(base: THREE.Color, dh: number, sMul: number, lMul: number): THREE.Color {
   const hsl = { h: 0, s: 0, l: 0 };
   base.getHSL(hsl);
   return new THREE.Color().setHSL((hsl.h + dh + 1) % 1, Math.min(1, hsl.s * sMul), Math.min(1, hsl.l * lMul));
 }
 
-const css = (c: THREE.Color) => "#" + c.getHexString();
+export const css = (c: THREE.Color) => "#" + c.getHexString();
 
 /** Add per-pixel grain: +-amount on each channel. */
-function grain(ctx: Ctx, w: number, h: number, rnd: () => number, amount: number) {
+export function grain(ctx: Ctx, w: number, h: number, rnd: () => number, amount: number) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -154,7 +160,7 @@ function grain(ctx: Ctx, w: number, h: number, rnd: () => number, amount: number
 }
 
 /** Soft blotches for render, plaster and concrete, wrapped so the tile repeats. */
-function blotches(ctx: Ctx, w: number, h: number, rnd: () => number, n: number, alpha: number, r0: number, r1: number) {
+export function blotches(ctx: Ctx, w: number, h: number, rnd: () => number, n: number, alpha: number, r0: number, r1: number) {
   for (let i = 0; i < n; i++) {
     const x = rnd() * w;
     const y = rnd() * h;
@@ -544,7 +550,7 @@ function drawPlaster(): HTMLCanvasElement {
 }
 
 /** Draw at the nine offsets of a repeat, so motifs crossing an edge carry on from the opposite one. */
-function wrapped(ctx: Ctx, w: number, h: number, draw: () => void) {
+export function wrapped(ctx: Ctx, w: number, h: number, draw: () => void) {
   for (const ox of [-w, 0, w])
     for (const oy of [-h, 0, h]) {
       ctx.save();
@@ -555,7 +561,7 @@ function wrapped(ctx: Ctx, w: number, h: number, draw: () => void) {
 }
 
 /** A pointed leaf or petal from (x, y) along angle a: length l, width wd. */
-function blade(ctx: Ctx, x: number, y: number, a: number, l: number, wd: number) {
+export function blade(ctx: Ctx, x: number, y: number, a: number, l: number, wd: number) {
   const cx = Math.cos(a);
   const cy = Math.sin(a);
   const px = -cy * wd;
@@ -570,6 +576,7 @@ function blade(ctx: Ctx, x: number, y: number, a: number, l: number, wd: number)
 /** Wallpaper ground, tiles or brick with the pattern drawn over it. Wallpaper has no height map. */
 function drawCover(p: Pattern, hex: string, accentHex: string | null): { color: HTMLCanvasElement; height: HTMLCanvasElement | null } {
   if (p === "brick") return drawWall("brick", hex, accentHex ?? undefined);
+  if (isModern(p)) return drawModern(p, hex, accentHex);
   const [tw, th] = coverTile(p, accentHex !== null);
   const W = Math.round(tw * COVER_PX[p]);
   const H = Math.round(th * COVER_PX[p]);
@@ -1123,8 +1130,8 @@ function create(s: MatSpec): THREE.Material {
       return new THREE.MeshStandardMaterial({
         map: toTexture(painted.color, tile, true),
         bumpMap: bump,
-        bumpScale: s.covering === "brick" ? 2 : 1,
-        roughness: COVER_ROUGHNESS[s.covering],
+        bumpScale: coverBump(s.covering),
+        roughness: coverRoughness(s.covering),
       });
     }
     case "plain":
