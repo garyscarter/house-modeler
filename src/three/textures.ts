@@ -3,6 +3,10 @@ import type { FloorFinish, WallFinish } from "../types";
 import { overflow } from "../lib/cache";
 import type { Pattern } from "../lib/wallCovering";
 import { drawModern, isModern, modernBump, modernRoughness, modernTile } from "./wallTextures";
+import { DEFAULT_GROUT, FLOOR_COLOUR, takesGrout, type TexturedFloor } from "../lib/floorFinish";
+import { chevronBlocks, herringboneBlocks, hexagons, hexTile, parquetTile, type Block, type XY } from "../lib/floorPattern";
+
+export { FLOOR_COLOUR };
 
 /**
  * Procedural finishes drawn on canvases once and cached. Each texture covers
@@ -22,7 +26,14 @@ const WALL_TILE: Record<WallFinish, [number, number]> = {
   stone: [1.2, 1.2],
   cladding: [1.2, 1.2],
 };
-const FLOOR_TILE: Record<Exclude<FloorFinish, "plain">, [number, number]> = {
+/** Herringbone and chevron blocks, metres, and how many lattice periods one repeat holds (along, across). */
+const PARQUET = { length: 0.35, width: 0.07, along: 24, across: 3 };
+/** Hexagon tiles, metres across the flats, and a repeat of 10 by 12 of them. */
+const HEX = { flat: 0.1, along: 10, rows: 12 };
+/** Victorian geometric: one 150 mm cell of the pattern; encaustic: 200 mm printed tiles. */
+const VICTORIAN_CELL = 0.15;
+const ENCAUSTIC_TILE = 0.2;
+const FLOOR_TILE: Record<TexturedFloor, [number, number]> = {
   oak: [2.4, 1.2],
   laminate: [2.4, 1.2],
   tile: [1.2, 1.2],
@@ -31,10 +42,21 @@ const FLOOR_TILE: Record<Exclude<FloorFinish, "plain">, [number, number]> = {
   carpet: [0.5, 0.5],
   vinyl: [1.2, 1.2],
   concrete: [2, 2],
+  herringbone: parquetTile(PARQUET.length, PARQUET.width, PARQUET.along, PARQUET.across),
+  chevron: parquetTile(PARQUET.length, PARQUET.width, PARQUET.along, PARQUET.across),
+  // Six rows of 200 mm boards, long enough for boards up to 2.2 m.
+  wideoak: [4.4, 1.2],
+  // 1200 x 600 tiles in a third bond: two across, six rows.
+  porcelain: [2.4, 3.6],
+  microcement: [3, 3],
+  terrazzo: [1, 1],
+  encaustic: [4 * ENCAUSTIC_TILE, 4 * ENCAUSTIC_TILE],
+  victorian: [6 * VICTORIAN_CELL, 6 * VICTORIAN_CELL],
+  hexagon: hexTile(HEX.flat, HEX.along, HEX.rows),
 };
 /** Canvas pixels per metre: fine enough for close-ups, small enough for phones. */
 const WALL_PX: Record<WallFinish, number> = { brick: 1100, render: 256, pebbledash: 512, stone: 420, cladding: 420 };
-const FLOOR_PX: Record<Exclude<FloorFinish, "plain">, number> = {
+const FLOOR_PX: Record<TexturedFloor, number> = {
   oak: 420,
   laminate: 420,
   tile: 420,
@@ -43,20 +65,18 @@ const FLOOR_PX: Record<Exclude<FloorFinish, "plain">, number> = {
   carpet: 512,
   vinyl: 420,
   concrete: 256,
+  herringbone: 430,
+  chevron: 430,
+  wideoak: 300,
+  porcelain: 280,
+  microcement: 200,
+  terrazzo: 640,
+  encaustic: 600,
+  victorian: 600,
+  hexagon: 500,
 };
 
-/** Typical colour of each floor finish, used when the room has no colour of its own. */
-export const FLOOR_COLOUR: Record<Exclude<FloorFinish, "plain">, string> = {
-  oak: "#b88a58",
-  laminate: "#c9b393",
-  tile: "#e4e0d8",
-  quarry: "#9a4a35",
-  stone: "#b7ae9f",
-  carpet: "#d4c8b6",
-  vinyl: "#d5d0c6",
-  concrete: "#a9a8a3",
-};
-const FLOOR_ROUGHNESS: Record<Exclude<FloorFinish, "plain">, number> = {
+const FLOOR_ROUGHNESS: Record<TexturedFloor, number> = {
   oak: 0.55,
   laminate: 0.5,
   tile: 0.3,
@@ -65,6 +85,15 @@ const FLOOR_ROUGHNESS: Record<Exclude<FloorFinish, "plain">, number> = {
   carpet: 1,
   vinyl: 0.45,
   concrete: 0.85,
+  herringbone: 0.5,
+  chevron: 0.5,
+  wideoak: 0.72,
+  porcelain: 0.24,
+  microcement: 0.42,
+  terrazzo: 0.32,
+  encaustic: 0.68,
+  victorian: 0.5,
+  hexagon: 0.4,
 };
 const WALL_ROUGHNESS: Record<WallFinish, number> = { brick: 0.95, render: 0.92, pebbledash: 1, stone: 0.95, cladding: 0.85 };
 
@@ -330,7 +359,7 @@ function drawWall(finish: WallFinish, hex: string, mortar = "#c9c3b6"): Painted 
   return { color: cc, height: hc };
 }
 
-function drawFloor(finish: Exclude<FloorFinish, "plain">, hex: string): Painted {
+function drawFloor(finish: TexturedFloor, hex: string, groutHex?: string): Painted {
   const [tw, th] = FLOOR_TILE[finish];
   const W = Math.round(tw * FLOOR_PX[finish]);
   const H = Math.round(th * FLOOR_PX[finish]);
@@ -342,6 +371,82 @@ function drawFloor(finish: Exclude<FloorFinish, "plain">, hex: string): Painted 
   const sy = H / th;
   h.fillStyle = "#c0c0c0";
   h.fillRect(0, 0, W, H);
+  const grout = groutHex ?? (takesGrout(finish) ? DEFAULT_GROUT[finish] : "#808080");
+  /** Trace a polygon given in metres. */
+  const trace = (ctx: Ctx, pts: XY[]) => {
+    ctx.beginPath();
+    pts.forEach(([u, v], i) => (i ? ctx.lineTo(u * sx, v * sy) : ctx.moveTo(u * sx, v * sy)));
+    ctx.closePath();
+  };
+  /**
+   * Wood blocks, each with its own tone, figure and grain seeded by its key, so
+   * copies of a block either side of the repeat's edge match; then fine joints.
+   */
+  const parquet = (blocks: Block[]) => {
+    const reach = PARQUET.length * sx;
+    const across = PARQUET.width * sx;
+    for (const b of blocks) {
+      const r = rng(1000 + b.key);
+      trace(c, b.pts);
+      c.save();
+      c.clip();
+      c.fillStyle = vary(base, r, 0.12, 0.03);
+      c.fill();
+      c.translate((b.pts.reduce((s, p) => s + p[0], 0) / b.pts.length) * sx, (b.pts.reduce((s, p) => s + p[1], 0) / b.pts.length) * sy);
+      c.rotate(b.angle);
+      // Figure: the block lightens or darkens towards one end.
+      const g = c.createLinearGradient(-reach / 2, 0, reach / 2, 0);
+      g.addColorStop(0, `rgba(255,240,215,${r() * 0.1})`);
+      g.addColorStop(0.5, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(70,40,15,${r() * 0.1})`);
+      c.fillStyle = g;
+      c.fillRect(-reach, -across, 2 * reach, 2 * across);
+      for (let k = 0; k < 6; k++) {
+        c.strokeStyle = `rgba(70,40,15,${0.04 + r() * 0.09})`;
+        c.lineWidth = 0.5 + r() * 0.9;
+        const y = (r() - 0.5) * across;
+        const phase = r() * 6;
+        const amp = 0.3 + r() * 1.1;
+        const wave = 18 + r() * 30;
+        c.beginPath();
+        c.moveTo(-reach, y + Math.sin(-reach / wave + phase) * amp);
+        for (let x = -reach + 6; x <= reach; x += 6) c.lineTo(x, y + Math.sin(x / wave + phase) * amp);
+        c.stroke();
+      }
+      c.restore();
+    }
+    c.strokeStyle = "rgba(50,32,16,0.55)";
+    c.lineWidth = 1.1;
+    h.strokeStyle = "#404040";
+    h.lineWidth = 1.6;
+    for (const b of blocks) {
+      trace(c, b.pts);
+      c.stroke();
+      trace(h, b.pts);
+      h.stroke();
+    }
+  };
+  /** Tiles of any shape, given in metres with their colours, outlined in grout `joint` px wide. */
+  const tiled = (pieces: [XY[], string][], joint: number) => {
+    for (const [pts, fill] of pieces) {
+      c.fillStyle = fill;
+      trace(c, pts);
+      c.fill();
+      h.fillStyle = "#c8c8c8";
+      trace(h, pts);
+      h.fill();
+    }
+    c.strokeStyle = grout;
+    c.lineWidth = joint;
+    h.strokeStyle = "#303030";
+    h.lineWidth = joint + 0.5;
+    for (const [pts] of pieces) {
+      trace(c, pts);
+      c.stroke();
+      trace(h, pts);
+      h.stroke();
+    }
+  };
   /** Boards running along u, `bw` wide, staggered lengths. */
   const boards = (bw: number, minL: number, maxL: number, light: number, grainLines: number) => {
     const rows = Math.round(th / bw);
@@ -414,13 +519,13 @@ function drawFloor(finish: Exclude<FloorFinish, "plain">, hex: string): Painted 
       grain(c, W, H, rnd, 6);
       break;
     case "tile":
-      grid([0.4, 0.4, 0.4], [0.4, 0.4, 0.4], 0.004, 0.04, "#b9b4aa");
+      grid([0.4, 0.4, 0.4], [0.4, 0.4, 0.4], 0.004, 0.04, grout);
       grain(c, W, H, rnd, 6);
       break;
     case "quarry": {
       // 150 mm clay tiles in dark joints; each firing comes out a little different.
       const q = Array<number>(6).fill(0.15);
-      grid(q, q, 0.007, 0.1, "#4a3f3a");
+      grid(q, q, 0.007, 0.1, grout);
       blotches(c, W, H, rnd, 50, 0.05, 8, 30);
       grain(c, W, H, rnd, 14);
       break;
@@ -535,6 +640,302 @@ function drawFloor(finish: Exclude<FloorFinish, "plain">, hex: string): Painted 
       grain(c, W, H, rnd, 18);
       grain(h, W, H, rnd, 40);
       break;
+    case "herringbone":
+      parquet(herringboneBlocks(PARQUET.length, PARQUET.width, PARQUET.along, PARQUET.across));
+      grain(c, W, H, rnd, 7);
+      break;
+    case "chevron":
+      parquet(chevronBlocks(PARQUET.length, PARQUET.width, PARQUET.along, PARQUET.across));
+      grain(c, W, H, rnd, 7);
+      break;
+    case "wideoak": {
+      // Engineered boards 200 mm wide, long and staggered, matt lacquered, with the odd small knot.
+      boards(0.2, 1.2, 2.2, 0.07, 11);
+      for (let i = 0; i < 12; i++) {
+        const r = (0.005 + rnd() * 0.009) * sx;
+        const x = r * 3 + rnd() * (W - r * 6);
+        const y = r * 2 + rnd() * (H - r * 4);
+        const g = c.createRadialGradient(x, y, 0, x, y, r * 1.8);
+        g.addColorStop(0, "rgba(55,32,14,0.75)");
+        g.addColorStop(0.45, "rgba(80,48,20,0.35)");
+        g.addColorStop(1, "rgba(80,48,20,0)");
+        c.fillStyle = g;
+        c.beginPath();
+        c.ellipse(x, y, r * 2.4, r * 1.2, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+      // A faint highlight on the micro-bevel beside each long joint.
+      c.fillStyle = "rgba(255,245,230,0.12)";
+      for (let r = 0; r < 6; r++) c.fillRect(0, (r * H) / 6 + 1.5, W, 1);
+      grain(c, W, H, rnd, 7);
+      break;
+    }
+    case "porcelain": {
+      // 1200 x 600 stone-effect tiles in a third bond, 3 mm grout; each tile its own print.
+      c.fillStyle = grout;
+      c.fillRect(0, 0, W, H);
+      h.fillStyle = "#303030";
+      h.fillRect(0, 0, W, H);
+      const inset = Math.max(0.5, 0.0015 * sx);
+      for (let r = 0; r < 6; r++)
+        for (let k = -1; k <= 1; k++) {
+          // Copies a repeat apart (k = -1 and 1) are one tile, so they share a seed.
+          const t = rng(500 + r * 2 + ((k + 2) % 2));
+          const x = ((r % 3) * 0.4 + k * 1.2) * sx + inset;
+          const y = r * 0.6 * sy + inset;
+          const w = 1.2 * sx - 2 * inset;
+          const ht = 0.6 * sy - 2 * inset;
+          c.save();
+          c.beginPath();
+          c.rect(x, y, w, ht);
+          c.clip();
+          c.fillStyle = vary(base, t, 0.03, 0.008);
+          c.fillRect(x, y, w, ht);
+          for (let b = 0; b < 9; b++) {
+            const bx = x + t() * w;
+            const by = y + t() * ht;
+            const br = (0.1 + t() * 0.25) * sx;
+            const g = c.createRadialGradient(bx, by, 0, bx, by, br);
+            g.addColorStop(0, t() > 0.5 ? "rgba(255,255,255,0.07)" : "rgba(70,60,50,0.06)");
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            c.fillStyle = g;
+            c.fillRect(bx - br, by - br, 2 * br, 2 * br);
+          }
+          // A few soft veins drifting across the tile: a wide faint haze with a finer thread in it.
+          for (let v = 0; v < 3; v++) {
+            const dark = t() > 0.4;
+            const y0 = y + t() * ht;
+            const curve = [x + w * 0.3, y0 + (t() - 0.5) * ht, x + w * 0.65, y0 + (t() - 0.5) * ht, x + w + 5, y0 + (t() - 0.5) * ht * 0.8] as const;
+            for (const [lw, a] of [
+              [6 + t() * 8, 0.025],
+              [0.8 + t(), 0.045],
+            ]) {
+              c.strokeStyle = dark ? `rgba(100,90,80,${a})` : `rgba(255,255,255,${a * 2})`;
+              c.lineWidth = lw;
+              c.beginPath();
+              c.moveTo(x - 5, y0);
+              c.bezierCurveTo(...curve);
+              c.stroke();
+            }
+          }
+          c.restore();
+          h.fillStyle = "#c8c8c8";
+          h.fillRect(x, y, w, ht);
+        }
+      grain(c, W, H, rnd, 4);
+      break;
+    }
+    case "microcement": {
+      // Smooth, with soft clouding and the overlapping arcs the trowel leaves.
+      c.fillStyle = hex;
+      c.fillRect(0, 0, W, H);
+      blotches(c, W, H, rnd, 40, 0.035, 40, 160);
+      c.lineCap = "round";
+      for (let i = 0; i < 200; i++) {
+        const x = rnd() * W;
+        const y = rnd() * H;
+        const r = (0.15 + rnd() * 0.5) * sx;
+        const a0 = rnd() * Math.PI * 2;
+        const span = 0.4 + rnd() * 1.1;
+        const lw = (0.03 + rnd() * 0.12) * sx;
+        c.lineWidth = lw;
+        c.strokeStyle = rnd() > 0.5 ? `rgba(255,255,255,${0.02 + rnd() * 0.025})` : `rgba(40,35,30,${0.015 + rnd() * 0.02})`;
+        for (const ox of [-W, 0, W])
+          for (const oy of [-H, 0, H]) {
+            if (x + ox + r < -lw || x + ox - r > W + lw || y + oy + r < -lw || y + oy - r > H + lw) continue;
+            c.beginPath();
+            c.arc(x + ox, y + oy, r, a0, a0 + span);
+            c.stroke();
+          }
+      }
+      grain(c, W, H, rnd, 5);
+      h.fillStyle = "#808080";
+      h.fillRect(0, 0, W, H);
+      grain(h, W, H, rnd, 6);
+      break;
+    }
+    case "terrazzo": {
+      // Marble and stone chips, mostly small, a few larger, polished flush in the ground.
+      c.fillStyle = hex;
+      c.fillRect(0, 0, W, H);
+      grain(c, W, H, rnd, 10);
+      const palette: [THREE.Color, number][] = [
+        [new THREE.Color("#3d3c3a"), 0.2],
+        [new THREE.Color("#1f1e1d"), 0.08],
+        [new THREE.Color("#f8f6f1"), 0.22],
+        [new THREE.Color("#a29e97"), 0.2],
+        [new THREE.Color("#b9693f"), 0.14],
+        [new THREE.Color("#cba864"), 0.09],
+        [new THREE.Color("#7f8c85"), 0.07],
+      ];
+      const pick = () => {
+        let x = rnd();
+        for (const [col, w] of palette) if ((x -= w) <= 0) return col;
+        return palette[0][0];
+      };
+      const chip = (size: number) => {
+        const x = rnd() * W;
+        const y = rnd() * H;
+        const r = size * sx;
+        const n = 5 + Math.floor(rnd() * 4);
+        const turn = rnd() * Math.PI * 2;
+        const pts = Array.from({ length: n }, (_, k) => {
+          const a = turn + ((k + (rnd() - 0.5) * 0.6) * Math.PI * 2) / n;
+          const d = r * (0.6 + rnd() * 0.4);
+          return [Math.cos(a) * d, Math.sin(a) * d * (0.6 + 0.4 * rnd())];
+        });
+        c.fillStyle = vary(pick(), rnd, 0.08);
+        for (const ox of [-W, 0, W])
+          for (const oy of [-H, 0, H]) {
+            if (x + ox + r < 0 || x + ox - r > W || y + oy + r < 0 || y + oy - r > H) continue;
+            c.beginPath();
+            pts.forEach(([px, py], k) => (k ? c.lineTo(x + ox + px, y + oy + py) : c.moveTo(x + ox + px, y + oy + py)));
+            c.closePath();
+            c.fill();
+          }
+      };
+      for (let i = 0; i < 12000; i++) chip(0.0015 + rnd() * rnd() * 0.005);
+      for (let i = 0; i < 500; i++) chip(0.006 + rnd() * 0.008);
+      grain(c, W, H, rnd, 6);
+      break;
+    }
+    case "victorian": {
+      // Black, cream and terracotta geometric: a cream square on point in every 150 mm cell with a
+      // small black square at its heart; the terracotta triangles round it meet in diamonds.
+      const n = 6;
+      const cs = VICTORIAN_CELL;
+      const cream = new THREE.Color("#e9e0cc");
+      const black = new THREE.Color("#2b2826");
+      const terra = Array.from({ length: n * n }, () => vary(base, rnd, 0.08, 0.012));
+      const pieces: [XY[], string][] = [];
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++) {
+          const x = i * cs;
+          const y = j * cs;
+          const m = cs / 2;
+          // Each corner triangle is a quarter of the terracotta diamond centred on that corner.
+          for (const [dx, dy] of [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+          ]) {
+            const cx = x + dx * cs;
+            const cy = y + dy * cs;
+            pieces.push([
+              [
+                [cx, cy],
+                [x + m, cy],
+                [cx, y + m],
+              ],
+              terra[((i + dx) % n) * n + ((j + dy) % n)],
+            ]);
+          }
+          pieces.push([
+            [
+              [x + m, y],
+              [x + cs, y + m],
+              [x + m, y + cs],
+              [x, y + m],
+            ],
+            vary(cream, rnd, 0.05, 0.01),
+          ]);
+          const q = cs * 0.16;
+          pieces.push([
+            [
+              [x + m - q, y + m - q],
+              [x + m + q, y + m - q],
+              [x + m + q, y + m + q],
+              [x + m - q, y + m + q],
+            ],
+            vary(black, rnd, 0.04),
+          ]);
+        }
+      tiled(pieces, Math.max(1, 0.002 * sx));
+      blotches(c, W, H, rnd, 40, 0.03, 8, 40);
+      grain(c, W, H, rnd, 10);
+      break;
+    }
+    case "encaustic": {
+      // 200 mm cement tiles printed with a motif that joins up across four tiles into rings.
+      const ground = new THREE.Color("#ece5d6");
+      const motif = css(base);
+      const soft = css(tint(base, 0, 0.6, 1.9));
+      const inset = Math.max(0.5, 0.001 * sx);
+      c.fillStyle = grout;
+      c.fillRect(0, 0, W, H);
+      h.fillStyle = "#303030";
+      h.fillRect(0, 0, W, H);
+      const ts = ENCAUSTIC_TILE * sx;
+      for (let i = 0; i < 4; i++)
+        for (let j = 0; j < 4; j++) {
+          const x = i * ts;
+          const y = j * ts;
+          c.save();
+          c.beginPath();
+          c.rect(x + inset, y + inset, ts - 2 * inset, ts - 2 * inset);
+          c.clip();
+          c.fillStyle = vary(ground, rnd, 0.03);
+          c.fillRect(x, y, ts, ts);
+          c.translate(x, y);
+          for (const [cx, cy] of [
+            [0, 0],
+            [ts, 0],
+            [ts, ts],
+            [0, ts],
+          ]) {
+            c.fillStyle = soft;
+            c.beginPath();
+            c.arc(cx, cy, ts * 0.27, 0, Math.PI * 2);
+            c.fill();
+            c.strokeStyle = motif;
+            c.lineWidth = ts * 0.05;
+            c.beginPath();
+            c.arc(cx, cy, ts * 0.4, 0, Math.PI * 2);
+            c.stroke();
+            c.fillStyle = motif;
+            c.beginPath();
+            c.arc(cx, cy, ts * 0.1, 0, Math.PI * 2);
+            c.fill();
+          }
+          const mids: XY[] = [
+            [ts / 2, 0],
+            [ts, ts / 2],
+            [ts / 2, ts],
+            [0, ts / 2],
+          ];
+          for (let k = 0; k < 4; k++) {
+            c.fillStyle = motif;
+            blade(c, ts / 2, ts / 2, Math.PI / 4 + (k * Math.PI) / 2, ts * 0.3, ts * 0.1);
+            c.fill();
+            c.fillStyle = soft;
+            blade(c, ts / 2, ts / 2, (k * Math.PI) / 2, ts * 0.2, ts * 0.06);
+            c.fill();
+            c.fillStyle = motif;
+            c.beginPath();
+            c.arc(mids[k][0], mids[k][1], ts * 0.055, 0, Math.PI * 2);
+            c.fill();
+          }
+          c.fillStyle = css(ground);
+          c.beginPath();
+          c.arc(ts / 2, ts / 2, ts * 0.035, 0, Math.PI * 2);
+          c.fill();
+          c.restore();
+          h.fillStyle = "#c8c8c8";
+          h.fillRect(x + inset, y + inset, ts - 2 * inset, ts - 2 * inset);
+        }
+      // Cement tiles wear and take a patina.
+      blotches(c, W, H, rnd, 50, 0.035, 10, 50);
+      grain(c, W, H, rnd, 12);
+      break;
+    }
+    case "hexagon": {
+      const hexes = hexagons(HEX.flat, HEX.along, HEX.rows).map(({ pts, key }): [XY[], string] => [pts, vary(base, rng(300 + key), 0.05, 0.008)]);
+      tiled(hexes, Math.max(1, 0.003 * sx));
+      blotches(c, W, H, rnd, 30, 0.02, 10, 40);
+      grain(c, W, H, rnd, 5);
+      break;
+    }
   }
   return { color: cc, height: hc };
 }
@@ -1059,7 +1460,7 @@ export type MatSpec =
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
   | { kind: "plain"; color: string; roughness?: number; metalness?: number }
   | { kind: "glass" }
-  | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean };
+  | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
 
 export function matKey(s: MatSpec): string {
   switch (s.kind) {
@@ -1074,7 +1475,7 @@ export function matKey(s: MatSpec): string {
     case "glass":
       return "glass";
     case "floor":
-      return `floor|${s.finish}|${s.color}|${s.selected ? 1 : 0}`;
+      return `floor|${s.finish}|${s.color}|${s.selected ? 1 : 0}|${s.grout ?? ""}`;
   }
 }
 
@@ -1087,6 +1488,8 @@ const SELECTED = "#ffd166";
 const FLOOR_WARMTH = new THREE.Color("#ffecd2");
 const heightMaps = new Map<string, THREE.CanvasTexture>();
 const floorMaps = new Map<string, THREE.CanvasTexture>();
+/** Floor colour maps kept, oldest first: dragging a colour picker draws one per step. */
+const MAX_FLOOR_MAPS = 20;
 let plaster: THREE.CanvasTexture | null = null;
 /** Materials by key, oldest first. Colour pickers can mint many, so the cache is capped. */
 const materials = new Map<string, THREE.Material>();
@@ -1150,17 +1553,22 @@ function create(s: MatSpec): THREE.Material {
       if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : new THREE.Color(s.color).multiply(FLOOR_WARMTH), roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);
       // the pattern is seeded, so every colour shares one height map.
-      const key = `${s.finish}|${s.color}`;
+      const key = `${s.finish}|${s.color}|${s.grout ?? ""}`;
       let map = floorMaps.get(key);
       let bump = floorMaps.get(s.finish + "|h");
+      if (map) {
+        floorMaps.delete(key);
+        floorMaps.set(key, map);
+      }
       if (!map || !bump) {
-        const painted = drawFloor(s.finish, s.color);
+        const painted = drawFloor(s.finish, s.color, s.grout);
         map = toTexture(painted.color, FLOOR_TILE[s.finish], true);
         floorMaps.set(key, map);
         if (!bump) {
           bump = toTexture(painted.height, FLOOR_TILE[s.finish], false);
           floorMaps.set(s.finish + "|h", bump);
         }
+        dropOldFloorMaps();
       }
       return new THREE.MeshStandardMaterial({
         map,
@@ -1170,6 +1578,21 @@ function create(s: MatSpec): THREE.Material {
         roughness: FLOOR_ROUGHNESS[s.finish],
       });
     }
+  }
+}
+
+/** Free the oldest floor colour maps beyond the cap, with the cached materials drawn with them. */
+function dropOldFloorMaps() {
+  const colourKeys = [...floorMaps.keys()].filter((k) => !k.endsWith("|h"));
+  for (const k of colourKeys.slice(0, Math.max(0, colourKeys.length - MAX_FLOOR_MAPS))) {
+    const tex = floorMaps.get(k)!;
+    floorMaps.delete(k);
+    for (const [mk, m] of materials)
+      if ((m as THREE.MeshStandardMaterial).map === tex) {
+        materials.delete(mk);
+        m.dispose();
+      }
+    tex.dispose();
   }
 }
 

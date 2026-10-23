@@ -22,6 +22,10 @@ export interface Room {
   notes?: string;
   /** Floor finish drawn in 3D. Undefined = plain colour. */
   floorFinish?: FloorFinish;
+  /** Direction of the floor's pattern (boards, herringbone rows, tiles), degrees turned on the plan. Undefined = 0, along the plan's x axis. */
+  floorAngle?: number;
+  /** Grout colour of a tiled floor. Undefined = the finish's own. */
+  floorGrout?: string;
   /** Interior paint colour of this room's walls; under a covering, the wallpaper ground, tile or brick colour. */
   wallPaint?: string;
   /** What the inside walls are covered with. Undefined = paint. */
@@ -116,17 +120,45 @@ export interface OutsideOverride {
   color?: string;
 }
 
-export type FloorFinish = "plain" | "oak" | "laminate" | "tile" | "quarry" | "stone" | "carpet" | "vinyl" | "concrete";
+export type FloorFinish =
+  | "plain"
+  | "oak"
+  | "laminate"
+  | "tile"
+  | "quarry"
+  | "stone"
+  | "carpet"
+  | "vinyl"
+  | "concrete"
+  | "herringbone"
+  | "chevron"
+  | "wideoak"
+  | "porcelain"
+  | "microcement"
+  | "terrazzo"
+  | "encaustic"
+  | "victorian"
+  | "hexagon";
+/** Labels, in the order the floor finish list shows them. */
 export const FLOOR_FINISH_LABEL: Record<FloorFinish, string> = {
   plain: "Plain colour",
   oak: "Oak boards",
+  wideoak: "Wide-plank oak",
+  herringbone: "Herringbone wood or LVT",
+  chevron: "Chevron wood",
   laminate: "Laminate",
-  tile: "Ceramic tiles",
-  quarry: "Quarry tiles",
-  stone: "Stone flags",
-  carpet: "Carpet",
   vinyl: "Vinyl",
+  carpet: "Carpet",
+  tile: "Ceramic tiles",
+  porcelain: "Large porcelain tiles",
+  hexagon: "Hexagon tiles",
+  quarry: "Quarry tiles",
+  victorian: "Victorian geometric tiles",
+  encaustic: "Patterned encaustic tiles",
+  stone: "Stone flags",
+  terrazzo: "Terrazzo",
   concrete: "Concrete",
+  microcement: "Polished concrete / microcement",
 };
 
 export interface Opening {

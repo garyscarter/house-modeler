@@ -15,7 +15,9 @@ import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairw
 import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount } from "../lib/stairs";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
-import { FLOOR_COLOUR, getMaterial, type MatSpec } from "./textures";
+import { getMaterial, type MatSpec } from "./textures";
+import { finishColour, floorAngle, groutColour } from "../lib/floorFinish";
+import { floorUv } from "../lib/floorPattern";
 import {
   type WallSeg,
   WALL_T,
@@ -332,12 +334,25 @@ function shapeFrom(poly: V2[]): THREE.Shape {
 function floorSpec(room: Room, selected: boolean): MatSpec {
   const finish = room.floorFinish ?? "plain";
   if (finish === "plain") return { kind: "floor", finish, color: roomColor(room), selected };
-  return { kind: "floor", finish, color: room.color ?? FLOOR_COLOUR[finish], selected };
+  return { kind: "floor", finish, color: finishColour(room)!, selected, grout: room.floorGrout && groutColour(room) };
 }
 
 function RoomFloor({ room, polys, photos, selected, onSelect }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void }) {
-  // Shape coordinates are metres, so the UVs keep boards and tiles at their real size.
-  const geom = useMemo(() => new THREE.ShapeGeometry(polys.map(shapeFrom)), [polys]);
+  // Shape coordinates are metres, so the UVs keep boards and tiles at their real size;
+  // a floor angle turns them about the plan's origin, so rooms laid the same way line up.
+  const angle = floorAngle(room);
+  const geom = useMemo(() => {
+    const g = new THREE.ShapeGeometry(polys.map(shapeFrom));
+    if (angle) {
+      const uv = g.getAttribute("uv");
+      for (let i = 0; i < uv.count; i++) {
+        // Shape y is minus plan y.
+        const [u, v] = floorUv(uv.getX(i), -uv.getY(i), angle);
+        uv.setXY(i, u, -v);
+      }
+    }
+    return g;
+  }, [polys, angle]);
   useEffect(() => () => geom.dispose(), [geom]);
   const photo = room.floorPhotoId ? photos.find((p) => p.id === room.floorPhotoId) : undefined;
   const material = getMaterial(floorSpec(room, selected));

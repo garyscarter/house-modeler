@@ -13,6 +13,8 @@ import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../li
 import { ColourSwatches } from "./ColourSwatches";
 import { skirtingColour } from "../lib/skirting";
 import { roomColor } from "../three/House";
+import { finishColour, floorAngle, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
+import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
 import { FeatureWalls } from "./FeatureWalls";
 import { KnockThrough } from "./KnockThrough";
 import {
@@ -228,7 +230,15 @@ export function RoomInspector({
 
       <label>
         Floor finish
-        <select value={room.floorFinish ?? "plain"} onChange={(e) => onChange({ floorFinish: e.target.value === "plain" ? undefined : (e.target.value as FloorFinish) })}>
+        <select
+          value={room.floorFinish ?? "plain"}
+          onChange={(e) => {
+            const f = e.target.value as FloorFinish;
+            // A new textured finish starts in its own typical colour (light oak for herringbone);
+            // pick a colour after choosing the finish to change it.
+            onChange({ floorFinish: f === "plain" ? undefined : f, ...(f !== "plain" && room.color ? { color: undefined } : {}) });
+          }}
+        >
           {(Object.keys(FLOOR_FINISH_LABEL) as FloorFinish[]).map((k) => (
             <option key={k} value={k}>
               {FLOOR_FINISH_LABEL[k]}
@@ -236,10 +246,48 @@ export function RoomInspector({
           ))}
         </select>
       </label>
+      {takesAngle(room.floorFinish) && (
+        <div className="field">
+          <span className="field-label">Pattern direction (degrees)</span>
+          <div className="size-row floor-angle">
+            <NumberField value={room.floorAngle ?? 0} min={-361} max={360} step={5} label="Floor pattern angle" onCommit={(a) => onChange({ floorAngle: normaliseAngle(a) || undefined })} />
+            {[0, 45, 90].map((a) => (
+              <button key={a} className={floorAngle(room) === a ? "active" : ""} onClick={() => onChange({ floorAngle: a || undefined })}>
+                {a}°
+              </button>
+            ))}
+            <button title="Run the pattern along the room's longest wall" onClick={() => onChange({ floorAngle: longAxisAngle(room.polygon) || undefined })}>
+              Along room
+            </button>
+          </div>
+        </div>
+      )}
+      {takesGrout(room.floorFinish) && (
+        <div className="colour-row">
+          <label>
+            Grout colour
+            <span className="colour-pick">
+              <input type="color" value={groutColour(room)} onChange={(e) => onChange({ floorGrout: e.target.value })} />
+              {room.floorGrout && (
+                <button className="link" onClick={() => onChange({ floorGrout: undefined })}>
+                  Clear
+                </button>
+              )}
+            </span>
+          </label>
+        </div>
+      )}
       <div className="colour-row">
         <label>
           Floor colour
-          <input type="color" value={room.color ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
+          <span className="colour-pick">
+            <input type="color" value={finishColour(room) ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
+            {room.color && room.floorFinish && room.floorFinish !== "plain" && (
+              <button className="link" title="Back to the finish's own colour" onClick={() => onChange({ color: undefined })}>
+                Clear
+              </button>
+            )}
+          </span>
         </label>
         <label>
           {BASE_LABEL[room.wallCovering ?? "paint"]}

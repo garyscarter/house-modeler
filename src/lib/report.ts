@@ -1,4 +1,5 @@
 import type { Floor, HouseModel, Opening, OpeningKind, Room, Site } from "../types";
+import { FLOOR_FINISH_LABEL } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { M2_TO_FT2 } from "./planMath";
 import { diffSites } from "./siteDiff";
@@ -187,7 +188,8 @@ export type CostLineId =
   | "alterOpening"
   | "blockOpening"
   | "removeGardenWall"
-  | "newPaving";
+  | "newPaving"
+  | "newFlooring";
 
 export interface Change {
   key: string;
@@ -226,6 +228,15 @@ const newLine = (kind: OpeningKind): CostLineId => {
 };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const m1 = (v: number) => Math.round(v * 10) / 10;
+
+/** A room's floor finish changed: what is laid, and what it replaces. Colour and pattern direction alone don't count. */
+export function floorChange(ra: Pick<Room, "floorFinish">, rb: Pick<Room, "floorFinish" | "name">): { description: string; laid: boolean } | undefined {
+  const a = ra.floorFinish ?? "plain";
+  const b = rb.floorFinish ?? "plain";
+  if (a === b) return undefined;
+  if (b === "plain") return { description: `${rb.name}: ${FLOOR_FINISH_LABEL[a].toLowerCase()} floor taken up`, laid: false };
+  return { description: `New floor in the ${rb.name}: ${FLOOR_FINISH_LABEL[b]}${a === "plain" ? "" : ` (was ${FLOOR_FINISH_LABEL[a].toLowerCase()})`}`, laid: true };
+}
 const fmtLen = (v: number) => `${v.toFixed(v < 10 ? 2 : 1)} m`;
 const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
@@ -415,6 +426,8 @@ export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?:
           unit: "m²",
         });
       }
+      const fl = floorChange(ra, rb);
+      if (fl) push({ key: `room-floor:${rb.id}`, category: "Room", description: fl.description, quantity: m1(after), unit: "m²", costLine: fl.laid ? "newFlooring" : undefined });
     }
 
     // Walls.
@@ -543,6 +556,7 @@ export const COST_LINES: CostLineDef[] = [
   { id: "blockOpening", label: "Block up an opening", unit: "each", example: 500 },
   { id: "removeGardenWall", label: "Remove garden wall", unit: "m", example: 100 },
   { id: "newPaving", label: "New paving", unit: "m²", example: 80 },
+  { id: "newFlooring", label: "New floor finish", unit: "m²", example: 70 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */
