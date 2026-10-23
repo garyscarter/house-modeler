@@ -23,7 +23,7 @@ import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { siteEditPatch } from "./lib/modes";
 import { pickWallFace } from "./lib/decorPick";
-import { roomWorldPolygon } from "./lib/geometry";
+import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
 import { VARIANT_LABEL, type Floor, type VariantKey } from "./types";
@@ -122,9 +122,9 @@ export default function App() {
   };
 
   // Decorate: a tap on a wall in 3D picks that wall face of the room behind it.
-  const onPickWall = (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }) => {
+  const onPickWall = (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays: { id: string; poly: { x: number; y: number }[] }[] = []) => {
     const rooms = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
-    const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: 0.6, maxDist: 0.5 });
+    const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: EXT_WALL_T / 2 + 0.1, maxDist: 0.5 }, bays);
     if (!pick || pick.edge === null) return;
     setUi({ selectedRoomId: pick.roomId, selectedEdge: { edge: pick.edge, side: pick.side }, editFloorId: floor.id });
   };

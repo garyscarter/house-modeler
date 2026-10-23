@@ -67,3 +67,36 @@ describe("pickWallFace", () => {
     expect(pickWallFace(rooms, { x: 0.1, y: 1.5 }, { x: 0, y: 0 }, o)).toBeNull();
   });
 });
+
+describe("pickInPlan: taps exactly on an edge", () => {
+  const rooms = outlines([rect("A", 0, 0, 400, 300)]);
+  it("is outside on all four sides", () => {
+    expect(pickInPlan(rooms, { x: 200, y: 0 }, 8)).toEqual({ roomId: "A", edge: 0, side: "outside" });
+    expect(pickInPlan(rooms, { x: 400, y: 150 }, 8)).toEqual({ roomId: "A", edge: 1, side: "outside" });
+    expect(pickInPlan(rooms, { x: 200, y: 300 }, 8)).toEqual({ roomId: "A", edge: 2, side: "outside" });
+    expect(pickInPlan(rooms, { x: 0, y: 150 }, 8)).toEqual({ roomId: "A", edge: 3, side: "outside" });
+  });
+});
+
+describe("pickWallFace: junctions and bays", () => {
+  const A = { id: "A", poly: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }] };
+  const B = { id: "B", poly: [{ x: 4, y: 0 }, { x: 7, y: 0 }, { x: 7, y: 3 }, { x: 4, y: 3 }] };
+  const o = { probe: 0.05, through: 0.225, maxDist: 0.5 };
+
+  it("picks the wall that was hit, not the nearer partition, beside a junction", () => {
+    expect(pickWallFace([A, B], { x: 3.89, y: 0.125 }, { x: 0, y: 1 }, o)).toEqual({ roomId: "A", edge: 0, side: "inside" });
+  });
+
+  it("an outside face near an outside corner picks the wall behind it", () => {
+    expect(pickWallFace([A], { x: 4.125, y: 0.05 }, { x: 1, y: 0 }, o)).toEqual({ roomId: "A", edge: 1, side: "outside" });
+    expect(pickWallFace([A], { x: 0.05, y: -0.125 }, { x: 0, y: -1 }, o)).toEqual({ roomId: "A", edge: 0, side: "outside" });
+  });
+
+  it("bay faces resolve to the room's edge", () => {
+    const bay03 = { id: "A", poly: [{ x: 1, y: 3 }, { x: 1, y: 3.3 }, { x: 3, y: 3.3 }, { x: 3, y: 3 }] };
+    expect(pickWallFace([A], { x: 2, y: 3.25 }, { x: 0, y: -1 }, o)).toBeNull();
+    expect(pickWallFace([A], { x: 2, y: 3.25 }, { x: 0, y: -1 }, o, [bay03])).toEqual({ roomId: "A", edge: 2, side: "inside" });
+    const bay06 = { id: "A", poly: [{ x: 1, y: 3 }, { x: 1, y: 3.6 }, { x: 3, y: 3.6 }, { x: 3, y: 3 }] };
+    expect(pickWallFace([A], { x: 2, y: 3.6 }, { x: 0, y: 1 }, o, [bay06])).toEqual({ roomId: "A", edge: 2, side: "outside" });
+  });
+});

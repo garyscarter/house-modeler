@@ -312,7 +312,10 @@ export const useStore = create<State>()(
         addPhotos: (p) => setState((st) => ({ photos: [...st.photos, ...p] })),
         updatePhoto: (id, patch) => setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
         removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
-        setUi: (p) => rawSet(p),
+        setUi: (p) =>
+          rawSet((st) =>
+            "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
+          ),
         reset: () => setState({ variants: {}, photos: [], sites: {}, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
       };
     },

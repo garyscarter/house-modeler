@@ -59,4 +59,14 @@ describe("store: modes", () => {
     expect(p.mode).toBe("furnish");
     expect("selectedEdge" in p).toBe(false);
   });
+
+  it("setUi clears selectedEdge when the room changes unless an edge is given", () => {
+    st().setUi({ selectedRoomId: "a", selectedEdge: { edge: 2, side: "inside" } });
+    st().setUi({ selectedRoomId: "a" });
+    expect(st().selectedEdge).toEqual({ edge: 2, side: "inside" });
+    st().setUi({ selectedRoomId: "b" });
+    expect(st().selectedEdge).toBeNull();
+    st().setUi({ selectedRoomId: "c", selectedEdge: { edge: 1, side: "outside" } });
+    expect(st().selectedEdge).toEqual({ edge: 1, side: "outside" });
+  });
 });
