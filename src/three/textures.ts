@@ -151,7 +151,7 @@ export function canvas(w: number, h: number): [HTMLCanvasElement, Ctx] {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  return [c, c.getContext("2d")!];
+  return [c, c.getContext("2d", { willReadFrequently: true })!];
 }
 
 /** Base colour varied in lightness (and a touch of hue), as a CSS colour. */
@@ -1480,12 +1480,6 @@ export function matKey(s: MatSpec): string {
 }
 
 const SELECTED = "#ffd166";
-/**
- * Floors face up into the blue sky light and the bounce off the ceiling is missing, so a floor
- * painted in a warm beige comes out cool blue-grey (carpets in the listing's photos are oatmeal).
- * Multiplying the floor colour by this warm tint cancels most of that cast.
- */
-const FLOOR_WARMTH = new THREE.Color("#ffecd2");
 const heightMaps = new Map<string, THREE.CanvasTexture>();
 const floorMaps = new Map<string, THREE.CanvasTexture>();
 /** Floor colour maps kept, oldest first: dragging a colour picker draws one per step. */
@@ -1493,10 +1487,67 @@ const MAX_FLOOR_MAPS = 20;
 let plaster: THREE.CanvasTexture | null = null;
 /** Materials by key, oldest first. Colour pickers can mint many, so the cache is capped. */
 const materials = new Map<string, THREE.Material>();
-const MAX_MATERIALS = 64;
+const MAX_MATERIALS = 256;
 /** Outside finishes and wall coverings each own a large canvas texture. */
-const MAX_TEXTURED = 16;
+const MAX_TEXTURED = 48;
 const ownsMap = (key: string) => key.startsWith("ext|") || key.startsWith("cover|");
+
+/** Every glass material made, so a change of quality or a lit night can update them in place. */
+const glassMaterials = new Set<THREE.MeshPhysicalMaterial>();
+let glassHigh = false;
+let glassLit = false;
+const GLASS_TINT = "#e4ecea";
+const GLASS_GLOW = new THREE.Color("#ffd9a0");
+
+/** Fresnel alpha for the film glass: nearly clear face-on, a mirror at grazing angles. */
+function glassFresnel(shader: { fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+  if (m.transmission > 0) return;
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <opaque_fragment>",
+    `float ndv = abs(dot(normalize(normal), normalize(vViewPosition)));
+    diffuseColor.a = mix(0.15, 0.75, pow(1.0 - ndv, 3.0));
+    #include <opaque_fragment>`,
+  );
+}
+
+function styleGlass(m: THREE.MeshPhysicalMaterial) {
+  if (glassHigh) {
+    // Real transmission: the scene behind is refracted, no blending needed.
+    m.transmission = 1;
+    m.thickness = 0;
+    m.ior = 1.5;
+    m.transparent = false;
+    m.depthWrite = true;
+    m.side = THREE.FrontSide;
+  } else {
+    m.transmission = 0;
+    m.transparent = true;
+    m.depthWrite = false;
+    m.side = THREE.DoubleSide;
+  }
+  m.emissive.copy(GLASS_GLOW);
+  m.emissiveIntensity = glassLit ? 0.6 : 0;
+  m.needsUpdate = true;
+}
+
+/** Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. */
+export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
+  const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
+  m.onBeforeCompile = (shader) => glassFresnel(shader, m);
+  m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
+  glassMaterials.add(m);
+  styleGlass(m);
+  m.addEventListener("dispose", () => glassMaterials.delete(m));
+  return m;
+}
+
+/** Switch every glass pane between real transmission (high quality) and the film, and light it up at night. */
+export function setGlassMode(high: boolean, lit: boolean) {
+  if (high === glassHigh && lit === glassLit) return;
+  glassHigh = high;
+  glassLit = lit;
+  for (const m of glassMaterials) styleGlass(m);
+}
 
 /** Height maps are seeded, so one per pattern serves every colour. */
 function bumpFor(key: string, height: HTMLCanvasElement, tile: [number, number]) {
@@ -1540,17 +1591,9 @@ function create(s: MatSpec): THREE.Material {
     case "plain":
       return new THREE.MeshStandardMaterial({ color: s.color, roughness: s.roughness ?? 0.8, metalness: s.metalness ?? 0 });
     case "glass":
-      return new THREE.MeshPhysicalMaterial({
-        color: "#a9cfe3",
-        transparent: true,
-        opacity: 0.38,
-        roughness: 0.05,
-        metalness: 0.1,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
+      return glassMaterial();
     case "floor": {
-      if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : new THREE.Color(s.color).multiply(FLOOR_WARMTH), roughness: 0.85 });
+      if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : s.color, roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);
       // the pattern is seeded, so every colour shares one height map.
       const key = `${s.finish}|${s.color}|${s.grout ?? ""}`;
@@ -1574,7 +1617,7 @@ function create(s: MatSpec): THREE.Material {
         map,
         bumpMap: bump,
         bumpScale: 1,
-        color: s.selected ? SELECTED : FLOOR_WARMTH,
+        color: s.selected ? SELECTED : "#ffffff",
         roughness: FLOOR_ROUGHNESS[s.finish],
       });
     }

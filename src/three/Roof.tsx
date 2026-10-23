@@ -5,6 +5,7 @@ import type { HouseModel } from "../types";
 import { GUTTER_R, PIPE_R, exteriorOf, planRoofs, type P3 } from "../lib/roof";
 import { SOIL_R, roofParts, type RoofParts } from "../lib/roofParts";
 import { useStore } from "../store";
+import { roofStructure } from "../lib/structure";
 import { brickTexture, membraneTexture, tileTextures } from "./roofTextures";
 
 /** BufferGeometry from flat xyz triangle soup (and optional uv pairs), with flat normals. */
@@ -89,7 +90,7 @@ function buildGeometry(p: RoofParts): RoofGeometry {
   const capParts: THREE.BufferGeometry[] = [];
   for (const [pitch, mats] of byPitch) {
     const p0 = (pitch * Math.PI) / 180;
-    const unit = new THREE.CylinderGeometry(1, 1.08, 1, 12, 1, false, -(Math.PI / 2 + p0), Math.PI + 2 * p0);
+    const unit = new THREE.CylinderGeometry(1, 1.08, 1, 20, 1, false, -(Math.PI / 2 + p0), Math.PI + 2 * p0);
     const g = instances(unit, mats);
     if (g) capParts.push(g);
     unit.dispose();
@@ -182,7 +183,10 @@ function shade(hex: string, f: number): string {
 export function Roof({ model }: { model: HouseModel }) {
   const ext = exteriorOf(model);
   const low = useStore((s) => s.settings.quality === "low");
-  const plan = useMemo(() => planRoofs(model), [model]);
+  // Keyed on what planning reads, so recolouring a room or moving a fixture leaves the roof alone.
+  const sig = roofStructure(model);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const plan = useMemo(() => planRoofs(model), [sig]);
   const geo = useMemo(
     () => buildGeometry(roofParts(plan, { gutters: ext.gutters, skirt: ext.flatRoofSkirt, downpipes: ext.downpipes, soilPipes: ext.soilPipes })),
     [plan, ext.gutters, ext.flatRoofSkirt, ext.downpipes, ext.soilPipes],

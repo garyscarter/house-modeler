@@ -1,20 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { fitCam, zoomCam, type Cam, type Rect, type Size } from "../lib/planMath";
 
-/** True on touch-first devices, where handles and hit targets need to be bigger. */
-export function useCoarsePointer(): boolean {
-  const query = "(pointer: coarse)";
-  const [coarse, setCoarse] = useState(() => typeof window !== "undefined" && window.matchMedia?.(query).matches);
-  useEffect(() => {
-    const mq = window.matchMedia?.(query);
-    if (!mq) return;
-    const on = () => setCoarse(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return coarse;
-}
-
 /**
  * Camera for the plan editor: tracks the element's size, fits `home` when
  * `fitKey` changes (a different floor) and zooms at the cursor on the mouse

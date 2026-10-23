@@ -1,27 +1,77 @@
-import { memo, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
 import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
+import { glassMaterial } from "./textures";
 
-/** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
+/**
+ * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
+ * A floor's fixtures are a few hundred small parts, so they are merged into one mesh per material (see
+ * buildFixtureMeshes) rather than drawn one mesh each. Fixtures have no 3D click handling, so nothing is lost.
+ */
 export function Fixtures({ floor }: { floor: Floor }) {
+  // Rebuilt only when the fixtures, or the floor's placement, change: not for a room colour or a wall.
+  const meshes = useMemo(
+    () => buildFixtureMeshes(floor),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [floor.fixtures, floor.origin, floor.offset, floor.pxPerM],
+  );
+  useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
   return (
     <group>
-      {(floor.fixtures ?? []).map((f) => {
-        const item = byId(f.type);
-        if (!item) return null;
-        const p = toWorld(floor, { x: f.x, y: f.y });
-        const b = fixtureBox(f, item);
-        return (
-          <group key={f.id} position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
-            <FixtureMesh symbol={item.symbol} w={b.w} d={b.d} h={b.h} color={f.color ?? item.color} worktop={f.worktop ?? WORKTOP} mount={b.z0} />
-          </group>
-        );
-      })}
+      {meshes.map((m) => (
+        <mesh key={m.key} geometry={m.geometry} material={m.material} castShadow={m.castShadow} receiveShadow />
+      ))}
     </group>
   );
+}
+
+interface FixtureMesh {
+  key: string;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  castShadow: boolean;
+}
+
+const _place = new THREE.Matrix4();
+const _part = new THREE.Matrix4();
+const _euler = new THREE.Euler();
+const _quat = new THREE.Quaternion();
+const _pos = new THREE.Vector3();
+const _scale = new THREE.Vector3();
+const _yaw = new THREE.Quaternion();
+const _up = new THREE.Vector3(0, 1, 0);
+
+/** Every part of every fixture on the floor in world space, merged into one geometry per material. */
+function buildFixtureMeshes(floor: Floor): FixtureMesh[] {
+  const groups = new Map<string, { color: string; finish: Finish; geoms: THREE.BufferGeometry[] }>();
+  for (const f of floor.fixtures ?? []) {
+    const item = byId(f.type);
+    if (!item) continue;
+    const p = toWorld(floor, { x: f.x, y: f.y });
+    const b = fixtureBox(f, item);
+    _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0)) {
+      const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
+      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(0, 0, 0));
+      _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
+      const g = GEOMETRY[pt.g].clone().applyMatrix4(_part.premultiply(_place));
+      const key = pt.c + pt.f;
+      const group = groups.get(key) ?? { color: pt.c, finish: pt.f, geoms: [] };
+      group.geoms.push(g);
+      groups.set(key, group);
+    }
+  }
+  const out: FixtureMesh[] = [];
+  for (const [key, g] of groups) {
+    const merged = mergeGeometries(g.geoms);
+    g.geoms.forEach((x) => x.dispose());
+    if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish), castShadow: g.finish !== "glass" });
+  }
+  return out;
 }
 
 // Every part is a unit box, cylinder or quarter cylinder scaled into place, and
@@ -37,17 +87,31 @@ const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
 type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror" | "glow";
+/**
+ * Materials by colour and finish, least recently used first. Colours are free-form (every colour-picker step makes
+ * a new one), so the cache is bounded and an evicted material is disposed. One still on screen is not harmed by
+ * that: three uploads it again on its next draw.
+ */
+const MATERIAL_LIMIT = 96;
 const materials = new Map<string, THREE.Material>();
 function material(color: string, finish: Finish): THREE.Material {
   const key = color + finish;
   let m = materials.get(key);
-  if (!m) {
-    if (finish === "glass") m = new THREE.MeshPhysicalMaterial({ color, transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
+  if (m) {
+    materials.delete(key);
+    materials.set(key, m);
+  } else {
+    if (finish === "glass") m = glassMaterial(color);
     else if (finish === "glow") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.6 });
     else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
     else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
     materials.set(key, m);
+    if (materials.size > MATERIAL_LIMIT) {
+      const oldest = materials.keys().next().value as string;
+      materials.get(oldest)?.dispose();
+      materials.delete(oldest);
+    }
   }
   return m;
 }
@@ -75,26 +139,6 @@ const MARBLE = "#ece6da";
 const BRASS = "#c8a24a";
 const MIRROR = "#e4ecf0";
 const GLOW = "#fff1d6";
-
-const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop, mount }: { symbol: Symbol; w: number; d: number; h: number; color: string; worktop: string; mount: number }) {
-  const parts = useMemo(() => fixtureParts(symbol, w, d, h, color, worktop, mount), [symbol, w, d, h, color, worktop, mount]);
-  return (
-    <group>
-      {parts.map((pt, i) => (
-        <mesh
-          key={i}
-          geometry={GEOMETRY[pt.g]}
-          material={material(pt.c, pt.f)}
-          position={pt.p}
-          scale={pt.s}
-          rotation={pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : undefined}
-          castShadow={pt.f !== "glass"}
-          receiveShadow
-        />
-      ))}
-    </group>
-  );
-});
 
 /**
  * The parts of a fixture in its local frame: origin at the centre of its

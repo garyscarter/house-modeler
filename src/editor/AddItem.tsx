@@ -3,44 +3,31 @@ import { CATEGORIES, filterCatalogue, type CatalogueItem } from "../lib/catalogu
 import { usePanelPrefs } from "../components/panelPrefs";
 
 /**
- * Furnish's Add button: opens a popover (320 px wide, 60vh tall) with a search
- * box and category chips. Closes on an outside click or Esc, as ViewMenu does.
- * `open` / `onOpenChange` let a caller (the Add furniture button in the side
- * panel) open the same popover.
+ * The Add furniture popover: a search box and category chips in a card that opens to the right of its anchor
+ * (the rail's Add button, which wraps it in a `.rail-slot`). Closes on an outside click or Esc.
  */
-export function AddItemButton({
+export function AddPopover({
   activeId,
   onPick,
-  label = "Add",
-  open: openProp,
+  open,
   onOpenChange,
 }: {
   activeId?: string | null;
   onPick: (item: CatalogueItem) => void;
-  label?: string;
-  open?: boolean;
-  onOpenChange?: (v: boolean) => void;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
 }) {
-  const [openLocal, setOpenLocal] = useState(false);
-  const open = openProp ?? openLocal;
-  const setOpen = (v: boolean) => {
-    setOpenLocal(v);
-    onOpenChange?.(v);
-  };
-  const root = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) {
-        setOpenLocal(false);
-        onOpenChange?.(false);
-      }
+      // The anchor (the slot holding the button and this popover) counts as inside, so its button can toggle.
+      if (!pop.current?.parentElement?.contains(e.target as Node)) onOpenChange(false);
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        setOpenLocal(false);
-        onOpenChange?.(false);
+        onOpenChange(false);
       }
     };
     document.addEventListener("pointerdown", away);
@@ -50,23 +37,23 @@ export function AddItemButton({
       document.removeEventListener("keydown", esc, true);
     };
   }, [open, onOpenChange]);
+  if (!open) return null;
   return (
-    <div className="add-item" ref={root}>
-      <button className={open ? "active" : ""} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(!open)}>
-        {label}
-      </button>
-      {open && (
-        // Keys pressed on a chip or row must not reach the plan's shortcuts (Backspace would delete the selection).
-        <div className="add-pop" onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
-          <CataloguePicker
-            activeId={activeId}
-            onPick={(item) => {
-              setOpen(false);
-              onPick(item);
-            }}
-          />
-        </div>
-      )}
+    // Keys pressed on a chip or row must not reach the plan's shortcuts (Backspace would delete the selection).
+    <div
+      className="add-pop popover"
+      ref={pop}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") e.stopPropagation();
+      }}
+    >
+      <CataloguePicker
+        activeId={activeId}
+        onPick={(item) => {
+          onOpenChange(false);
+          onPick(item);
+        }}
+      />
     </div>
   );
 }

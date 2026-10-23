@@ -13,6 +13,9 @@ import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, styleOptions } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
+import { Info } from "../components/Info";
+import { floorDisplayName } from "../lib/studio";
+import { requestPlanTool } from "./planTool";
 import {
   COLOUR_KINDS,
   DOOR_KINDS,
@@ -28,7 +31,17 @@ import {
   type Corner,
 } from "../lib/planMath";
 
-const fmt2 = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
+/** Mouse enter / leave handlers that light a room in the plan and in 3D (store.hoveredRoomId). */
+export function hoverRoom(id: string) {
+  return {
+    onMouseEnter: () => useStore.getState().setUi({ hoveredRoomId: id }),
+    onMouseLeave: () => {
+      if (useStore.getState().hoveredRoomId === id) useStore.getState().setUi({ hoveredRoomId: null });
+    },
+  };
+}
+
+const fmt2 =(v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
 
 /**
  * A name input that commits when you leave it or press Enter (Escape undoes
@@ -170,7 +183,7 @@ export function BuildRoomPanel({
 
   return (
     <div className="inspector room-inspector">
-      <label>
+      <label {...hoverRoom(room.id)}>
         Name
         <NameField value={room.name} onCommit={(name) => onChange({ name })} />
       </label>
@@ -179,7 +192,10 @@ export function BuildRoomPanel({
         <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
         {r ? (
           <div className="field">
-            <span className="field-label">Traced size, width × depth (m)</span>
+            <span className="field-label">
+              Traced size, width × depth (m)
+              <Info>The highlighted corner stays put. Click an edge length on the plan to type a new one.</Info>
+            </span>
             <div className="size-row">
               <NumberField value={tracedW} label="Width" onCommit={(w) => resize(w, tracedH)} />
               <span>×</span>
@@ -192,11 +208,11 @@ export function BuildRoomPanel({
                 ))}
               </div>
             </div>
-            <p className="muted small">The highlighted corner stays put. Tap an edge length on the plan to type a new one.</p>
           </div>
         ) : (
           <p className="muted small">
-            Traced extent {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m. Tap an edge length on the plan to type a new one.
+            Traced extent {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m
+            <Info>Click an edge length on the plan to type a new one.</Info>
           </p>
         )}
 
@@ -279,10 +295,16 @@ export function CanopyInspector({
   return (
     <div className="inspector canopy-inspector">
       <b>Porch canopy</b>
-      <p className="muted small">Roof area {formatArea(areaM2(poly, ppm))}. Roofed at this floor's ceiling; choose flat or lean-to under Exterior.</p>
+      <p className="muted small">
+        Roof area {formatArea(areaM2(poly, ppm))}
+        <Info>Roofed at this floor's ceiling; choose flat or lean-to under Exterior.</Info>
+      </p>
       {size ? (
         <div className="field">
-          <span className="field-label">Size, width × depth (m)</span>
+          <span className="field-label">
+            Size, width × depth (m)
+            <Info>The highlighted corner stays put. Drag the corners on the plan, or drag the canopy to move it.</Info>
+          </span>
           <div className="size-row">
             <NumberField value={w} min={0.1} label="Canopy width" onCommit={(v) => onResize(v * ppm, h * ppm, anchor)} />
             <span>×</span>
@@ -295,11 +317,11 @@ export function CanopyInspector({
               ))}
             </div>
           </div>
-          <p className="muted small">The highlighted corner stays put. Drag the corners on the plan, or drag the canopy to move it.</p>
         </div>
       ) : (
         <p className="muted small">
-          Extent {w.toFixed(2)} × {h.toFixed(2)} m. Drag the corners on the plan to reshape it.
+          Extent {w.toFixed(2)} × {h.toFixed(2)} m
+          <Info>Drag the corners on the plan to reshape it.</Info>
         </p>
       )}
       <button
@@ -426,7 +448,10 @@ export function OpeningInspector({
   return (
     <div className="inspector">
       <label>
-        Type
+        <span>
+          Type
+          <Info>Drag it along the wall on the plan; it snaps onto the nearest wall.</Info>
+        </span>
         <select value={k} onChange={(e) => onChange({ kind: e.target.value as OpeningKind })}>
           {(Object.keys(OPENING_KIND_LABEL) as OpeningKind[]).map((kind) => (
             <option key={kind} value={kind}>
@@ -509,7 +534,6 @@ export function OpeningInspector({
       <Section id="build.opening.look" title="Look" summary={openingLookSummary(opening)}>
         <OpeningLook opening={opening} onChange={onChange} />
       </Section>
-      <p className="muted small">Drag it along the wall on the plan; it snaps onto the nearest wall.</p>
       <button className="danger" onClick={onDelete}>
         Delete opening
       </button>
@@ -531,7 +555,10 @@ export function WallInspector({
 }) {
   return (
     <div className="inspector">
-      <h4>Wall</h4>
+      <h4>
+        Wall
+        {mode !== "decorate" && <Info>Doors, windows and gaps can be placed on it like any other wall.</Info>}
+      </h4>
       {mode !== "decorate" && (
       <label>
         Height (m, blank = full height)
@@ -553,7 +580,6 @@ export function WallInspector({
       )}
       {mode !== "decorate" && (
         <>
-          <p className="muted small">Doors, windows and gaps can be placed on it like any other wall.</p>
           <button className="danger" onClick={onDelete}>
             Delete wall
           </button>
@@ -665,8 +691,9 @@ export function FixtureInspector({
           Remove
         </button>
       </div>
-      <p className="muted small">
-        Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). Tap it again to pick the item under it. R turns 90°, Shift+R 15°.
+      <p className="muted small hint-row">
+        Moving furniture
+        <Info>Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). Click it again to pick the item under it. R turns 90°, Shift+R 15°.</Info>
       </p>
     </div>
   );
@@ -693,6 +720,15 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
         Scale (px per metre)
         <NumberField value={floor.pxPerM} step={0.1} label="Scale" onCommit={(pxPerM) => updateFloor(variant, floor.id, { pxPerM })} />
       </label>
+      <button
+        title="Opens the plan with the calibrate tool: click two points a known distance apart"
+        onClick={() => {
+          setUi({ tab: "plan", editFloorId: floor.id });
+          requestPlanTool("calibrate");
+        }}
+      >
+        Calibrate from two points…
+      </button>
       <button
         disabled={!withDims}
         title="Uses the printed sizes you entered on rooms"
@@ -724,7 +760,7 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
         <button
           className="danger"
           onClick={async () => {
-            if (!model || !(await ask(`Delete ${floor.name} and its rooms?`, { ok: "Delete", danger: true }))) return;
+            if (!model || !(await ask(`Delete ${floorDisplayName(floor.name)} and its rooms?`, { ok: "Delete", danger: true }))) return;
             const floors = model.floors.filter((f) => f.id !== floor.id);
             if (floors.length) setVariant(variant, { ...model, floors });
             else setVariant(variant, undefined);
@@ -786,7 +822,10 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
               <input type="number" step="0.1" min="0.6" value={floor.stairsWidth ?? 0.9} onChange={(e) => updateFloor(variant, floor.id, { stairsWidth: parseFloat(e.target.value) || 0.9 })} />
             </span>
           </label>
-          <p className="muted small">The flight is drawn only on floors that have a floor above; on the top floor the marker is where it arrives.</p>
+          <p className="muted small">
+            Stairs
+            <Info>The flight is drawn only on floors that have a floor above; on the top floor the marker is where it arrives.</Info>
+          </p>
           <button onClick={() => updateFloor(variant, floor.id, { stairs: undefined })}>Remove stairs</button>
         </>
       ) : (

@@ -4,6 +4,7 @@
  * World frame: x right, z toward the front of the house, y up.
  */
 
+import { elevationFraming } from "./viewFraming";
 import type { HouseModel } from "../types";
 import { modelBounds, type V2 } from "./geometry";
 
@@ -42,7 +43,6 @@ export function frameFor(models: HouseModel[], boundaries: V2[][], roofAllowance
   for (const m of models) {
     if (!m.floors.length) continue;
     const top = Math.max(...m.floors.map((f) => f.level));
-    // Same measure as before: storeys counted from level 0 to the top level.
     height = Math.max(height, (top + 1) * (m.ceilingHeight + m.slabThickness) + roofAllowance);
   }
   for (const poly of boundaries)
@@ -124,11 +124,24 @@ export function homeView(
   return { position: { x: target.x + back.x * dist, y: target.y + back.y * dist, z: target.z + back.z * dist }, target };
 }
 
-/** The elevation presets: street level, slightly raised, looking at the house; "top" is a plan view. */
-export function presetView(side: ViewSide, bounds: { x0: number; x1: number; y0: number; y1: number }, size: number, centre: V3): CameraPose {
-  const d = size * 1.6;
-  const eye = 2.2;
-  const target: V3 = { x: centre.x, y: 1.6, z: centre.z };
+/** What the elevation presets fit: the house's height (ridge included) and the camera's lens. */
+export interface ElevationLens {
+  height: number;
+  fovDeg: number;
+  aspect: number;
+}
+
+/**
+ * The elevation presets: from standing eye level, aimed at half the house's
+ * height and backed off until its height and width fit the frame (so the
+ * house, not the road, fills it); "top" is a plan view.
+ */
+export function presetView(side: ViewSide, bounds: { x0: number; x1: number; y0: number; y1: number }, size: number, centre: V3, lens: ElevationLens): CameraPose {
+  const across = side === "front" || side === "rear" ? bounds.x1 - bounds.x0 : bounds.y1 - bounds.y0;
+  const f = elevationFraming(lens.height, across, lens.fovDeg, lens.aspect);
+  const d = f.distance;
+  const eye = f.eyeY;
+  const target: V3 = { x: centre.x, y: side === "top" ? 1.6 : f.targetY, z: centre.z };
   let position: V3;
   switch (side) {
     case "front":
