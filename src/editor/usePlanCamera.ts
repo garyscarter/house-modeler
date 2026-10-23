@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { fitCam, zoomCam, type Cam, type Rect, type Size } from "../lib/planMath";
+import { fitCam, panCam, zoomCam, type Cam, type Rect, type Size } from "../lib/planMath";
+import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 
 /**
  * Camera for the plan editor: tracks the element's size, fits `home` when
- * `fitKey` changes (a different floor) and zooms at the cursor on the mouse
- * wheel or a trackpad pinch. Scale limits: from 1 m filling about 2000 screen
+ * `fitKey` changes (a different floor), pans on a trackpad two-finger swipe and
+ * zooms at the cursor on the mouse wheel or a trackpad pinch. Scale limits: from 1 m filling about 2000 screen
  * px to the whole image at a third of the element.
  */
 export function usePlanCamera(el: RefObject<HTMLElement | null>, home: Rect, fitKey: string, pxPerM: number, imageSize: Size) {
@@ -50,13 +51,19 @@ export function usePlanCamera(el: RefObject<HTMLElement | null>, home: Rect, fit
   useEffect(() => {
     const node = el.current;
     if (!node) return;
+    const intentOf = wheelClassifier();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const { dx, dy } = wheelPixels(e);
+      // A two-finger swipe moves the plan; a pinch or a mouse wheel zooms.
+      if (intentOf(e, e.timeStamp) === "pan") {
+        setCam((c) => c && panCam(c, -dx, -dy));
+        return;
+      }
       const r = node.getBoundingClientRect();
-      const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
       // Trackpad pinches arrive as ctrl+wheel with small deltas; give them more punch.
       const k = e.ctrlKey ? 0.01 : 0.0015;
-      zoomBy(Math.exp(-e.deltaY * unit * k), { x: e.clientX - r.left, y: e.clientY - r.top });
+      zoomBy(Math.exp(-dy * k), { x: e.clientX - r.left, y: e.clientY - r.top });
     };
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => node.removeEventListener("wheel", onWheel);

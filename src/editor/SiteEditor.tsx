@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSite, useStore } from "../store";
+import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
@@ -136,18 +137,25 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   /** Zoom about the centre of the view (the zoom buttons and the +/- keys). */
   const zoomBy = (factor: number) => setView((c) => (c ? { ...c, ppm: Math.max(2, Math.min(400, c.ppm * factor)) } : c));
 
-  // Wheel zoom about the cursor (non-passive so the page doesn't scroll).
+  // A trackpad two-finger swipe pans; a pinch or a mouse wheel zooms about the cursor (non-passive so the page doesn't scroll).
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
+    const intentOf = wheelClassifier();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const { dx, dy } = wheelPixels(e);
+      if (intentOf(e, e.timeStamp) === "pan") {
+        setView((c) => (c ? { ...c, cx: c.cx + dx / c.ppm, cy: c.cy + dy / c.ppm } : c));
+        return;
+      }
       const r = el.getBoundingClientRect();
       const sx = e.clientX - r.left - r.width / 2;
       const sy = e.clientY - r.top - r.height / 2;
+      const k = e.ctrlKey ? 0.01 : 0.0015;
       setView((c) => {
         if (!c) return c;
-        const ppm = Math.max(2, Math.min(400, c.ppm * Math.exp(-e.deltaY * 0.0015)));
+        const ppm = Math.max(2, Math.min(400, c.ppm * Math.exp(-dy * k)));
         return { cx: c.cx + sx / c.ppm - sx / ppm, cy: c.cy + sy / c.ppm - sy / ppm, ppm };
       });
     };
@@ -552,7 +560,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
           ]}
           footer={
             <Info label="How this works">
-              Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan, scroll to zoom. Arrows nudge the selected corner or shape (Shift ×10).
+              Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10).
             </Info>
           }
         />

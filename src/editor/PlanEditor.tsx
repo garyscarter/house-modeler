@@ -947,12 +947,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   })();
   const selectHint =
     mode === "build"
-      ? "Click a room, canopy, opening or wall to edit it. Drag corners; drag the background to pan, scroll to zoom. Arrows nudge (Shift ×10). Shift+click a neighbouring room to knock through. Right-click for actions."
+      ? "Click a room, canopy, opening or wall to edit it. Drag corners; drag the background or swipe with two fingers to pan, pinch or use the mouse wheel to zoom. Arrows nudge (Shift ×10). Shift+click a neighbouring room to knock through. Right-click for actions."
       : mode === "decorate"
-        ? "Click a floor, or a wall near its edge, to decorate it. Drag the background to pan, scroll to zoom. Right-click for actions."
+        ? "Click a floor, or a wall near its edge, to decorate it. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Right-click for actions."
         : mode === "furnish"
           ? "Click an item to edit it; drag to move. Arrows nudge (Shift ×10) · R turns 90°, Shift+R 15° · Ctrl/⌘C, V copy and paste · Ctrl/⌘D duplicates · Delete removes. Right-click for actions."
-          : "Drag the background to pan, scroll to zoom. Use Measure to check a distance.";
+          : "Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Use Measure to check a distance.";
   const hovered = hoveredRoomId && hoveredRoomId !== selectedRoomId ? floor.rooms.find((r) => r.id === hoveredRoomId) : undefined;
 
   return (

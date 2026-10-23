@@ -80,6 +80,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ["double-click"], action: "Turn an item" },
       { keys: ["Alt", "place"], action: "Place furniture freely, without snapping to walls" },
       { keys: ["right-click"], action: "Actions for what's under the pointer" },
+      { keys: ["two-finger swipe"], action: "Move around the plan (or drag the background)" },
+      { keys: ["pinch"], action: "Zoom the plan (or the mouse wheel)" },
     ],
   },
   {
@@ -87,7 +89,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: ["drag"], action: "Orbit" },
       { keys: ["right-drag"], action: "Pan (or Shift-drag)" },
-      { keys: ["scroll"], action: "Zoom" },
+      { keys: ["two-finger swipe"], action: "Pan" },
+      { keys: ["pinch"], action: "Zoom (or the mouse wheel, or Ctrl/⌘ + scroll)" },
       { keys: ["right-click"], action: "Actions for the room under the pointer" },
     ],
   },

@@ -8,6 +8,7 @@ import { House } from "./House";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
+import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 import { easeInOut, frameFor, homeView, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube, requestView } from "./ViewCube";
@@ -371,6 +372,35 @@ function Orbit({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
+
+  // A trackpad two-finger swipe pans the view across the screen; a pinch or a mouse wheel still reaches
+  // OrbitControls and zooms. Listen on the canvas's parent in the capture phase so a pan never reaches it.
+  useEffect(() => {
+    const host = gl.domElement.parentElement;
+    if (!host) return;
+    const intentOf = wheelClassifier();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const onWheel = (e: WheelEvent) => {
+      const c = controls.current;
+      if (!c || intentOf(e, e.timeStamp) !== "pan") return;
+      e.preventDefault();
+      e.stopPropagation();
+      glide.current = null;
+      const { dx, dy } = wheelPixels(e);
+      // The same scale as OrbitControls' own pan: a swipe the height of the canvas moves one view height at the target.
+      const h = gl.domElement.clientHeight || 1;
+      const reach = (2 * camera.position.distanceTo(c.target) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / h;
+      right.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(dx * reach);
+      up.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(-dy * reach);
+      right.add(up);
+      camera.position.add(right);
+      c.target.add(right);
+      c.update();
+    };
+    host.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => host.removeEventListener("wheel", onWheel, { capture: true });
+  }, [gl, camera]);
 
   const tmp = useMemo(() => ({ off: new THREE.Spherical(), v: new THREE.Vector3(), t: new THREE.Vector3() }), []);
   const viewer = useRef<HTMLElement | null>(null);
