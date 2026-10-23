@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { HouseModel } from "../types";
@@ -194,22 +195,22 @@ export function Roof({ model }: { model: HouseModel }) {
   useEffect(() => () => Object.values(geo).forEach((g) => g?.dispose()), [geo]);
 
   const fascia = ext.fascia === "trim" ? ext.trimColor : WHITE_TRIM;
+  // Made once per tile style and quality; a colour change only sets .color below, so no material or program is recreated.
   const mats = useMemo(() => {
     const tex = tileTextures(ext.tileStyle);
     return {
       tiles: new THREE.MeshStandardMaterial({
-        color: ext.roofColor,
         map: tex.map,
         bumpMap: low ? null : tex.bump,
         bumpScale: 2,
         roughness: tex.roughness,
         side: THREE.DoubleSide,
       }),
-      caps: new THREE.MeshStandardMaterial({ color: shade(ext.roofColor, 0.9), roughness: 0.8 }),
-      gable: new THREE.MeshStandardMaterial({ color: ext.wallColor, roughness: 0.9, side: THREE.DoubleSide }),
-      trim: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.55, side: THREE.DoubleSide }),
+      caps: new THREE.MeshStandardMaterial({ roughness: 0.8 }),
+      gable: new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide }),
+      trim: new THREE.MeshStandardMaterial({ roughness: 0.55, side: THREE.DoubleSide }),
       ceiling: new THREE.MeshStandardMaterial({ color: CEILING, roughness: 0.9, side: THREE.DoubleSide }),
-      rainwater: new THREE.MeshStandardMaterial({ color: fascia, roughness: 0.4, side: THREE.DoubleSide }),
+      rainwater: new THREE.MeshStandardMaterial({ roughness: 0.4, side: THREE.DoubleSide }),
       membrane: new THREE.MeshStandardMaterial({ color: "#55585d", map: membraneTexture(), roughness: 0.95 }),
       edgeTrim: new THREE.MeshStandardMaterial({ color: "#2f3236", roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide }),
       flashing: new THREE.MeshStandardMaterial({ color: "#8b9096", roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide }),
@@ -218,8 +219,17 @@ export function Roof({ model }: { model: HouseModel }) {
       pot: new THREE.MeshStandardMaterial({ color: "#b5603f", roughness: 0.85 }),
       vent: new THREE.MeshStandardMaterial({ color: "#c9cbcc", roughness: 0.6 }),
     };
-  }, [ext.tileStyle, ext.roofColor, ext.wallColor, fascia, low]);
+  }, [ext.tileStyle, low]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  const invalidate = useThree((s) => s.invalidate);
+  useLayoutEffect(() => {
+    mats.tiles.color.set(ext.roofColor);
+    mats.caps.color.set(shade(ext.roofColor, 0.9));
+    mats.gable.color.set(ext.wallColor);
+    mats.trim.color.set(fascia);
+    mats.rainwater.color.set(fascia);
+    invalidate();
+  }, [mats, ext.roofColor, ext.wallColor, fascia, invalidate]);
 
   const solid = (g: THREE.BufferGeometry | null, m: THREE.Material, key: string, shadow = true) =>
     g && <mesh key={key} geometry={g} material={m} castShadow={shadow} receiveShadow />;
