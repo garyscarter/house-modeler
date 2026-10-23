@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { ask } from "./Dialogs";
-import { SITE_EDIT_ID, useSite, useStore } from "../store";
+import { useSite, useStore } from "../store";
 import { SiteVariantNote } from "./SiteVariantNote";
 import { freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite } from "../lib/sitePreset";
 import { siteSource } from "../lib/sites";
@@ -13,6 +13,7 @@ import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpl
 import { useSiteView } from "../three/siteView";
 import { SlopeFields } from "./SlopeFields";
 import { SurfaceFinishField } from "./SurfaceFinishField";
+import { Info } from "./Info";
 import "./SitePanel.css";
 
 const fmtArea = (a: number) => `${a.toFixed(a < 100 ? 1 : 0)} m²`;
@@ -28,7 +29,9 @@ export function SitePanel() {
   const updateSite = useStore((s) => s.updateSite);
   const model = useStore((s) => s.variants[s.activeVariant]);
   const setUi = useStore((s) => s.setUi);
+  const setMode = useStore((s) => s.setMode);
   const ghost = useSiteView((s) => s.ghostNeighbours);
+  const trueColours = useSiteView((s) => s.trueNeighbourColours);
   const setSiteView = useSiteView((s) => s.setSiteView);
 
   const loadListing = async () => {
@@ -37,24 +40,32 @@ export function SitePanel() {
 
   return (
     <div className="panel site-panel">
-      <h3>Site</h3>
+      <h3 className="with-info">
+        Site
+        <Info>
+          The site holds the plot boundary, garden, neighbouring buildings and which way the house faces. It drives the sun study and the boundary distances in
+          the site plan.
+        </Info>
+      </h3>
       <SiteVariantNote />
       <StalePlotNote />
       {!site ? (
         <>
-          <p className="muted small">
-            The site holds the plot boundary, garden, neighbouring buildings and which way the house faces. It drives the sun study and
-            the boundary distances in the site plan.
-          </p>
           <button onClick={loadListing}>Load site for listing 91770873</button>
           {model && <SimpleSiteForm model={model} site={site} />}
         </>
       ) : (
         <>
           <div className="row">
-            <button onClick={() => setUi({ tab: "plan", editFloorId: SITE_EDIT_ID })}>Edit the site plan</button>
+            <button onClick={() => {
+                setUi({ tab: "plan" });
+                setMode("plot");
+              }}>Edit the site plan</button>
             <label className="check site-inline">
               <input type="checkbox" checked={ghost} onChange={(e) => setSiteView({ ghostNeighbours: e.target.checked })} /> See-through neighbours
+            </label>
+            <label className="check site-inline">
+              <input type="checkbox" checked={trueColours} onChange={(e) => setSiteView({ trueNeighbourColours: e.target.checked })} /> Neighbours in their own colours
             </label>
           </div>
 
@@ -284,7 +295,10 @@ function SimpleSiteForm({ model, site }: { model: HouseModel; site: Site | undef
   );
   return (
     <div className="site-simple">
-      <p className="muted small">A rectangular plot with lawns front and back, a pavement and road. Garden depths in metres from the house:</p>
+      <p className="small with-info">
+        Garden depths (m)
+        <Info>A rectangular plot with lawns front and back, a pavement and road. Garden depths are in metres from the house.</Info>
+      </p>
       <div className="site-depths">
         {field("front", "Front")}
         {field("rear", "Rear")}

@@ -54,6 +54,20 @@ export function Dialogs() {
     } else requestAnimationFrame(() => okButton.current?.focus());
   }, [req]);
 
+  // Esc cancels even when focus is outside the dialog. Capture phase, and preventDefault so no other layer also closes.
+  const cancelRef = useRef<() => void>(() => {});
+  const open = !!req;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      cancelRef.current();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+
   if (!req) return null;
   const close = (ok: boolean) => {
     useDialog.setState({ req: null });
@@ -61,6 +75,7 @@ export function Dialogs() {
     else if (req.kind === "choose") req.resolve(null);
     else req.resolve(ok ? text : null);
   };
+  cancelRef.current = () => close(false);
   const pick = (i: number) => {
     useDialog.setState({ req: null });
     if (req.kind === "choose") req.resolve(i);
@@ -75,9 +90,6 @@ export function Dialogs() {
         onSubmit={(e) => {
           e.preventDefault();
           close(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") close(false);
         }}
       >
         <p>{req.message}</p>

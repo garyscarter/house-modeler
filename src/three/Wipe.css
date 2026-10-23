@@ -1,0 +1,43 @@
+/* Wipe compare: As listed underneath, Proposed on top and clipped to the right of the divider. --wipe is 0.05..0.95. */
+.wipe { --wipe: 0.5; position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.wipe-top { position: absolute; inset: 0; clip-path: inset(0 0 0 calc(var(--wipe) * 100%)); }
+/* Every viewer fills the whole box, the one inside .wipe-top too: a .viewer there would otherwise be a plain
+   block with no height, and its canvas would fall back to the 150 px default and draw the scene in a strip. */
+.wipe .viewer { position: absolute; inset: 0; flex: none; }
+/* "Preparing the 3D view…" centres in each side's visible part, clear of the divider handle in the middle. */
+.wipe > .viewer .viewer-loading { right: calc((1 - var(--wipe)) * 100%); }
+.wipe-top .viewer-loading { left: calc(var(--wipe) * 100%); }
+
+/* A 28 px wide strip is the grab area; the line and handle are drawn inside it. */
+.wipe-divider {
+  position: absolute; top: 0; bottom: 0; left: calc(var(--wipe) * 100%); width: 28px; margin-left: -14px; z-index: 11;
+  display: grid; place-items: center; cursor: ew-resize; touch-action: none; outline: none;
+}
+.wipe-line {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #fff;
+  box-shadow: 0 0 0 1px rgba(29, 36, 34, 0.18), 0 0 14px rgba(29, 36, 34, 0.3);
+}
+.wipe-handle {
+  position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; color: var(--accent); box-shadow: var(--shadow-card), 0 0 0 1px rgba(29, 36, 34, 0.12);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.wipe-divider:hover .wipe-handle, .wipe.dragging .wipe-handle { transform: scale(1.12); }
+.wipe-divider:focus-visible .wipe-handle { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent); }
+
+/* Labels hug the divider on their own side, so they never meet the inspector card at the right edge. */
+.wipe-label {
+  position: absolute; top: var(--float-top, 12px); z-index: 11; pointer-events: none; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 10px; border-radius: var(--pill);
+  background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
+  box-shadow: var(--shadow-card); font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--text);
+}
+.wipe-label i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.wipe-label.after i { background: var(--accent); }
+.wipe-label.before { right: calc((1 - var(--wipe)) * 100% + 22px); opacity: clamp(0, calc((var(--wipe) - 0.12) * 20), 1); }
+.wipe-label.after { left: calc(var(--wipe) * 100% + 22px); opacity: clamp(0, calc((0.88 - var(--wipe)) * 20), 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wipe-handle { transition: none; }
+  .wipe-divider:hover .wipe-handle, .wipe.dragging .wipe-handle { transform: none; }
+}

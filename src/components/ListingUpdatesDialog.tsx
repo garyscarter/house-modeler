@@ -70,7 +70,10 @@ function ReviewSheet({ open }: { open: Open }) {
           close(true);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") close(false);
+          if (e.key === "Escape") {
+            e.preventDefault();
+            close(false);
+          }
         }}
       >
         <h3 id="review-title">Bring in updates from listing 91770873</h3>

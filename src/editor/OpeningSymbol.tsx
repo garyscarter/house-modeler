@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { Opening } from "../types";
 import { bifoldLayout, bifoldZigzag } from "../lib/bifold";
-import { bayOutline, DEFAULT_ARCHWAY_COLOUR } from "../lib/openings";
+import { bayOutline, DEFAULT_ARCHWAY_COLOUR, frontUnit } from "../lib/openings";
 import { DOUBLE_DOOR_M, doorSwing } from "../lib/planMath";
 
 const INK = "#1f2937";
@@ -84,14 +84,29 @@ export const OpeningSymbol = memo(function OpeningSymbol({
         </>
       );
       break;
-    case "front":
+    case "front": {
+      // The leaf swings across its own span; side lights are drawn as glazing, past a mullion.
+      const unit = frontUnit(o, len / m);
+      const [d0, d1] = unit.door.map((x) => x * m);
       body = (
         <>
           {breakWall}
-          {leaf(hinge * half, len, hinge > 0 ? -1 : 1, o.color ?? "#b3202e")}
+          {unit.lights.map(([a, b], i) => {
+            const mx = (a * m + half < px ? b : a) * m;
+            return (
+              <g key={i}>
+                {[-t / 2, 0, t / 2].map((y) => (
+                  <line key={y} x1={a * m} y1={y} x2={b * m} y2={y} {...thin} />
+                ))}
+                <line x1={mx} y1={-t / 2} x2={mx} y2={t / 2} {...thin} />
+              </g>
+            );
+          })}
+          {leaf(hinge > 0 ? d1 : d0, d1 - d0, hinge > 0 ? -1 : 1, o.color ?? "#b3202e")}
         </>
       );
       break;
+    }
     case "french":
       body = (
         <>
