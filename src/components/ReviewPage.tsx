@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { Icon } from "./icons";
 import { PlanningBody, PLANNING_TITLE, usePlanningCheck } from "./PlanningPanel";
 import { AreaCheck, Areas, Changes, Costs, Exports, Notes, useReportData } from "./ReportPanel";
+import { SunlightSection } from "./SunlightSection";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "../lib/reviewSummary";
 import type { VariantKey } from "../types";
 import { MyFurnitureReview } from "../editor/MyFurniture";
@@ -158,6 +159,7 @@ function ReviewDocument() {
             <RvSection id="rv-planning" title={PLANNING_TITLE}>
               <PlanningBody check={check} wing={wing} onWing={setWing} />
             </RvSection>
+            <RvSection id="rv-sunlight" title="Sunlight"><SunlightSection /></RvSection>
           </div>
         </div>
 

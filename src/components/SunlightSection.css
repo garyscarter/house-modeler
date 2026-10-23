@@ -1,0 +1,13 @@
+.sl .sl-dates { max-width: 280px; margin: 0 0 10px; }
+.sl .sun-quick button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sl .sl-garden { font-size: 15px; font-weight: 500; margin: 8px 0 12px; }
+.sl .sl-garden.sl-warn { color: var(--warn); border-left: 4px solid var(--warn); padding-left: 10px; }
+.sl .sl-table { width: 100%; font-size: 14px; }
+.sl .sl-table th:not(:first-child) { text-align: left; }
+.sl .sl-hours { min-width: 120px; font-variant-numeric: tabular-nums; }
+.sl .sl-strip { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; height: 5px; margin-top: 3px; }
+.sl .sl-strip i { background: var(--line); border-radius: 1px; }
+.sl .sl-strip i.on { background: #f2b01e; }
+.sl .sl-loss td { background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.sl .sl-change.neg { color: var(--warn); font-weight: 600; }
+.sl .sl-change { white-space: nowrap; font-variant-numeric: tabular-nums; }

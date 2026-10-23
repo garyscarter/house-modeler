@@ -179,6 +179,7 @@ function SunHoursLegend() {
         {share}% of the garden gets 2 hours or more of sun on {formatDay(SUN_YEAR, day)}.
         <span className="muted"> Planning guidance looks for at least half on 21 Mar.</span>
       </p>
+      <p className="sun-read muted">Room-by-room sun: Review {"→"} Sunlight.</p>
     </div>
   );
 }

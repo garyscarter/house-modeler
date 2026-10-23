@@ -2,8 +2,8 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { HouseModel, Site } from "../types";
 import { useStore } from "../store";
-import { bearingToWorld, solarPosition, sunTimes } from "../lib/sun";
-import { housePrisms, neighbourPrism, sunHoursGrid, type SunHoursGrid } from "../lib/site";
+import { sunHoursGridFromSamples, type SunHoursGrid } from "../lib/site";
+import { occludersFor, sunSamples } from "../lib/sunlight";
 import { SUN_YEAR } from "./useSun";
 
 /** Top of the colour scale: this many hours or more of direct sun. */
@@ -42,17 +42,8 @@ export function useSunHours(site: Site | undefined, model: HouseModel | undefine
   return useMemo(() => {
     if (!site || !model || site.boundary.length < 3) return null;
     if (last && last.site === site && last.model === model && last.day === day) return last.grid;
-    const { sunrise, sunset } = sunTimes(site.latitude, site.longitude, SUN_YEAR, day);
-    let grid: SunHoursGrid | null = null;
-    if (sunrise !== null && sunset !== null) {
-      const prisms = [...housePrisms(model), ...site.neighbours.map(neighbourPrism)];
-      const sun = (t: number) => {
-        const p = solarPosition(site.latitude, site.longitude, SUN_YEAR, day, t);
-        const d = bearingToWorld(site.frontBearing, p.azimuth);
-        return { x: d.x, y: d.z, altitude: p.altitude };
-      };
-      grid = sunHoursGrid(site.boundary, prisms, sun, sunrise, sunset, 0.5, 0.25);
-    }
+    const samples = sunSamples(site, SUN_YEAR, day);
+    const grid = samples.length ? sunHoursGridFromSamples(site.boundary, occludersFor(model, site), samples, 0.5, 0.25) : null;
     last = { site, model, day, grid };
     return grid;
   }, [site, model, day]);

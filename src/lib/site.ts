@@ -302,7 +302,12 @@ export function simpleSite(model: HouseModel, depths: PlotDepths, keep?: Pick<Si
 /** A building as a vertical prism standing on the ground: footprint and height above the ground, metres. */
 export interface Prism {
   poly: V2[];
+  /** Top of the block, metres above the ground. */
   height: number;
+  /** Bottom of the block (default 0: standing on the ground), so a roof leaves the storey beneath it open to a high sun. */
+  base?: number;
+  /** Fences and walls on the boundary: they shade the garden but a point beside one is still garden. Default "building". */
+  kind?: "building" | "boundary";
 }
 
 /**
@@ -318,7 +323,7 @@ export function housePrisms(model: HouseModel): Prism[] {
   const roofs = planRoofs(model).blocks.map((b) => {
     const span = Math.min(b.x1 - b.x0, b.z1 - b.z0) + EXT_WALL_T;
     const rise = (span / 2) * Math.tan((b.pitchDeg * Math.PI) / 180);
-    return { poly: rectPoly(b.x0, b.z0, b.x1, b.z1), height: b.y + GROUND_DROP + rise / 2 };
+    return { poly: rectPoly(b.x0, b.z0, b.x1, b.z1), height: b.y + GROUND_DROP + rise / 2, base: b.y + GROUND_DROP };
   });
   return [...rooms, ...roofs];
 }
@@ -330,15 +335,45 @@ export function neighbourPrism(n: Neighbour): Prism {
   return { poly: n.polygon, height: n.eaves + rise / 2 };
 }
 
+/** Boundary fences, walls and hedges as thin prisms (open edges leave a gap). */
+export function boundaryPrisms(site: Pick<Site, "boundary" | "boundaryEdges">): Prism[] {
+  const out: Prism[] = [];
+  const edges = edgesOf(site);
+  const half = 0.05;
+  site.boundary.forEach((a, i) => {
+    const e = edges[i];
+    if (e.kind === "open" || !(e.height > 0)) return;
+    const b = site.boundary[(i + 1) % site.boundary.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1e-6) return;
+    const nx = ((b.y - a.y) / len) * half;
+    const ny = (-(b.x - a.x) / len) * half;
+    out.push({
+      poly: [
+        { x: a.x + nx, y: a.y + ny },
+        { x: b.x + nx, y: b.y + ny },
+        { x: b.x - nx, y: b.y - ny },
+        { x: a.x - nx, y: a.y - ny },
+      ],
+      height: e.height,
+      kind: "boundary",
+    });
+  });
+  return out;
+}
+
 /**
- * Whether a ray from ground point p towards a sun with unit horizontal
- * direction (dx, dy) and altitude tangent `tanAlt` is blocked by a prism.
+ * Whether a ray from point p at height z (default: the ground) towards a sun
+ * with unit horizontal direction (dx, dy) and altitude tangent `tanAlt` is
+ * blocked by a prism: it is if the ray is inside the block's height range
+ * somewhere over its footprint.
  */
-export function prismBlocks(p: V2, dx: number, dy: number, tanAlt: number, prism: Prism): boolean {
+export function prismBlocks(p: V2, dx: number, dy: number, tanAlt: number, prism: Prism, z = 0): boolean {
   const poly = prism.poly;
-  // Entry distances where the horizontal ray crosses into the footprint.
-  if (pointInPolygon(p, poly)) return true;
-  let nearest = Infinity;
+  const base = prism.base ?? 0;
+  const inside = pointInPolygon(p, poly);
+  let sIn = inside ? 0 : Infinity;
+  let sOut = 0;
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
@@ -348,9 +383,13 @@ export function prismBlocks(p: V2, dx: number, dy: number, tanAlt: number, prism
     if (Math.abs(den) < 1e-12) continue;
     const s = ((a.x - p.x) * ey - (a.y - p.y) * ex) / den;
     const u = ((a.x - p.x) * dy - (a.y - p.y) * dx) / den;
-    if (s > 0 && u >= 0 && u <= 1 && s < nearest) nearest = s;
+    if (s > 0 && u >= 0 && u <= 1) {
+      if (s < sIn) sIn = s;
+      if (s > sOut) sOut = s;
+    }
   }
-  return nearest < Infinity && nearest * tanAlt < prism.height;
+  if (sIn === Infinity) return false;
+  return z + sIn * tanAlt < prism.height && z + sOut * tanAlt > base;
 }
 
 export interface SunHoursGrid {
@@ -378,21 +417,34 @@ export function sunHoursGrid(
   cell = 0.5,
   stepH = 0.25,
 ): SunHoursGrid {
-  const b = bbox(boundary);
-  const nx = Math.max(1, Math.ceil(b.w / cell));
-  const ny = Math.max(1, Math.ceil(b.h / cell));
-  const hours = new Float32Array(nx * ny).fill(NaN);
-  const samples: { dx: number; dy: number; tan: number }[] = [];
+  const samples: SunDir[] = [];
   for (let t = sunrise + stepH / 2; t < sunset; t += stepH) {
     const s = sun(t);
     if (s.altitude <= 0) continue;
     const len = Math.hypot(s.x, s.y) || 1;
     samples.push({ dx: s.x / len, dy: s.y / len, tan: Math.tan((s.altitude * Math.PI) / 180) });
   }
+  return sunHoursGridFromSamples(boundary, prisms, samples, cell, stepH);
+}
+
+/** A direction of the sun: horizontal unit vector in world (x, z = plan y) and the tangent of its altitude. */
+export interface SunDir {
+  dx: number;
+  dy: number;
+  tan: number;
+}
+
+/** As sunHoursGrid, from ready-made sun directions, one per `stepH` hours. */
+export function sunHoursGridFromSamples(boundary: V2[], prisms: Prism[], samples: SunDir[], cell = 0.5, stepH = 0.25): SunHoursGrid {
+  const b = bbox(boundary);
+  const nx = Math.max(1, Math.ceil(b.w / cell));
+  const ny = Math.max(1, Math.ceil(b.h / cell));
+  const hours = new Float32Array(nx * ny).fill(NaN);
+  const solid = prisms.filter((pr) => pr.kind !== "boundary");
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const p = { x: b.x0 + (i + 0.5) * cell, y: b.y0 + (j + 0.5) * cell };
-      if (!pointInPolygon(p, boundary) || prisms.some((pr) => pointInPolygon(p, pr.poly))) continue;
+      if (!pointInPolygon(p, boundary) || solid.some((pr) => pointInPolygon(p, pr.poly))) continue;
       let lit = 0;
       for (const s of samples) if (!prisms.some((pr) => prismBlocks(p, s.dx, s.dy, s.tan, pr))) lit++;
       hours[j * nx + i] = lit * stepH;
