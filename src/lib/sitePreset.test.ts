@@ -148,7 +148,7 @@ describe("the startup prompt with a plot update", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true, proposed: "own" } });
     expect(d.choices.map((c) => c.label)).toEqual([
       "Update",
-      "Update the boundaries only (keep my edits)",
+      "Update the boundaries and neighbours only (keep my edits)",
       "Update, and Proposed's plot too (your plot edits there are lost)",
       "Not now",
     ]);
@@ -161,12 +161,12 @@ describe("the startup prompt with a plot update", () => {
   });
   it("offers boundaries only for an edited As listed plot, with layouts or without", () => {
     const only = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true, currentEdited: true } });
-    expect(only.choices.map((c) => c.label)).toEqual(["Update", "Update the boundaries only (keep my edits)", "Not now"]);
+    expect(only.choices.map((c) => c.label)).toEqual(["Update", "Update the boundaries and neighbours only (keep my edits)", "Not now"]);
     expect(only.choices[1].plan).toEqual({ layouts: [], sites: [], boundaries: ["current"], remember: [] });
     const both = describeUpdate({ kind: "update", version: 5, variants: ["current"], site: { version: 1, current: true, proposed: "with-current", currentEdited: true } });
-    expect(both.choices[1].label).toBe("Update, and only the plot's boundaries (keep my plot edits)");
+    expect(both.choices[1].label).toBe("Update, and only the plot's boundaries and neighbours (keep my plot edits)");
     expect(both.choices[1].plan).toEqual({ layouts: ["current"], sites: [], boundaries: ["current", "proposed"], remember: [] });
-    expect(both.message).toContain("boundaries-only");
+    expect(both.message).toContain("the update that keeps your edits");
   });
   it("offers no boundaries-only choice for a plot with no edits", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: true } });
@@ -175,7 +175,7 @@ describe("the startup prompt with a plot update", () => {
   });
   it("offers just the boundaries when only Proposed's own plot is stale", () => {
     const d = describeUpdate({ kind: "update", version: 0, variants: [], site: { version: 1, current: false, proposed: "own" } });
-    expect(d.choices.map((c) => c.label)).toEqual(["Update Proposed's plot (your plot edits there are lost)", "Update the boundaries only (keep my edits)", "Not now"]);
+    expect(d.choices.map((c) => c.label)).toEqual(["Update Proposed's plot (your plot edits there are lost)", "Update the boundaries and neighbours only (keep my edits)", "Not now"]);
     expect(d.choices[1].plan).toEqual({ layouts: [], sites: [], boundaries: ["proposed"], remember: [] });
   });
   it("takes Proposed's unchanged copy with As listed", () => {

@@ -99,7 +99,7 @@ describe("describeUpdate with a Proposed review on offer", () => {
     const d = describeUpdate({ kind: "update", version: 5, variants: ["current"], site: { version: 3, current: true, proposed: "own" }, review: 5 });
     expect(d.choices.map((c) => c.label)).toEqual([
       "Update",
-      "Update, and only the plot's boundaries (keep my plot edits)",
+      "Update, and only the plot's boundaries and neighbours (keep my plot edits)",
       "Update, keep my plot edits, and review updates for my Proposed",
       "Update, and Proposed's plot too (your plot edits there are lost)",
       "Not now",

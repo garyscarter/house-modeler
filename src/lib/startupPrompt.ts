@@ -157,7 +157,7 @@ function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices:
     ...(own || (site.proposed === "with-current" && site.currentEdited) ? (["proposed"] as const) : []),
   ];
   const boundaryChoice = (replaced: VariantKey[], withLayouts: VariantKey[]): UpdateChoice => ({
-    label: withLayouts.length ? "Update, and only the plot's boundaries (keep my plot edits)" : "Update the boundaries only (keep my edits)",
+    label: withLayouts.length ? "Update, and only the plot's boundaries and neighbours (keep my plot edits)" : "Update the boundaries and neighbours only (keep my edits)",
     plan: { layouts: withLayouts, sites: replaced.filter((k) => !keepers.includes(k)), boundaries: keepers, remember: [] },
   });
   const tail = " Layouts and plots you copied or made yourself are not touched. You can undo it.";
@@ -176,7 +176,7 @@ function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices:
   const parts = [...(layouts.length ? [`house layouts (${layouts.map((k) => VARIANT_LABEL[k]).join(", ")})`] : []), ...(sites.length ? ["the plot"] : [])];
   const edits = [...(layouts.length ? [`the built-in ${names} layout${layouts.length > 1 ? "s" : ""}`] : []), ...(sites.length ? ["the plot"] : [])];
   const ownNote = own ? " Proposed has a plot of its own, which is left as it is unless you choose to update it too." : "";
-  const keepNote = keepers.length ? " To keep your plot edits and only bring in the new fences and walls, choose the boundaries-only update." : "";
+  const keepNote = keepers.length ? " To keep your plot edits and only bring in the new fences, walls and neighbouring buildings, choose the update that keeps your edits." : "";
   const choices: UpdateChoice[] = [
     // Declining Proposed's own plot is an answer for it, so it is not asked again for this version.
     { label: "Update", plan: { layouts, sites, remember: own ? ["site"] : [] } },

@@ -7,7 +7,7 @@ import { describeUpdate, notNowRemembers, remember, type Remembered, type Startu
 import { openListingReview } from "./ListingUpdatesDialog";
 
 /**
- * Work out the boundary-only update for these layouts' plots and ask the owner to confirm it, listing what
+ * Work out the keep-my-edits update (boundaries and neighbouring buildings) for these layouts' plots and ask the owner to confirm it, listing what
  * changes. Resolves with a function that puts it in (one undo step), or null when there is nothing to update
  * or the owner declined.
  */
@@ -17,9 +17,9 @@ export async function confirmBoundaryUpdates(variants: VariantKey[]): Promise<((
     return merge ? [{ variant, merge }] : [];
   });
   if (!plans.length) return null;
-  const message = describeBoundaryChanges(plans.map((p) => ({ name: plans.length > 1 ? VARIANT_LABEL[p.variant] : undefined, changes: p.merge.changes })));
-  const none = plans.every((p) => !p.merge.changes.length);
-  if (!(await ask(message, { ok: none ? "OK" : "Update the boundaries" }))) return null;
+  const message = describeBoundaryChanges(plans.map((p) => ({ name: plans.length > 1 ? VARIANT_LABEL[p.variant] : undefined, changes: p.merge.changes, buildings: p.merge.buildings })));
+  const none = plans.every((p) => !p.merge.changes.length && !p.merge.buildings?.length);
+  if (!(await ask(message, { ok: none ? "OK" : "Update" }))) return null;
   return () => plans.forEach((p) => applyBoundaryUpdate(p.variant, p.merge));
 }
 

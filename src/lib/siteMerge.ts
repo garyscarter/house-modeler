@@ -27,6 +27,8 @@ export interface BoundaryChange {
 export interface BoundaryMerge {
   site: Site;
   changes: BoundaryChange[];
+  /** Plain words for each neighbouring building's measurement brought in alongside (see mergeKeepingEdits). */
+  buildings?: string[];
 }
 
 type PlotSide = "front" | "right" | "rear" | "left";
@@ -154,11 +156,23 @@ export function mergeBoundaryTreatments(mine: Site, latest: Site): BoundaryMerge
 }
 
 /** The confirm-dialog text for one or more plots' changes; `names` labels each plot when there are several. */
-export function describeBoundaryChanges(parts: { name?: string; changes: BoundaryChange[] }[]): string {
-  const lines = parts.flatMap((p) => p.changes.map((c) => `• ${p.name ? `${p.name}: ` : ""}${c.label}`));
-  const intro = "Update the plot's fences, walls and hedges to the latest for listing 91770873? Your corners, drive opening and other plot edits stay as they are. You can undo it.";
-  if (!lines.length) return "The boundary walls and fences already match the latest for listing 91770873. Mark the plot as up to date?";
+export function describeBoundaryChanges(parts: { name?: string; changes: BoundaryChange[]; buildings?: string[] }[]): string {
+  const lines = parts.flatMap((p) => [...p.changes.map((c) => c.label), ...(p.buildings ?? [])].map((l) => `• ${p.name ? `${p.name}: ` : ""}${l}`));
+  const intro =
+    "Update the plot's fences, walls and hedges, and the neighbouring buildings' measurements, to the latest for listing 91770873? Your corners, drive opening, garden and any buildings you added or redrew stay as they are. You can undo it.";
+  if (!lines.length) return "The boundary walls, fences and neighbouring buildings already match the latest for listing 91770873. Mark the plot as up to date?";
   return `${intro}\n\nThese change:\n${lines.join("\n")}`;
+}
+
+/**
+ * The update for a plot with edits worth keeping: the latest boundary treatments (mergeBoundaryTreatments) plus
+ * the neighbouring buildings' changes neighbourUpdates ticks by default (roof pitch, eaves, overhang, colours,
+ * small corrections to where they stand). Buildings the owner added, removed or redrew are left as they are.
+ */
+export function mergeKeepingEdits(mine: Site, latest: Site): BoundaryMerge {
+  const merged = mergeBoundaryTreatments(mine, latest);
+  const picked = neighbourUpdates(merged.site, latest).filter((c) => c.defaultSelected);
+  return { site: picked.reduce((s, c) => c.apply(s), merged.site), changes: merged.changes, buildings: picked.map((c) => c.label) };
 }
 
 // ---------------------------------------------------------------------------------------------------------

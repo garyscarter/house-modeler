@@ -3,7 +3,7 @@ import type { HouseModel, Site, VariantKey } from "../types";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
 import { freshSiteFor } from "./sitePreset";
-import { mergeBoundaryTreatments, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
+import { mergeKeepingEdits, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
 import { applyChanges, isBasedOnListing, listingUpdates, type LayoutChange } from "./layoutMerge";
 
 /**
@@ -51,13 +51,14 @@ export function updateSitePreset(variant: VariantKey): void {
 }
 
 /**
- * What bringing a layout's plot up to the latest built-in boundary treatments would do, without doing it.
- * Undefined when the layout has no plot of its own. See mergeBoundaryTreatments for the matching rules.
+ * What bringing a layout's plot up to the latest built-in boundary treatments and neighbouring buildings, keeping
+ * the owner's edits, would do, without doing it. Undefined when the layout has no plot of its own. See
+ * mergeKeepingEdits for what is brought in.
  */
 export function planBoundaryUpdate(variant: VariantKey): BoundaryMerge | undefined {
   const site = useStore.getState().sites[variant];
   const latest = site && freshSiteFor(site);
-  return site && latest ? mergeBoundaryTreatments(site, latest) : undefined;
+  return site && latest ? mergeKeepingEdits(site, latest) : undefined;
 }
 
 /**

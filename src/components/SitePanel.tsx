@@ -185,17 +185,17 @@ function StalePlotNote() {
       <p>A newer plot for listing 91770873 is available.</p>
       <div className="row">
         <button onClick={update}>Update the plot</button>
-        {edited && <BoundaryUpdateButton source={source} label="Update the boundaries only (keep my edits)" />}
+        {edited && <BoundaryUpdateButton source={source} label="Update the boundaries and neighbours only (keep my edits)" />}
       </div>
     </div>
   );
 }
 
-/** Brings a plot's walls, fences and hedges up to the latest built-in ones after showing what changes; the rest of the plot is kept. */
+/** Brings a plot's walls, fences, hedges and neighbouring buildings up to the latest built-in ones after showing what changes; the rest of the plot is kept. */
 function BoundaryUpdateButton({ source, label }: { source: VariantKey; label: string }) {
   return (
     <button
-      title="Updates the walls, fences and hedges and keeps your corners, drive opening and other edits"
+      title="Updates the walls, fences and hedges and the neighbouring buildings' measurements, and keeps your corners, drive opening and other edits"
       onClick={async () => (await confirmBoundaryUpdates([source]))?.()}
     >
       {label}
@@ -215,8 +215,8 @@ function BoundaryUpdateAction() {
   if (!source || !show) return null;
   return (
     <div className="site-boundary-update">
-      <BoundaryUpdateButton source={source} label="Update boundaries from listing 91770873" />
-      <span className="muted small">Brings the walls, fences and hedges up to date and keeps your other plot edits.</span>
+      <BoundaryUpdateButton source={source} label="Update boundaries and neighbours from listing 91770873" />
+      <span className="muted small">Brings the walls, fences, hedges and neighbouring buildings up to date and keeps your other plot edits.</span>
     </div>
   );
 }

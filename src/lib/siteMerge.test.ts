@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listingSite } from "./houses/listing91770873";
 import { setOpeningWidth } from "./boundaryOpening";
-import { describeBoundaryChanges, mergeBoundaryTreatments, neighbourUpdates } from "./siteMerge";
+import { describeBoundaryChanges, mergeBoundaryTreatments, mergeKeepingEdits, neighbourUpdates } from "./siteMerge";
 import { applyChanges, defaultSelection } from "./layoutMerge";
 import { insertBoundaryVertex } from "./site";
 import type { BoundaryEdge, Site } from "../types";
@@ -240,5 +240,28 @@ describe("neighbourUpdates", () => {
     const r = neighbourUpdates(mine, latest)[0];
     expect(r.label).toMatch(/^West neighbour: new outline/);
     expect(r.defaultSelected).toBe(false);
+  });
+});
+
+describe("mergeKeepingEdits", () => {
+  it("brings in the attached neighbour's measured roof along with the boundaries, and keeps the owner's own buildings", () => {
+    const mine = baseSite();
+    mine.neighbours = mine.neighbours.map((n) => (n.name === "Attached neighbour" ? { ...n, pitchDeg: 28, overhang: undefined } : n));
+    mine.neighbours.push({ ...mine.neighbours[0], id: "shed", name: "My shed" });
+    const r = mergeKeepingEdits(mine, newerSite());
+    const attached = r.site.neighbours.find((n) => n.name === "Attached neighbour")!;
+    expect(attached.pitchDeg).toBe(32);
+    expect(attached.overhang).toBe(0.25);
+    expect(r.site.neighbours.some((n) => n.name === "My shed")).toBe(true);
+    expect(r.changes.length).toBeGreaterThan(0);
+    expect(r.buildings).toEqual(expect.arrayContaining([expect.stringContaining("roof pitch")]));
+    expect(describeBoundaryChanges([{ changes: r.changes, buildings: r.buildings }])).toContain("Attached neighbour: roof pitch 28° → 32°");
+  });
+
+  it("leaves a building the owner redrew where they put it", () => {
+    const mine = baseSite();
+    mine.neighbours = mine.neighbours.map((n, i) => (i === 0 ? { ...n, polygon: n.polygon.map((p) => ({ x: p.x + 3, y: p.y })) } : n));
+    const r = mergeKeepingEdits(mine, newerSite());
+    expect(r.site.neighbours[0].polygon).toEqual(mine.neighbours[0].polygon);
   });
 });
