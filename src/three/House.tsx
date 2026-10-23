@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { useLoader } from "@react-three/fiber";
@@ -12,7 +12,8 @@ import { Fixtures } from "./Fixtures";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
-import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount } from "../lib/stairs";
+import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightShape } from "../lib/stairs";
+import { flightStructure, floorsStructure, modelStructure } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { getMaterial, type MatSpec } from "./textures";
@@ -113,7 +114,10 @@ export function House({
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
   const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
-  const wells = useMemo(() => stairwells(model), [model]);
+  // Stairwells depend on structure only, so recolouring leaves them (and every floor group's props) as they were.
+  const structure = modelStructure(model);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const wells = useMemo(() => stairwells(model), [structure]);
   return (
     <group>
       {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
@@ -140,7 +144,18 @@ export function House({
   );
 }
 
-function FloorGroup({
+/**
+ * One floor's walls, floors, fixtures and stairs. Memoised: a model edit hands every floor a new `model`, but a
+ * floor only needs to redraw when its own data, the exterior or the structure of the other floors changed.
+ */
+const FloorGroup = memo(FloorGroupInner, (a, b) => {
+  const { model: ma, ...ra } = a;
+  const { model: mb, ...rb } = b;
+  for (const k of Object.keys(ra) as (keyof typeof ra)[]) if (ra[k] !== rb[k]) return false;
+  return ma === mb || (ma.exterior === mb.exterior && modelStructure(ma) === modelStructure(mb));
+});
+
+function FloorGroupInner({
   model,
   floor,
   photos,
@@ -171,6 +186,7 @@ function FloorGroup({
   wells: Stairwell[];
 }) {
   const y0 = floorBaseY(model, floor);
+  const modelSig = modelStructure(model);
   // Openings in this floor (stairwells from below) and in the ceiling over it (stairwells up from here).
   const holes = useMemo(() => wells.filter((w) => w.upperId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
   const ceilingHoles = useMemo(() => wells.filter((w) => w.lowerId === floor.id).flatMap((w) => w.rects), [wells, floor.id]);
@@ -182,9 +198,14 @@ function FloorGroup({
       out.push(...(w.lowerId === floor.id ? b.lower : b.upper));
     }
     return out;
-  }, [wells, model, floor.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wells, modelSig, floor.id]);
   const H = model.ceilingHeight;
   const hasAbove = model.floors.some((f) => f.level === floor.level + 1);
+  // The flight up from this floor, once for the shell (walls it passes over stop under its treads) and the stairs.
+  const flightSig = flightStructure(model, floor);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const flight = useMemo(() => (hasAbove ? floorFlight(model, floor) : null), [hasAbove, flightSig]);
   const allWalls = useMemo(() => buildWalls(floor), [floor]);
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
@@ -204,7 +225,7 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} />
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} flight={flight} />
       {showCeilings && (
         <group onClick={onPickWall ? block : undefined}>
           {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
@@ -219,7 +240,7 @@ function FloorGroup({
           </WallBox>
         ))}
 
-      {floor.stairs && hasAbove && <Stairs model={model} floor={floor} />}
+      {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
 
       <group onClick={onPickWall ? block : undefined}>
         <Fixtures floor={floor} />
@@ -249,10 +270,13 @@ function FloorShell({
   onPickWall,
   holes,
   doorsOpen,
+  flight,
 }: {
   model: HouseModel;
   floor: Floor;
   walls: WallSeg[];
+  /** The flight up from this floor (see FloorGroup). */
+  flight: FlightShape | null;
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
@@ -266,13 +290,15 @@ function FloorShell({
   const slab = model.slabThickness;
   const lowest = Math.min(...model.floors.map((f) => f.level));
   const baseY = floorBaseY(model, floor);
+  // The floor above, keyed on its structure so recolouring a room does not rebuild every floor's shell.
+  const upperSig = floorsStructure(model.floors.filter((f) => f.level === floor.level + 1), false);
   const upperPolys = useMemo(
     () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
-    [model.floors, floor.level],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [upperSig],
   );
-  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [model.floors, floor.level]);
-  // The flight up from this floor: walls it passes over stop under its treads.
-  const flight = useMemo(() => (model.floors.some((f) => f.level === floor.level + 1) ? floorFlight(model, floor) : null), [model, floor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [upperSig]);
   const finish = ext.wallFinish ?? "render";
   const shell = useMemo(
     () =>
@@ -456,9 +482,9 @@ function WallBox({ piece, children, thickness }: { piece: WallPiece; children: R
  * the flight passes over a wall into another room (a head running on over
  * the kitchen), only a soffit hangs under the treads there.
  */
-function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
+function Stairs({ floor, flight: f }: { floor: Floor; flight: FlightShape | null }) {
+  // `f` changes whenever anything the treads read does (see flightStructure), so `floor` is not a dependency.
   const geom = useMemo(() => {
-    const f = floorFlight(model, floor);
     if (!f) return null;
     const treads = stairTreads(f);
     const riser = f.rise / treadCount(f);
@@ -481,7 +507,8 @@ function Stairs({ model, floor }: { model: HouseModel; floor: Floor }) {
       return g;
     };
     return { body: merge(body), carpet: merge(carpet) };
-  }, [model, floor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f]);
   useEffect(() => () => {
     geom?.body?.dispose();
     geom?.carpet?.dispose();
