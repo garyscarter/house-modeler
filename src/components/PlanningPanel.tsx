@@ -76,7 +76,7 @@ export function PlanningBody({ check, wing, onWing }: { check?: PlanningCheck; w
     <>
       <p className="muted small pl-intro">Proposed against As listed, under householder permitted development in England. Guidance, not legal advice.</p>
       {!check ? (
-        <p className="muted small">Load or draw a Proposed layout (Floorplans) to check it against the planning rules.</p>
+        <p className="muted small">Load or draw a Proposed layout (House menu → Layouts) to check it against the planning rules.</p>
       ) : (
         <>
           <Verdict check={check} />

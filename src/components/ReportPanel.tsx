@@ -25,6 +25,7 @@ import { useCaptureIds } from "../three/captureRegistry";
 const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
 const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
+import { floorDisplayName } from "../lib/studio";
 import { openReview } from "./ReviewPage";
 import "./ReportPanel.css";
 
@@ -68,7 +69,7 @@ export function ReportPanel() {
         <summary>
           Changes{changes && <span className="rp-count">{changes.length}</span>}
         </summary>
-        {changes ? <Changes changes={changes} /> : <p className="muted small">Load or draw a Proposed layout (Floorplans) to list what changes from As listed.</p>}
+        {changes ? <Changes changes={changes} /> : <p className="muted small">Load or draw a Proposed layout (House menu → Layouts) to list what changes from As listed.</p>}
       </details>
       {changes && estimate && (
         <details open>
@@ -122,7 +123,7 @@ export function Areas({ report, both }: { report: AreaReport; both: boolean }) {
         {report.floors.map((f) => (
           <tbody key={f.key}>
             <tr className="rp-floor">
-              <th colSpan={both ? 4 : 2}>{f.name}</th>
+              <th colSpan={both ? 4 : 2}>{floorDisplayName(f.name)}</th>
             </tr>
             {f.rows.map((r) => (
               <tr key={r.key} className={both && r.current === undefined ? "rp-new" : both && r.proposed === undefined ? "rp-gone" : undefined}>
@@ -322,7 +323,7 @@ export function Costs({ estimate }: { estimate: CostEstimate }) {
 
 export function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<typeof roomNotes> }[] }) {
   if (!notes.some((v) => v.notes.length)) {
-    return <p className="muted small">No room notes yet. Select a room in Check plan and add notes in its inspector; they appear here and in the printed report.</p>;
+    return <p className="muted small">No room notes yet. Select a room in Plan and add notes in its inspector; they appear here and in the printed report.</p>;
   }
   return (
     <>
@@ -403,13 +404,13 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   };
 
   const print = () => {
-    // Open the window inside the tap itself or pop-up blockers stop it; fill it once the snapshots are ready.
+    // Open the window inside the click itself or pop-up blockers stop it; fill it once the snapshots are ready.
     const w = window.open("", "_blank");
     void run("print", async () => {
       const snapshots: { caption: string; src: string }[] = [];
       for (const id of ids) {
         try {
-          snapshots.push({ caption: `3D view: ${captureLabel(id, active)}`, src: await blobToDataUrl(await captureImage(id, 1)) });
+          snapshots.push({ caption: `3D: ${captureLabel(id, active)}`, src: await blobToDataUrl(await captureImage(id, 1)) });
         } catch {
           // A failed snapshot only leaves the picture out.
         }
@@ -459,7 +460,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
                 .sort((a, b) => a.level - b.level)
                 .map((f) => (
                   <button key={f.id} onClick={() => plan(k, variants[k]!, f.id)}>
-                    {f.name}
+                    {floorDisplayName(f.name)}
                   </button>
                 ))}
             </div>
@@ -478,7 +479,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         </div>
       </div>
       <div className="rp-export-group">
-        <h4 className="rp-sub">3D view</h4>
+        <h4 className="rp-sub">3D</h4>
         <div className="row">
           <button onClick={() => snapshot(1)} disabled={no3d || busy !== null}>
             {busy === "png1" ? "Saving…" : "Snapshot (PNG)"}
@@ -492,7 +493,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         </div>
         <p className="muted small">
           {no3d
-            ? "Switch to the 3D view to save pictures or the model."
+            ? "Switch to 3D to save pictures or the model."
             : ids.length > 1
               ? "Side by side: a snapshot is saved for each view. The model export uses the selected variant."
               : "Snapshots show the view as it is now, without labels. GLB files open in most 3D apps and online model viewers."}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { create } from "zustand";
+import { useStore } from "../store";
 import { PlanningBody, PLANNING_TITLE, usePlanningCheck, useSwitchToProposed } from "./PlanningPanel";
 import { AreaCheck, Areas, Changes, Costs, Exports, Notes, useReportData } from "./ReportPanel";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "../lib/reviewSummary";
@@ -9,27 +10,30 @@ import "./ReviewPage.css";
 export type ReviewSection = "report" | "planning";
 
 interface ReviewState {
-  open: boolean;
   /** Which section to scroll to when opening; `nonce` makes repeated opens of the same section re-scroll. */
   section?: ReviewSection;
   nonce: number;
 }
 
-const useReview = create<ReviewState>(() => ({ open: false, nonce: 0 }));
+const useReview = create<ReviewState>(() => ({ nonce: 0 }));
 
+/** Review is a mode: opening it switches to Review mode (the page below the top bar is its open state). */
 export function openReview(section?: ReviewSection) {
-  useReview.setState((s) => ({ open: true, section, nonce: s.nonce + 1 }));
+  useStore.getState().setMode("review");
+  useReview.setState((s) => ({ section, nonce: s.nonce + 1 }));
 }
 
+/** Leave Review, back to the mode it was opened from. */
 export function closeReview() {
-  useReview.setState({ open: false, section: undefined });
+  useStore.getState().leaveReview();
+  useReview.setState({ section: undefined });
 }
 
 const KEYS: VariantKey[] = ["current", "proposed"];
 
-/** Full-screen, document-style Review: report, planning check and exports, overlaying the whole app. */
+/** Full-screen, document-style Review: report, planning check and exports, under the top bar. */
 export function ReviewPage() {
-  const open = useReview((s) => s.open);
+  const open = useStore((s) => s.mode === "review" && !!s.variants[s.activeVariant]);
 
   useEffect(() => {
     const onEvent = (e: Event) => {
@@ -83,7 +87,7 @@ function ReviewDocument() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".modal-backdrop, .dialog-backdrop")) {
         e.preventDefault();
         closeReview();
       }
@@ -98,7 +102,7 @@ function ReviewDocument() {
   const present = KEYS.filter((k) => variants[k]);
 
   return (
-    <div className="review-page" ref={rootRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Review">
+    <div className="review-page" ref={rootRef} tabIndex={-1} role="dialog" aria-label="Review">
       <header className="rv-bar">
         <div className="rv-bar-inner">
           <div>
@@ -139,7 +143,7 @@ function ReviewDocument() {
               <AreaCheck variants={variants} hideTitle />
             </Section>
             <Section id="rv-changes" title="Changes" count={changes?.length}>
-              {changes ? <Changes changes={changes} /> : <p className="muted">Load or draw a Proposed layout (Floorplans) to list what changes from As listed.</p>}
+              {changes ? <Changes changes={changes} /> : <p className="muted">Load or draw a Proposed layout (House menu → Layouts) to list what changes from As listed.</p>}
             </Section>
             <Section id="rv-costs" title="Rough costs">
               {changes && estimate ? <Costs estimate={estimate} /> : <p className="muted">Costs appear once there is a Proposed layout to compare with As listed.</p>}

@@ -1,111 +1,30 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "../store";
-import type { HouseModel } from "../types";
+import { siteOf } from "../lib/sites";
+import { Icon } from "./icons";
 import "./ViewMenu.css";
 
 /**
- * What the 3D view shows: compare mode, floors and overlays. Rendered
- * inline in the header on wide screens and inside the View popover otherwise.
+ * A button that opens its children in a popover (upwards by default, for the dock). Clicking outside, Esc,
+ * or picking a row marked data-pick closes it; toggles keep it open.
  */
-export function ViewControls({ model, both }: { model: HouseModel | undefined; both: boolean }) {
-  const viewMode = useStore((s) => s.viewMode);
-  const showLabels = useStore((s) => s.showLabels);
-  const showCeilings = useStore((s) => s.showCeilings);
-  const doorsOpen = useStore((s) => s.doorsOpen);
-  const maxLevel = useStore((s) => s.maxLevel);
-  const showExterior = useStore((s) => s.showExterior);
-  const showSite = useStore((s) => s.showSite);
-  const site = useStore((s) => !!(s.sites.current || s.sites.proposed));
-  const activeVariant = useStore((s) => s.activeVariant);
-  const setUi = useStore((s) => s.setUi);
-  const updateModel = useStore((s) => s.updateModel);
-
-  return (
-    <>
-      <div className="seg" role="group" aria-label="Compare">
-        <button data-pick className={viewMode === "single" ? "active" : ""} onClick={() => setUi({ viewMode: "single" })}>
-          Single
-        </button>
-        <button data-pick className={viewMode === "side-by-side" ? "active" : ""} disabled={!both} onClick={() => setUi({ viewMode: "side-by-side" })}>
-          Side by side
-        </button>
-        <button data-pick className={viewMode === "overlay" ? "active" : ""} disabled={!both} onClick={() => setUi({ viewMode: "overlay" })}>
-          Overlay
-        </button>
-      </div>
-      {model && model.floors.length > 1 && (
-        <label className="check">
-          Show up to
-          <select value={maxLevel ?? ""} onChange={(e) => setUi({ maxLevel: e.target.value === "" ? null : parseInt(e.target.value) })}>
-            <option value="">all floors</option>
-            {model.floors.map((f) => (
-              <option key={f.id} value={f.level}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <div className="checks">
-        <label className="check">
-          <input type="checkbox" checked={showLabels} onChange={(e) => setUi({ showLabels: e.target.checked })} /> Labels
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={showCeilings} onChange={(e) => setUi({ showCeilings: e.target.checked })} /> Ceilings
-        </label>
-        <label className="check" title="Draw swing doors at their open angle. Off: every door is drawn shut.">
-          <input type="checkbox" checked={doorsOpen} onChange={(e) => setUi({ doorsOpen: e.target.checked })} /> Doors open
-        </label>
-        <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
-          <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior
-        </label>
-        <label className="check" title="Plot, garden and neighbouring buildings (set up under Site)">
-          <input type="checkbox" checked={showSite} disabled={!site} onChange={(e) => setUi({ showSite: e.target.checked })} /> Site
-        </label>
-      </div>
-      {model && (
-        <label className="check">
-          Ceiling height
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            min="2"
-            max="4"
-            value={model.ceilingHeight}
-            onChange={(e) => updateModel(activeVariant, { ceilingHeight: parseFloat(e.target.value) || 2.4 })}
-            style={{ width: 64 }}
-          />
-          m
-        </label>
-      )}
-    </>
-  );
-}
-
-/** Which floor the plan editor shows. Plot has no floors (it shows the site), so it renders nothing there. */
-export function PlanFloorSwitch({ model }: { model: HouseModel }) {
-  const editFloorId = useStore((s) => s.editFloorId);
-  const mode = useStore((s) => s.mode);
-  const setUi = useStore((s) => s.setUi);
-  if (mode === "plot") return null;
-  const current = model.floors.find((f) => f.id === editFloorId) ?? model.floors[0];
-  return (
-    <div className="seg" role="group" aria-label="Floor">
-      {model.floors.map((f) => (
-        <button key={f.id} data-pick className={current?.id === f.id ? "active" : ""} onClick={() => setUi({ editFloorId: f.id })}>
-          {f.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * A header button that opens its children in a popover. Tapping outside, Esc,
- * or picking a mode (a button marked data-pick) closes it; toggles keep it open.
- */
-export function ViewMenu({ label, children }: { label: string; children: ReactNode }) {
+export function Popover({
+  label,
+  className = "",
+  title,
+  disabled,
+  placement = "up",
+  align = "center",
+  children,
+}: {
+  label: ReactNode;
+  className?: string;
+  title?: string;
+  disabled?: boolean;
+  placement?: "up" | "down";
+  align?: "center" | "start" | "end";
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -113,7 +32,12 @@ export function ViewMenu({ label, children }: { label: string; children: ReactNo
     const away = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     return () => {
@@ -121,16 +45,50 @@ export function ViewMenu({ label, children }: { label: string; children: ReactNo
       document.removeEventListener("keydown", esc);
     };
   }, [open]);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   return (
-    <div className="view-menu" ref={root}>
-      <button className={open ? "view-menu-btn active" : "view-menu-btn"} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
-        {label} <span aria-hidden="true">▾</span>
+    <div className={`popover-host ${className}`.trim()} ref={root}>
+      <button className={open ? "popover-btn active" : "popover-btn"} aria-expanded={open} aria-haspopup="true" title={title} disabled={disabled} onClick={() => setOpen((o) => !o)}>
+        {label}
+        <Icon name="chevronDown" size={14} />
       </button>
       {open && (
-        <div className="view-pop" onClick={(e) => (e.target as Element).closest("button[data-pick]") && setOpen(false)}>
+        <div className={`popover pop-${placement} pop-${align}`} onClick={(e) => (e.target as Element).closest("[data-pick]") && setOpen(false)}>
           {children}
         </div>
       )}
+    </div>
+  );
+}
+
+/** What the 3D view shows: labels, ceilings, doors, the exterior and the site. */
+export function ViewToggles() {
+  const showLabels = useStore((s) => s.showLabels);
+  const showCeilings = useStore((s) => s.showCeilings);
+  const doorsOpen = useStore((s) => s.doorsOpen);
+  const showExterior = useStore((s) => s.showExterior);
+  const showSite = useStore((s) => s.showSite);
+  const site = useStore((s) => !!siteOf(s.sites, s.activeVariant));
+  const setUi = useStore((s) => s.setUi);
+  return (
+    <div className="view-toggles">
+      <label className="check">
+        <input type="checkbox" checked={showLabels} onChange={(e) => setUi({ showLabels: e.target.checked })} /> Labels
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={showCeilings} onChange={(e) => setUi({ showCeilings: e.target.checked })} /> Ceilings
+      </label>
+      <label className="check" title="Draw swing doors at their open angle. Off: every door is drawn shut.">
+        <input type="checkbox" checked={doorsOpen} onChange={(e) => setUi({ doorsOpen: e.target.checked })} /> Doors open
+      </label>
+      <label className="check" title="Roof, canopies and exterior photos. Hidden automatically when a floor cap is set.">
+        <input type="checkbox" checked={showExterior} onChange={(e) => setUi({ showExterior: e.target.checked })} /> Exterior
+      </label>
+      <label className="check" title="Plot, garden and neighbouring buildings (set up under Plot)">
+        <input type="checkbox" checked={showSite} disabled={!site} onChange={(e) => setUi({ showSite: e.target.checked })} /> Site
+      </label>
     </div>
   );
 }
