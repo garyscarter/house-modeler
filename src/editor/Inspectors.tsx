@@ -27,6 +27,8 @@ import {
   defaultSill,
   fixtureBox,
   formatArea,
+  openingEnds,
+  placeFromEnd,
   resizeRect,
   turn,
   wallRun,
@@ -110,6 +112,7 @@ export function NumberField({
   autoFocus,
   onDone,
   onClear,
+  disabled,
 }: {
   value: number | undefined;
   onCommit: (v: number) => void;
@@ -124,6 +127,7 @@ export function NumberField({
   onDone?: () => void;
   /** Called when the field is emptied, for values that fall back to a default. */
   onClear?: () => void;
+  disabled?: boolean;
 }) {
   const [text, setText] = useState(fmt2(value));
   const [focused, setFocused] = useState(false);
@@ -139,6 +143,7 @@ export function NumberField({
       placeholder={placeholder}
       aria-label={label}
       autoFocus={autoFocus}
+      disabled={disabled}
       onFocus={(e) => {
         setFocused(true);
         e.target.select();
@@ -194,7 +199,9 @@ export function BuildRoomPanel({
   const tracedH = (r ? r.y1 - r.y0 : b.h) / ppm;
   const cmp = room.dims ? comparePrinted(tracedW, tracedH, room.dims) : null;
   const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-  const resize = (w: number, h: number) => onChange({ polygon: resizeRect(room.polygon, w * ppm, h * ppm, anchor) });
+  const resize = (w: number, h: number) => {
+    if (!room.locked) onChange({ polygon: resizeRect(room.polygon, w * ppm, h * ppm, anchor) });
+  };
 
   return (
     <div className="inspector room-inspector">
@@ -205,6 +212,9 @@ export function BuildRoomPanel({
 
       <Section id="build.room.shape" title="Shape & size" summary={shapeSummary(room, ppm)} defaultOpen>
         <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
+        <label className="check" title="Keep the corners and edge lengths from being dragged or typed over by accident">
+          <input type="checkbox" checked={!!room.locked} onChange={(e) => onChange({ locked: e.target.checked || undefined })} /> Lock shape
+        </label>
         {r ? (
           <div className="field">
             <span className="field-label">
@@ -212,12 +222,12 @@ export function BuildRoomPanel({
               <Info>The highlighted corner stays put. Click an edge length on the plan to type a new one.</Info>
             </span>
             <div className="size-row">
-              <NumberField value={tracedW} label="Width" onCommit={(w) => resize(w, tracedH)} />
+              <NumberField value={tracedW} label="Width" disabled={room.locked} onCommit={(w) => resize(w, tracedH)} />
               <span>×</span>
-              <NumberField value={tracedH} label="Depth" onCommit={(h) => resize(tracedW, h)} />
+              <NumberField value={tracedH} label="Depth" disabled={room.locked} onCommit={(h) => resize(tracedW, h)} />
               <div className="anchor-grid" role="group" aria-label="Corner that stays put">
                 {CORNERS.map(([c, arrow, name]) => (
-                  <button key={c} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
+                  <button key={c} disabled={room.locked} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
                     {arrow}
                   </button>
                 ))}
@@ -485,6 +495,8 @@ export function OpeningInspector({
   const k = opening.kind;
   const sill = defaultSill(k);
   const head = defaultHead(k);
+  const ends = openingEnds(floor, opening);
+  const vertical = opening.orientation === "v";
   return (
     <div className="inspector">
       <label>
@@ -513,6 +525,24 @@ export function OpeningInspector({
           </select>
         </label>
       </div>
+      {ends && (
+        <div className="field">
+          <span className="field-label">
+            Position along the wall
+            <Info>Measured from the inside face of each corner to the edge of the opening, as a builder sets it out.</Info>
+          </span>
+          <div className="size-row">
+            <label>
+              {vertical ? "From top end (m)" : "From left end (m)"}
+              <NumberField value={ends.lo} min={-0.001} label={vertical ? "From top end" : "From left end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "lo", m))} />
+            </label>
+            <label>
+              {vertical ? "From bottom end (m)" : "From right end (m)"}
+              <NumberField value={ends.hi} min={-0.001} label={vertical ? "From bottom end" : "From right end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "hi", m))} />
+            </label>
+          </div>
+        </div>
+      )}
       {SWING_KINDS.includes(k) && (
         <div className="row flip-row">
           {k !== "french" && !pair && (
@@ -660,9 +690,16 @@ export function FixtureInspector({
 }) {
   const resized = fixture.w !== undefined || fixture.d !== undefined || fixture.h !== undefined;
   const rot = Math.round(fixture.rot) % 360;
+  const locked = !!fixture.locked;
   return (
     <div className="inspector fixture-inspector">
       <h4>{item.name}</h4>
+      <div className="row">
+        <button className={locked ? "active" : ""} aria-pressed={locked} onClick={() => onChange({ locked: !fixture.locked || undefined })} title="Locked items can be selected but not moved, turned or resized on the plan">
+          {locked ? "Unlock" : "Lock position"}
+        </button>
+      </div>
+      {locked && <p className="muted small">Locked: unlock to move or resize.</p>}
       {item.note && <p className="muted small">{item.note}</p>}
       {clash && <p className="small warn">Overlaps another item.</p>}
       {groupSize !== undefined && groupSize > 1 && onSelectGroup && (
@@ -680,12 +717,12 @@ export function FixtureInspector({
       <div className="field">
         <span className="field-label">Width × depth × height (m)</span>
         <div className="size-row">
-          <NumberField value={fixture.w ?? item.w} label="Width" onCommit={(w) => onChange({ w })} />
-          <NumberField value={fixture.d ?? item.d} label="Depth" onCommit={(d) => onChange({ d })} />
-          <NumberField value={fixtureBox(fixture, item, ceiling).h} label="Height" onCommit={(h) => onChange({ h })} />
+          <NumberField value={fixture.w ?? item.w} label="Width" disabled={locked} onCommit={(w) => onChange({ w })} />
+          <NumberField value={fixture.d ?? item.d} label="Depth" disabled={locked} onCommit={(d) => onChange({ d })} />
+          <NumberField value={fixtureBox(fixture, item, ceiling).h} label="Height" disabled={locked} onCommit={(h) => onChange({ h })} />
         </div>
         {resized && (
-          <button className="link" onClick={() => onChange({ w: undefined, d: undefined, h: undefined })}>
+          <button className="link" disabled={locked} onClick={() => onChange({ w: undefined, d: undefined, h: undefined })}>
             Reset to {item.w.toFixed(2)} × {item.d.toFixed(2)} × {item.toCeiling && ceiling ? `${ceiling.toFixed(2)} (the ceiling)` : item.h.toFixed(2)} m
           </button>
         )}
@@ -727,10 +764,10 @@ export function FixtureInspector({
       )}
       <label>
         Rotation {rot}°
-        <input type="range" min={0} max={345} step={15} value={Math.round(rot / 15) * 15} onChange={(e) => onChange({ rot: parseInt(e.target.value) })} />
+        <input type="range" min={0} max={345} step={15} disabled={locked} value={Math.round(rot / 15) * 15} onChange={(e) => onChange({ rot: parseInt(e.target.value) })} />
       </label>
       <div className="row">
-        <button onClick={() => onChange({ rot: turn(fixture.rot, 90) })} title="R">
+        <button disabled={locked} onClick={() => onChange({ rot: turn(fixture.rot, 90) })} title="R">
           Rotate 90°
         </button>
         <button onClick={onDuplicate} title="Ctrl+D or Cmd+D">
@@ -768,6 +805,7 @@ export function MultiFixtureInspector({
   onCopy,
   onRemove,
   onColour,
+  onLock,
 }: {
   fixtures: Fixture[];
   /** The selection is exactly one group. */
@@ -780,6 +818,8 @@ export function MultiFixtureInspector({
   onCopy: () => void;
   onRemove: () => void;
   onColour: (color: string) => void;
+  /** Lock (true) or unlock (false) every selected item. */
+  onLock: (on: boolean) => void;
 }) {
   const anyGrouped = fixtures.some((f) => f.groupId);
   const first = fixtures[0];
@@ -813,7 +853,10 @@ export function MultiFixtureInspector({
             Ungroup
           </button>
         )}
-        <button onClick={onTurn} title="R">
+        <button onClick={() => onLock(!fixtures.every((f) => f.locked))} title="Locked items can be selected but not moved or turned on the plan">
+          {fixtures.every((f) => f.locked) ? "Unlock all" : "Lock all"}
+        </button>
+        <button disabled={fixtures.some((f) => f.locked)} onClick={onTurn} title="R">
           Turn 90°
         </button>
         <button onClick={onDuplicate} title="Ctrl+D or Cmd+D">

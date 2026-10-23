@@ -7,6 +7,7 @@ import { FixtureSymbol } from "./FixtureSymbol";
 import { OpeningSymbol } from "./OpeningSymbol";
 import { confirmKnockThrough } from "./KnockThrough";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
+import { LockGlyph } from "./LockGlyph";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, NumberField, OpeningInspector, WallInspector } from "./Inspectors";
 import { AddPopover } from "./AddItem";
 import { ToolRail, type RailItem } from "./ToolRail";
@@ -315,6 +316,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     }
   };
 
+  /** Whether any of these fixtures is locked against moving. */
+  const anyLocked = (ids: string[]) => allFixtures.some((f) => f.locked && ids.includes(f.id));
+  /** Lock or unlock these fixtures. */
+  const lockFixtures = (ids: string[], on: boolean) => setFixtures((all) => all.map((f) => (ids.includes(f.id) ? { ...f, locked: on || undefined } : f)));
+
   /** Move the selection by (dx, dy) image px; false when nothing selected can move that way. */
   const nudgeSelection = (dx: number, dy: number): boolean => {
     if (!build && !furnish) return false;
@@ -322,6 +328,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       if (!canopies[selectedCanopy]) return false;
       setCanopies((all) => moveCanopy(all, selectedCanopy, dx, dy));
     } else if (liveIds.length) {
+      if (anyLocked(liveIds)) return false;
       setFixtures((all) => moveFixtures(all, liveIds, dx, dy));
     } else if (selectedOpeningId) {
       const o = floor.openings.find((x) => x.id === selectedOpeningId);
@@ -338,7 +345,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       updateFloor(variant, floor.id, (f) => ({ ...f, walls: (f.walls ?? []).map((w) => (w.id === selectedWallId ? { ...w, a: { x: w.a.x + dx, y: w.a.y + dy }, b: { x: w.b.x + dx, y: w.b.y + dy } } : w)) }));
     } else if (activeCorner && selectedRoomId === activeCorner.roomId) {
       const room = floor.rooms.find((r) => r.id === activeCorner.roomId);
-      if (!room?.polygon[activeCorner.idx]) return false;
+      if (!room?.polygon[activeCorner.idx] || room.locked) return false;
       updateFloor(variant, floor.id, (f) => ({
         ...f,
         rooms: f.rooms.map((r) => (r.id === room.id ? { ...r, polygon: r.polygon.map((v, i) => (i === activeCorner.idx ? { x: v.x + dx, y: v.y + dy } : v)) } : r)),
@@ -387,7 +394,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       if ("tool" in act) pick(act.tool);
       else if ("rotate" in act) {
         if (placing) setPlacing({ ...placing, rot: turn(placing.rot, act.rotate) });
-        else if (liveIds.length) setFixtures((all) => rotateFixtures(all, liveIds, act.rotate));
+        else if (liveIds.length && !anyLocked(liveIds)) setFixtures((all) => rotateFixtures(all, liveIds, act.rotate));
       } else if ("image" in act) setUi({ planImage: { ...planImage, show: !planImage.show } });
       else if ("zoom" in act) zoomBy(act.zoom > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
       else if ("fit" in act) fit();
@@ -754,7 +761,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       const grouped = !!allFixtures.find((x) => x.id === id)?.groupId;
       const group = expandToGroups([id], allFixtures);
       return [
-        { label: "Turn 90°", hint: "R", run: () => { select({ fixtures: ids }); setFixtures((all) => rotateFixtures(all, ids, 90)); } },
+        ...(anyLocked(ids) ? [] : [{ label: "Turn 90°", hint: "R", run: () => { select({ fixtures: ids }); setFixtures((all) => rotateFixtures(all, ids, 90)); } } satisfies MenuItem]),
+        { label: ids.every((i) => allFixtures.find((x) => x.id === i)?.locked) ? "Unlock" : "Lock", run: () => { select({ fixtures: ids }); lockFixtures(ids, !ids.every((i) => allFixtures.find((x) => x.id === i)?.locked)); } },
         { label: "Duplicate", hint: "Ctrl D", run: () => duplicateFixtureIds(ids) },
         { label: "Copy", hint: "Ctrl C", run: () => { select({ fixtures: ids }); copyFixtureIds(ids); } },
         ...(ids.length >= 2 && !exactGroup(allFixtures, ids) ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); groupSelected(ids); } } satisfies MenuItem] : []),
@@ -824,13 +832,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           },
         },
         { label: "Decorate this room", run: () => { select({ room: room.id }); setMode("decorate"); } },
+        ...(build ? [{ label: room.locked ? "Unlock shape" : "Lock shape", run: () => updateRoom(variant, floor.id, room.id, { locked: !room.locked || undefined }) } satisfies MenuItem] : []),
         ...(onEdge
           ? [
               { label: "Add door here", run: () => placeOpeningAt("door", onEdge) } satisfies MenuItem,
               { label: "Add window here", run: () => placeOpeningAt("window", onEdge) } satisfies MenuItem,
             ]
           : []),
-        ...(neighbours.length
+        ...(neighbours.length && !room.locked
           ? [
               {
                 label: "Knock through into…",
@@ -1188,6 +1197,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   key={fx.id}
                   transform={`translate(${fx.x} ${fx.y}) rotate(${fx.rot})`}
                   className="plan-fixture"
+                  data-fixture-id={fx.id}
                   style={furnish ? undefined : { pointerEvents: "none", opacity: 0.55 }}
                   onPointerDown={(e) => {
                     if (!furnish || tool !== "select") return;
@@ -1204,6 +1214,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     // Ctrl/Cmd+click picks the item alone, even inside a group; a plain click takes its whole group.
                     const ids = e.ctrlKey || e.metaKey ? [fx.id] : liveIds.includes(fx.id) ? liveIds : expandToGroups([fx.id], allFixtures);
                     if (ids !== liveIds) select({ fixtures: ids });
+                    // A locked item selects but never drags; the press falls through to the background, which pans.
+                    if (anyLocked(ids)) return;
                     const p = toImage(e);
                     startDrag(e, { kind: "fixture", fixtureId: fx.id, ids, dx: fx.x - p.x, dy: fx.y - p.y, x0: e.clientX, y0: e.clientY, moved: false, wasSelected });
                   }}
@@ -1215,6 +1227,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     e.stopPropagation();
                     const ids = targetIds(fx.id);
                     select({ fixtures: ids });
+                    if (anyLocked(ids)) return;
                     setFixtures((all) => rotateFixtures(all, ids, 90));
                   }}
                   onPointerEnter={() => furnish && tool === "select" && setHoverGroup(fx.groupId ?? null)}
@@ -1287,6 +1300,14 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   </text>
                 ),
             )}
+            {(floor.fixtures ?? []).map((fx) => {
+              if (!fx.locked) return null;
+              const item = byId(fx.type);
+              if (!item) return null;
+              const b = fixtureBox(fx, item);
+              const cs = rectCorners({ x: fx.x, y: fx.y }, b.w * ppm, b.d * ppm, fx.rot);
+              return <LockGlyph key={"k" + fx.id} at={{ x: Math.max(...cs.map((c) => c.x)) - px * 6, y: Math.min(...cs.map((c) => c.y)) + px * 6 }} px={px * 10} />;
+            })}
             {ghost && placing && (
               <g transform={`translate(${ghost.x} ${ghost.y}) rotate(${ghost.rot})`} style={{ pointerEvents: "none" }}>
                 <FixtureSymbol item={placing.item} w={placing.item.w * ppm} d={placing.item.d * ppm} m={ppm} stroke={stroke} ghost />
@@ -1396,7 +1417,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 const sel = r.id === selectedRoomId;
                 return (
                   <g key={"h" + r.id}>
-                    {sel &&
+                    {sel && !r.locked &&
                       r.polygon.map((p, i) => {
                         const q = r.polygon[(i + 1) % r.polygon.length];
                         return (
@@ -1428,6 +1449,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         fill={sel ? "#fff7ed" : "#fff"}
                         ink={sel ? "#d97706" : "#2563eb"}
                         sw={stroke * (sel ? 2 : 1.3)}
+                        style={r.locked ? { pointerEvents: "none" } : undefined}
                         onPointerDown={(e) => {
                           select({ room: r.id });
                           setActiveCorner({ roomId: r.id, idx: i });
@@ -1436,7 +1458,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         onClick={(e) => e.stopPropagation()}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
-                          if (r.polygon.length > 3) updateRoom(variant, floor.id, r.id, removeCorner(r, i));
+                          if (r.polygon.length > 3 && !r.locked) updateRoom(variant, floor.id, r.id, removeCorner(r, i));
                         }}
                       >
                         <title>Drag to move; double-click to remove the corner</title>
@@ -1463,7 +1485,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               ))}
             {selected && litShown !== null && litShown < selected.polygon.length && <LitEdge room={selected} idx={litShown} px={px} fontSize={fontSize} />}
             {selected && build && tool === "select" && (
-              <EdgeLabels room={selected} ppm={ppm} px={px} fontSize={fontSize} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onEdit={(idx) => setEdgeEdit({ roomId: selected.id, idx })} />
+              <EdgeLabels room={selected} ppm={ppm} px={px} fontSize={fontSize} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onEdit={selected.locked ? () => {} : (idx) => setEdgeEdit({ roomId: selected.id, idx })} />
             )}
 
             {measure.length > 0 && measureEnd && <MeasureLine a={measure[0]} b={measureEnd} ppm={ppm} px={px} fontSize={fontSize} />}
@@ -1524,7 +1546,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   onPick={(id) => select({ fixtures: [id] })}
                   onGroup={() => groupSelected(liveIds)}
                   onUngroup={() => setFixtures((all) => ungroupFixtures(all, liveIds))}
-                  onTurn={() => setFixtures((all) => rotateFixtures(all, liveIds, 90))}
+                  onTurn={() => anyLocked(liveIds) || setFixtures((all) => rotateFixtures(all, liveIds, 90))}
+                  onLock={(on) => lockFixtures(liveIds, on)}
                   onDuplicate={() => duplicateFixtureIds(liveIds)}
                   onCopy={() => copyFixtureIds(liveIds)}
                   onRemove={removeSelected}
@@ -1660,7 +1683,7 @@ function Handle({
   sw: number;
   className?: string;
   children?: React.ReactNode;
-} & Pick<React.SVGProps<SVGGElement>, "onPointerDown" | "onClick" | "onDoubleClick">) {
+} & Pick<React.SVGProps<SVGGElement>, "onPointerDown" | "onClick" | "onDoubleClick" | "style">) {
   return (
     <g className={className} {...events}>
       <circle cx={at.x} cy={at.y} r={hit} fill="transparent" />
@@ -1683,6 +1706,7 @@ function RoomLabel({ room, ppm, px, fontSize }: { room: Room; ppm: number; px: n
       <text x={c.x} y={c.y} fontSize={fontSize} textAnchor="middle" fill="#111" fontWeight={600} {...halo}>
         {room.name}
       </text>
+      {room.locked && <LockGlyph at={{ x: c.x - (room.name.length * fontSize * 0.3 + px * 8), y: c.y - fontSize * 0.3 }} px={px * 10} />}
       {onScreen > 60 && (
         <text x={c.x} y={c.y + fontSize * 1.2} fontSize={fontSize * 0.82} textAnchor="middle" fill="#374151" {...halo}>
           {formatArea(area)}
