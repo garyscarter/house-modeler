@@ -13,7 +13,8 @@
 .plan-hit, .plan-canopy { cursor: pointer; }
 /* While Space is held the plan shows the other layout and ignores the pointer. */
 .plan-canvas svg.peeking { pointer-events: none; }
-.plan-text, .plan-edge-label text { font-family: var(--font-mono); }
+.plan-text { font-family: var(--font-ui); font-weight: 500; }
+.plan-edge-label text { font-family: var(--font-mono); }
 .plan-text { pointer-events: none; }
 .plan-edge-label { cursor: text; }
 
