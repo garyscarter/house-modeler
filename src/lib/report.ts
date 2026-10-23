@@ -1,5 +1,5 @@
 import type { Floor, HouseModel, Opening, OpeningKind, Room, Site } from "../types";
-import { FLOOR_FINISH_LABEL } from "../types";
+import { FLOOR_FINISH_LABEL, type FloorFinish } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { M2_TO_FT2 } from "./planMath";
 import { diffSites } from "./siteDiff";
@@ -229,13 +229,15 @@ const newLine = (kind: OpeningKind): CostLineId => {
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const m1 = (v: number) => Math.round(v * 10) / 10;
 
+const label = (f: string) => FLOOR_FINISH_LABEL[f as FloorFinish] ?? f;
+
 /** A room's floor finish changed: what is laid, and what it replaces. Colour and pattern direction alone don't count. */
 export function floorChange(ra: Pick<Room, "floorFinish">, rb: Pick<Room, "floorFinish" | "name">): { description: string; laid: boolean } | undefined {
   const a = ra.floorFinish ?? "plain";
   const b = rb.floorFinish ?? "plain";
   if (a === b) return undefined;
-  if (b === "plain") return { description: `${rb.name}: ${FLOOR_FINISH_LABEL[a].toLowerCase()} floor taken up`, laid: false };
-  return { description: `New floor in the ${rb.name}: ${FLOOR_FINISH_LABEL[b]}${a === "plain" ? "" : ` (was ${FLOOR_FINISH_LABEL[a].toLowerCase()})`}`, laid: true };
+  if (b === "plain") return { description: `${rb.name}: ${label(a).toLowerCase()} floor taken up`, laid: false };
+  return { description: `New floor in the ${rb.name}: ${label(b)}${a === "plain" ? "" : ` (was ${label(a).toLowerCase()})`}`, laid: true };
 }
 const fmtLen = (v: number) => `${v.toFixed(v < 10 ? 2 : 1)} m`;
 const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
