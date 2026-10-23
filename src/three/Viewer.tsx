@@ -25,7 +25,7 @@ interface ViewerProps {
   selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room) => void;
   /** Decorate: a tap on a wall face, with the hit point and the face's normal in the plan frame (world x, z). */
-  onPickWall?: (floor: Floor, hit: V2, normal: V2) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   title?: string;
   maxLevel?: number | null;
   showExterior?: boolean;
