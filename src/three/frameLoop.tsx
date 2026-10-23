@@ -16,43 +16,51 @@ const contentSignature = (gl: THREE.WebGLRenderer) => `${gl.info.memory.geometri
  * The sun's shadow map costs a second pass over the whole scene, so it is
  * only redrawn when something in the scene may have changed, never for a
  * frame that only moves the camera. The map is marked dirty (and a frame
- * requested) on mount, on any change to the stores the scene is built from
- * (model, site, sun, variant, doors, visibility, quality, site view), and
+ * requested) on mount, in the commit of any change to what the scene is built
+ * from (`deps` from the viewer, plus site, sun, variant and site view), and
  * whenever the renderer's geometry, texture or program counts change, which
  * catches photos and other content that arrive asynchronously. Err on the
  * side of redrawing: a stale shadow is a visible bug, a spare redraw is not.
  */
-export function ShadowUpdates() {
+export function ShadowUpdates({ deps }: { deps: unknown[] }) {
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
   const dirty = useRef(MOUNT_FRAMES);
+  const mark = useRef(() => {});
+  mark.current = () => {
+    dirty.current = Math.max(dirty.current, CHANGE_FRAMES);
+    invalidate();
+  };
+  const sun = useStore((s) => s.sun);
+  const sites = useStore((s) => s.sites);
+  const showSite = useStore((s) => s.showSite);
+  const activeVariant = useStore((s) => s.activeVariant);
+  const siteView = useSiteView((s) => s);
 
   useLayoutEffect(() => {
     gl.shadowMap.autoUpdate = false;
     gl.shadowMap.needsUpdate = true;
     dirty.current = Math.max(dirty.current, MOUNT_FRAMES);
-    const mark = () => {
-      dirty.current = Math.max(dirty.current, CHANGE_FRAMES);
-      invalidate();
-    };
     let last = contentSignature(gl);
-    const stop = [
-      useStore.subscribe(mark),
-      useSiteView.subscribe(mark),
-      // After each frame: did that render upload or drop anything?
-      addAfterEffect(() => {
-        const sig = contentSignature(gl);
-        if (sig === last) return;
-        last = sig;
-        mark();
-      }),
-    ];
+    // After each frame: did that render upload or drop anything? The after-effect runs once R3F
+    // has worked out whether the loop continues, so a direct invalidate would be lost on a burst's
+    // last frame (frames stuck at 1); a microtask lets the loop settle first.
+    const stop = addAfterEffect(() => {
+      const sig = contentSignature(gl);
+      if (sig === last) return;
+      last = sig;
+      queueMicrotask(() => mark.current());
+    });
     invalidate();
     return () => {
-      stop.forEach((s) => s());
+      stop();
       gl.shadowMap.autoUpdate = true;
     };
   }, [gl, invalidate]);
+
+  // Runs in the same commit as the scene change, so the shadow pass sees the new geometry.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView]);
 
   useFrame(() => {
     gl.shadowMap.autoUpdate = false;
@@ -60,6 +68,15 @@ export function ShadowUpdates() {
     gl.shadowMap.needsUpdate = true;
     dirty.current--;
     if (dirty.current > 0) invalidate();
+  });
+  return null;
+}
+
+/** Redraws after every React commit. R3F's own invalidate skips a commit when a burst's last frame left the loop with frames stuck at 1, so ask again from a microtask. */
+export function FrameOnCommit() {
+  const invalidate = useThree((s) => s.invalidate);
+  useLayoutEffect(() => {
+    queueMicrotask(() => invalidate());
   });
   return null;
 }
