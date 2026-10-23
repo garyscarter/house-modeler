@@ -213,6 +213,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setSelectedWallId(s.wall ?? null);
     setSelectedFixtureId(s.fixture ?? null);
     setSelectedCanopy(s.canopy ?? null);
+    setLitEdge(null);
     setUi({ selectedRoomId: s.room ?? null, selectedEdge: null });
     setEdgeEdit(null);
     setActiveCorner(null);
@@ -620,6 +621,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   useEffect(() => {
     if (prevMode.current === mode) return;
     prevMode.current = mode;
+    drag.current = null;
     pick("select");
     setPlacing(null);
     setAddOpen(false);

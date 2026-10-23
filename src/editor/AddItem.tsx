@@ -56,7 +56,8 @@ export function AddItemButton({
         {label}
       </button>
       {open && (
-        <div className="add-pop">
+        // Keys pressed on a chip or row must not reach the plan's shortcuts (Backspace would delete the selection).
+        <div className="add-pop" onKeyDown={(e) => { if (e.key !== "Escape") e.stopPropagation(); }}>
           <CataloguePicker
             activeId={activeId}
             onPick={(item) => {
