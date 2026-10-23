@@ -1,42 +1,25 @@
-.view-menu {
-  position: relative;
-  margin-left: auto;
-}
-.view-menu-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.view-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
-  width: max-content;
-  max-width: min(360px, calc(100vw - 16px));
-  max-height: calc(100dvh - 80px);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
-}
-.view-pop .seg {
-  max-width: 100%;
-}
-.view-pop .check {
-  margin: 0;
-}
-.view-pop .checks {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 18px;
-}
-header .checks {
-  display: contents;
-}
+.popover-host { position: relative; display: inline-flex; }
+.popover-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.popover-btn.active { background: var(--accent-soft); color: var(--accent); }
+.popover-btn svg { opacity: 0.7; }
+
+/* Popovers open above the dock by default. */
+.popover-host > .popover { width: max-content; min-width: 180px; max-width: min(360px, calc(100vw - 24px)); max-height: 80vh; overflow-y: auto; }
+.popover.pop-up { bottom: calc(100% + 10px); }
+.popover.pop-down { top: calc(100% + 10px); }
+.popover.pop-center { left: 50%; transform: translateX(-50%); }
+.popover.pop-start { left: 0; }
+.popover.pop-end { right: 0; }
+
+.view-toggles { display: flex; flex-direction: column; gap: 2px; }
+.view-toggles .check { margin: 0; padding: 7px 10px; border-radius: var(--radius-s); color: var(--text); cursor: pointer; gap: 10px; }
+.view-toggles .check:hover { background: var(--surface-2); }
+.view-toggles input { margin: 0; accent-color: var(--accent); }
+
+.compare-rows { display: flex; flex-direction: column; gap: 2px; }
+.compare-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; background: transparent; }
+.compare-row:hover:not(:disabled) { background: var(--surface-2); }
+.compare-row .radio { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.compare-row[aria-checked="true"] { color: var(--accent); font-weight: 600; }
+.compare-row[aria-checked="true"] .radio { border-color: var(--accent); }
+.compare-row[aria-checked="true"] .radio::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }

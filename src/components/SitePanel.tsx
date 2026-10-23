@@ -13,6 +13,7 @@ import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpl
 import { useSiteView } from "../three/siteView";
 import { SlopeFields } from "./SlopeFields";
 import { SurfaceFinishField } from "./SurfaceFinishField";
+import { Info } from "./Info";
 import "./SitePanel.css";
 
 const fmtArea = (a: number) => `${a.toFixed(a < 100 ? 1 : 0)} m²`;
@@ -39,15 +40,17 @@ export function SitePanel() {
 
   return (
     <div className="panel site-panel">
-      <h3>Site</h3>
+      <h3 className="with-info">
+        Site
+        <Info>
+          The site holds the plot boundary, garden, neighbouring buildings and which way the house faces. It drives the sun study and the boundary distances in
+          the site plan.
+        </Info>
+      </h3>
       <SiteVariantNote />
       <StalePlotNote />
       {!site ? (
         <>
-          <p className="muted small">
-            The site holds the plot boundary, garden, neighbouring buildings and which way the house faces. It drives the sun study and
-            the boundary distances in the site plan.
-          </p>
           <button onClick={loadListing}>Load site for listing 91770873</button>
           {model && <SimpleSiteForm model={model} site={site} />}
         </>
@@ -292,7 +295,10 @@ function SimpleSiteForm({ model, site }: { model: HouseModel; site: Site | undef
   );
   return (
     <div className="site-simple">
-      <p className="muted small">A rectangular plot with lawns front and back, a pavement and road. Garden depths in metres from the house:</p>
+      <p className="small with-info">
+        Garden depths (m)
+        <Info>A rectangular plot with lawns front and back, a pavement and road. Garden depths are in metres from the house.</Info>
+      </p>
       <div className="site-depths">
         {field("front", "Front")}
         {field("rear", "Rear")}

@@ -5,11 +5,10 @@ import { BuildSummary, DecorateSummary, FurnishSummary, useClashCount } from "..
 import { DecoratePanel } from "../editor/DecoratePanel";
 import { BuildRoomPanel } from "../editor/Inspectors";
 import { PlotPanel } from "./PlotPanel";
-import { ReviewPanel } from "./ReviewPanel";
 
 /**
- * The panel beside (or, on narrow screens, over the bottom of) the 3D view: what the current mode shows for
- * the selected room, or a summary when nothing is selected. Also hosts Review on the plan.
+ * The panel beside the canvas: what the current mode shows for
+ * the selected room, or a summary when nothing is selected.
  */
 export function ModePanel() {
   const mode = useStore((s) => s.mode);
@@ -32,7 +31,7 @@ export function ModePanel() {
 
   const body = (() => {
     if (mode === "plot") return <PlotPanel />;
-    if (mode === "review") return <ReviewPanel />;
+    if (mode === "review") return null;
     if (!model || !floor) return <p className="muted small">Load a house to start.</p>;
     switch (mode) {
       case "build":
@@ -60,7 +59,7 @@ export function ModePanel() {
   })();
 
   return (
-    <div className={mode === "review" ? "mode-panel wide" : "mode-panel"} data-mode={mode satisfies Mode} role="region" aria-label={`${MODE_LABEL[mode]} panel`}>
+    <div className="mode-panel" data-mode={mode satisfies Mode} role="region" aria-label={`${MODE_LABEL[mode]} panel`}>
       {body}
     </div>
   );
