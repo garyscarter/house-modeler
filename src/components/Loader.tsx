@@ -1,9 +1,8 @@
 import { useId } from "react";
+import { MARK } from "../lib/brand";
 
 // The Storey mark in three parts (ground floor, first floor, roof), animated by the .loader rules in styles.css.
-const ROOF = "M10 27L32 9L54 27Z";
-const FIRST = "M14 31H50Q52 31 52 33V39Q52 41 50 41H14Q12 41 12 39V33Q12 31 14 31Z";
-const GROUND = "M14 45H50Q52 45 52 47V53Q52 55 50 55H14Q12 55 12 53V47Q12 45 14 45Z";
+const { roof: ROOF, first: FIRST, ground: GROUND } = MARK;
 // The roof grown by its stroke, so the rising fill covers the drawn roof edge.
 const ROOF_CLIP = "M7.6 28.5L32 7L56.4 28.5Z";
 

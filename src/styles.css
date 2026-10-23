@@ -233,3 +233,7 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
 
 /* While Space is held the inspector shows the other layout read-only. */
 .inspector-card.peeking { opacity: 0.55; pointer-events: none; }
+
+.empty .brand-outline { color: var(--brand); margin: 0 auto 4px; display: block; }
+.about-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; }
+.about-line svg { color: var(--brand); }

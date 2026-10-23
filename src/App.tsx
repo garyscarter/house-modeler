@@ -22,11 +22,12 @@ import { SiteEditor } from "./editor/SiteEditor";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { siteEditPatch } from "./lib/modes";
-import { floorAtLevel } from "./lib/studio";
+import { floorAtLevel, houseName } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
 import { Loader } from "./components/Loader";
+import { BrandMark } from "./components/BrandMark";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -70,6 +71,10 @@ export default function App() {
   }, [hydrated]);
 
   const model = variants[activeVariant];
+  const titleModel = variants[activeVariant] ?? variants.current ?? variants.proposed;
+  useEffect(() => {
+    document.title = titleModel ? `${houseName(titleModel)} · Storey` : "Storey";
+  }, [titleModel]);
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
   const otherModel = variants[other];
   const both = !!variants.current && !!variants.proposed;
@@ -157,6 +162,7 @@ export default function App() {
       <main data-tab={tab}>
         {!model && (
           <div className="empty">
+            <BrandMark outline size={72} />
             <h2>Load the listing</h2>
             <p>Open Layouts and choose Load listing 91770873 to see the house in 3D.</p>
             <button className="primary" onClick={openLayouts}>

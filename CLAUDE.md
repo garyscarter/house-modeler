@@ -18,6 +18,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 - `npm run check` (typecheck plus vitest) and `npm run build` must pass before pushing.
 - Check UI changes in headless Chromium with Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. In dev builds the store is on `window.__houseStore`.
 - Pure logic goes in src/lib with tests; world frame: x right, world z = plan y (+z is the front of the house).
+- Brand: the app is Storey. Follow docs/brand.md: the mark and colours come from `src/lib/brand.ts` and `BrandMark`, CSS tokens only, and every wait or busy state uses `<Loader>` (blueprint, lift or fill) beside a short label, never bare "Loading…".
 - Privacy: never put the property's address, postcode, title number or any owner's name in the repo; refer to it as "listing 91770873".
 
 ## Code map

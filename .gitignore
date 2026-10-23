@@ -4,3 +4,6 @@ dist
 *.local
 dist-hosted
 data/
+
+# Subagent git worktrees
+.claude/worktrees/
