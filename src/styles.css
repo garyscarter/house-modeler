@@ -39,8 +39,8 @@ header button { white-space: nowrap; }
 .seg.vertical button + button { border-left: 0; border-top: 1px solid var(--line); }
 .check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
 
-.body { display: flex; flex: 1; min-height: 0; }
-aside { width: 340px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); }
+.body { position: relative; display: flex; flex: 1; min-height: 0; }
+aside.drawer { width: 340px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); }
 aside .seg.vertical { margin: 10px; flex: none; }
 .side-content { overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 main { flex: 1; min-width: 0; position: relative; display: flex; }
@@ -94,7 +94,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .toolbar .hint.right { margin-left: auto; }
 .editor-body { display: flex; flex: 1; min-height: 0; }
 .editor-body svg { flex: 1; min-width: 0; height: 100%; background: #fff; user-select: none; touch-action: none; }
-.editor-body .side { width: 260px; border-left: 1px solid var(--line); background: var(--panel); padding: 10px; overflow-y: auto; }
+.editor-body .side { width: 300px; border-left: 1px solid var(--line); background: var(--panel); padding: 10px; overflow-y: auto; }
 .inspector label { margin: 6px 0; font-size: 13px; }
 
 .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 50; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -116,20 +116,63 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .palette-items button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .palette-items button.active .muted { color: #dbe4ff; }
 
-/* Drawer: under 900 px the sidebar slides over the view (keep in step with DRAWER_QUERY in App.tsx). */
-.drawer-head { display: none; }
+/* Project menu: the sidebar is a pull-out drawer at every width. */
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 0 14px; }
+.drawer-close { border: 0; background: none; font-size: 24px; line-height: 1; padding: 4px 10px; color: var(--muted); }
+aside.drawer {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 40;
+  width: min(360px, 88vw); box-shadow: 0 0 30px rgba(15, 23, 42, 0.25);
+  padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left);
+  /* Hide only once the slide-out has finished. */
+  transform: translateX(-105%); transition: transform 0.22s ease, visibility 0s linear 0.22s; visibility: hidden;
+}
+.drawer-open aside.drawer { transform: none; visibility: visible; transition: transform 0.22s ease; }
+.drawer-backdrop { position: fixed; inset: 0; z-index: 39; background: rgba(15, 23, 42, 0.35); }
+
+/* Modes: each has its own accent, picked up by active buttons, chevrons and the mode bar. */
+.app[data-mode="build"] { --accent: #2563eb; }
+.app[data-mode="decorate"] { --accent: #be185d; }
+.app[data-mode="furnish"] { --accent: #0f766e; }
+.app[data-mode="plot"] { --accent: #4d7c0f; }
+.app[data-mode="review"] { --accent: #6d28d9; }
+
+nav.mode-bar {
+  display: flex; gap: 6px; flex: none; align-items: center;
+  padding: 4px 14px; padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right));
+  background: var(--panel); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; overflow-x: auto;
+}
+nav.mode-bar.seg button, nav.mode-bar.seg button + button { border: 0; border-radius: 6px; padding: 4px 16px; min-height: 28px; font-weight: 600; flex: none; }
+nav.mode-bar.seg button:not(.active):hover { background: var(--bg); }
+
+/* Collapsible sections */
+.sect { border-bottom: 1px solid var(--line); }
+.sect-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 8px 2px; border: 0; border-radius: 0; background: none; text-align: left; }
+.sect-head:hover:not(:disabled) { border-color: transparent; background: var(--bg); }
+.sect-title { flex: none; font-weight: 600; }
+.sect-sum { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.sect-chev { flex: none; margin-left: auto; color: var(--accent); }
+.sect-body { padding: 4px 0 8px; }
+.sect-body > .panel { padding-top: 4px; border-bottom: 0; }
+.sect-body > .panel > h3:first-child { display: none; }
+
+/* Mode panel: beside the 3D view on wide screens, a bottom sheet on narrow ones. */
+.mode-panel { width: 300px; flex: none; overflow-y: auto; overscroll-behavior: contain; padding: 10px; padding-right: max(10px, env(safe-area-inset-right)); border-left: 1px solid var(--line); background: var(--panel); }
+.mode-panel.wide { width: 380px; }
+.mode-summary .summary-line { margin: 4px 0 10px; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { filter: brightness(1.1); }
+button.big { padding: 10px 14px; font-size: 15px; }
+.review-tabs { display: flex; margin-bottom: 8px; }
+.review-tabs button { flex: 1; }
+.review-compare { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.mode-sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.14); }
+.sheet-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 14px; padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); border: 0; border-radius: 0; background: none; text-align: left; }
+.sheet-head b { flex: none; color: var(--accent); }
+.sheet-head .sect-sum { font-size: 13px; }
+.sheet-body { max-height: 50dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 12px; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+.site-editor-body > .site-side { width: 300px; }
+
 @media (max-width: 899px) {
-  aside.drawer {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 40;
-    width: min(360px, 88vw); box-shadow: 0 0 30px rgba(15, 23, 42, 0.25);
-    padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left);
-    /* Hide only once the slide-out has finished. */
-    transform: translateX(-105%); transition: transform 0.22s ease, visibility 0s linear 0.22s; visibility: hidden;
-  }
-  .drawer-open aside.drawer { transform: none; visibility: visible; transition: transform 0.22s ease; }
-  .drawer-backdrop { position: fixed; inset: 0; z-index: 39; background: rgba(15, 23, 42, 0.35); }
-  .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 0 14px; }
-  .drawer-close { border: 0; background: none; font-size: 24px; line-height: 1; padding: 4px 10px; color: var(--muted); }
   main { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 
   /* The plan editor's inspector goes under the plan. */
@@ -158,6 +201,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   .view-buttons button { padding: 3px 7px; }
   .viewer-title { max-width: calc(100% - 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lightbox .nav { display: none; }
+
+  /* The mode bar becomes a tab bar at the bottom of the screen (last in the column). */
+  nav.mode-bar { order: 99; gap: 0; padding: 0 max(4px, env(safe-area-inset-left)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-right)); border-bottom: 0; border-top: 1px solid var(--line); overflow: visible; }
+  nav.mode-bar.seg button, nav.mode-bar.seg button + button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 2px; font-size: 13px; border-radius: 0; }
+  nav.mode-bar.seg button.active { box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55); }
 }
 
 /* Coarse pointers (fingers): targets at least 40 px. */
@@ -165,6 +213,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   button, select, label.file, .seg button, .seg select { min-height: 40px; }
   .seg button, .seg select { padding-left: 12px; padding-right: 12px; }
   .drawer-toggle, .hdr-undo button { min-width: 44px; }
+  nav.mode-bar.seg button, nav.mode-bar.seg button + button, .sect-head, .sheet-head { min-height: 40px; }
   input[type="text"], input[type="number"], input[type="password"], input:not([type]), select, textarea { font-size: 16px; }
   label input[type="text"], label input[type="password"], label input[type="number"], label select { min-height: 40px; }
   input[type="checkbox"] { width: 20px; height: 20px; }

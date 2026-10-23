@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { ask } from "./Dialogs";
-import { SITE_EDIT_ID, useSite, useStore } from "../store";
+import { useSite, useStore } from "../store";
 import { SiteVariantNote } from "./SiteVariantNote";
 import { freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite } from "../lib/sitePreset";
 import { siteSource } from "../lib/sites";
@@ -28,6 +28,7 @@ export function SitePanel() {
   const updateSite = useStore((s) => s.updateSite);
   const model = useStore((s) => s.variants[s.activeVariant]);
   const setUi = useStore((s) => s.setUi);
+  const setMode = useStore((s) => s.setMode);
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const setSiteView = useSiteView((s) => s.setSiteView);
 
@@ -52,7 +53,10 @@ export function SitePanel() {
       ) : (
         <>
           <div className="row">
-            <button onClick={() => setUi({ tab: "plan", editFloorId: SITE_EDIT_ID })}>Edit the site plan</button>
+            <button onClick={() => {
+                setUi({ tab: "plan" });
+                setMode("plot");
+              }}>Edit the site plan</button>
             <label className="check site-inline">
               <input type="checkbox" checked={ghost} onChange={(e) => setSiteView({ ghostNeighbours: e.target.checked })} /> See-through neighbours
             </label>

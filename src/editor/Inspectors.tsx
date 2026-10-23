@@ -664,7 +664,17 @@ export function OpeningInspector({
   );
 }
 
-export function WallInspector({ wall, onChange, onDelete }: { wall: Wall; onChange: (p: Partial<Wall>) => void; onDelete: () => void }) {
+export function WallInspector({
+  wall,
+  onChange,
+  onDelete,
+}: {
+  wall: Wall;
+  /** Which mode the panel is for (Build: height and delete; Decorate: colour). Ignored until Chunk C. */
+  mode?: import("../lib/modes").Mode;
+  onChange: (p: Partial<Wall>) => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="inspector">
       <h4>Wall</h4>
@@ -930,3 +940,7 @@ export function FloorInspector({ variant, floor }: { variant: VariantKey; floor:
     </div>
   );
 }
+
+/** Stable names for the modes redesign: Build's room panel and floor settings (Chunk C replaces these with the real ones). */
+export const BuildRoomPanel = RoomInspector;
+export const FloorSettings = FloorInspector;

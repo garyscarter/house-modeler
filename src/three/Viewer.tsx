@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
-import { modelBounds } from "../lib/geometry";
+import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { Lighting, SkyBackdrop } from "./Lighting";
 import { GROUND_Y, SiteScene } from "./Site";
@@ -24,6 +24,8 @@ interface ViewerProps {
   doorsOpen?: boolean;
   selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room) => void;
+  /** Decorate: a tap on a wall face, with the hit point and the face's normal in the plan frame (world x, z). */
+  onPickWall?: (floor: Floor, hit: V2, normal: V2) => void;
   title?: string;
   maxLevel?: number | null;
   showExterior?: boolean;
@@ -36,7 +38,7 @@ interface ViewerProps {
 }
 
 export function Viewer(props: ViewerProps) {
-  const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, title, maxLevel, showExterior, captureId, variant, ghostVariant } = props;
+  const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant } = props;
   const bounds = useMemo(() => modelBounds([...model.floors, ...(ghost?.floors ?? [])]), [model, ghost]);
   const centre = useMemo(
     () => new THREE.Vector3((bounds.x0 + bounds.x1) / 2, 1, (bounds.y0 + bounds.y1) / 2),
@@ -77,6 +79,7 @@ export function Viewer(props: ViewerProps) {
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onPickWall={onPickWall}
           visibleLevels={visibleLevels}
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}

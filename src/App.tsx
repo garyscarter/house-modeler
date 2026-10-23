@@ -5,7 +5,6 @@ import { PlanEditor } from "./editor/PlanEditor";
 import { ImportPanel } from "./components/ImportPanel";
 import { PhotosPanel } from "./components/PhotosPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { ExteriorPanel } from "./components/ExteriorPanel";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
@@ -14,20 +13,22 @@ import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
-import { SitePanel } from "./components/SitePanel";
-import { ReportPanel } from "./components/ReportPanel";
-import { PlanningPanel } from "./components/PlanningPanel";
+import { ModeBar } from "./components/ModeBar";
+import { ModePanel } from "./components/ModePanel";
+import { usePanelPrefs } from "./components/panelPrefs";
+import { siteEditPatch } from "./lib/modes";
+import { pickWallFace } from "./lib/decorPick";
+import { roomWorldPolygon } from "./lib/geometry";
 import { SiteEditor } from "./editor/SiteEditor";
 import { PlanFloorSwitch, ViewControls, ViewMenu } from "./components/ViewMenu";
 import { useMediaQuery } from "./components/useMediaQuery";
-import { VARIANT_LABEL, type VariantKey } from "./types";
+import { VARIANT_LABEL, type Floor, type VariantKey } from "./types";
 
-type Side = "floorplans" | "photos" | "exterior" | "site" | "report" | "planning" | "settings";
-
-/** Below this width the sidebar becomes a slide-over drawer (keep in step with styles.css). */
-const DRAWER_QUERY = "(max-width: 899px)";
 /** From this width the view controls fit inline in the header; narrower screens get the View popover. */
 const INLINE_QUERY = "(min-width: 1680px)";
+
+/** The Project menu (the pull-out drawer): floorplans, photos and settings. */
+type Side = "floorplans" | "photos" | "settings";
 
 export default function App() {
   const variants = useStore((s) => s.variants);
@@ -50,7 +51,7 @@ export default function App() {
   const canRedo = useStore((s) => s.future.length > 0);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
-  const drawer = useMediaQuery(DRAWER_QUERY);
+  const mode = useStore((s) => s.mode);
   const inline = useMediaQuery(INLINE_QUERY);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -91,40 +92,54 @@ export default function App() {
   }, [undo, redo]);
 
   // A panel action that opens the plan editor or another floor should reveal it.
-  useEffect(() => setDrawerOpen(false), [tab, editFloorId, drawer]);
+  useEffect(() => setDrawerOpen(false), [tab, editFloorId]);
 
   const model = variants[activeVariant];
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
   const otherModel = variants[other];
   const both = !!variants.current && !!variants.proposed;
-  const editingSite = editFloorId === SITE_EDIT_ID;
+  const editingSite = editFloorId === SITE_EDIT_ID || mode === "plot";
   const editFloor = model?.floors.find((f) => f.id === editFloorId) ?? model?.floors[0];
 
+  // On the plan, Plot always shows the site editor and no other mode does.
+  useEffect(() => {
+    if (tab === "plan" && mode === "plot" && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
+  }, [tab, mode, editFloorId, setUi]);
+
   const onSelectRoom = (floor: { id: string }, room: { id: string }) => {
-    setUi({ selectedRoomId: room.id, editFloorId: floor.id });
+    if (mode === "plot") return;
+    if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
+    else if (mode === "decorate") {
+      setUi({ selectedRoomId: room.id, selectedEdge: null, editFloorId: floor.id });
+      usePanelPrefs.getState().setOpen("decorate.floor", true);
+    } else setUi({ editFloorId: floor.id });
   };
+
+  // Decorate: a tap on a wall in 3D picks that wall face of the room behind it.
+  const onPickWall = (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }) => {
+    const rooms = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
+    const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: 0.6, maxDist: 0.5 });
+    if (!pick || pick.edge === null) return;
+    setUi({ selectedRoomId: pick.roomId, selectedEdge: { edge: pick.edge, side: pick.side }, editFloorId: floor.id });
+  };
+  const pickWall = mode === "decorate" ? onPickWall : undefined;
 
   if (!hydrated) return <div className="loading">Loading…</div>;
 
-  const viewControls = tab === "3d" ? <ViewControls model={model} both={both} /> : model ? <PlanFloorSwitch model={model} /> : null;
+  const viewControls =
+    tab === "3d" ? <ViewControls model={model} both={both} /> : model && mode !== "plot" ? <PlanFloorSwitch model={model} /> : null;
   const sides: [Side, string, boolean][] = [
     ["floorplans", "Floorplans", true],
     ["photos", `Photos (${photos.length})`, true],
-    ["exterior", "Exterior", !!model],
-    ["site", "Site", true],
-    ["report", "Report", !!model],
-    ["planning", "Planning check", !!model],
     ["settings", "Settings", true],
   ];
 
   return (
-    <div className={drawer && drawerOpen ? "app drawer-open" : "app"}>
+    <div className={drawerOpen ? "app drawer-open" : "app"} data-mode={mode}>
       <header>
-        {drawer && (
-          <button className="drawer-toggle" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Panels" title="Panels">
-            <span aria-hidden="true">☰</span>
-          </button>
-        )}
+        <button className="drawer-toggle" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Project" title="Project">
+          <span aria-hidden="true">☰</span>
+        </button>
         <h1>House Modeler</h1>
         <div className="seg hdr-undo">
           <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -137,7 +152,7 @@ export default function App() {
         <div className="hdr-break" />
         <div className="seg hdr-variant">
           {(["current", "proposed"] as VariantKey[]).map((k) => (
-            <button key={k} className={activeVariant === k ? "active" : ""} disabled={!variants[k]} onClick={() => setUi({ activeVariant: k, selectedRoomId: null })}>
+            <button key={k} className={activeVariant === k ? "active" : ""} disabled={!variants[k]} onClick={() => setUi({ activeVariant: k, selectedRoomId: null, selectedEdge: null })}>
               {VARIANT_LABEL[k]}
             </button>
           ))}
@@ -153,17 +168,17 @@ export default function App() {
         {viewControls && (inline ? <div className="hdr-inline">{viewControls}</div> : <ViewMenu label="View">{viewControls}</ViewMenu>)}
       </header>
 
+      <ModeBar />
+
       <div className="body">
-        {drawer && drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
-        <aside className={drawer ? "drawer" : undefined} aria-hidden={drawer && !drawerOpen ? true : undefined} inert={drawer && !drawerOpen ? true : undefined}>
-          {drawer && (
-            <div className="drawer-head">
-              <b>Panels</b>
-              <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close panels">
-                ×
-              </button>
-            </div>
-          )}
+        {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
+        <aside className="drawer" aria-label="Project" aria-hidden={!drawerOpen ? true : undefined} inert={!drawerOpen ? true : undefined}>
+          <div className="drawer-head">
+            <b>Project</b>
+            <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close project menu">
+              ×
+            </button>
+          </div>
           <div className="seg vertical">
             {sides.map(([key, label, enabled]) => (
               <button key={key} className={side === key ? "active" : ""} onClick={() => setSide(key)} disabled={!enabled}>
@@ -179,10 +194,6 @@ export default function App() {
               </>
             )}
             {side === "photos" && <PhotosPanel />}
-            {side === "exterior" && model && <ExteriorPanel variant={activeVariant} />}
-            {side === "site" && <SitePanel />}
-            {side === "report" && model && <ReportPanel />}
-            {side === "planning" && model && <PlanningPanel />}
             {side === "settings" && <SettingsPanel />}
           </div>
         </aside>
@@ -192,7 +203,7 @@ export default function App() {
             <div className="empty">
               <h2>Load the listing</h2>
               <p>Open Floorplans and choose Load listing 91770873 to see the house in 3D.</p>
-              {drawer && <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>}
+              <button onClick={() => setDrawerOpen(true)}>Open floorplans</button>
             </div>
           )}
           {model && tab === "3d" && viewMode === "single" && (
@@ -204,6 +215,7 @@ export default function App() {
               doorsOpen={doorsOpen}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
+              onPickWall={pickWall}
               title={VARIANT_LABEL[activeVariant]}
               maxLevel={maxLevel}
               showExterior={showExterior}
@@ -227,6 +239,13 @@ export default function App() {
                     setUi({ activeVariant: k });
                     onSelectRoom(f, r);
                   }}
+                  onPickWall={
+                    pickWall &&
+                    ((f, h, n) => {
+                      setUi({ activeVariant: k });
+                      pickWall(f, h, n);
+                    })
+                  }
                   title={VARIANT_LABEL[k]}
                   maxLevel={maxLevel}
                   showExterior={showExterior}
@@ -246,6 +265,7 @@ export default function App() {
               doorsOpen={doorsOpen}
               selectedRoomId={selectedRoomId}
               onSelectRoom={onSelectRoom}
+              onPickWall={pickWall}
               title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
               maxLevel={maxLevel}
               showExterior={showExterior}
@@ -254,6 +274,7 @@ export default function App() {
           {model && tab === "plan" && editingSite && <SiteEditor />}
           {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={editFloor.id} variant={activeVariant} floor={editFloor} />}
         </main>
+        {((model && (tab === "3d" || mode === "review")) || (!model && mode === "plot")) && <ModePanel />}
       </div>
       <PhotoLightbox />
       <Dialogs />

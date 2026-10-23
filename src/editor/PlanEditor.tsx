@@ -48,7 +48,7 @@ import { arrowDelta, keyBelongsElsewhere, pasteAt, slideOpening } from "../lib/n
 import { getClipboardFixture, setClipboardFixture, useClipboardFixture } from "../lib/clipboard";
 import "./PlanEditor.css";
 
-type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
+import type { Tool } from "../lib/modes";
 
 type Drag =
   | { kind: "corner"; roomId: string; idx: number }
