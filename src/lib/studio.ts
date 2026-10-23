@@ -34,6 +34,30 @@ export function floorsByLevel(floors: Floor[]): Floor[] {
   return [...floors].sort((a, b) => a.level - b.level);
 }
 
+/** The floor at the same level in another layout (floor ids differ between layouts); the nearest level if none matches. */
+export function floorAtLevel(floors: Floor[], level: number): Floor | undefined {
+  let best: Floor | undefined;
+  for (const f of floors) if (!best || Math.abs(f.level - level) < Math.abs(best.level - level)) best = f;
+  return best;
+}
+
+type Targetish = { tagName?: string; closest?: (s: string) => unknown } | null;
+const tag = (t: Targetish) => t?.tagName?.toLowerCase();
+
+/** Tab flips Plan/3D only from the page itself (body, a canvas, the plan, an svg), never from a control, card, menu or dialog. */
+export function tabKeyApplies(target: EventTarget | null): boolean {
+  const t = target as Targetish;
+  if (t?.closest?.(".inspector-card, .popover, .house-menu, .dock, .tool-rail, [role=\"dialog\"], [role=\"menu\"]")) return false;
+  const g = tag(t);
+  return !t || g === "body" || g === "html" || g === "canvas" || g === "svg" || !!t.closest?.(".plan-canvas") || (g !== undefined && !!t.closest?.("svg"));
+}
+
+/** Space peeks unless it is on something Space already presses or types into. */
+export function spaceKeyApplies(target: EventTarget | null): boolean {
+  const g = tag(target as Targetish);
+  return !(g === "button" || g === "a" || g === "input" || g === "select" || g === "textarea" || g === "summary");
+}
+
 export interface FloorUi {
   tab: Tab;
   maxLevel: number | null;
@@ -88,16 +112,17 @@ export interface PeekState {
   peekReturn: VariantKey | null;
   activeVariant: VariantKey;
   viewMode: ViewMode;
+  tab: Tab;
   variants: Partial<Record<VariantKey, unknown>>;
 }
 
 /**
- * Holding Space shows the other layout. On: only when not already peeking, the view is single or
+ * Holding Space shows the other layout. On: only when not already peeking, the 3D view (if on 3D) is single or
  * overlay and the other layout exists. Off: only when peeking. Anything else changes nothing.
  */
 export function peekPatch(s: PeekState, on: boolean): Partial<Pick<PeekState, "peek" | "peekReturn" | "activeVariant">> {
   if (on) {
-    if (s.peek || (s.viewMode !== "single" && s.viewMode !== "overlay")) return {};
+    if (s.peek || (s.tab === "3d" && s.viewMode !== "single" && s.viewMode !== "overlay")) return {};
     const other: VariantKey = s.activeVariant === "current" ? "proposed" : "current";
     if (!s.variants[other]) return {};
     return { peek: true, peekReturn: s.activeVariant, activeVariant: other };

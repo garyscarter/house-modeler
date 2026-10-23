@@ -221,7 +221,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (keyBelongsElsewhere(e.target, document)) return;
+      if (keyBelongsElsewhere(e.target, document) || useStore.getState().peek) return;
       const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
       if (arrow) {
         if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();

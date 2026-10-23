@@ -18,15 +18,18 @@ export function Info({ children, label = "More about this" }: { children: ReactN
       setPinned(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
     };
     const onDown = (e: PointerEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) close();
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener("pointerdown", onDown, true);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("pointerdown", onDown, true);
     };
   }, [open]);

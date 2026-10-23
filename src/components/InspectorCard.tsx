@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useStore } from "../store";
 import { MODE_LABEL } from "../lib/modes";
 import { usePanelPrefs } from "./panelPrefs";
@@ -12,10 +12,17 @@ export function InspectorCard({ title, className = "", children }: { title?: str
   const mode = useStore((s) => s.mode);
   const collapsed = usePanelPrefs((s) => s.inspectorCollapsed);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
+  const peek = useStore((s) => s.peek);
+  const selectedRoomId = useStore((s) => s.selectedRoomId);
+  // A hover highlight from a row in this card must not outlive a change of selection.
+  useEffect(() => {
+    useStore.getState().setUi({ hoveredRoomId: null });
+  }, [selectedRoomId]);
   if (!children) return null;
   const heading = title ?? MODE_LABEL[mode];
   return (
-    <section className={`inspector-card float-card ${className}`.trim()} aria-label={title ?? `${MODE_LABEL[mode]} inspector`}>
+    <section className={`inspector-card float-card ${className}${peek ? " peeking" : ""}`.trim()}
+      inert={peek} aria-label={title ?? `${MODE_LABEL[mode]} inspector`}>
       <div className="inspector-card-head">
         <h2>{heading}</h2>
         <button

@@ -166,8 +166,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 /* The mode panel lives inside the floating inspector card */
 .mode-panel { padding: 0; }
 .mode-summary .summary-line { margin: 4px 0 10px; font-weight: 600; }
-.review-tabs { display: flex; margin-bottom: 8px; }
-.review-tabs button { flex: 1; }
 
 /* Shared floating classes (used by every Studio chunk) */
 .float-card { background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur); border-radius: var(--card-radius); box-shadow: var(--shadow-card); }
@@ -192,3 +190,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 8px; background: transparent; color: var(--text); gap: 4px; }
 .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
 kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
+
+/* While Space is held the inspector shows the other layout read-only. */
+.inspector-card.peeking { opacity: 0.55; pointer-events: none; }

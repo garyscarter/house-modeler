@@ -24,6 +24,7 @@ import { SiteEditor } from "./editor/SiteEditor";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { siteEditPatch } from "./lib/modes";
+import { floorAtLevel } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type VariantKey } from "./types";
@@ -44,6 +45,7 @@ export default function App() {
   const editFloorId = useStore((s) => s.editFloorId);
   const mode = useStore((s) => s.mode);
   const peek = useStore((s) => s.peek);
+  const peekReturn = useStore((s) => s.peekReturn);
   const look = usePanelPrefs((s) => s.look);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
 
@@ -71,7 +73,10 @@ export default function App() {
   const effectiveViewMode = both ? viewMode : "single";
   // On the plan, Plot always shows the site editor and no other mode does.
   const editingSite = mode === "plot";
-  const editFloor = (editFloorId && editFloorId !== SITE_EDIT_ID ? model?.floors.find((f) => f.id === editFloorId) : undefined) ?? model?.floors[0];
+  // While peeking, the shown layout has other floor ids: follow the level of the floor you were on, and keep the editor's key.
+  const homeModel = peek && peekReturn ? variants[peekReturn] : model;
+  const homeFloor = (editFloorId && editFloorId !== SITE_EDIT_ID ? homeModel?.floors.find((f) => f.id === editFloorId) : undefined) ?? homeModel?.floors[0];
+  const editFloor = peek && homeFloor && model ? floorAtLevel(model.floors, homeFloor.level) ?? model.floors[0] : (editFloorId && editFloorId !== SITE_EDIT_ID ? model?.floors.find((f) => f.id === editFloorId) : undefined) ?? model?.floors[0];
 
   useEffect(() => {
     if (tab === "plan" && mode === "plot" && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
@@ -194,7 +199,7 @@ export default function App() {
           />
         )}
         {model && tab === "plan" && editingSite && <SiteEditor />}
-        {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={editFloor.id} variant={activeVariant} floor={editFloor} />}
+        {model && tab === "plan" && !editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
 
         {showInspector && (
           <InspectorCard className="side">
