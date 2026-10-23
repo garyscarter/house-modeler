@@ -29,7 +29,7 @@ export type ViewSide = "front" | "rear" | "left" | "right" | "top";
 export type ViewRequest = ViewSide | "home";
 
 /** Allowance for the roof above the top storey when framing the house, metres. */
-export const ROOF_ALLOWANCE = 3.5;
+const ROOF_ALLOWANCE = 3.5;
 
 /**
  * The box the opening view frames: every floor of every model given (with its
@@ -82,9 +82,9 @@ export function poseFits(p: unknown, box: FrameBox, maxDistance: number): p is C
   return near && d <= maxDistance * 1.001;
 }
 
-export const HOME_AZIMUTH_DEG = 35;
-export const HOME_ELEVATION_DEG = 28;
-export const HOME_MARGIN = 0.12;
+const HOME_AZIMUTH_DEG = 35;
+const HOME_ELEVATION_DEG = 28;
+const HOME_MARGIN = 0.12;
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -140,7 +140,7 @@ export function homeView(
 }
 
 /** What the elevation presets fit: the house's height (ridge included) and the camera's lens. */
-export interface ElevationLens {
+interface ElevationLens {
   height: number;
   fovDeg: number;
   aspect: number;

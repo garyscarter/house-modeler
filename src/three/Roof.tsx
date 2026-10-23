@@ -7,16 +7,9 @@ import { GUTTER_R, PIPE_R, exteriorOf, planRoofs, type P3 } from "../lib/roof";
 import { SOIL_R, roofParts, type RoofParts } from "../lib/roofParts";
 import { useStore } from "../store";
 import { roofStructure } from "../lib/structure";
+import { shade } from "./shell";
+import { triangles } from "./geometryUtil";
 import { brickTexture, membraneTexture, tileTextures } from "./roofTextures";
-
-/** BufferGeometry from flat xyz triangle soup (and optional uv pairs), with flat normals. */
-export function triangles(pos: number[], uv?: number[]): THREE.BufferGeometry {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  if (uv && uv.length) g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  g.computeVertexNormals();
-  return g;
-}
 
 /** uPVC white for fascias, soffits and rainwater goods. */
 const WHITE_TRIM = "#f2f1ec";
@@ -167,13 +160,6 @@ function buildGeometry(p: RoofParts): RoofGeometry {
     vents,
     pots,
   };
-}
-
-/** Lighten (>1) or darken (<1) a hex colour. */
-function shade(hex: string, f: number): string {
-  const c = new THREE.Color(hex);
-  c.multiplyScalar(f);
-  return "#" + c.getHexString();
 }
 
 /**

@@ -18,6 +18,7 @@ import { flightStructure, floorStructure, floorsStructure, modelStructure, shell
 import { GROUND_Y } from "./Site";
 import { buildShell } from "./shell";
 import { getMaterial, type MatSpec } from "./textures";
+import { floorBaseY } from "./floorBase";
 import { finishColour, floorAngle, groutColour } from "../lib/floorFinish";
 import { floorUv } from "../lib/floorPattern";
 import {
@@ -33,10 +34,6 @@ import {
 } from "../lib/geometry";
 
 export { WALL_T, roomColor };
-
-export function floorBaseY(model: HouseModel, floor: Floor) {
-  return floor.level * (model.ceilingHeight + model.slabThickness);
-}
 
 interface HouseProps {
   model: HouseModel;

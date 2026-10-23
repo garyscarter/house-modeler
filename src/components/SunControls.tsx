@@ -6,7 +6,8 @@ import { compassPoint, dayOfYear, daysInYear, formatClock, formatDay, sunTimes, 
 import { SUN_YEAR, useSunInfo } from "../three/useSun";
 import { useViewedSite, useViewedVariant } from "../three/viewedVariant";
 import { useSiteView } from "../three/siteView";
-import { SUN_HOURS_GRADIENT, SUN_HOURS_MAX, shareWithSun, useSunHours } from "../three/SunHours";
+import { SUN_HOURS_GRADIENT, SUN_HOURS_MAX, useSunHours } from "../three/SunHours";
+import { shareWithSun } from "../three/sunShare";
 import "./SunControls.css";
 
 const QUICK_DATES: [string, number][] = [

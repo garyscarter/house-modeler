@@ -12,7 +12,7 @@ import { metricUvs } from "../lib/neighbourUv";
 import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
 import { surfaceLook } from "../lib/surfaceFinish";
 import { boundaryWallSegments, wallAt, type WallSegment } from "../lib/wallSteps";
-import { triangles } from "./Roof";
+import { triangles } from "./geometryUtil";
 import { membraneTexture, tileTextures } from "./roofTextures";
 import { getMaterial } from "./textures";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";

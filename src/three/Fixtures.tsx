@@ -6,6 +6,7 @@ import { toWorld } from "../lib/geometry";
 import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { glassMaterial, inUse } from "./textures";
+import { shade } from "./shell";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
@@ -796,11 +797,3 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
   return out;
 }
 
-/** Lighten (k > 1) or darken (k < 1) a hex colour. */
-function shade(hex: string, k: number): string {
-  const c = new THREE.Color(hex);
-  c.r = Math.min(1, c.r * k);
-  c.g = Math.min(1, c.g * k);
-  c.b = Math.min(1, c.b * k);
-  return "#" + c.getHexString();
-}
