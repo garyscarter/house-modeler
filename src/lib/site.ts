@@ -1,13 +1,13 @@
 import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, WPt } from "../types";
 import { uid } from "../types";
-import { EXT_WALL_T, bbox, modelBounds, pointInPolygon, polygonArea, roomWorldPolygon, type V2 } from "./geometry";
+import { EXT_WALL_T, areaOf, bbox, modelBounds, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
 import { exteriorOf, floorBase, planRoofs } from "./roof";
 
 /** Ground level below the ground floor's finished floor, metres (matches the 3D scene). */
 export const GROUND_DROP = 0.26;
 
 /** Unsigned polygon area, m². */
-export const areaOf = (poly: V2[]) => Math.abs(polygonArea(poly));
+export { areaOf };
 
 export function closestOnSegment(p: V2, a: V2, b: V2): V2 {
   const dx = b.x - a.x;
@@ -57,17 +57,6 @@ export function pointPolygonDistance(p: V2, poly: V2[]): number {
   if (pointInPolygon(p, poly)) return 0;
   let best = Infinity;
   for (let i = 0; i < poly.length; i++) best = Math.min(best, pointSegmentDistance(p, poly[i], poly[(i + 1) % poly.length]));
-  return best;
-}
-
-/** Closest points between a segment and a polygon (distance 0 when the segment touches or enters it). */
-export function segmentPolygonDistance(a: V2, b: V2, poly: V2[]): Closest {
-  if (pointInPolygon(a, poly)) return { d: 0, a, b: a };
-  let best: Closest = { d: Infinity, a, b: a };
-  for (let i = 0; i < poly.length; i++) {
-    const c = segmentSegmentClosest(a, b, poly[i], poly[(i + 1) % poly.length]);
-    if (c.d < best.d) best = c;
-  }
   return best;
 }
 

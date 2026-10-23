@@ -202,4 +202,9 @@ describe("mergeRooms", () => {
     expect(knockThroughNeighbours(f, "A").map((r) => r.id)).toEqual(["B", "D"]);
     expect(knockThroughNeighbours(f, "C")).toEqual([]);
   });
+
+  it("skips rooms whose box is far away and keeps adjacent ones", () => {
+    const f = floor([rect("A", 0, 0, 200, 300), rect("Far", 2000, 0, 2200, 300), rect("Next", 200, 0, 400, 300)]);
+    expect(knockThroughNeighbours(f, "A").map((r) => r.id)).toEqual(["Next"]);
+  });
 });

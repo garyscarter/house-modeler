@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  server: { watch: { ignored: ["**/.claude/**"] } },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "server/**/*.test.mjs"],

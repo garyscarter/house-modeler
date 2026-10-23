@@ -343,7 +343,7 @@ export interface Floor {
   /** Winders at the head turning the top steps a quarter turn onto the landing, towards this side (facing up the flight). Default straight. */
   stairsTopTurn?: "left" | "right";
   /** Number of winders in a turned head (2 or 3). Default 2. */
-  stairsTopWinders?: number;
+  stairsTopWinders?: 2 | 3;
   /** Covered outdoor areas (porch, carport): polygons in image px, roofed at this floor's ceiling. */
   canopies?: Pt[][];
 }

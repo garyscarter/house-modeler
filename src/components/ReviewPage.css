@@ -25,13 +25,13 @@
 .review-page .rv-tile-value { font-family: var(--font-display); font-size: 24px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
 .review-page .rv-tile-cta { color: var(--accent); }
 .review-page .rv-tile-detail { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 21px; }
-.review-page .rv-tile:first-child .rv-tile-detail { color: #15803d; font-weight: 600; font-size: 16px; }
+.review-page .rv-tile:first-child .rv-tile-detail { color: var(--ok); font-weight: 600; font-size: 16px; }
 .review-page .rv-tone-bad { border-left: 5px solid var(--danger); }
 .review-page .rv-tone-bad .rv-tile-value { color: var(--danger); }
-.review-page .rv-tone-warn { border-left: 5px solid #d97706; }
-.review-page .rv-tone-warn .rv-tile-value { color: #b45309; }
-.review-page .rv-tone-good { border-left: 5px solid #16a34a; }
-.review-page .rv-tone-good .rv-tile-value { color: #15803d; }
+.review-page .rv-tone-warn { border-left: 5px solid var(--warn); }
+.review-page .rv-tone-warn .rv-tile-value { color: var(--warn); }
+.review-page .rv-tone-good { border-left: 5px solid var(--ok); }
+.review-page .rv-tone-good .rv-tile-value { color: var(--ok); }
 
 /* Columns and sections */
 .review-page .rv-columns { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }

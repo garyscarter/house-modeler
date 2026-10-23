@@ -58,4 +58,10 @@ describe("floor finish changes in the report", () => {
     expect(floorChange({ floorFinish: "oak" }, { name: "Kitchen", floorFinish: "oak" })).toBeUndefined();
     expect(COST_LINES.find((l) => l.id === "newFlooring")).toMatchObject({ label: "New floor finish", unit: "m²" });
   });
+
+  it("does not throw on a finish it does not know", () => {
+    const bogus = "bogus" as never;
+    expect(floorChange({ floorFinish: bogus }, { name: "Hall" })?.description).toBe("Hall: bogus floor taken up");
+    expect(floorChange({}, { name: "Hall", floorFinish: bogus })?.description).toBe("New floor in the Hall: bogus");
+  });
 });

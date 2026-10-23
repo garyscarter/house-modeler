@@ -1,7 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { create } from "zustand";
 import { useStore } from "../store";
-import { PlanningBody, PLANNING_TITLE, usePlanningCheck, useSwitchToProposed } from "./PlanningPanel";
+import { Icon } from "./icons";
+import { PlanningBody, PLANNING_TITLE, usePlanningCheck } from "./PlanningPanel";
 import { AreaCheck, Areas, Changes, Costs, Exports, Notes, useReportData } from "./ReportPanel";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "../lib/reviewSummary";
 import type { VariantKey } from "../types";
@@ -47,7 +48,7 @@ export function ReviewPage() {
   return open ? <ReviewDocument /> : null;
 }
 
-function Section({ id, title, count, children }: { id: string; title: string; count?: number; children: ReactNode }) {
+function RvSection({ id, title, count, children }: { id: string; title: string; count?: number; children: ReactNode }) {
   return (
     <section className="rv-section" id={id}>
       <h2>
@@ -65,7 +66,6 @@ function ReviewDocument() {
   const rootRef = useRef<HTMLDivElement>(null);
   const data = useReportData();
   const { check, wing, setWing } = usePlanningCheck();
-  useSwitchToProposed();
   const { variants, areas, changes, estimate, notes, noteCount, both } = data;
 
   const scrollTo = (id: string) => {
@@ -87,7 +87,7 @@ function ReviewDocument() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".modal-backdrop, .dialog-backdrop")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".modal-backdrop, .dialog-backdrop, .lightbox")) {
         e.preventDefault();
         closeReview();
       }
@@ -109,8 +109,8 @@ function ReviewDocument() {
             <h1>Review</h1>
             <p className="rv-subtitle">{reviewSubtitle(present)}</p>
           </div>
-          <button className="rv-close" onClick={closeReview} aria-label="Close review" title="Close (Esc)">
-            ×
+          <button className="icon-btn rv-close" onClick={closeReview} aria-label="Close review" title="Close (Esc)">
+            <Icon name="close" />
           </button>
         </div>
       </header>
@@ -136,32 +136,32 @@ function ReviewDocument() {
 
         <div className="rv-columns">
           <div className="rv-col">
-            <Section id="rv-areas" title="Areas">
+            <RvSection id="rv-areas" title="Areas">
               <Areas report={areas} both={both} />
-            </Section>
-            <Section id="rv-measured" title="Measured like the listing">
+            </RvSection>
+            <RvSection id="rv-measured" title="Measured like the listing">
               <AreaCheck variants={variants} hideTitle />
-            </Section>
-            <Section id="rv-changes" title="Changes" count={changes?.length}>
+            </RvSection>
+            <RvSection id="rv-changes" title="Changes" count={changes?.length}>
               {changes ? <Changes changes={changes} /> : <p className="muted">Load or draw a Proposed layout (House menu → Layouts) to list what changes from As listed.</p>}
-            </Section>
-            <Section id="rv-costs" title="Rough costs">
+            </RvSection>
+            <RvSection id="rv-costs" title="Rough costs">
               {changes && estimate ? <Costs estimate={estimate} /> : <p className="muted">Costs appear once there is a Proposed layout to compare with As listed.</p>}
-            </Section>
-            <Section id="rv-notes" title="Notes" count={noteCount}>
+            </RvSection>
+            <RvSection id="rv-notes" title="Notes" count={noteCount}>
               <Notes notes={notes} />
-            </Section>
+            </RvSection>
           </div>
           <div className="rv-col">
-            <Section id="rv-planning" title={PLANNING_TITLE}>
+            <RvSection id="rv-planning" title={PLANNING_TITLE}>
               <PlanningBody check={check} wing={wing} onWing={setWing} />
-            </Section>
+            </RvSection>
           </div>
         </div>
 
-        <Section id="rv-exports" title="Exports">
+        <RvSection id="rv-exports" title="Exports">
           <Exports areas={areas} changes={changes} />
-        </Section>
+        </RvSection>
       </div>
     </div>
   );

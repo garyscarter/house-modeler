@@ -3,7 +3,8 @@
 //   npm run build && PASSCODE=... npm start
 //
 // Environment: PASSCODE (required, 4+ characters), SESSION_SECRET (optional but
-// recommended), PORT (default 10000), DATA_DIR (where the shared project is saved;
+// recommended), TRUSTED_PROXY_HOPS (proxies in front whose x-forwarded-for entries are
+// trusted; default 1 for Render, 0 when reached directly), PORT (default 10000), DATA_DIR (where the shared project is saved;
 // without it the saved project is lost on restart and the app is told so).
 import http from "node:http";
 import fs from "node:fs";
@@ -41,6 +42,13 @@ if (!SESSION_SECRET) {
   SESSION_SECRET = randomBytes(32).toString("hex");
   console.warn("SESSION_SECRET is not set: generated a random one, so everyone is logged out whenever the server restarts.");
 }
+if (PASSCODE.length < 10) {
+  console.warn("The passcode is shorter than 10 characters: consider a longer one, as the sign-in is open to the internet.");
+}
+// Number of proxies in front of this server whose x-forwarded-for entries are trusted.
+// Render adds one, so the default is 1; use 0 when the server is reached directly.
+const hopsEnv = Number(process.env.TRUSTED_PROXY_HOPS);
+const TRUSTED_PROXY_HOPS = process.env.TRUSTED_PROXY_HOPS !== undefined && Number.isInteger(hopsEnv) && hopsEnv >= 0 ? hopsEnv : 1;
 const KEY = deriveKey(SESSION_SECRET, PASSCODE);
 
 const PORT = Number(process.env.PORT) || 10000;
@@ -62,8 +70,8 @@ const project = createProjectStore(DATA_DIR);
 
 const MAX_BODY_BYTES = 4096;
 const perIp = new RateLimiter({ limit: 10, windowMs: 15 * 60 * 1000 });
-// Backstop in case a client spoofs x-forwarded-for to dodge the per-address limit.
-const overall = new RateLimiter({ limit: 200, windowMs: 15 * 60 * 1000 });
+// Backstop (60 failures per hour in all) in case addresses are spoofed or rotated.
+const overall = new RateLimiter({ limit: 60, windowMs: 60 * 60 * 1000 });
 
 const PUBLIC_PATHS = new Set([
   "/healthz",
@@ -207,7 +215,7 @@ async function handleProject(req, res, url) {
 }
 
 async function handleLogin(req, res) {
-  const ip = clientIp(req.headers, req.socket.remoteAddress);
+  const ip = clientIp(req.headers, req.socket.remoteAddress, TRUSTED_PROXY_HOPS);
   let form;
   try {
     form = await readForm(req);
@@ -411,7 +419,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.requestTimeout = 60_000;
+server.requestTimeout = 180_000; // room for a slow upload of a project with photos
 server.headersTimeout = 20_000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Storey listening on port ${PORT}, serving ${ROOT}`);

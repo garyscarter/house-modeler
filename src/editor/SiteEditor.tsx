@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSite, useStore } from "../store";
+import { holdUndo, useSite, useStore } from "../store";
+import { svgPoints } from "../lib/planMath";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
-import { SiteVariantNote } from "../components/SiteVariantNote";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
@@ -164,11 +164,13 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   }, []);
 
   /** Snap to a nearby corner of the house, boundary, surfaces or neighbours (except the one being dragged). */
-  const snap = (p: WPt, skip?: { sel: NonNullable<Sel>; index: number }): WPt => {
+  const snap = (p: WPt, skip?: { sel: NonNullable<Sel>; index: number }, skipAt?: WPt): WPt => {
     const tol = SNAP_PX * px;
     let best: WPt = p;
     let bestD = tol;
     const consider = (q: WPt) => {
+      // A boundary corner carries the surface corners that met it; they must not pull it back.
+      if (skipAt && Math.hypot(q.x - skipAt.x, q.y - skipAt.y) < 1e-6) return;
       const d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d < bestD) {
         bestD = d;
@@ -227,37 +229,42 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     return true;
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (keyBelongsElsewhere(e.target, document) || useStore.getState().peek) return;
-      const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
-      if (arrow) {
-        if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
-        return;
-      }
-      if (e.key === "Escape") {
-        setSel(null);
+  // Read the latest state through a ref so the listener is attached once.
+  const onKey = (e: KeyboardEvent) => {
+    if (keyBelongsElsewhere(e.target, document) || useStore.getState().peek) return;
+    const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
+    if (arrow) {
+      if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
+      return;
+    }
+    if (e.key === "Escape") {
+      setSel(null);
+      setDraft(null);
+      setTool("select");
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !useStore.getState().peek) {
+      const k = e.key.toLowerCase();
+      if (k === "v" || k === "r" || k === "b") {
+        setTool(k === "v" ? "select" : k === "r" ? "surface" : "neighbour");
         setDraft(null);
-        setTool("select");
-      }
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && !useStore.getState().peek) {
-        const k = e.key.toLowerCase();
-        if (k === "v" || k === "r" || k === "b") {
-          setTool(k === "v" ? "select" : k === "r" ? "surface" : "neighbour");
-          setDraft(null);
-        } else if (k === "f") setView(fitRef.current(size.w, size.h));
-        else if (k === "+" || k === "=") zoomBy(1.4);
-        else if (k === "-" || k === "_") zoomBy(1 / 1.4);
-      }
-      if ((e.key === "Delete" || e.key === "Backspace") && sel) {
-        e.preventDefault();
-        if (sel.vertex !== null) deleteVertex(sel, sel.vertex);
-        else deleteItem(sel);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+      } else if (k === "f") setView(fitRef.current(size.w, size.h));
+      else if (k === "+" || k === "=") zoomBy(1.4);
+      else if (k === "-" || k === "_") zoomBy(1 / 1.4);
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && sel) {
+      e.preventDefault();
+      if (sel.vertex !== null) deleteVertex(sel, sel.vertex);
+      else deleteItem(sel);
+    }
+  };
+  const keyRef = useRef(onKey);
+  keyRef.current = onKey;
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+  useEffect(() => () => holdUndo(false), []);
 
   // ---- Pointer handling: a drag moves or pans; a two-touch trackpad pinch zooms.
   const startPinch = () => {
@@ -269,6 +276,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   const capture = (e: React.PointerEvent) => {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     svgRef.current?.setPointerCapture(e.pointerId);
+    holdUndo(true);
     if (pointers.current.size === 2) {
       startPinch();
       return true;
@@ -277,6 +285,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   };
 
   const onBackgroundDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     if (capture(e)) return;
     if (tool !== "select") {
       const p = snap(toWorld(e));
@@ -285,6 +294,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     } else drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy, moved: false };
   };
   const onItemDown = (e: React.PointerEvent, s: NonNullable<Sel>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     if (tool !== "select") return; // let drawing start over items
     e.stopPropagation();
     if (capture(e)) return;
@@ -302,12 +312,14 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     return undefined;
   };
   const onVertexDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     e.stopPropagation();
     if (capture(e)) return;
     setSel({ ...s, vertex: index } as Sel);
     drag.current = { kind: "vertex", sel: s, index, slide: slideFor(s, index) };
   };
   const onMidDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     e.stopPropagation();
     if (capture(e)) return;
     const poly = polyOf(s);
@@ -348,7 +360,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         // (snapping to nearby corners), taking the surface corners that met it along.
         if (d.slide) updateSite((st) => slideCorner(st, d.index, d.slide!, p));
         else {
-          const q = snap(p, { sel: d.sel, index: d.index });
+          const q = snap(p, { sel: d.sel, index: d.index }, site.boundary[d.index]);
           updateSite((st) => moveBoundaryCorner(st, d.index, q));
         }
       } else {
@@ -364,6 +376,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
+    holdUndo(false);
     const d = drag.current;
     if (d?.kind === "pinch") {
       if (pointers.current.size < 2) drag.current = null;
@@ -390,7 +403,6 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   };
 
   // ---- Drawing helpers in world units.
-  const pts = (poly: WPt[]) => poly.map((p) => `${p.x},${p.y}`).join(" ");
   const edges = edgesOf(site);
   const selPoly = sel ? polyOf(sel) : [];
   const selected = (t: Sel) => !!sel && !!t && sameItem(sel, t);
@@ -424,7 +436,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
             {site.surfaces.map((s) => (
               <polygon
                 key={s.id}
-                points={pts(s.polygon)}
+                points={svgPoints(s.polygon)}
                 fill={SURFACE_FILL[s.kind]}
                 fillOpacity={0.75}
                 stroke={selected({ type: "surface", id: s.id, vertex: null }) ? "#2563eb" : "rgba(0,0,0,0.15)"}
@@ -438,7 +450,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               const isSel = selected({ type: "neighbour", id: n.id, vertex: null });
               return (
                 <g key={n.id} onPointerDown={(e) => onItemDown(e, { type: "neighbour", id: n.id, vertex: null })}>
-                  <polygon points={pts(n.polygon)} fill="#d6d8dc" stroke={isSel ? "#2563eb" : "#8b9099"} strokeWidth={(isSel ? 2 : 1) * px} />
+                  <polygon points={svgPoints(n.polygon)} fill="#d6d8dc" stroke={isSel ? "#2563eb" : "#8b9099"} strokeWidth={(isSel ? 2 : 1) * px} />
                   <text x={c.x} y={c.y} fontSize={fs} textAnchor="middle" dominantBaseline="central" className="site-label">
                     {n.name}
                   </text>
@@ -451,9 +463,9 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               {outlines.map((o, li) =>
                 o.polys.map((poly, i) =>
                   li === 0 ? (
-                    <polygon key={`${li}-${i}`} points={pts(poly)} fill="#efe6cf" stroke="#7a4a3a" strokeWidth={1.2 * px} />
+                    <polygon key={`${li}-${i}`} points={svgPoints(poly)} fill="#efe6cf" stroke="#7a4a3a" strokeWidth={1.2 * px} />
                   ) : (
-                    <polygon key={`${li}-${i}`} points={pts(poly)} fill="none" stroke="#7a4a3a" strokeWidth={1.2 * px} strokeDasharray={`${5 * px} ${4 * px}`} />
+                    <polygon key={`${li}-${i}`} points={svgPoints(poly)} fill="none" stroke="#7a4a3a" strokeWidth={1.2 * px} strokeDasharray={`${5 * px} ${4 * px}`} />
                   ),
                 ),
               )}
@@ -534,7 +546,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               </g>
             )}
 
-            {draft && <polygon points={pts(rectPoly(draft.a.x, draft.a.y, draft.b.x, draft.b.y))} className="site-draft" strokeWidth={1.5 * px} strokeDasharray={`${4 * px} ${3 * px}`} />}
+            {draft && <polygon points={svgPoints(rectPoly(draft.a.x, draft.a.y, draft.b.x, draft.b.y))} className="site-draft" strokeWidth={1.5 * px} strokeDasharray={`${4 * px} ${3 * px}`} />}
           </svg>
           <div className="site-north" style={{ transform: `rotate(${northDeg}deg)` }} aria-label="North">
             <span>N</span>
@@ -702,7 +714,7 @@ function Inspector({
   }
   if (sel?.type === "surface") {
     const s = site.surfaces.find((x) => x.id === sel.id);
-    if (!s) return <EmptyInspector clearances={clearances} />;
+    if (!s) return <EmptyInspector />;
     return (
       <div className="inspector">
         <h4>Garden surface</h4>
@@ -730,7 +742,7 @@ function Inspector({
   }
   if (sel?.type === "neighbour") {
     const n = site.neighbours.find((x) => x.id === sel.id);
-    if (!n) return <EmptyInspector clearances={clearances} />;
+    if (!n) return <EmptyInspector />;
     const set = (p: Partial<Neighbour>) => updateSite((st) => ({ ...st, neighbours: st.neighbours.map((x) => (x.id === n.id ? { ...x, ...p } : x)) }));
     return (
       <div className="inspector">
@@ -786,7 +798,7 @@ function Inspector({
       </div>
     );
   }
-  return <EmptyInspector clearances={clearances} />;
+  return <EmptyInspector />;
 }
 
 /** Typed width of the selected edge. One end slides along the wall next to it, so the boundary line holds. */
@@ -844,15 +856,14 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
   );
 }
 
-function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
+// The plot panel below already shows the variant note and the house-to-boundary distances.
+function EmptyInspector() {
   return (
     <div className="inspector">
       <h4>
         Site plan
         <Info>Click a boundary edge to set its fence, wall or hedge; click a surface or building to edit it. Corners snap to the house and to each other.</Info>
       </h4>
-      <SiteVariantNote />
-      <Clearances clearances={clearances} />
       <PlotPanel />
     </div>
   );

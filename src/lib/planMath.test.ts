@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  svgPoints,
   fixtureBox,
   areaM2,
   axisRect,
@@ -365,4 +366,8 @@ describe("fixtureBox", () => {
     expect(fixtureBox(at(), chest, 2.25).h).toBe(1.2);
     expect(fixtureBox(at(), wardrobe).h).toBe(2.4);
   });
+});
+
+describe("svgPoints", () => {
+  it("joins x,y pairs", () => expect(svgPoints([{ x: 1, y: 2 }, { x: 3, y: 4 }])).toBe("1,2 3,4"));
 });

@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "../store";
 import { planningCheck, STATUS_LABEL, type ExtensionPart, type PlanningCheck, type PlanningRule } from "../lib/planning";
 import { siteOf } from "../lib/sites";
-import { openReview } from "./ReviewPage";
 import "./PlanningPanel.css";
 
 const WING_KEY = "house-modeler.planning.wingAfter1948";
@@ -40,34 +39,6 @@ export function usePlanningCheck() {
     writeWing(v);
   };
   return { check, wing, setWing };
-}
-
-/** Once, when the planning check is shown on As listed with a Proposed layout available, switch the view to Proposed. */
-export function useSwitchToProposed(active = true) {
-  const done = useRef(false);
-  const hasProposed = useStore((s) => !!s.variants.proposed);
-  useEffect(() => {
-    if (!active || done.current || !hasProposed) return;
-    done.current = true;
-    const s = useStore.getState();
-    if (s.activeVariant === "current") s.setUi({ activeVariant: "proposed" });
-  }, [active, hasProposed]);
-}
-
-/** Whether Proposed fits householder permitted development, rule by rule, and the other consents it needs. */
-export function PlanningPanel() {
-  const { check, wing, setWing } = usePlanningCheck();
-  useSwitchToProposed();
-
-  return (
-    <div className="panel planning-panel">
-      <h3>{PLANNING_TITLE}</h3>
-      <button className="rp-open-full" onClick={() => openReview("planning")}>
-        Open full report
-      </button>
-      <PlanningBody check={check} wing={wing} onWing={setWing} />
-    </div>
-  );
 }
 
 /** The planning check's content, without a title: used in the sidebar panel and on the Review page. */

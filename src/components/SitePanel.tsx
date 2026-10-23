@@ -29,6 +29,7 @@ export function SitePanel() {
   const updateSite = useStore((s) => s.updateSite);
   const model = useStore((s) => s.variants[s.activeVariant]);
   const setUi = useStore((s) => s.setUi);
+  const tab = useStore((s) => s.tab);
   const setMode = useStore((s) => s.setMode);
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const trueColours = useSiteView((s) => s.trueNeighbourColours);
@@ -57,10 +58,12 @@ export function SitePanel() {
       ) : (
         <>
           <div className="row">
-            <button onClick={() => {
-                setUi({ tab: "plan" });
-                setMode("plot");
-              }}>Edit the site plan</button>
+            {tab !== "plan" && (
+              <button onClick={() => {
+                  setUi({ tab: "plan" });
+                  setMode("plot");
+                }}>Edit the site plan</button>
+            )}
             <label className="check site-inline">
               <input type="checkbox" checked={ghost} onChange={(e) => setSiteView({ ghostNeighbours: e.target.checked })} /> See-through neighbours
             </label>
@@ -246,7 +249,7 @@ function SiteFigures({ site, model }: { site: Site; model?: HouseModel }) {
           return (
             <div key={side}>
               <span className="muted small">{side}</span>
-              <b>{c ? (c.distance < 0.05 ? "0" : c.distance.toFixed(2)) : "–"}</b>
+              <b>{c ? (c.distance < 0.05 ? "on boundary" : c.distance.toFixed(2)) : "–"}</b>
             </div>
           );
         })}

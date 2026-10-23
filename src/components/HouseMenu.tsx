@@ -28,7 +28,7 @@ export function HouseMenu({ name }: { name: string }) {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
         setOpen(false);
       }

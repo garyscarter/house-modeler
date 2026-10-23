@@ -1,6 +1,6 @@
 import type { Chimney, Exterior, Floor, HouseModel, Pt, Room } from "../types";
 import { DEFAULT_EXTERIOR } from "../types";
-import { EXT_WALL_T, bbox, modelBounds, pointInPolygon, roomWorldPolygon, toWorld, type V2 } from "./geometry";
+import { EXT_WALL_T, areaOf, bbox, modelBounds, pointInPolygon, roomWorldPolygon, toWorld, type V2 } from "./geometry";
 
 /** How a roof ends along its ridge: hipped, a gable wall with a verge overhang, or flush against a party wall. */
 export type RoofEnd = "hip" | "gable" | "flush";
@@ -905,30 +905,20 @@ function clipAxis(poly: V2[], axis: "x" | "y", at: number, below: boolean): V2[]
   return out;
 }
 
-function shoelace(poly: V2[]): number {
-  let a = 0;
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i];
-    const q = poly[(i + 1) % poly.length];
-    a += p.x * q.y - q.x * p.y;
-  }
-  return Math.abs(a) / 2;
-}
-
 /** Area of a polygon inside a box. */
 export function polyAreaIn(poly: V2[], b: Box): number {
   let p = clipAxis(poly, "x", b.x0, false);
   p = clipAxis(p, "x", b.x1, true);
   p = clipAxis(p, "y", b.y0, false);
   p = clipAxis(p, "y", b.y1, true);
-  return p.length >= 3 ? shoelace(p) : 0;
+  return p.length >= 3 ? areaOf(p) : 0;
 }
 
 /** The parts of a polygon outside a box (slivers dropped), as up to four pieces. */
 export function polyOutside(poly: V2[], b: Box): V2[][] {
   const mid = clipAxis(clipAxis(poly, "x", b.x0, false), "x", b.x1, true);
   return [clipAxis(poly, "x", b.x0, true), clipAxis(poly, "x", b.x1, false), clipAxis(mid, "y", b.y0, true), clipAxis(mid, "y", b.y1, false)].filter(
-    (p) => p.length >= 3 && shoelace(p) > 1e-4,
+    (p) => p.length >= 3 && areaOf(p) > 1e-4,
   );
 }
 
