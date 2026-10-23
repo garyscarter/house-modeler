@@ -1,7 +1,7 @@
 import { Suspense, memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
-import { useLoader } from "@react-three/fiber";
+import { useLoader, useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
@@ -464,6 +464,9 @@ function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { roo
  */
 function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
   const id = useStore((s) => s.hoveredRoomId);
+  const invalidate = useThree((s) => s.invalidate);
+  // Frames are drawn on demand: ask for one when the hovered room changes.
+  useEffect(() => invalidate(), [id, invalidate]);
   const room = id ? floor.rooms.find((r) => r.id === id) : undefined;
   const polys = useMemo(() => (room ? cutWells(roomWorldPolygon(floor, room), holes) : []), [floor, room, holes]);
   const geom = useMemo(() => (polys.length ? new THREE.ShapeGeometry(polys.map(shapeFrom)) : null), [polys]);
@@ -481,11 +484,11 @@ function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
   return (
     <group>
       <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2} raycast={() => null}>
-        <meshBasicMaterial color="#0f6e66" transparent opacity={0.22} depthWrite={false} polygonOffset polygonOffsetFactor={-2} />
+        <meshBasicMaterial color="#14a89b" toneMapped={false} transparent opacity={0.34} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} />
       </mesh>
       {outline.map((g, i) => (
         <lineLoop key={i} geometry={g} renderOrder={3} raycast={() => null}>
-          <lineBasicMaterial color="#0f6e66" />
+          <lineBasicMaterial color="#14a89b" toneMapped={false} />
         </lineLoop>
       ))}
     </group>
