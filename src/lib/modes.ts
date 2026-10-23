@@ -1,0 +1,88 @@
+import type { Tab } from "../store";
+import type { EdgePick } from "./decorPick";
+
+/** editFloorId value that opens the site editor instead of a floor (re-exported by the store). */
+export const SITE_EDIT_ID = "site";
+
+export type Mode = "build" | "decorate" | "furnish" | "plot" | "review";
+export const MODES: Mode[] = ["build", "decorate", "furnish", "plot", "review"];
+export const MODE_LABEL: Record<Mode, string> = {
+  build: "Build",
+  decorate: "Decorate",
+  furnish: "Furnish",
+  plot: "Plot",
+  review: "Review",
+};
+export const isMode = (v: unknown): v is Mode => typeof v === "string" && (MODES as string[]).includes(v);
+
+export type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";
+
+/** The plan toolbar buttons each mode shows, in order. */
+export const PLAN_TOOLS: Record<Mode, Tool[]> = {
+  build: ["select", "rect", "canopy", "room", "door", "window", "gap", "wall", "measure", "calibrate"],
+  decorate: [],
+  furnish: ["select", "measure"],
+  review: ["select", "measure"],
+  plot: [],
+};
+
+export type SelKind = "room" | "edge" | "opening" | "wall" | "canopy" | "fixture" | "corner";
+const SELECTABLE: Record<Mode, SelKind[]> = {
+  build: ["room", "opening", "wall", "canopy", "corner"],
+  decorate: ["room", "edge", "wall"],
+  furnish: ["fixture"],
+  plot: [],
+  review: [],
+};
+export const canSelect = (mode: Mode, kind: SelKind): boolean => SELECTABLE[mode].includes(kind);
+
+/** The plan-only selections PlanEditor keeps in local state. */
+export interface PlanSelection {
+  room?: string;
+  opening?: string;
+  wall?: string;
+  fixture?: string;
+  canopy?: number;
+}
+
+/** Drop the selections the mode cannot hold. */
+export function pruneSelection(mode: Mode, s: PlanSelection): PlanSelection {
+  const out: PlanSelection = {};
+  if (s.room !== undefined && canSelect(mode, "room")) out.room = s.room;
+  if (s.opening !== undefined && canSelect(mode, "opening")) out.opening = s.opening;
+  if (s.wall !== undefined && canSelect(mode, "wall")) out.wall = s.wall;
+  if (s.fixture !== undefined && canSelect(mode, "fixture")) out.fixture = s.fixture;
+  if (s.canopy !== undefined && canSelect(mode, "canopy")) out.canopy = s.canopy;
+  return out;
+}
+
+export interface ModeUi {
+  mode: Mode;
+  tab: Tab;
+  editFloorId: string | null;
+  floorBeforeSite: string | null;
+  selectedRoomId: string | null;
+  selectedEdge: EdgePick | null;
+}
+
+/** Tapping a room's floor selects it in these modes. */
+export const roomTapSelects = (m: Mode) => m === "build" || m === "decorate";
+
+/** Put the plan on the site editor, remembering the floor it was on (nothing to do if it is already there). */
+export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> {
+  return ui.editFloorId === SITE_EDIT_ID ? {} : { floorBeforeSite: ui.editFloorId, editFloorId: SITE_EDIT_ID };
+}
+
+/** The UI fields that change when the mode does. Selections the new mode cannot hold are cleared. */
+export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
+  const patch: Partial<ModeUi> = { mode: next };
+  if (!roomTapSelects(next)) patch.selectedRoomId = null;
+  if (next !== "decorate") patch.selectedEdge = null;
+  if (next === "plot") {
+    if (ui.tab === "plan") Object.assign(patch, siteEditPatch(ui));
+  } else if (ui.editFloorId === SITE_EDIT_ID) {
+    patch.editFloorId = ui.floorBeforeSite;
+    patch.floorBeforeSite = null;
+  }
+  return patch;
+}

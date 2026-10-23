@@ -77,6 +77,8 @@ interface HouseProps {
   doorsOpen?: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  /** Decorate: a tap on a wall face (hit point and face normal in the plan frame: world x, z). */
+  onPickWall?: (floor: Floor, hit: V2, normal: V2) => void;
   /** Only render these floor levels (used to hide floors above the walk floor). */
   visibleLevels?: number[] | null;
   /**
@@ -98,6 +100,7 @@ export function House({
   doorsOpen = false,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   visibleLevels,
   diffAgainst,
   showExterior,
@@ -124,6 +127,7 @@ export function House({
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onPickWall={onPickWall}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
         />
@@ -142,6 +146,7 @@ function FloorGroup({
   doorsOpen,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   otherFloor,
   wells,
 }: {
@@ -154,6 +159,7 @@ function FloorGroup({
   doorsOpen: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2) => void;
   otherFloor?: Floor | null;
   wells: Stairwell[];
 }) {
@@ -191,7 +197,7 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} doorsOpen={doorsOpen} />
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} />
       {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
       <Balustrade runs={rails} />
 
@@ -227,6 +233,7 @@ function FloorShell({
   photos,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   holes,
   doorsOpen,
 }: {
@@ -236,6 +243,7 @@ function FloorShell({
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2) => void;
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
   doorsOpen: boolean;
@@ -315,7 +323,23 @@ function FloorShell({
         ) : null;
       })}
       {shell.meshes.map((m) => (
-        <mesh key={m.key} geometry={m.geometry} material={getMaterial(m.spec)} castShadow={m.castShadow} receiveShadow />
+        <mesh
+          key={m.key}
+          geometry={m.geometry}
+          material={getMaterial(m.spec)}
+          castShadow={m.castShadow}
+          receiveShadow
+          onClick={
+            onPickWall &&
+            ((e) => {
+              // Only side faces count: wall tops and any other upward or downward face are left alone.
+              if (!e.face || Math.abs(e.face.normal.y) > 0.5) return;
+              e.stopPropagation();
+              // Shell meshes are not rotated or moved, so the local normal is the world normal.
+              onPickWall(floor, { x: e.point.x, y: e.point.z }, { x: e.face.normal.x, y: e.face.normal.z });
+            })
+          }
+        />
       ))}
     </group>
   );

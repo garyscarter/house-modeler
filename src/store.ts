@@ -6,11 +6,13 @@ import { renamePhotos } from "./lib/modelOps";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
+import { isMode, modeSwitchPatch, type Mode } from "./lib/modes";
+import type { EdgePick } from "./lib/decorPick";
 
 export type ViewMode = "single" | "side-by-side" | "overlay";
 export type Tab = "3d" | "plan";
 /** editFloorId value that opens the site editor instead of a floor. */
-export const SITE_EDIT_ID = "site";
+export { SITE_EDIT_ID } from "./lib/modes";
 
 export interface Settings {
   /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
@@ -53,7 +55,14 @@ interface State {
   undo: () => void;
   redo: () => void;
 
-  // UI (not persisted)
+  // UI (not persisted, except `mode`)
+  /** What the person is doing: Build, Decorate, Furnish, Plot or Review. Persisted per browser, not synced, no undo. */
+  mode: Mode;
+  /** Decorate: the wall face picked on the selected room (null = the room's floor). */
+  selectedEdge: EdgePick | null;
+  /** The floor the plan showed before Plot opened the site editor, so leaving Plot goes back to it. */
+  floorBeforeSite: string | null;
+  setMode: (m: Mode) => void;
   activeVariant: VariantKey;
   tab: Tab;
   editFloorId: string | null;
@@ -105,6 +114,8 @@ interface State {
         | "editFloorId"
         | "viewMode"
         | "selectedRoomId"
+        | "selectedEdge"
+        | "floorBeforeSite"
         | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
@@ -120,7 +131,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -168,6 +179,7 @@ export const useStore = create<State>()(
             past: st.past.slice(0, -1),
             future: [snapshot(st), ...st.future].slice(0, HISTORY_LIMIT),
             selectedRoomId: null,
+            selectedEdge: null,
           });
         },
         redo: () => {
@@ -180,9 +192,14 @@ export const useStore = create<State>()(
             past: [...st.past, snapshot(st)].slice(-HISTORY_LIMIT),
             future: st.future.slice(1),
             selectedRoomId: null,
+            selectedEdge: null,
           });
         },
 
+        mode: "build",
+        selectedEdge: null,
+        floorBeforeSite: null,
+        setMode: (m) => rawSet((st) => modeSwitchPatch(st, m)),
         activeVariant: "current",
         tab: "3d",
         editFloorId: null,
@@ -296,7 +313,7 @@ export const useStore = create<State>()(
         updatePhoto: (id, patch) => setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
         removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
         setUi: (p) => rawSet(p),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, selectedRoomId: null, selectedPhotoId: null }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
       };
     },
     {
@@ -312,11 +329,16 @@ export const useStore = create<State>()(
         doorsOpen: s.doorsOpen,
         planImage: s.planImage,
         planWalls: s.planWalls,
+        mode: s.mode,
       }),
       version: PERSIST_VERSION,
       migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
       // Older saves lack the newer persisted fields; keep the defaults for those.
-      merge: (persisted, current) => ({ ...current, ...((persisted ?? {}) as Partial<Persisted>) }),
+      merge: (persisted, current) => {
+        const merged = { ...current, ...((persisted ?? {}) as Partial<Persisted>) };
+        if (!isMode(merged.mode)) merged.mode = "build";
+        return merged;
+      },
     },
   ),
 );

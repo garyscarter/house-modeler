@@ -94,7 +94,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .toolbar .hint.right { margin-left: auto; }
 .editor-body { display: flex; flex: 1; min-height: 0; }
 .editor-body svg { flex: 1; min-width: 0; height: 100%; background: #fff; user-select: none; touch-action: none; }
-.editor-body .side { width: 260px; border-left: 1px solid var(--line); background: var(--panel); padding: 10px; overflow-y: auto; }
+.editor-body .side { width: 300px; border-left: 1px solid var(--line); background: var(--panel); padding: 10px; overflow-y: auto; }
 .inspector label { margin: 6px 0; font-size: 13px; }
 
 .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 50; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -172,3 +172,41 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   .view-buttons button { min-height: 40px; min-width: 44px; }
   .photo-card select { min-height: 40px; }
 }
+
+/* Modes: each has its own accent, picked up by active buttons, chevrons and the mode bar. */
+.app[data-mode="build"] { --accent: #2563eb; }
+.app[data-mode="decorate"] { --accent: #be185d; }
+.app[data-mode="furnish"] { --accent: #0f766e; }
+.app[data-mode="plot"] { --accent: #4d7c0f; }
+.app[data-mode="review"] { --accent: #6d28d9; }
+
+/* Mode bar: one slim row above the body (move the <ModeBar/> element to relocate it). */
+nav.mode-bar {
+  display: flex; gap: 6px; flex: none; align-items: center;
+  padding: 4px 14px; background: var(--panel); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; overflow-x: auto;
+}
+nav.mode-bar.seg button, nav.mode-bar.seg button + button { border: 0; border-radius: 6px; padding: 4px 16px; min-height: 28px; font-weight: 600; flex: none; }
+nav.mode-bar.seg button:not(.active):hover { background: var(--bg); }
+
+/* Collapsible sections */
+.sect { border-bottom: 1px solid var(--line); }
+.sect-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 8px 2px; border: 0; border-radius: 0; background: none; text-align: left; }
+.sect-head:hover:not(:disabled) { border-color: transparent; background: var(--bg); }
+.sect-title { flex: none; font-weight: 600; }
+.sect-sum { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.sect-chev { flex: none; margin-left: auto; color: var(--accent); }
+.sect-body { padding: 4px 0 8px; }
+.sect-body > .panel { padding-top: 4px; border-bottom: 0; }
+.sect-body > .panel > h3:first-child { display: none; }
+
+/* Mode panel: a column to the right of the 3D view (or the plan, in Review). */
+.mode-panel { width: 300px; flex: none; overflow-y: auto; overscroll-behavior: contain; padding: 10px; border-left: 1px solid var(--line); background: var(--panel); }
+.mode-panel.wide { width: 380px; }
+.mode-summary .summary-line { margin: 4px 0 10px; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { filter: brightness(1.1); }
+button.big { padding: 10px 14px; font-size: 15px; }
+.review-tabs { display: flex; margin-bottom: 8px; }
+.review-tabs button { flex: 1; }
+.review-compare { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.site-editor-body > .site-side { width: 300px; }

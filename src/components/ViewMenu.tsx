@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { SITE_EDIT_ID, useStore } from "../store";
+import { useStore } from "../store";
 import type { HouseModel } from "../types";
 import "./ViewMenu.css";
 
@@ -83,22 +83,20 @@ export function ViewControls({ model, both }: { model: HouseModel | undefined; b
   );
 }
 
-/** Which floor (or the site) the plan editor shows. */
+/** Which floor the plan editor shows. Plot has no floors (it shows the site), so it renders nothing there. */
 export function PlanFloorSwitch({ model }: { model: HouseModel }) {
   const editFloorId = useStore((s) => s.editFloorId);
+  const mode = useStore((s) => s.mode);
   const setUi = useStore((s) => s.setUi);
-  const editingSite = editFloorId === SITE_EDIT_ID;
+  if (mode === "plot") return null;
   const current = model.floors.find((f) => f.id === editFloorId) ?? model.floors[0];
   return (
     <div className="seg" role="group" aria-label="Floor">
       {model.floors.map((f) => (
-        <button key={f.id} data-pick className={!editingSite && current?.id === f.id ? "active" : ""} onClick={() => setUi({ editFloorId: f.id })}>
+        <button key={f.id} data-pick className={current?.id === f.id ? "active" : ""} onClick={() => setUi({ editFloorId: f.id })}>
           {f.name}
         </button>
       ))}
-      <button data-pick className={editingSite ? "active" : ""} onClick={() => setUi({ editFloorId: SITE_EDIT_ID })} title="Plot boundary, garden and neighbours">
-        Site
-      </button>
     </div>
   );
 }
