@@ -48,7 +48,8 @@ type Shape = Pick<FlightShape, "run" | "width" | "turn" | "topTurn" | "topWinder
 /** Number of winders in a flight's head (0 when it arrives straight). */
 export function topWinderCount(f: Pick<FlightShape, "topTurn" | "topWinders">): number {
   if (!f.topTurn) return 0;
-  return Math.max(2, Math.min(3, Math.round(f.topWinders ?? TOP_WINDERS)));
+  const n = Math.round(f.topWinders ?? TOP_WINDERS);
+  return Math.max(2, Math.min(3, Number.isFinite(n) ? n : TOP_WINDERS));
 }
 
 /** How a flight's run is shared out: foot winders, straight treads from s0 to s1, head winders, and the risers in all. */
