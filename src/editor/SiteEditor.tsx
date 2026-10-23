@@ -19,6 +19,7 @@ import {
   simpleSite,
 } from "../lib/site";
 import { SlopeFields } from "../components/SlopeFields";
+import { PlotPanel } from "../components/PlotPanel";
 import {
   MIN_OPENING,
   defaultOpeningEnd,
@@ -803,6 +804,7 @@ function EmptyInspector({ clearances }: { clearances: ReturnType<typeof sideClea
         other.
       </p>
       <Clearances clearances={clearances} />
+      <PlotPanel />
     </div>
   );
 }

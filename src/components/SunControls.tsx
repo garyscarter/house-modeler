@@ -21,7 +21,7 @@ const quarter = (h: number, round: (x: number) => number) => round(h * 4) / 4;
 
 /**
  * Sun study controls overlaid on the 3D view (date, time, play through the
- * day) and a compass rose showing north relative to the camera. Shown only
+ * day). The compass lives in the view cube. Shown only
  * when a site gives the house a location and orientation.
  */
 export function SunControls() {
@@ -170,7 +170,6 @@ export function SunControls() {
           </div>
         )}
       </div>
-      <CompassRose sunAzimuth={sun.enabled && altitude > 0 ? azimuth : null} />
     </>
   );
 }
@@ -195,33 +194,6 @@ function SunHoursLegend() {
         {share}% of the garden gets 2 hours or more of sun on {formatDay(SUN_YEAR, day)}.
         <span className="muted"> Planning guidance looks for at least half on 21 Mar.</span>
       </p>
-    </div>
-  );
-}
-
-/**
- * North relative to the camera. The ring turns with the view via the
- * --view-bearing CSS variable that the 3D scene keeps up to date, so
- * orbiting doesn't re-render React.
- */
-function CompassRose({ sunAzimuth }: { sunAzimuth: number | null }) {
-  const marks: [string, number][] = [
-    ["N", 0],
-    ["E", 90],
-    ["S", 180],
-    ["W", 270],
-  ];
-  return (
-    <div className="compass-rose" aria-hidden>
-      <div className="compass-ring">
-        {marks.map(([l, a]) => (
-          <span key={l} className={`compass-mark${l === "N" ? " north" : ""}`} style={{ "--a": a } as React.CSSProperties}>
-            {l}
-          </span>
-        ))}
-        <span className="compass-needle" />
-        {sunAzimuth !== null && <span className="compass-sun" style={{ "--a": sunAzimuth } as React.CSSProperties} />}
-      </div>
     </div>
   );
 }

@@ -10,7 +10,9 @@ interface SiteView {
   ghostNeighbours: boolean;
   /** Overlay hours of direct sun on the garden for the sun study's day. */
   sunHours: boolean;
-  setSiteView: (p: Partial<Pick<SiteView, "ghostNeighbours" | "sunHours">>) => void;
+  /** Draw neighbours in the colours the plot gives them; off, they are pale card-model massing. */
+  trueNeighbourColours: boolean;
+  setSiteView: (p: Partial<Pick<SiteView, "ghostNeighbours" | "sunHours" | "trueNeighbourColours">>) => void;
 }
 
 export const useSiteView = create<SiteView>()(
@@ -18,12 +20,13 @@ export const useSiteView = create<SiteView>()(
     (set) => ({
       ghostNeighbours: false,
       sunHours: false,
+      trueNeighbourColours: false,
       setSiteView: (p) => set(p),
     }),
     {
       name: "house-modeler-site-view",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ ghostNeighbours: s.ghostNeighbours, sunHours: s.sunHours }),
+      partialize: (s) => ({ ghostNeighbours: s.ghostNeighbours, sunHours: s.sunHours, trueNeighbourColours: s.trueNeighbourColours }),
     },
   ),
 );
