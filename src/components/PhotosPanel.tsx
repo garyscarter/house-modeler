@@ -3,8 +3,10 @@ import { useStore } from "../store";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
 import { listingPhotos } from "../lib/houses/listingAssets";
+import { floorDisplayName } from "../lib/studio";
+import { Info } from "./Info";
 
-export function PhotosPanel() {
+export function PhotosPanel({ inDialog = false }: { inDialog?: boolean } = {}) {
   const photos = useStore((s) => s.photos);
   const model = useStore((s) => s.variants.current ?? s.variants.proposed);
   const addPhotos = useStore((s) => s.addPhotos);
@@ -29,11 +31,12 @@ export function PhotosPanel() {
 
   return (
     <div className="panel">
-      <h3>Photos</h3>
-      <p className="muted">
-        Load the listing photos or add your own, then pick the room or side of the house each one shows. They appear as pins in the 3D
-        view and can be used as floor textures.
-      </p>
+      {!inDialog && (
+        <h3 className="with-info">
+          Photos
+          <Info>Load the listing photos or add your own, then pick the room or side of the house each one shows. They appear as pins in the 3D view and can be used as floor textures.</Info>
+        </h3>
+      )}
       <div className="row">
         <label className="file">
           Add photos
@@ -90,7 +93,7 @@ export function PhotosPanel() {
               <optgroup label="Rooms">
                 {rooms.map((r) => (
                   <option key={`${r.floorName}|${r.roomName}`} value={`${r.floorName}|${r.roomName}`}>
-                    {r.floorName}: {r.roomName}
+                    {floorDisplayName(r.floorName)}: {r.roomName}
                   </option>
                 ))}
               </optgroup>

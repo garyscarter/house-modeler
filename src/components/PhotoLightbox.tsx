@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 
-/** Swipes shorter than this (pixels) are taps. */
+/** Swipes shorter than this (pixels) are clicks. */
 const SWIPE = 50;
 
 export function PhotoLightbox() {
