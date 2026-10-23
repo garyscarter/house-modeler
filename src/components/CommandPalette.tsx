@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { SITE_EDIT_ID, useStore } from "../store";
 import { buildCommands, defaultCommands, isMacPlatform, rankCommands } from "../lib/commands";
 import { usePanelPrefs } from "./panelPrefs";
@@ -32,7 +33,28 @@ export function CommandPalette() {
 }
 
 function Palette({ close }: { close: () => void }) {
-  const s = useStore();
+  const s = useStore(
+    useShallow((st) => ({
+      activeVariant: st.activeVariant,
+      doorsOpen: st.doorsOpen,
+      mode: st.mode,
+      redo: st.redo,
+      selectedRoomId: st.selectedRoomId,
+      setMode: st.setMode,
+      setSettings: st.setSettings,
+      setUi: st.setUi,
+      settings: st.settings,
+      showCeilings: st.showCeilings,
+      showExterior: st.showExterior,
+      showLabels: st.showLabels,
+      showSite: st.showSite,
+      tab: st.tab,
+      undo: st.undo,
+      updateRoom: st.updateRoom,
+      variants: st.variants,
+      viewMode: st.viewMode,
+    })),
+  );
   const look = usePanelPrefs((p) => p.look);
   const setPrefs = usePanelPrefs((p) => p.setPrefs);
   const [query, setQuery] = useState("");
