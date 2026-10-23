@@ -243,6 +243,9 @@ export interface RoomCompare {
   /** Outside glazed openings in each layout (0: show "No outside windows"). */
   currentWindows?: number;
   proposedWindows?: number;
+  /** Clock-hour spans of direct sun in each layout. */
+  currentSpans?: [number, number][];
+  proposedSpans?: [number, number][];
 }
 
 /** Match rooms of the two layouts by id, then by name; rooms in only one layout are kept. */
@@ -256,8 +259,8 @@ export function compareRooms(a?: SunlightResult, b?: SunlightResult): RoomCompar
     if (i < 0) i = right.findIndex((x) => x.name === r.name && x.floorName === r.floorName);
     if (i < 0) i = right.findIndex((x) => x.name === r.name);
     const m = i >= 0 ? right.splice(i, 1)[0] : undefined;
-    out.push({ name: r.name, floorName: r.floorName, current: r.hours, currentWindows: r.windows, proposed: m?.hours, proposedWindows: m?.windows });
+    out.push({ name: r.name, floorName: r.floorName, current: r.hours, currentWindows: r.windows, proposed: m?.hours, proposedWindows: m?.windows, currentSpans: r.spans, proposedSpans: m?.spans });
   }
-  for (const m of right) out.push({ name: m.name, floorName: m.floorName, proposed: m.hours, proposedWindows: m.windows });
+  for (const m of right) out.push({ name: m.name, floorName: m.floorName, proposed: m.hours, proposedWindows: m.windows, proposedSpans: m.spans });
   return out;
 }
