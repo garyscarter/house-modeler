@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, presetView } from "./cameraViews";
+import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, poseFits, presetView } from "./cameraViews";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
 
 const project = (pose: ReturnType<typeof homeView>, p: { x: number; y: number; z: number }, fov: number, aspect: number) => {
@@ -131,5 +131,24 @@ describe("isValidPose", () => {
     expect(isValidPose({ position: ok.position })).toBe(false);
     expect(isValidPose(null)).toBe(false);
     expect(isValidPose({ position: ok.target, target: ok.target })).toBe(false);
+  });
+});
+
+describe("poseFits", () => {
+  const box = { x0: 0, x1: 10, y0: 0, y1: 20, height: 9 };
+  const at = (t: { x: number; y: number; z: number }, d = 30) => ({ position: { x: t.x + d, y: t.y + d / 2, z: t.z }, target: t });
+  it("accepts the home view and a pose panned a little off the plot", () => {
+    expect(poseFits(homeView(box, 45, 1.6), box, 120)).toBe(true);
+    expect(poseFits(at({ x: -4, y: 1, z: 22 }), box, 120)).toBe(true);
+  });
+  it("rejects invalid poses, poses aimed at another house's plot and poses beyond the zoom limit", () => {
+    expect(poseFits({ position: { x: 1, y: 1, z: 1 } }, box, 120)).toBe(false);
+    expect(poseFits(at({ x: 200, y: 1, z: 5 }), box, 120)).toBe(false);
+    expect(poseFits(at({ x: 5, y: 1, z: -40 }), box, 120)).toBe(false);
+    expect(poseFits(at({ x: 5, y: 1, z: 5 }, 200), box, 120)).toBe(false);
+  });
+  it("accepts the listing's home view for both layouts", () => {
+    const f = frameFor([listing91770873("data:,"), listing91770873Proposed("data:,")], [listingSite().boundary]);
+    expect(poseFits(homeView(f, 45, 1.6), f, 60)).toBe(true);
   });
 });
