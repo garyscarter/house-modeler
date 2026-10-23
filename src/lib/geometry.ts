@@ -30,6 +30,9 @@ export interface WallSeg {
   color?: string;
 }
 
+/** Unsigned polygon area. */
+export const areaOf = (poly: V2[]) => Math.abs(polygonArea(poly));
+
 export function polygonArea(poly: V2[]): number {
   let s = 0;
   for (let i = 0; i < poly.length; i++) {
@@ -85,53 +88,6 @@ export function toWorld(floor: Floor, p: Pt): V2 {
 
 export function roomWorldPolygon(floor: Floor, room: Room): V2[] {
   return room.polygon.map((p) => toWorld(floor, p));
-}
-
-/**
- * Snap near-equal x and y coordinates across all rooms so shared walls line up.
- * `tol` is in image pixels.
- */
-export function snapRooms(rooms: Room[], tol: number): Room[] {
-  const snapAxis = (vals: number[]) => {
-    const sorted = [...new Set(vals)].sort((a, b) => a - b);
-    const map = new Map<number, number>();
-    let cluster: number[] = [];
-    const flush = () => {
-      if (!cluster.length) return;
-      const mean = cluster.reduce((s, v) => s + v, 0) / cluster.length;
-      for (const v of cluster) map.set(v, mean);
-      cluster = [];
-    };
-    for (const v of sorted) {
-      if (cluster.length && v - cluster[cluster.length - 1] > tol) flush();
-      cluster.push(v);
-    }
-    flush();
-    return map;
-  };
-  const xs = snapAxis(rooms.flatMap((r) => r.polygon.map((p) => p.x)));
-  const ys = snapAxis(rooms.flatMap((r) => r.polygon.map((p) => p.y)));
-  return rooms.map((r) => ({
-    ...r,
-    polygon: dedupeConsecutive(
-      r.polygon.map((p) => ({ x: xs.get(p.x) ?? p.x, y: ys.get(p.y) ?? p.y })),
-    ),
-  }));
-}
-
-function dedupeConsecutive(poly: Pt[]): Pt[] {
-  const out: Pt[] = [];
-  for (const p of poly) {
-    const last = out[out.length - 1];
-    if (last && Math.abs(last.x - p.x) < 1e-6 && Math.abs(last.y - p.y) < 1e-6) continue;
-    out.push(p);
-  }
-  if (out.length > 1) {
-    const f = out[0];
-    const l = out[out.length - 1];
-    if (Math.abs(f.x - l.x) < 1e-6 && Math.abs(f.y - l.y) < 1e-6) out.pop();
-  }
-  return out;
 }
 
 /**
@@ -376,12 +332,6 @@ export function estimatePxPerM(rooms: Room[]): number | undefined {
     est.push(Math.sqrt((b.w * b.h) / (r.dims.w * r.dims.h)));
   }
   return median(est);
-}
-
-export function floorFootprint(floor: Floor) {
-  const pts = floor.rooms.flatMap((r) => roomWorldPolygon(floor, r));
-  if (!pts.length) return { x0: -5, y0: -5, x1: 5, y1: 5, w: 10, h: 10 };
-  return bbox(pts);
 }
 
 /** Overall model bounds across floors, world metres. */

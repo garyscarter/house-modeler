@@ -1,5 +1,5 @@
 import type { Floor, HouseModel } from "../types";
-import { buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
+import { areaOf, buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
 import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
 
 /**
@@ -79,8 +79,6 @@ function clipHalf(poly: V2[], nx: number, ny: number, c: number): V2[] {
   return out;
 }
 
-const area = (poly: V2[]) => Math.abs(poly.reduce((s, p, i) => s + p.x * poly[(i + 1) % poly.length].y - poly[(i + 1) % poly.length].x * p.y, 0) / 2);
-
 /**
  * A polygon with a rectangle taken out, as up to four pieces (left of it,
  * right of it, and the strips in front and behind). Returns the polygon
@@ -92,7 +90,7 @@ export function subtractRect(poly: V2[], r: Rect): V2[][] {
   if (Math.min(...xs) >= r.x1 || Math.max(...xs) <= r.x0 || Math.min(...ys) >= r.y1 || Math.max(...ys) <= r.y0) return [poly];
   const across = clipHalf(clipHalf(poly, -1, 0, -r.x0), 1, 0, r.x1);
   const pieces = [clipHalf(poly, 1, 0, r.x0), clipHalf(poly, -1, 0, -r.x1), clipHalf(across, 0, 1, r.y0), clipHalf(across, 0, -1, -r.y1)];
-  return pieces.filter((p) => p.length >= 3 && area(p) > 1e-4);
+  return pieces.filter((p) => p.length >= 3 && areaOf(p) > 1e-4);
 }
 
 /** A room polygon with every stairwell opening taken out. */

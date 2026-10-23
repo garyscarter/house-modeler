@@ -2,6 +2,7 @@ import type { BoundaryEdge, Neighbour, Site, WPt } from "../types";
 import { uid } from "../types";
 import type { Change } from "./layoutMerge";
 import { areaOf, edgesOf, pointSegmentDistance } from "./site";
+import { metres } from "./layoutMerge";
 
 /**
  * Bring a plot's boundary treatments (fence, wall, hedge, heights, tops) up to date with another plot's
@@ -84,7 +85,6 @@ function value(e: BoundaryEdge, f: (typeof FIELDS)[number]): unknown {
 
 const differs = (a: BoundaryEdge, b: BoundaryEdge) => FIELDS.some((f) => value(a, f) !== value(b, f));
 
-const metres = (n: number) => `${+n.toFixed(2)} m`;
 
 /** "brick wall 1.4 m", adding only the details that differ from `other` (so the arrow reads cleanly). */
 function describe(e: BoundaryEdge, other: BoundaryEdge): string {
