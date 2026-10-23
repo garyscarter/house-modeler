@@ -505,6 +505,10 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
 const NEIGHBOUR_WALL = "#f7f7f5";
 const NEIGHBOUR_ROOF = "#aca7a2";
 const FLAT_ROOF = "#9a9894";
+/** Quiet "card model" massing, used unless the neighbours are shown in their own colours. */
+const CARD_WALL = "#eef0ee";
+const CARD_ROOF = "#cfd3d1";
+const CARD_FLAT_ROOF = "#c4c8c6";
 
 function neighbourGeometry(n: Neighbour) {
   const walls = new THREE.ExtrudeGeometry(flatShape(n.polygon), { depth: Math.max(0.5, n.eaves), bevelEnabled: false });
@@ -559,12 +563,16 @@ const FADED_OPACITY = 0.08;
 function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; house: THREE.Vector3 }) {
   const geo = useMemo(() => neighbourGeometry(n), [n]);
   useDisposeAll(useMemo(() => [geo.walls, geo.slopes, geo.gables], [geo]));
+  const trueColours = useSiteView((s) => s.trueNeighbourColours);
   const mats = useMemo(() => {
     const make = (color: string, side: THREE.Side = THREE.FrontSide) =>
       new THREE.MeshStandardMaterial({ color, roughness: 0.92, side, transparent: ghost, opacity: ghost ? GHOST_OPACITY : 1, depthWrite: !ghost });
     // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
+    if (!trueColours) {
+      return [make(CARD_FLAT_ROOF), make(CARD_WALL), make(CARD_ROOF, THREE.DoubleSide), make(CARD_WALL, THREE.DoubleSide)];
+    }
     return [make(FLAT_ROOF), make(n.color ?? NEIGHBOUR_WALL), make(n.roofColor ?? NEIGHBOUR_ROOF, THREE.DoubleSide), make(n.color ?? NEIGHBOUR_WALL, THREE.DoubleSide)];
-  }, [n.color, n.roofColor, ghost]);
+  }, [n.color, n.roofColor, ghost, trueColours]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
 
   const box = useMemo(() => {

@@ -107,8 +107,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .lightbox .prev { left: 10px; }
 .lightbox .next { right: 10px; }
 
-.view-buttons { position: absolute; top: 8px; right: 10px; z-index: 2; display: flex; gap: 4px; }
-.view-buttons button { padding: 3px 8px; font-size: 12px; background: rgba(255,255,255,0.9); text-transform: capitalize; }
 
 .palette select { flex: 1; margin-left: 6px; padding: 3px; font: inherit; }
 .palette-items { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; max-height: 240px; overflow-y: auto; }
@@ -154,8 +152,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   header .hdr-variant, header .hdr-tab { order: 6; flex: 1 1 0; }
   header .hdr-variant button, header .hdr-tab button { flex: 1; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
   header .view-menu { order: 4; margin-left: 0; }
-  .view-buttons { gap: 3px; right: 8px; }
-  .view-buttons button { padding: 3px 7px; }
   .viewer-title { max-width: calc(100% - 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lightbox .nav { display: none; }
 }
@@ -169,7 +165,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   label input[type="text"], label input[type="password"], label input[type="number"], label select { min-height: 40px; }
   input[type="checkbox"] { width: 20px; height: 20px; }
   .check { min-height: 40px; }
-  .view-buttons button { min-height: 40px; min-width: 44px; }
   .photo-card select { min-height: 40px; }
 }
 

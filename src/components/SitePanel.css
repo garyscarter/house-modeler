@@ -27,7 +27,9 @@ label .site-unit input[type="number"] { width: 72px; display: inline-block; marg
 .site-gaps div .small { text-transform: capitalize; }
 
 .site-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
-.site-item.site-neighbour { display: grid; grid-template-columns: minmax(0, 1fr) 62px 78px auto; font-size: 12px; }
+/* Name on its own full-width line; height, roof and remove beneath. */
+.site-item.site-neighbour { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; font-size: 12px; row-gap: 4px; }
+.site-neighbour .site-name { grid-column: 1 / -1; }
 .site-item select, .site-item input { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
 .site-item select { flex: 1; }
 .site-neighbour .site-unit { gap: 2px; }

@@ -30,6 +30,7 @@ export function SitePanel() {
   const setUi = useStore((s) => s.setUi);
   const setMode = useStore((s) => s.setMode);
   const ghost = useSiteView((s) => s.ghostNeighbours);
+  const trueColours = useSiteView((s) => s.trueNeighbourColours);
   const setSiteView = useSiteView((s) => s.setSiteView);
 
   const loadListing = async () => {
@@ -59,6 +60,9 @@ export function SitePanel() {
               }}>Edit the site plan</button>
             <label className="check site-inline">
               <input type="checkbox" checked={ghost} onChange={(e) => setSiteView({ ghostNeighbours: e.target.checked })} /> See-through neighbours
+            </label>
+            <label className="check site-inline">
+              <input type="checkbox" checked={trueColours} onChange={(e) => setSiteView({ trueNeighbourColours: e.target.checked })} /> Neighbours in their own colours
             </label>
           </div>
 
