@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyListingUpdates, defaultSelection, isBasedOnListing, listingUpdates, onWall, reviewedVersion, type LayoutChange } from "./layoutMerge";
+import { applyChanges, applyListingUpdates, defaultSelection, isBasedOnListing, listingUpdates, onWall, reviewedVersion, type LayoutChange } from "./layoutMerge";
 import { floor, rect } from "./testing";
 import { DEFAULT_EXTERIOR, type Fixture, type HouseModel, type Opening } from "../types";
 import { LISTING_PRESET, PRESETS } from "./houses/listing91770873";
@@ -78,6 +78,24 @@ describe("listingUpdates", () => {
     const out = applyListingUpdates(base(), l, ["model.storeys"]);
     expect([out.ceilingHeight, out.slabThickness]).toEqual([2.25, 0.2]);
     expect(out.floors).toEqual(base().floors);
+  });
+
+  it("brings the design's own default-height windows to the sill and head every window on the latest floor shares", () => {
+    const mine = base();
+    // An extension window of the owner's at the default heights, and one with heights of its own.
+    mine.floors[1].openings.push(win(100, 0), win(500, 0, { sill: 1.2, head: 2.0 }));
+    const l = base();
+    l.floors[1].openings = [win(300, 300, { sill: 0.98, head: 1.95 }), win(450, 300, { sill: 0.98, head: 1.95 })];
+    // The ground floor's one window has its own heights, so no house height is offered there.
+    l.floors[0].openings[1] = win(200, 300, { sill: 1.0, head: 2.15 });
+    const cs = listingUpdates(mine, l).filter((c) => c.id.endsWith("own-heights"));
+    expect(cs.map((c) => [c.label, c.defaultSelected])).toEqual([["First, your own window in Bedroom's outside wall: sill and head 0.9 m to 2.1 m → 0.98 m to 1.95 m, as the house's", true]]);
+    const out = applyChanges(mine, cs, [cs[0].id]);
+    expect(out.floors[1].openings.map((o) => [o.x, o.sill, o.head])).toEqual([
+      [300, undefined, undefined],
+      [100, 0.98, 1.95],
+      [500, 1.2, 2.0],
+    ]);
   });
 
   it("applies only what is ticked, and never touches rooms, walls or the design's own fixtures", () => {

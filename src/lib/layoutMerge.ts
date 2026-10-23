@@ -563,6 +563,37 @@ function openingChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
   return out;
 }
 
+/**
+ * The design's own windows (ones the latest floor has no counterpart for, an extension's say) still at the default
+ * sill and head, brought to the sill and head every window on the latest floor shares: one ticked change per floor.
+ * Defaults drawn for 2.4 m storeys are taller than the measured windows, and on the first floor reach past the soffit.
+ */
+function ownWindowChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
+  const out: LayoutChange[] = [];
+  for (const { lf, mf, li } of floorPairs(mine, latest)) {
+    const wins = lf.openings.filter((o) => o.kind === "window");
+    const { sill, head } = wins[0] ?? {};
+    if (wins.length < 2 || sill === undefined || head === undefined || !wins.every((o) => o.sill === sill && o.head === head)) continue;
+    const matched = new Set(matchOpenings(lf, mf).values());
+    const own = mf.openings.filter((o) => o.kind === "window" && !matched.has(o) && o.sill === undefined && o.head === undefined);
+    if (!own.length) continue;
+    const ids = new Set(own.map((o) => o.id));
+    const span = (s: number, h: number) => `${metres(s)} to ${metres(h)}`;
+    out.push({
+      id: `opening.${li}.own-heights`,
+      group: "openings",
+      label: `${mf.name}, your own window${own.length > 1 ? `s (${own.length})` : ""} ${[...new Set(own.map((o) => where(mf, o)))].join(", ")}: sill and head ${span(defaultSill("window")!, defaultHead("window")!)} → ${span(sill, head)}, as the house's`,
+      defaultSelected: true,
+      available: true,
+      apply: (model) => ({
+        ...model,
+        floors: model.floors.map((f) => (f.id !== mf.id ? f : { ...f, openings: f.openings.map((o) => (ids.has(o.id) ? { ...o, sill, head } : o)) })),
+      }),
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 
 /**
@@ -579,7 +610,8 @@ function openingChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
  *   style, size and height fields that differ are offered (ticked unless a new width would leave its wall
  *   or run into another opening). Hinge side, swing and open angle are never offered. A latest opening
  *   with no counterpart is offered unticked, and can't be ticked off a wall or over an opening. Openings
- *   the design has and the latest hasn't are never removed.
+ *   the design has and the latest hasn't are never removed. The design's own windows still at the default
+ *   sill and head are brought to the latest floor's, when all its windows share one (ticked).
  */
 /**
  * The storeys' ceiling height and floor depth, as one ticked change: they are measured from the photos, and the
@@ -607,6 +639,7 @@ export function listingUpdates(mine: HouseModel, latest: HouseModel): LayoutChan
     ...fixtureChanges(mine, latest),
     ...stairChanges(mine, latest),
     ...openingChanges(mine, latest),
+    ...ownWindowChanges(mine, latest),
   ];
 }
 
