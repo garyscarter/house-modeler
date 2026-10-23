@@ -106,7 +106,7 @@ const currentProject = (): ProjectData => {
 
 /** Put a project into the store the way Import JSON does. Returns false when it isn't a project. */
 export function applyProject(data: unknown, fromServer = false): boolean {
-  const project = parseProject(data, useStore.getState().costRates);
+  const project = parseProject(data, useStore.getState().costRates, { allowEmpty: fromServer });
   if (!project) return false;
   applying = fromServer; // the server's own copy is not a local change to send back
   try {
@@ -155,6 +155,10 @@ async function pushOnce(base: number): Promise<void> {
   if (!reply) return goOffline();
   if (reply.status === 401) return setStatus({ kind: "signedout" });
   if (reply.status === 409) return conflict(reply.json as Partial<Revision>);
+  if (reply.status === 413) {
+    paused = true; // retrying the same upload cannot succeed: wait for Sync now
+    return setStatus({ kind: "tooLarge" });
+  }
   if (reply.status !== 200) return goOffline();
   persistent = reply.json.persistent !== false;
   if (sent === version) dirty = false;

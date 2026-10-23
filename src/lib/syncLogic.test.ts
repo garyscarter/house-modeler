@@ -100,6 +100,14 @@ describe("replies and projects", () => {
     expect(parseProject("nope", {})).toBeNull();
     expect(parseProject(null, {})).toBeNull();
   });
+  it("accepts an emptied project only from the server", () => {
+    expect(parseProject({ variants: {} }, { z: 2 }, { allowEmpty: true })).toEqual({ variants: {}, photos: [], sites: {}, costRates: { z: 2 } });
+    expect(parseProject({ variants: {} }, { z: 2 })).toBeNull();
+    expect(parseProject({}, {}, { allowEmpty: true })).toBeNull();
+  });
+  it("says when the project is too large to sync", () => {
+    expect(statusText({ kind: "tooLarge" })).toContain("Too large to sync (over 50 MB)");
+  });
   it("keeps the current cost rates when the file has none, and treats missing photos as none", () => {
     const p = parseProject({ variants: { proposed: model } }, { z: 2 });
     expect(p?.costRates).toEqual({ z: 2 });
