@@ -289,6 +289,51 @@ export interface Wall {
   color?: string;
 }
 
+/** Fronts of fitted joinery: framed shaker doors, flat slab doors, glazed doors, or open (no doors). */
+export type JoineryFront = "shaker" | "slab" | "glass" | "open";
+export const JOINERY_FRONT_LABEL: Record<JoineryFront, string> = { shaker: "Shaker doors", slab: "Slab doors", glass: "Glazed doors", open: "Open (no doors)" };
+/** Front of a window seat or banquette. */
+export type SeatFront = "lid" | "drawers";
+export const SEAT_FRONT_LABEL: Record<SeatFront, string> = { lid: "Lift-up lid, panelled front", drawers: "Drawers" };
+/** How a built-in or window seat was last sized to the walls; "Refit" runs the same fit again. */
+export type JoineryFit = "recess" | "window";
+
+/**
+ * Settings of fitted joinery (built-ins, wall boxes, floating-shelf stacks, window seats). All optional: unset
+ * falls back to the catalogue item's `joinery`, then to joineryOf's defaults (lib/joinery.ts).
+ */
+export interface JoineryConfig {
+  /** Vertical divisions across the width; unset = about one per 0.6 m (wall boxes: 1). */
+  bays?: number;
+  /** Built-ins: height of the base cupboards including plinth and top, m; 0 = no base. */
+  baseH?: number;
+  baseFront?: JoineryFront;
+  /** Built-ins: a top (worktop or cap) on the base; its colour is Fixture.worktop. */
+  top?: boolean;
+  /** Recessed kickboard under built-ins and window seats. */
+  plinth?: boolean;
+  /** Built-ins: shelves in the upper section. Wall boxes: shelves inside. Floating shelves: boards in the stack. */
+  shelves?: number;
+  /** Built-ins: the upper section; "open" = open shelves, otherwise doors. */
+  upperFront?: JoineryFront;
+  /** Built-ins: depth of the upper section, m (unset = full depth). */
+  upperD?: number;
+  /** Built-ins: top-box height, m (0 or unset = none). */
+  topBox?: number;
+  /** Wall boxes: their front. */
+  front?: JoineryFront;
+  /** Carcass and inside colour (unset = the fixture colour). */
+  carcass?: string;
+  /** Shelf thickness, m. */
+  shelfT?: number;
+  seatFront?: SeatFront;
+  /** Window seats: back cushions against the wall (a banquette). */
+  backCushion?: boolean;
+  /** Window seats: cushion colour. */
+  cushion?: string;
+  fit?: JoineryFit;
+}
+
 /** A piece of furniture or a fixture placed on the plan, by catalogue id. */
 export interface Fixture {
   id: string;
@@ -316,6 +361,8 @@ export interface Fixture {
   piece?: string;
   /** Selects but can't be moved, resized or reshaped on the plan. */
   locked?: boolean;
+  /** Fitted joinery settings (built-ins, window seats, wall boxes, floating-shelf stacks); see lib/joinery.ts. */
+  joinery?: JoineryConfig;
 }
 
 export interface Floor {

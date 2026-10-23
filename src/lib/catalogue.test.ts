@@ -105,3 +105,12 @@ describe("filterCatalogue", () => {
     expect(filterCatalogue("qqqqxx", "All")).toEqual([]);
   });
 });
+
+describe("joinery", () => {
+  it("offers built-ins, window seats, shelf stacks and wall boxes under Joinery, after Living", () => {
+    for (const id of ["built-in-alcove", "built-in-cupboard", "built-in-shelves", "window-seat", "banquette", "floating-shelves", "wall-cube", "wall-cupboard"]) expect(byId(id)?.category, id).toBe("Joinery");
+    expect(CATEGORIES.indexOf("Joinery")).toBe(CATEGORIES.indexOf("Living") + 1);
+    for (const id of ["built-in-alcove", "built-in-cupboard", "built-in-shelves"]) expect(byId(id)!.toCeiling, id).toBe(true);
+    expect(byId("wall-cube")!.mount).toBeGreaterThan(1);
+  });
+});

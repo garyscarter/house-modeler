@@ -1,5 +1,6 @@
 import { createElement, memo, type ReactNode } from "react";
 import { burners, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import type { Fixture } from "../types";
 
 /**
  * Plan symbol for a catalogue item, drawn in a local frame centred on (0,0)
@@ -28,6 +29,8 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   selected?: boolean;
   clash?: boolean;
   ghost?: boolean;
+  /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);

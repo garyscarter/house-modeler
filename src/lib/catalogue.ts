@@ -1,3 +1,5 @@
+import type { JoineryConfig } from "../types";
+
 /**
  * Furniture and fixture catalogue with typical UK sizes, in metres.
  * `w` is the width left-right on the plan at rotation 0, `d` the depth top-bottom,
@@ -60,7 +62,10 @@ export type Symbol =
   | "wine-cooler"
   | "waterfall"
   | "chimney-hood"
-  | "shelf";
+  | "shelf"
+  | "built-in"
+  | "window-seat"
+  | "wall-box";
 
 export interface CatalogueItem {
   id: string;
@@ -78,6 +83,8 @@ export interface CatalogueItem {
   note?: string;
   /** Id of the owner's MyPiece this entry stands for (see lib/myFurniture.ts). */
   piece?: string;
+  /** Default joinery settings (see lib/joinery.ts). */
+  joinery?: JoineryConfig;
 }
 
 /** Kitchen carcass colour shared by the units so a run reads as one kitchen. */
@@ -85,6 +92,7 @@ const UNIT = "#e0dccf";
 const WOOD = "#c9a26b";
 const WALNUT = "#6b4a2f";
 const STAINLESS = "#b9bdc2";
+const PAINTED = "#ece9e1";
 /** Worktop colour of kitchen units unless a fixture sets its own. */
 export const DEFAULT_WORKTOP = "#4a4d52";
 
@@ -150,6 +158,17 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "rug-large", name: "Rug (200 × 300)", category: "Living", w: 3.00, d: 2.00, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
   { id: "rug-medium", name: "Rug (160 × 230)", category: "Living", w: 2.30, d: 1.60, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
 
+  // Joinery: fitted, made to measure. Placing a built-in in an alcove sizes it to the recess and a window seat
+  // by a window to the window (lib/recess.ts); settings in lib/joinery.ts.
+  { id: "built-in-alcove", name: "Built-in alcove unit", category: "Joinery", w: 0.9, d: 0.4, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0.85, baseFront: "shaker", top: true, plinth: true, shelves: 3, upperFront: "open", upperD: 0.3 }, note: "Cupboards below, open shelves above, floor to ceiling; click in an alcove to fit it" },
+  { id: "built-in-cupboard", name: "Built-in cupboard (full height)", category: "Joinery", w: 0.9, d: 0.5, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0.9, baseFront: "shaker", top: false, plinth: true, shelves: 3, upperFront: "shaker", topBox: 0.4 }, note: "Doors top to bottom with a top box; click in an alcove to fit it" },
+  { id: "built-in-shelves", name: "Built-in shelves (open)", category: "Joinery", w: 0.9, d: 0.3, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0, plinth: true, shelves: 5, upperFront: "open" }, note: "Open shelving floor to ceiling; click in an alcove to fit it" },
+  { id: "window-seat", name: "Window seat", category: "Joinery", w: 1.2, d: 0.5, h: 0.45, color: PAINTED, symbol: "window-seat", joinery: { seatFront: "lid", plinth: true, backCushion: false }, note: "Storage bench with a cushion; click by a window to fit it to the window" },
+  { id: "banquette", name: "Banquette", category: "Joinery", w: 1.6, d: 0.55, h: 0.45, color: PAINTED, symbol: "window-seat", joinery: { seatFront: "drawers", plinth: true, backCushion: true }, note: "Bench seat with drawers and back cushions, along a wall or under a window" },
+  { id: "floating-shelves", name: "Floating shelves (stack of 3)", category: "Joinery", w: 1.0, d: 0.25, h: 0.74, color: WOOD, symbol: "shelf", mount: 1.2, joinery: { shelves: 3, shelfT: 0.04 }, note: "Set how many shelves, their spacing and thickness" },
+  { id: "wall-cube", name: "Wall cube (open)", category: "Joinery", w: 0.4, d: 0.3, h: 0.4, color: PAINTED, symbol: "wall-box", mount: 1.4, joinery: { front: "open", bays: 1, shelves: 0 }, note: "Open box on the wall; set bays and shelves for a grid" },
+  { id: "wall-cupboard", name: "Wall cupboard", category: "Joinery", w: 0.8, d: 0.3, h: 0.5, color: PAINTED, symbol: "wall-box", mount: 1.5, joinery: { front: "slab", shelves: 1 }, note: "Wall-hung cupboard for a living room or study" },
+
   // Dining
   { id: "table-4", name: "Dining table (4)", category: "Dining", w: 1.20, d: 0.80, h: 0.75, color: WOOD, symbol: "table" },
   { id: "table-6", name: "Dining table (6)", category: "Dining", w: 1.80, d: 0.90, h: 0.75, color: WOOD, symbol: "table" },
@@ -185,7 +204,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "fridge-integrated", name: "Integrated fridge freezer (tall)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "tall", note: "Built in behind two cabinet doors" },
   { id: "island-waterfall", name: "Island, waterfall (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.92, color: UNIT, symbol: "waterfall", note: "Worktop runs down both ends; overhang at the back for stools" },
   { id: "island-2400", name: "Island (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.9, color: UNIT, symbol: "island" },
-  { id: "floating-shelf", name: "Floating shelf (1 m)", category: "Kitchen", w: 1.00, d: 0.25, h: 0.04, color: WOOD, symbol: "shelf", mount: 1.5, note: "Open shelf in place of wall cabinets; set any width" },
+  { id: "floating-shelf", name: "Floating shelf (1 m)", category: "Kitchen", w: 1.00, d: 0.25, h: 0.04, color: WOOD, symbol: "shelf", mount: 1.5, note: "Open shelf in place of wall cabinets; set any width, or a stack in the inspector" },
 
   // Utility
   { id: "washing-machine", name: "Washing machine", category: "Utility", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "washer" },

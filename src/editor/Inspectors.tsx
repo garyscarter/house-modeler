@@ -688,6 +688,10 @@ export function FixtureInspector({
   /** Present when the clipboard holds something to paste. */
   onPaste?: () => void;
   onRemove: () => void;
+  /** Re-run the fit (recess or window); present for built-ins and window seats. */
+  onRefit?: () => void;
+  /** Why a fitted unit no longer fits its recess or window. */
+  misfit?: string;
 }) {
   const resized = fixture.w !== undefined || fixture.d !== undefined || fixture.h !== undefined;
   const rot = Math.round(fixture.rot) % 360;
