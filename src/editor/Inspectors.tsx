@@ -32,6 +32,7 @@ import {
   wallRun,
   type Corner,
 } from "../lib/planMath";
+import { PieceLink } from "./MyFurniture";
 
 /** Mouse enter / leave handlers that light a room in the plan and in 3D (store.hoveredRoomId). */
 const hoverRefs = new Map<string, (el: HTMLElement | null) => (() => void) | void>();
@@ -663,6 +664,7 @@ export function FixtureInspector({
   return (
     <div className="inspector fixture-inspector">
       <h4>{item.name}</h4>
+      {fixture.piece && <PieceLink fixture={fixture} />}
       {item.note && <p className="muted small">{item.note}</p>}
       {clash && <p className="small warn">Overlaps another item.</p>}
       {groupSize !== undefined && groupSize > 1 && onSelectGroup && (

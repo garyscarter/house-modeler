@@ -6,6 +6,7 @@ import { PlanningBody, PLANNING_TITLE, usePlanningCheck } from "./PlanningPanel"
 import { AreaCheck, Areas, Changes, Costs, Exports, Notes, useReportData } from "./ReportPanel";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "../lib/reviewSummary";
 import type { VariantKey } from "../types";
+import { MyFurnitureReview } from "../editor/MyFurniture";
 import "./ReviewPage.css";
 
 export type ReviewSection = "report" | "planning";
@@ -67,6 +68,7 @@ function ReviewDocument() {
   const data = useReportData();
   const { check, wing, setWing } = usePlanningCheck();
   const { variants, areas, changes, estimate, notes, noteCount, both } = data;
+  const pieces = useStore((s) => s.pieces);
 
   const scrollTo = (id: string) => {
     const el = rootRef.current?.querySelector<HTMLElement>(`#${id}`);
@@ -158,6 +160,12 @@ function ReviewDocument() {
             </RvSection>
           </div>
         </div>
+
+        {pieces.length > 0 && (
+          <RvSection id="rv-mine" title="My furniture" count={pieces.length}>
+            <MyFurnitureReview />
+          </RvSection>
+        )}
 
         <RvSection id="rv-exports" title="Exports">
           <Exports areas={areas} changes={changes} />

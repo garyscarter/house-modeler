@@ -76,6 +76,8 @@ export interface CatalogueItem {
   /** Floor-to-ceiling items (fitted wardrobes): as tall as the room unless set lower, and never taller. */
   toCeiling?: boolean;
   note?: string;
+  /** Id of the owner's MyPiece this entry stands for (see lib/myFurniture.ts). */
+  piece?: string;
 }
 
 /** Kitchen carcass colour shared by the units so a run reads as one kitchen. */
@@ -272,13 +274,15 @@ export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount
   return Number.isFinite(m) ? Math.max(0, m) : item.mount ?? 0;
 }
 
+/** Category of the owner's own pieces. */
+export const MINE = "Mine";
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];
 export const byId = (id: string) => CATALOGUE.find((c) => c.id === id);
 
 /** Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note. */
-export function filterCatalogue(query: string, category: string | "All"): CatalogueItem[] {
+export function filterCatalogue(query: string, category: string | "All", extra: CatalogueItem[] = []): CatalogueItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return CATALOGUE.filter((c) => {
+  return [...extra, ...CATALOGUE].filter((c) => {
     if (category !== "All" && c.category !== category) return false;
     const hay = `${c.name} ${c.category} ${c.note ?? ""}`.toLowerCase();
     return words.every((w) => hay.includes(w));

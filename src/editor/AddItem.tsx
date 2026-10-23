@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { CATEGORIES, filterCatalogue, type CatalogueItem } from "../lib/catalogue";
+import { CATEGORIES, filterCatalogue, MINE, type CatalogueItem } from "../lib/catalogue";
+import { pieceItem } from "../lib/myFurniture";
+import { useStore } from "../store";
+import { PieceForm } from "./MyFurniture";
 import { usePanelPrefs } from "../components/panelPrefs";
 
 /**
@@ -64,13 +67,16 @@ export function CataloguePicker({ activeId, onPick }: { activeId?: string | null
   const category = usePanelPrefs((s) => s.addCategory);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const [query, setQuery] = useState("");
-  const cat = category === "All" || CATEGORIES.includes(category) ? category : "All";
-  const items = filterCatalogue(query, cat);
+  const pieces = useStore((s) => s.pieces);
+  const addPiece = useStore((s) => s.addPiece);
+  const [adding, setAdding] = useState(false);
+  const cat = category === "All" || category === MINE || CATEGORIES.includes(category) ? category : "All";
+  const items = filterCatalogue(query, cat, pieces.map(pieceItem));
   return (
     <div className="catalogue-picker">
       <input type="search" autoFocus placeholder="Search furniture" aria-label="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="chips" role="group" aria-label="Category">
-        {["All", ...CATEGORIES].map((c) => (
+        {["All", MINE, ...CATEGORIES].map((c) => (
           <button key={c} className={c === cat ? "chip active" : "chip"} aria-pressed={c === cat} onClick={() => setPrefs({ addCategory: c })}>
             {c}
           </button>
@@ -78,15 +84,32 @@ export function CataloguePicker({ activeId, onPick }: { activeId?: string | null
       </div>
       <div className="picker-rows">
         {items.map((c) => (
-          <button key={c.id} className={activeId === c.id ? "active" : ""} title={c.note ?? ""} onClick={() => onPick(c)}>
+          <button key={c.id} className={activeId === (c.piece ?? c.id) ? "active" : ""} title={c.note ?? ""} onClick={() => onPick(c)}>
             <span>{c.name}</span>
             <span className="muted">
+              {c.piece ? "Yours · " : ""}
               {c.w.toFixed(2)} × {c.d.toFixed(2)} m
             </span>
           </button>
         ))}
-        {items.length === 0 && <p className="muted small">Nothing matches.</p>}
+        {items.length === 0 && cat !== MINE && <p className="muted small">Nothing matches.</p>}
+        {items.length === 0 && cat === MINE && !adding && <p className="muted small">Furniture you already own, with its real sizes, shows here.</p>}
       </div>
+      {cat === MINE &&
+        (adding ? (
+          <PieceForm
+            onCancel={() => setAdding(false)}
+            onSave={(p) => {
+              const id = addPiece(p);
+              setAdding(false);
+              onPick(pieceItem({ ...p, id }));
+            }}
+          />
+        ) : (
+          <div className="picker-foot">
+            <button onClick={() => setAdding(true)}>Add a piece I own</button>
+          </div>
+        ))}
     </div>
   );
 }

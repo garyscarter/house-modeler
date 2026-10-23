@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Floor, HouseModel, Photo, Room, Site, VariantKey } from "./types";
+import type { Floor, HouseModel, MyPiece, Photo, Room, Site, VariantKey } from "./types";
+import { applyPiece, unlinkPiece } from "./lib/myFurniture";
 import { imageAwareStorage } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
@@ -35,6 +36,7 @@ interface Snapshot {
   variants: Partial<Record<VariantKey, HouseModel>>;
   photos: Photo[];
   sites: Sites;
+  pieces: MyPiece[];
 }
 
 interface State {
@@ -46,6 +48,8 @@ interface State {
    * house model untouched and the 3D house is not rebuilt for it.
    */
   sites: Sites;
+  /** Furniture the owner already has, measured (see lib/myFurniture.ts). Kept when a project is reset. */
+  pieces: MyPiece[];
   settings: Settings;
   sun: SunState;
   /** Cost rates for the report, keyed by line item. */
@@ -118,6 +122,12 @@ interface State {
   addPhotos: (p: Photo[]) => void;
   updatePhoto: (id: string, patch: Partial<Photo>) => void;
   removePhoto: (id: string) => void;
+  /** Add a piece of the owner's furniture; returns its id. */
+  addPiece: (p: Omit<MyPiece, "id">) => string;
+  /** Edit a piece; every placement in both layouts follows, as one undo step. */
+  updatePiece: (id: string, patch: Partial<Omit<MyPiece, "id">>) => void;
+  /** Delete a piece; its placements stay as plain items. */
+  removePiece: (id: string) => void;
   setUi: (
     p: Partial<
       Pick<
@@ -145,7 +155,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "pieces" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -173,10 +183,10 @@ export const useStore = create<State>()(
       const setState: typeof rawSet = (partial) => {
         const st = get();
         const patch = typeof partial === "function" ? partial(st) : partial;
-        const touches = "variants" in patch || "photos" in patch || "sites" in patch;
+        const touches = "variants" in patch || "photos" in patch || "sites" in patch || "pieces" in patch;
         if (touches) {
           const now = Date.now();
-          const snap: Snapshot = { variants: st.variants, photos: st.photos, sites: st.sites };
+          const snap: Snapshot = { variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces };
           const coalesce = held ? heldPushed && st.past.length > 0 : now - lastPush < COALESCE_MS && st.past.length > 0;
           const past = coalesce ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
           lastPush = now;
@@ -184,11 +194,12 @@ export const useStore = create<State>()(
           rawSet({ ...patch, past, future: [] });
         } else rawSet(patch);
       };
-      const snapshot = (st: State): Snapshot => ({ variants: st.variants, photos: st.photos, sites: st.sites });
+      const snapshot = (st: State): Snapshot => ({ variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces });
       return {
         variants: {},
         photos: [],
         sites: {},
+        pieces: [],
         settings: { quality: "high" },
         sun: { enabled: false, dayOfYear: 172, hour: 15 },
         costRates: {},
@@ -352,6 +363,32 @@ export const useStore = create<State>()(
         addPhotos: (p) => setState((st) => ({ photos: [...st.photos, ...p] })),
         updatePhoto: (id, patch) => setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
         removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
+        addPiece: (p) => {
+          const id = `piece-${Math.random().toString(36).slice(2, 10)}`;
+          setState((st) => ({ pieces: [...st.pieces, { ...p, id }] }));
+          return id;
+        },
+        updatePiece: (id, patch) =>
+          setState((st) => {
+            const prev = st.pieces.find((x) => x.id === id);
+            if (!prev) return {};
+            const next = { ...prev, ...patch };
+            const variants = { ...st.variants };
+            for (const k of ["current", "proposed"] as VariantKey[]) {
+              const m = variants[k];
+              if (m) variants[k] = applyPiece(m, prev, next);
+            }
+            return { pieces: st.pieces.map((x) => (x.id === id ? next : x)), variants };
+          }),
+        removePiece: (id) =>
+          setState((st) => {
+            const variants = { ...st.variants };
+            for (const k of ["current", "proposed"] as VariantKey[]) {
+              const m = variants[k];
+              if (m) variants[k] = unlinkPiece(m, id);
+            }
+            return { pieces: st.pieces.filter((x) => x.id !== id), variants };
+          }),
         setUi: (p) =>
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
@@ -366,6 +403,7 @@ export const useStore = create<State>()(
         variants: s.variants,
         photos: s.photos,
         sites: s.sites,
+        pieces: s.pieces,
         settings: s.settings,
         sun: s.sun,
         costRates: s.costRates,
@@ -383,6 +421,7 @@ export const useStore = create<State>()(
       // Older saves lack the newer persisted fields; keep the defaults for those.
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<Persisted>) };
+        if (!Array.isArray(merged.pieces)) merged.pieces = [];
         if (!isMode(merged.mode)) merged.mode = "build";
         if (!VIEW_MODES.includes(merged.viewMode)) merged.viewMode = "single";
         if (merged.tab !== "3d" && merged.tab !== "plan") merged.tab = "3d";

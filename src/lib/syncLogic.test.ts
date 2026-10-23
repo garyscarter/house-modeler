@@ -113,6 +113,12 @@ describe("replies and projects", () => {
     expect(p?.costRates).toEqual({ z: 2 });
     expect(p?.photos).toEqual([]);
   });
+  it("reads the owner's pieces, ignoring junk, and leaves them undefined for older copies", () => {
+    const p = parseProject({ variants: { current: model }, pieces: [{ id: "a", name: "Sofa", kind: "sofa-3", w: 2, d: 1, h: 1 }, 7] }, {});
+    expect(p?.pieces).toHaveLength(1);
+    expect(parseProject({ variants: { current: model } }, {})?.pieces).toBeUndefined();
+    expect(parseProject({ variants: {}, pieces: [] }, {}, { allowEmpty: true })?.pieces).toEqual([]);
+  });
   it("knows an empty project", () => {
     expect(isProjectEmpty({ variants: {}, photos: [] })).toBe(true);
     expect(isProjectEmpty({ variants: {}, photos: [{ id: "p" } as never] })).toBe(false);

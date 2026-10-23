@@ -52,6 +52,12 @@ describe("buildCommands", () => {
     cmd.run();
     expect(c.setUi).toHaveBeenCalledWith({ tab: "plan", editFloorId: "f", selectedRoomId: "r2" });
   });
+  it("offers adding a piece of furniture I own, in Furnish", () => {
+    const c = ctx();
+    buildCommands(c).find((x) => x.id === "my-furniture-add")!.run();
+    expect(c.setMode).toHaveBeenCalledWith("furnish");
+    expect(c.dispatch).toHaveBeenCalledWith("house:add-piece", {});
+  });
   it("only offers camera commands in 3D, and titles toggles by state", () => {
     expect(buildCommands(ctx()).some((x) => x.id.startsWith("camera:"))).toBe(false);
     const c = ctx({ tab: "3d" });

@@ -9,6 +9,8 @@ import { confirmKnockThrough } from "./KnockThrough";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, NumberField, OpeningInspector, WallInspector } from "./Inspectors";
 import { AddPopover } from "./AddItem";
+import { pieceFixtureFields, pieceItem } from "../lib/myFurniture";
+import { takePendingPlace } from "./MyFurniture";
 import { ToolRail, type RailItem } from "./ToolRail";
 import { takePendingTool, PLAN_TOOL_EVENT } from "./planTool";
 import { ContextMenu, type MenuItem, type MenuState } from "../components/ContextMenu";
@@ -705,7 +707,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     }
     const raw = toImage(e);
     if (tool === "place" && placing) {
-      const fx: Fixture = { id: uid(), type: placing.item.id, x: raw.x, y: raw.y, rot: placing.rot };
+      const fx: Fixture = { id: uid(), type: placing.item.id, x: raw.x, y: raw.y, rot: placing.rot, ...pieceFixtureFields(placing.item) };
       const snapped = snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, e.altKey);
       setFixtures((all) => [...all, { ...fx, ...snapped }]);
       return; // stay in place mode for the next one
@@ -1057,6 +1059,18 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     setDraft([]);
     setMeasure([]);
   };
+  // "Place" on a piece in the Furnish panel starts placing it here (also when the plan was only just opened).
+  useEffect(() => {
+    const go = () => {
+      const id = takePendingPlace();
+      const piece = id ? useStore.getState().pieces.find((p) => p.id === id) : undefined;
+      if (piece) startPlacing(pieceItem(piece));
+    };
+    go();
+    window.addEventListener("house:place-piece", go);
+    return () => window.removeEventListener("house:place-piece", go);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Build and Decorate light the edge the panel is hovering; Decorate also keeps the picked wall lit.
   const litShown = litEdge ?? (decorate && selectedEdge ? selectedEdge.edge : null);
   const editRoom = edgeEdit && floor.rooms.find((r) => r.id === edgeEdit.roomId);
@@ -1086,7 +1100,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             shortcut: "A",
             active: addOpen,
             onClick: () => setAddOpen(!addOpen),
-            extra: <AddPopover activeId={placing?.item.id} onPick={startPlacing} open={addOpen} onOpenChange={setAddOpen} />,
+            extra: <AddPopover activeId={placing?.item.piece ?? placing?.item.id} onPick={startPlacing} open={addOpen} onOpenChange={setAddOpen} />,
           },
           ...(clipboard.length
             ? [{ id: "paste", icon: "paste" as const, label: pasteLabel, shortcut: "Ctrl V", onClick: () => pasteFixtures() }]
