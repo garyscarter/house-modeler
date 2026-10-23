@@ -95,3 +95,10 @@
 
 .plan-editor .plan-image-ctl { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .plan-editor .plan-image-ctl input[type="range"] { width: 90px; margin: 0; }
+
+/* Panels (chunk C) */
+.side .decorate-panel .decor-head { margin: 0 0 2px; font-size: 15px; }
+.side .decorate-wall .feature-walls { margin: 6px 0; }
+.side .decorate-wall .whole-room { margin-top: 4px; }
+.side .sect-body .feature-walls { margin: 0; }
+.side .room-inspector > .danger { margin-top: 10px; }
