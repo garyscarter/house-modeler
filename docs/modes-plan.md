@@ -1,6 +1,6 @@
 # Modes redesign: implementation plan (Taylor Swift)
 
-Status: draft for the owner's approval; nothing built yet. Brief: docs/modes-brief.md.
+Status: approved by the owner with all of the defaults in §13; being built in chunks A → (B ∥ C). Brief: docs/modes-brief.md.
 
 Built from docs/modes-brief.md and the code as it stands. Five modes (Build, Decorate, Furnish, Plot, Review), each with its own accent colour. The work splits into **Chunk A**, which lands first, then **Chunks B and C** in parallel.
 
