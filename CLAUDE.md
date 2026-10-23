@@ -1,4 +1,4 @@
-# House Modeler
+# Storey (house modeler)
 
 Browser-only React + react-three-fiber + zustand app for one house the owner is buying ("listing 91770873") and its renovation. See README.md for what it does and reference/listing-91770873/NOTES.md for the facts behind the built-in model.
 

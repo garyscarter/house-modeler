@@ -1,6 +1,6 @@
-# House Modeler
+# Storey
 
-A browser-only tool for visualising a house you are buying and planning its renovation, on a desktop, iPad or phone.
+Storey is a browser-only tool for visualising a house you are buying and planning its renovation, on a desktop, iPad or phone.
 
 The house is built in: the listing, traced from its floorplan and placed on its plot. The app builds a 3D model with real wall finishes, doors and windows, roofs, the garden, the neighbours and the sun. Edit the plan, draw a second "Proposed" layout and compare it with the original side by side or as an overlay, list what changes, put rough costs against it and export plans and a print-ready report.
 

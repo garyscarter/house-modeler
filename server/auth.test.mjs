@@ -168,7 +168,7 @@ describe("renderLoginPage", () => {
   it("has the form, escapes input and makes no external requests", () => {
     const html = renderLoginPage({ error: "Wrong <b>", next: '/x"><script>' });
     expect(html).toContain('autocomplete="current-password"');
-    expect(html).toContain("<title>House Modeler</title>");
+    expect(html).toContain("<title>Storey</title>");
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("<b>");
     expect(html).not.toMatch(/https?:\/\//);

@@ -103,7 +103,7 @@ export function statusText(s: SyncStatus): string {
   }
 }
 
-/** True for a reply that came from the House Modeler server (a static host answers with HTML instead). */
+/** True for a reply that came from the Storey server (a static host answers with HTML instead). */
 export const isJsonReply = (contentType: string | null) => /\bapplication\/json\b/i.test(contentType ?? "");
 
 export const isProjectEmpty = (p: { variants: ProjectData["variants"]; photos: Photo[] }) =>
@@ -113,7 +113,7 @@ const looksLikeModel = (m: unknown): m is HouseModel => !!m && Array.isArray((m 
 
 /**
  * Read a project (a server copy or an imported file) into what the store should hold,
- * or null when it is not a House Modeler project. Older files with one shared `site` are accepted.
+ * or null when it is not a Storey project. Older files with one shared `site` are accepted.
  */
 export function parseProject(data: unknown, costRatesNow: Record<string, number>, opts: { allowEmpty?: boolean } = {}): ProjectData | null {
   if (!data || typeof data !== "object") return null;

@@ -10,8 +10,8 @@ export function escapeHtml(value) {
 }
 
 const CSS = `
-:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2230;--muted:#5d6678;--line:#d6dbe4;--accent:#2f6fed;--accent-ink:#fff;--err:#b3261e;--err-bg:#fdecea;--shadow:0 1px 2px rgba(20,30,50,.06),0 8px 28px rgba(20,30,50,.08)}
-@media (prefers-color-scheme:dark){:root{--bg:#0f131a;--card:#181e29;--ink:#e8ebf2;--muted:#9aa3b5;--line:#2c3547;--accent:#6b9bff;--accent-ink:#0b1220;--err:#ffb4ab;--err-bg:#3a1a1a;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.45)}}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2230;--muted:#5d6678;--line:#d6dbe4;--accent:#0f6e66;--accent-ink:#fff;--err:#b3261e;--err-bg:#fdecea;--shadow:0 1px 2px rgba(20,30,50,.06),0 8px 28px rgba(20,30,50,.08)}
+@media (prefers-color-scheme:dark){:root{--bg:#0f131a;--card:#181e29;--ink:#e8ebf2;--muted:#9aa3b5;--line:#2c3547;--accent:#5dbdb2;--accent-ink:#0b1a18;--err:#ffb4ab;--err-bg:#3a1a1a;--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.45)}}
 *{box-sizing:border-box}
 html{color-scheme:light dark}
 body{margin:0;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
@@ -41,13 +41,13 @@ export function renderLoginPage({ error = "", next = "/" } = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
-<title>House Modeler</title>
+<title>Storey</title>
 <style>${CSS}</style>
 </head>
 <body>
 <main>
-<svg class="mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 23 24 8l18 15"/><path d="M11 20v20h26V20"/><path d="M20 40V28h8v12"/></svg>
-<h1>House Modeler</h1>
+<svg class="mark" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true"><path d="M10 27L32 9L54 27Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect x="12" y="31" width="40" height="10" rx="2"/><rect x="12" y="45" width="40" height="10" rx="2"/></svg>
+<h1>Storey</h1>
 <p>Enter the passcode to continue.</p>
 ${errorHtml}
 <form method="post" action="/login">

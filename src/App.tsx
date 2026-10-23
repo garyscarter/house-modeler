@@ -145,7 +145,7 @@ export default function App() {
   return (
     <div className="app" data-mode={mode} data-tab={tab} data-look={look}>
       <TopBar />
-      <div className="narrow-note">House Modeler is designed for a desktop or laptop.</div>
+      <div className="narrow-note">Storey is designed for a desktop or laptop.</div>
 
       <main data-tab={tab}>
         {!model && (
