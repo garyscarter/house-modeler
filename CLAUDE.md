@@ -14,7 +14,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 
 ## Working on it
 
-- `npm ci`; if npm 10 fails with an "edgesOut" error, use `npx -y npm@11.6.2 ci` (or `install`). In a worktree, symlink the main checkout's node_modules instead of reinstalling, unless package-lock.json differs.
+- A SessionStart hook (`.claude/hooks/session-start.sh`) runs `npm ci` when node_modules is missing. By hand: `npm ci`; if npm 10 fails with an "edgesOut" error, use `npx -y npm@11.6.2 ci` (or `install`). In a worktree, symlink the main checkout's node_modules instead of reinstalling, unless package-lock.json differs.
 - `npm run check` (typecheck plus vitest) and `npm run build` must pass before pushing.
 - Check UI changes in headless Chromium with Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. In dev builds the store is on `window.__houseStore`.
 - Pure logic goes in src/lib with tests; world frame: x right, world z = plan y (+z is the front of the house).
