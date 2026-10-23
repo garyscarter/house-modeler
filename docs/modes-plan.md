@@ -2,6 +2,8 @@
 
 Status: approved by the owner with all of the defaults in §13; being built in chunks A → (B ∥ C). Brief: docs/modes-brief.md.
 
+**Scope change (owner, 2026-10-23):** desktop only (mouse and keyboard, 1440×900 and up). Drop the iPad, phone and touch rules: §8 below the 900 px line, the bottom sheets, the bottom tab bar and Playwright check 11. Leave the header, left sidebar and drawer as they are until the owner picks a whole-app layout in the separate design review. That reverses §7 and the drawer half of check 10. The mode bar lives in one self-contained spot so it can be moved later.
+
 Built from docs/modes-brief.md and the code as it stands. Five modes (Build, Decorate, Furnish, Plot, Review), each with its own accent colour. The work splits into **Chunk A**, which lands first, then **Chunks B and C** in parallel.
 
 ---
