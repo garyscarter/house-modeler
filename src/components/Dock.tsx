@@ -33,7 +33,7 @@ export function Dock() {
   const active = dockFloorActive(ui, floors);
   const showFloors = tab === "3d" ? sorted.length > 0 : mode !== "plot" && sorted.length > 1;
   const keyOf = (i: number) => (i < 9 ? ` (${i + 1})` : "");
-  const compareLabel = COMPARE.find(([k]) => k === viewMode)?.[1] ?? "Single";
+  const compareLabel = COMPARE.find(([k]) => k === (both ? viewMode : "single"))?.[1] ?? "Single";
 
   return (
     <div className="dock float-card" role="toolbar" aria-label="View">

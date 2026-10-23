@@ -32,8 +32,21 @@ import {
 } from "../lib/planMath";
 
 /** Mouse enter / leave handlers that light a room in the plan and in 3D (store.hoveredRoomId). */
+const hoverRefs = new Map<string, (el: HTMLElement | null) => (() => void) | void>();
 export function hoverRoom(id: string) {
+  // A stable ref per id whose cleanup clears the hover when the element unmounts (no mouseleave fires then).
+  let ref = hoverRefs.get(id);
+  if (!ref) {
+    ref = (el) => {
+      if (!el) return;
+      return () => {
+        if (useStore.getState().hoveredRoomId === id) useStore.getState().setUi({ hoveredRoomId: null });
+      };
+    };
+    hoverRefs.set(id, ref);
+  }
   return {
+    ref,
     onMouseEnter: () => useStore.getState().setUi({ hoveredRoomId: id }),
     onMouseLeave: () => {
       if (useStore.getState().hoveredRoomId === id) useStore.getState().setUi({ hoveredRoomId: null });

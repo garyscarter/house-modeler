@@ -314,7 +314,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       // Furniture only lives in Furnish: switch there, then paste.
       if (!furnish) setMode("furnish");
       pasteFixture();
-    } else if (e.key === "Escape") {
+    } else if (e.key === "Escape" && !e.defaultPrevented) {
       setDraft([]);
       setCalib([]);
       setMeasure([]);
@@ -818,7 +818,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     const away = (e: PointerEvent) => {
       if (!imagePop.current?.parentElement?.contains(e.target as Node)) setImageOpen(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setImageOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setImageOpen(false);
+    };
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     return () => {

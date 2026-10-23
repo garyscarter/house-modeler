@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useStore } from "../store";
 import { keyBelongsElsewhere } from "../lib/nudge";
-import { dockFloorPick, floorForKey, tabSwitchPatch } from "../lib/studio";
+import { dockFloorPick, floorForKey, spaceKeyApplies, tabKeyApplies, tabSwitchPatch } from "../lib/studio";
 
 const isTextField = (t: EventTarget | null) => {
   const tag = (t as HTMLElement | null)?.tagName;
@@ -36,16 +36,23 @@ export function useStudioKeys() {
       if (!model || s.mode === "review" || keyBelongsElsewhere(e.target, document)) return;
 
       if (e.key === "Tab") {
-        if (e.shiftKey) return;
+        if (e.shiftKey || !tabKeyApplies(e.target)) return;
         e.preventDefault();
         s.setUi(tabSwitchPatch(s, model.floors, s.tab === "3d" ? "plan" : "3d"));
         return;
       }
       if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        if (!e.repeat) s.setPeek(true);
+        if (!spaceKeyApplies(e.target)) return;
+        if (s.peek) {
+          e.preventDefault(); // held: repeats keep the page from scrolling
+          return;
+        }
+        if (e.repeat) return;
+        s.setPeek(true);
+        if (st().peek) e.preventDefault();
         return;
       }
+      if (s.peek) return; // the floor shown is the one you left; digits wait for release
       if (e.shiftKey || !/^[0-9]$/.test(e.key)) return;
       if (s.tab === "plan" && s.mode === "plot") return;
       const pick = floorForKey(model.floors, e.key);

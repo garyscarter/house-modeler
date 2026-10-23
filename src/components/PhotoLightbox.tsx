@@ -22,7 +22,10 @@ export function PhotoLightbox() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") setUi({ selectedPhotoId: photos[(idx - 1 + photos.length) % photos.length].id });
       else if (e.key === "ArrowRight") setUi({ selectedPhotoId: photos[(idx + 1) % photos.length].id });
-      else if (e.key === "Escape") setUi({ selectedPhotoId: null });
+      else if (e.key === "Escape") {
+        e.preventDefault();
+        setUi({ selectedPhotoId: null });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

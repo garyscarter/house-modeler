@@ -8,7 +8,10 @@ export function ShortcutSheet() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        return setOpen(false);
+      }
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {

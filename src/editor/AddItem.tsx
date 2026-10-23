@@ -26,6 +26,7 @@ export function AddPopover({
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
         e.stopPropagation();
         onOpenChange(false);
       }

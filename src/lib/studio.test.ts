@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch } from "./studio";
+import { dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
 import type { Floor, HouseModel } from "../types";
 
 const fl = (id: string, level: number) => ({ id, name: id, level }) as unknown as Floor;
@@ -63,7 +63,7 @@ describe("floors", () => {
 });
 
 describe("peekPatch", () => {
-  const base = { peek: false, peekReturn: null, activeVariant: "proposed" as const, viewMode: "single" as const, variants: { current: {}, proposed: {} } };
+  const base = { peek: false, peekReturn: null, activeVariant: "proposed" as const, viewMode: "single" as const, tab: "3d" as const, variants: { current: {}, proposed: {} } };
   it("swaps to the other layout and back", () => {
     const on = peekPatch(base, true);
     expect(on).toEqual({ peek: true, peekReturn: "proposed", activeVariant: "current" });
@@ -74,8 +74,39 @@ describe("peekPatch", () => {
     expect(peekPatch({ ...base, variants: { proposed: {} } }, true)).toEqual({});
     expect(peekPatch({ ...base, viewMode: "side-by-side" }, true)).toEqual({});
     expect(peekPatch({ ...base, viewMode: "wipe" }, true)).toEqual({});
+    // On the plan the 3D compare setting does not matter.
+    expect(peekPatch({ ...base, tab: "plan", viewMode: "wipe" }, true).peek).toBe(true);
+    expect(peekPatch({ ...base, tab: "plan", viewMode: "side-by-side" }, true).peek).toBe(true);
     expect(peekPatch({ ...base, peek: true }, true)).toEqual({});
     expect(peekPatch(base, false)).toEqual({});
     expect(peekPatch({ ...base, viewMode: "overlay" }, true).peek).toBe(true);
+  });
+});
+
+describe("floorAtLevel", () => {
+  it("matches by level, not id, and falls back to the nearest level", () => {
+    const other = [fl("g2", 0), fl("u2", 1)];
+    expect(floorAtLevel(other, 1)?.id).toBe("u2");
+    expect(floorAtLevel(other, 0)?.id).toBe("g2");
+    expect(floorAtLevel([fl("g2", 0)], 1)?.id).toBe("g2");
+    expect(floorAtLevel([], 0)).toBeUndefined();
+  });
+});
+
+describe("key targets", () => {
+  const el = (tagName: string, closest: string[] = []) => ({ tagName, closest: (s: string) => (closest.some((c) => s.includes(c)) ? {} : null) }) as unknown as EventTarget;
+  it("Tab only from the page, canvas, plan or svg", () => {
+    expect(tabKeyApplies(el("BODY"))).toBe(true);
+    expect(tabKeyApplies(el("CANVAS"))).toBe(true);
+    expect(tabKeyApplies(el("DIV", [".plan-canvas"]))).toBe(true);
+    expect(tabKeyApplies(el("BUTTON"))).toBe(false);
+    expect(tabKeyApplies(el("BUTTON", [".inspector-card"]))).toBe(false);
+    expect(tabKeyApplies(el("svg", [".dock"]))).toBe(false);
+  });
+  it("Space is left to buttons, links and fields", () => {
+    expect(spaceKeyApplies(el("BODY"))).toBe(true);
+    expect(spaceKeyApplies(el("BUTTON"))).toBe(false);
+    expect(spaceKeyApplies(el("A"))).toBe(false);
+    expect(spaceKeyApplies(el("TEXTAREA"))).toBe(false);
   });
 });
