@@ -11,6 +11,8 @@ import { DEFAULT_WORKTOP, byId, hasWorktop, mountOf, type CatalogueItem } from "
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
+import { DEFAULT_CUSHION, isJoinery, joineryOf, patchJoinery, shelfStack, shelfStackPatch } from "../lib/joinery";
+import { JOINERY_FRONT_LABEL, SEAT_FRONT_LABEL, type JoineryFront, type SeatFront } from "../types";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
@@ -671,6 +673,8 @@ export function FixtureInspector({
   onCopy,
   onPaste,
   onRemove,
+  onRefit,
+  misfit,
   ceiling,
 }: {
   fixture: Fixture;
@@ -708,6 +712,7 @@ export function FixtureInspector({
       {locked && <p className="muted small">Locked: unlock to move or resize.</p>}
       {item.note && <p className="muted small">{item.note}</p>}
       {clash && <p className="small warn">Overlaps another item.</p>}
+      {misfit && <p className="small warn">{misfit}</p>}
       {groupSize !== undefined && groupSize > 1 && onSelectGroup && (
         <p className="muted small">
           Part of a group of {groupSize} ·{" "}
@@ -755,6 +760,7 @@ export function FixtureInspector({
           )}
         </span>
       </label>
+      {isJoinery(item) && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
         <label>
           Worktop colour
@@ -796,6 +802,187 @@ export function FixtureInspector({
         <Info>Drag to move; near a wall its back snaps to the wall (hold Alt to place freely). Click it again to pick the item under it. R turns 90°, Shift+R 15°.</Info>
       </p>
     </div>
+  );
+}
+
+const FRONT_OPTIONS = Object.keys(JOINERY_FRONT_LABEL) as JoineryFront[];
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Settings of fitted joinery: built-ins, window seats, wall boxes and floating-shelf stacks. */
+function JoineryFields({
+  fixture,
+  item,
+  ceiling,
+  locked,
+  onChange,
+  onRefit,
+}: {
+  fixture: Fixture;
+  item: CatalogueItem;
+  ceiling?: number;
+  locked: boolean;
+  onChange: (p: Partial<Fixture>) => void;
+  onRefit?: () => void;
+}) {
+  const box = fixtureBox(fixture, item, ceiling);
+  const j = joineryOf(fixture, item, box);
+  const set = (p: Parameters<typeof patchJoinery>[1]) => onChange(patchJoinery(fixture, p));
+  const sym = item.symbol;
+  const colourField = (label: string, value: string, isSet: boolean, change: (c: string) => void, reset: () => void) => (
+    <label>
+      {label}
+      <span className="colour-pick">
+        <input type="color" value={value} onChange={(e) => change(e.target.value)} />
+        {isSet && (
+          <button className="link" onClick={reset}>
+            Reset
+          </button>
+        )}
+      </span>
+    </label>
+  );
+  const frontSelect = (label: string, value: JoineryFront, change: (v: JoineryFront) => void, openLabel?: string) => (
+    <label>
+      {label}
+      <select value={value} onChange={(e) => change(e.target.value as JoineryFront)}>
+        {FRONT_OPTIONS.map((f) => (
+          <option key={f} value={f}>
+            {f === "open" && openLabel ? openLabel : JOINERY_FRONT_LABEL[f]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const baysField = (
+    <div className="field">
+      <span className="field-label">Bays</span>
+      <NumberField value={j.bays} label="Bays" step={1} min={0.5} max={12} onCommit={(v) => set({ bays: Math.round(Math.min(12, Math.max(1, v))) })} />
+      {fixture.joinery?.bays !== undefined && (
+        <button className="link" onClick={() => set({ bays: undefined })}>
+          Auto
+        </button>
+      )}
+    </div>
+  );
+  const toCeiling = fixture.h === undefined || (ceiling !== undefined && fixture.h >= ceiling);
+  const refitLabel =
+    (fixture.joinery?.fit ?? (sym === "window-seat" ? "window" : undefined)) === "window" ? "Fit to window" : fixture.joinery?.fit ? "Refit to recess" : "Fit to recess";
+  return (
+    <>
+      {sym === "built-in" && (
+        <>
+          {baysField}
+          <div className="field">
+            <span className="field-label">Base height (m)</span>
+            <NumberField value={j.baseH} label="Base height" min={-0.001} onCommit={(v) => set({ baseH: Math.max(0, v) })} />
+            <small className="muted">0 = no base cupboards.</small>
+          </div>
+          {j.baseH > 0 && frontSelect("Base fronts", j.baseFront, (v) => set({ baseFront: v }))}
+          {j.baseH > 0 && (
+            <label>
+              <input type="checkbox" checked={j.top} onChange={(e) => set({ top: e.target.checked })} /> Top on the base
+            </label>
+          )}
+          <label>
+            <input type="checkbox" checked={j.plinth} onChange={(e) => set({ plinth: e.target.checked })} /> Plinth
+          </label>
+          <div className="field">
+            <span className="field-label">Shelves above</span>
+            <NumberField value={j.shelves} label="Shelves above" step={1} min={-0.001} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
+          </div>
+          {frontSelect("Above the base", j.upperFront, (v) => set({ upperFront: v }), "Open shelves")}
+          <div className="field">
+            <span className="field-label">Shelf depth above (m)</span>
+            <NumberField value={j.upperD} label="Shelf depth above" onCommit={(v) => set({ upperD: v })} />
+            {fixture.joinery?.upperD !== undefined && (
+              <button className="link" onClick={() => set({ upperD: undefined })}>
+                Full depth
+              </button>
+            )}
+          </div>
+          <div className="field">
+            <span className="field-label">Top box (m)</span>
+            <NumberField value={j.topBox} label="Top box" min={-0.001} onCommit={(v) => set({ topBox: Math.max(0, v) })} />
+            <small className="muted">0 = none.</small>
+          </div>
+          {item.toCeiling && (
+            <label>
+              <input
+                type="checkbox"
+                checked={toCeiling}
+                disabled={locked}
+                onChange={(e) => onChange({ h: e.target.checked ? undefined : round2(Math.min(2.1, (ceiling ?? 2.4) - 0.15)) })}
+              />{" "}
+              To ceiling
+            </label>
+          )}
+          {colourField("Carcass colour", j.carcass, fixture.joinery?.carcass !== undefined, (c) => set({ carcass: c }), () => set({ carcass: undefined }))}
+          {j.top && colourField("Top colour", j.topColor, fixture.worktop !== undefined, (c) => onChange({ worktop: c }), () => onChange({ worktop: undefined }))}
+        </>
+      )}
+      {sym === "window-seat" && (
+        <>
+          <label>
+            Front
+            <select value={j.seatFront} onChange={(e) => set({ seatFront: e.target.value as SeatFront })}>
+              {(Object.keys(SEAT_FRONT_LABEL) as SeatFront[]).map((f) => (
+                <option key={f} value={f}>
+                  {SEAT_FRONT_LABEL[f]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <input type="checkbox" checked={j.plinth} onChange={(e) => set({ plinth: e.target.checked })} /> Plinth
+          </label>
+          <label>
+            <input type="checkbox" checked={j.backCushion} onChange={(e) => set({ backCushion: e.target.checked })} /> Back cushions
+          </label>
+          {colourField("Cushion colour", j.cushion, fixture.joinery?.cushion !== undefined && fixture.joinery.cushion !== DEFAULT_CUSHION, (c) => set({ cushion: c }), () => set({ cushion: undefined }))}
+        </>
+      )}
+      {sym === "wall-box" && (
+        <>
+          {frontSelect("Front", j.front, (v) => set({ front: v }))}
+          {baysField}
+          <div className="field">
+            <span className="field-label">Shelves inside</span>
+            <NumberField value={j.shelves} label="Shelves inside" step={1} min={-0.001} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
+          </div>
+        </>
+      )}
+      {sym === "shelf" &&
+        (() => {
+          const st = shelfStack(j, box.h);
+          return (
+            <>
+              <div className="field">
+                <span className="field-label">Shelves</span>
+                <NumberField value={st.n} label="Shelves" step={1} min={0.5} max={12} onCommit={(n) => onChange(shelfStackPatch(fixture, item, { n }))} />
+              </div>
+              {st.n > 1 && (
+                <div className="field">
+                  <span className="field-label">Spacing (m)</span>
+                  <NumberField value={st.spacing} label="Spacing" onCommit={(spacing) => onChange(shelfStackPatch(fixture, item, { spacing }))} />
+                </div>
+              )}
+              <div className="field">
+                <span className="field-label">Thickness (m)</span>
+                <NumberField value={st.t} label="Thickness" onCommit={(t) => onChange(shelfStackPatch(fixture, item, { t }))} />
+              </div>
+              <p className="muted small">Height is the whole stack.</p>
+            </>
+          );
+        })()}
+      {onRefit && (
+        <div className="row">
+          <button disabled={locked} onClick={onRefit}>
+            {refitLabel}
+          </button>
+          <Info>Puts its back on the nearest wall and sizes it between the side walls (a window seat to its window). It doesn't follow later wall changes; refit after moving walls.</Info>
+        </div>
+      )}
+    </>
   );
 }
 
