@@ -1,5 +1,6 @@
 import { createElement, memo, type ReactNode } from "react";
 import { burners, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
 /**
@@ -19,6 +20,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   selected,
   clash,
   ghost,
+  fixture,
 }: {
   item: CatalogueItem;
   w: number;
@@ -60,6 +62,13 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   const front = (inset: number) => <line x1={x0} y1={y1 - inset} x2={x1} y2={y1 - inset} {...thin} />;
   // Children passed as arguments, not an array, so the fixed parts need no keys.
   const g = (...kids: ReactNode[]) => createElement("g", null, ...kids);
+  const cross = (style = thin) => [
+    <line key="xa" x1={x0} y1={y0} x2={x1} y2={y1} {...style} />,
+    <line key="xb" x1={x1} y1={y0} x2={x0} y2={y1} {...style} />,
+  ];
+  const j = isJoinery(item) ? joineryOf(fixture ?? {}, item, { w: w / m, d: d / m, h: fixture?.h ?? item.h }) : undefined;
+  /** Door joints along the front strip, one per bay boundary. */
+  const joints = (xs: number[], inset: number) => xs.slice(1, -1).map((x) => <line key={`j${x}`} x1={x} y1={y1 - inset} x2={x} y2={y1} {...thin} />);
 
   switch (item.symbol) {
     case "bed": {
@@ -310,8 +319,46 @@ export const FixtureSymbol = memo(function FixtureSymbol({
       const cd = Math.min(0.26 * m, d * 0.55);
       return g(body(0), <rect key="c" x={-cw / 2} y={y0} width={cw} height={cd} {...line} strokeDasharray={dash} />);
     }
-    case "shelf":
-      return body(0);
+    case "built-in": {
+      if (!j) return body(0);
+      const L = builtInLayout(j, w / m, 1);
+      const xs = L.bayXs.map((x) => x * m);
+      const bottomClosed = j.baseH > 0.1 ? j.baseFront !== "open" : j.upperFront !== "open";
+      return g(
+        body(0),
+        ...xs.slice(1, -1).map((x) => <line key={`b${x}`} x1={x} y1={y0} x2={x} y2={y1} {...thin} />),
+        j.upperD < d / m - 0.01 && <line key="u" x1={x0} y1={y0 + j.upperD * m} x2={x1} y2={y0 + j.upperD * m} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        bottomClosed ? front(0.02 * m) : <line key="of" x1={x0} y1={y1 - 0.02 * m} x2={x1} y2={y1 - 0.02 * m} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        bottomClosed && joints(xs, 0.02 * m),
+        j.upperFront !== "open" && cross(),
+      );
+    }
+    case "window-seat": {
+      if (!j) return body(r * 0.3);
+      const ins = 0.03 * m;
+      return g(
+        body(r * 0.3),
+        <rect key="c" x={x0 + ins} y={y0 + ins} width={w - 2 * ins} height={d - 2 * ins} rx={r * 0.3} {...line} />,
+        j.backCushion && <line key="bc" x1={x0 + ins} y1={y0 + 0.15 * m} x2={x1 - ins} y2={y0 + 0.15 * m} {...line} />,
+        j.seatFront === "drawers" && front(0.03 * m),
+        j.seatFront === "drawers" && joints(Array.from({ length: autoBays(w / m) + 1 }, (_, k) => x0 + (k * w) / autoBays(w / m)), 0.03 * m),
+      );
+    }
+    case "wall-box": {
+      if (!j) return body(0);
+      const xs = builtInLayout(j, w / m, 1).bayXs.map((x) => x * m);
+      const ins = 0.02 * m;
+      return g(
+        body(0),
+        ...xs.slice(1, -1).map((x) => <line key={`b${x}`} x1={x} y1={y0} x2={x} y2={y1} {...thin} />),
+        j.front === "open" ? <rect key="o" x={x0 + ins} y={y0 + ins} width={w - 2 * ins} height={d - 2 * ins} {...thin} /> : cross(),
+      );
+    }
+    case "shelf": {
+      if (!j || j.shelves <= 1) return body(0);
+      const ins = 0.02 * m;
+      return g(body(0), <rect key="s" x={x0 + ins} y={y0 + ins} width={w - 2 * ins} height={d - 2 * ins} {...thin} />);
+    }
     case "oven-pair":
     case "oven":
       return g(
