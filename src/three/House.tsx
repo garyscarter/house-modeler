@@ -77,6 +77,8 @@ interface HouseProps {
   doorsOpen?: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  /** Decorate: a tap on a wall face (hit point and face normal in the plan frame: world x, z). */
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Only render these floor levels (used to hide floors above the walk floor). */
   visibleLevels?: number[] | null;
   /**
@@ -89,6 +91,9 @@ interface HouseProps {
   showExterior?: boolean;
 }
 
+/** Decorate: furniture, ceilings and the roof swallow clicks so a tap never reaches the wall or floor behind them. */
+const block = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
 export function House({
   model,
   photos,
@@ -98,6 +103,7 @@ export function House({
   doorsOpen = false,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   visibleLevels,
   diffAgainst,
   showExterior,
@@ -110,7 +116,7 @@ export function House({
   const wells = useMemo(() => stairwells(model), [model]);
   return (
     <group>
-      {showExterior && !ghost && ext.showRoof && <Roof model={model} />}
+      {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
       {showExterior && !ghost && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (
         <FloorGroup
@@ -120,10 +126,12 @@ export function House({
           photos={photos}
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
+          roofOver={!!showExterior && !ghost && ext.showRoof}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
           onSelectRoom={onSelectRoom}
+          onPickWall={onPickWall}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
         />
@@ -138,10 +146,12 @@ function FloorGroup({
   photos,
   ghost,
   showLabels,
+  roofOver,
   showCeilings,
   doorsOpen,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   otherFloor,
   wells,
 }: {
@@ -150,10 +160,13 @@ function FloorGroup({
   photos: Photo[];
   ghost: boolean;
   showLabels: boolean;
+  /** The roof is drawn over this floor, so only the selected room is labelled. */
+  roofOver: boolean;
   showCeilings: boolean;
   doorsOpen: boolean;
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   otherFloor?: Floor | null;
   wells: Stairwell[];
 }) {
@@ -191,8 +204,12 @@ function FloorGroup({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} holes={holes} doorsOpen={doorsOpen} />
-      {showCeilings && floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} />
+      {showCeilings && (
+        <group onClick={onPickWall ? block : undefined}>
+          {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+        </group>
+      )}
       <Balustrade runs={rails} />
 
       {otherWalls &&
@@ -204,9 +221,11 @@ function FloorGroup({
 
       {floor.stairs && hasAbove && <Stairs model={model} floor={floor} />}
 
-      <Fixtures floor={floor} />
+      <group onClick={onPickWall ? block : undefined}>
+        <Fixtures floor={floor} />
+      </group>
 
-      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} />}
+      {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
 
       {floor.rooms.map((room) => (
         <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />
@@ -227,6 +246,7 @@ function FloorShell({
   photos,
   selectedRoomId,
   onSelectRoom,
+  onPickWall,
   holes,
   doorsOpen,
 }: {
@@ -236,6 +256,7 @@ function FloorShell({
   photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
+  onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
   doorsOpen: boolean;
@@ -315,7 +336,24 @@ function FloorShell({
         ) : null;
       })}
       {shell.meshes.map((m) => (
-        <mesh key={m.key} geometry={m.geometry} material={getMaterial(m.spec)} castShadow={m.castShadow} receiveShadow />
+        <mesh
+          key={m.key}
+          geometry={m.geometry}
+          material={getMaterial(m.spec)}
+          castShadow={m.castShadow}
+          receiveShadow
+          onClick={
+            onPickWall &&
+            ((e) => {
+              // A wall top (or any up/down face) is swallowed rather than falling through to the floor beneath.
+              e.stopPropagation();
+              if (!e.face || Math.abs(e.face.normal.y) > 0.5) return;
+              // Shell meshes are not rotated or moved, so the local normal is the world normal.
+              const bays = shell.bayFloors.flatMap((b) => (b.roomId ? [{ id: b.roomId, poly: b.poly }] : []));
+              onPickWall(floor, { x: e.point.x, y: e.point.z }, { x: e.face.normal.x, y: e.face.normal.z }, bays);
+            })
+          }
+        />
       ))}
     </group>
   );
