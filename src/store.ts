@@ -6,13 +6,15 @@ import { renamePhotos } from "./lib/modelOps";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
-import { isMode, modeSwitchPatch, type Mode } from "./lib/modes";
+import { isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./lib/modes";
 import type { EdgePick } from "./lib/decorPick";
+import { peekPatch } from "./lib/studio";
 
-export type ViewMode = "single" | "side-by-side" | "overlay";
+export type ViewMode = "single" | "side-by-side" | "overlay" | "wipe";
+const VIEW_MODES: ViewMode[] = ["single", "side-by-side", "overlay", "wipe"];
 export type Tab = "3d" | "plan";
 /** editFloorId value that opens the site editor instead of a floor. */
-export { SITE_EDIT_ID } from "./lib/modes";
+export { SITE_EDIT_ID };
 
 export interface Settings {
   /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
@@ -63,6 +65,17 @@ interface State {
   /** The floor the plan showed before Plot opened the site editor, so leaving Plot goes back to it. */
   floorBeforeSite: string | null;
   setMode: (m: Mode) => void;
+  /** The mode Review was opened from, so closing it goes back there. Persisted. */
+  modeBeforeReview: Mode | null;
+  /** Close Review and return to the mode it was opened from (Build when unknown). */
+  leaveReview: () => void;
+  /** The room the pointer is over, in the plan or 3D, lit in both. Not persisted. */
+  hoveredRoomId: string | null;
+  /** Space held: showing the other layout. Not persisted, no undo step. */
+  peek: boolean;
+  /** The layout to go back to when the peek ends. */
+  peekReturn: VariantKey | null;
+  setPeek: (on: boolean) => void;
   activeVariant: VariantKey;
   tab: Tab;
   editFloorId: string | null;
@@ -114,6 +127,7 @@ interface State {
         | "editFloorId"
         | "viewMode"
         | "selectedRoomId"
+        | "hoveredRoomId"
         | "selectedEdge"
         | "floorBeforeSite"
         | "selectedPhotoId"
@@ -131,7 +145,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode">;
+type Persisted = Pick<State, "variants" | "photos" | "sites" | "settings" | "sun" | "costRates" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -180,6 +194,7 @@ export const useStore = create<State>()(
             future: [snapshot(st), ...st.future].slice(0, HISTORY_LIMIT),
             selectedRoomId: null,
             selectedEdge: null,
+            hoveredRoomId: null,
           });
         },
         redo: () => {
@@ -193,13 +208,27 @@ export const useStore = create<State>()(
             future: st.future.slice(1),
             selectedRoomId: null,
             selectedEdge: null,
+            hoveredRoomId: null,
           });
         },
 
         mode: "build",
         selectedEdge: null,
         floorBeforeSite: null,
-        setMode: (m) => rawSet((st) => modeSwitchPatch(st, m)),
+        setMode: (m) =>
+          rawSet((st) => ({
+            ...modeSwitchPatch(st, m),
+            ...(m === "review" && st.mode !== "review" ? { modeBeforeReview: st.mode } : {}),
+          })),
+        modeBeforeReview: null,
+        leaveReview: () => {
+          get().setMode(get().modeBeforeReview ?? "build");
+          rawSet({ modeBeforeReview: null });
+        },
+        hoveredRoomId: null,
+        peek: false,
+        peekReturn: null,
+        setPeek: (on) => rawSet((st) => peekPatch(st, on)),
         activeVariant: "current",
         tab: "3d",
         editFloorId: null,
@@ -209,7 +238,7 @@ export const useStore = create<State>()(
         showLabels: true,
         showCeilings: false,
         doorsOpen: false,
-        planImage: { show: true, opacity: 0.9 },
+        planImage: { show: true, opacity: 0.3 },
         planWalls: true,
         maxLevel: null,
         showExterior: true,
@@ -316,7 +345,7 @@ export const useStore = create<State>()(
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
           ),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
       };
     },
     {
@@ -333,6 +362,10 @@ export const useStore = create<State>()(
         planImage: s.planImage,
         planWalls: s.planWalls,
         mode: s.mode,
+        tab: s.tab,
+        editFloorId: s.editFloorId,
+        viewMode: s.viewMode,
+        modeBeforeReview: s.modeBeforeReview,
       }),
       version: PERSIST_VERSION,
       migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
@@ -340,6 +373,11 @@ export const useStore = create<State>()(
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<Persisted>) };
         if (!isMode(merged.mode)) merged.mode = "build";
+        if (!VIEW_MODES.includes(merged.viewMode)) merged.viewMode = "single";
+        if (merged.tab !== "3d" && merged.tab !== "plan") merged.tab = "3d";
+        if (merged.editFloorId === SITE_EDIT_ID && merged.mode !== "plot") merged.editFloorId = null;
+        if (merged.editFloorId !== null && typeof merged.editFloorId !== "string") merged.editFloorId = null;
+        if (!isMode(merged.modeBeforeReview) || merged.modeBeforeReview === "review") merged.modeBeforeReview = null;
         return merged;
       },
     },
