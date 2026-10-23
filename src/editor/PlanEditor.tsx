@@ -832,7 +832,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
           },
         },
         { label: "Decorate this room", run: () => { select({ room: room.id }); setMode("decorate"); } },
-        ...(build ? [{ label: room.locked ? "Unlock shape" : "Lock shape", run: () => updateRoom(variant, floor.id, room.id, { locked: !room.locked || undefined }) } satisfies MenuItem] : []),
+        ...(build ? [{ label: room.locked ? "Unlock shape" : "Lock shape", run: () => { select({ room: room.id }); updateRoom(variant, floor.id, room.id, { locked: !room.locked || undefined }); } } satisfies MenuItem] : []),
         ...(onEdge
           ? [
               { label: "Add door here", run: () => placeOpeningAt("door", onEdge) } satisfies MenuItem,
