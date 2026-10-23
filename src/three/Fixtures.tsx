@@ -5,6 +5,7 @@ import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
 import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
+import { glassMaterial } from "./textures";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
@@ -100,7 +101,7 @@ function material(color: string, finish: Finish): THREE.Material {
     materials.delete(key);
     materials.set(key, m);
   } else {
-    if (finish === "glass") m = new THREE.MeshPhysicalMaterial({ color, transparent: true, opacity: 0.3, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
+    if (finish === "glass") m = glassMaterial(color);
     else if (finish === "glow") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.6 });
     else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
