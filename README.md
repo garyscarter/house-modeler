@@ -24,7 +24,7 @@ Then open the URL Vite prints. `npm run check` runs the type check and the unit 
 
 To change the passcode, edit `PASSCODE` under the service's **Environment** tab and save. Render redeploys, and everyone is signed out. Visiting `/logout` signs out the current browser.
 
-Wrong passcodes are limited to 10 per 15 minutes for each address.
+Wrong passcodes are limited to 10 per 15 minutes for each address, and to 60 per hour in all. The address comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` proxies from the end (default 1, as Render adds one; set it to 0 if the server is reached directly, so the header is ignored). The server logs a warning at startup if the passcode is shorter than 10 characters.
 
 ### Keeping one project on every device
 
