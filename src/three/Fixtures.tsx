@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import * as THREE from "three";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, radiatorPanels, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 
 /** Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation. */
@@ -61,6 +61,8 @@ interface Part {
   f: Finish;
   /** Axis of a cylinder (default standing, along y). */
   axis?: "x" | "z";
+  /** Lean about the x axis, radians, after scaling; negative tips the top back and the front up. */
+  tilt?: number;
 }
 
 const WHITE = "#f5f5f5";
@@ -87,7 +89,7 @@ const FixtureMesh = memo(function FixtureMesh({ symbol, w, d, h, color, worktop,
           material={material(pt.c, pt.f)}
           position={pt.p}
           scale={pt.s}
-          rotation={pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : undefined}
+          rotation={pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : pt.tilt ? [pt.tilt, 0, 0] : undefined}
           castShadow={pt.f !== "glass"}
           receiveShadow
         />
@@ -107,6 +109,26 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
   const cyl = (x: number, y: number, z: number, dia: number, len: number, c: string, f: Finish = "matt", axis?: "x" | "z") =>
     out.push({ g: "cyl", p: [x, y, z], s: [dia, len, dia], c, f, axis });
+  /** A box leaning back by `tilt` radians about its centre (see Part.tilt). */
+  const lean = (x: number, y: number, z: number, sx: number, sy: number, sz: number, tilt: number, c = color, f: Finish = "matt") =>
+    out.push({ g: "box", p: [x, y, z], s: [sx, sy, sz], c, f, tilt });
+  /** An upright elliptical drum filling w × d, from y0 to y1. */
+  const drum = (y0: number, y1: number, sw: number, sd: number, c: string, f: Finish = "matt") =>
+    out.push({ g: "cyl", p: [0, (y0 + y1) / 2, 0], s: [sw, Math.max(y1 - y0, 0.001), sd], c, f });
+  /** Slim black legs at plan points (x, z), 0.1 m tall. */
+  const legs = (pts: [number, number][]) => {
+    for (const [x, z] of pts) box(x, 0.05, z, 0.03, 0.1, 0.03, DARK, "metal");
+  };
+  /** Seat cushions from x0 to x1 over z0..z1 on a frame top at y, with leaning back cushions when `backs`. */
+  const cushions = (x0: number, x1: number, z0: number, z1: number, y: number, backs: boolean) => {
+    const n = Math.max(1, Math.round((x1 - x0) / 0.75));
+    const cw = (x1 - x0) / n;
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + (i + 0.5) * cw;
+      box(cx, y + 0.07, (z0 + z1) / 2, cw - 0.015, 0.14, z1 - z0 - 0.01);
+      if (backs) lean(cx, (y + 0.14 + h - 0.03) / 2, z0 + 0.09, cw - 0.03, h - 0.03 - y - 0.14, 0.16, -0.12, shade(color, 1.06));
+    }
+  };
   /** Door fronts with handles across a carcass face from y0 to y1, one per ~0.6 m. */
   const doors = (y0: number, y1: number, z: number, pitch = 0.6, handleAtTop = true) => {
     const n = Math.max(1, Math.round(w / pitch));
@@ -251,6 +273,77 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(-w / 2 + s / 2, 0.31, d / 2 - arm / 2, s, 0.62, arm, color);
       break;
     }
+    case "low-sofa": {
+      const back = Math.min(0.2, d * 0.25);
+      const arm = Math.min(0.14, w * 0.1);
+      const frame = shade(color, 0.85);
+      legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, d / 2 - 0.06], [w / 2 - 0.06, d / 2 - 0.06]]);
+      box(0, 0.18, 0, w, 0.16, d, frame);
+      for (const sx of [-1, 1]) box(sx * (w / 2 - arm / 2), 0.38, 0, arm, 0.24, d, color);
+      box(0, (0.26 + h) / 2, -d / 2 + back / 2, w - arm * 2, h - 0.26, back, color);
+      cushions(-w / 2 + arm, w / 2 - arm, -d / 2 + back, d / 2, 0.26, true);
+      break;
+    }
+    case "chaise-sofa": {
+      const { s, c, back, arm } = chaiseSizes(w, d);
+      const frame = shade(color, 0.85);
+      legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, -d / 2 + s - 0.06], [w / 2 - 0.06, d / 2 - 0.06], [w / 2 - c + 0.06, d / 2 - 0.06]]);
+      box(0, 0.18, -d / 2 + s / 2, w, 0.16, s, frame);
+      box(w / 2 - c / 2, 0.18, s / 2, c, 0.16, d - s, frame);
+      box(-w / 2 + arm / 2, 0.38, -d / 2 + s / 2, arm, 0.24, s, color);
+      box(w / 2 - arm / 2, 0.38, 0, arm, 0.24, d, color);
+      box(0, (0.26 + h) / 2, -d / 2 + back / 2, w - arm * 2, h - 0.26, back, color);
+      cushions(-w / 2 + arm, w / 2 - c, -d / 2 + back, -d / 2 + s, 0.26, true);
+      cushions(w / 2 - c, w / 2 - arm, -d / 2 + back, d / 2, 0.26, true);
+      break;
+    }
+    case "lounge-chair": {
+      // Swivel base, a walnut seat and back shell, leather cushions and arm rests, all leaning back.
+      const shell = "#6b4a2f";
+      const base = Math.min(w, d) * 0.6;
+      out.push({ g: "cyl", p: [0, 0.02, 0.02], s: [base, 0.04, base], c: DARK, f: "metal" });
+      cyl(0, 0.17, 0.02, 0.06, 0.26, DARK, "metal");
+      lean(0, 0.32, 0.04, w - 0.14, 0.05, d * 0.64, -0.1, shell, "satin");
+      lean(0, 0.39, 0.06, w - 0.18, 0.1, d * 0.6, -0.1, color, "satin");
+      lean(0, h * 0.71, -d / 2 + 0.1, w - 0.1, h * 0.6, 0.03, -0.3, shell, "satin");
+      lean(0, h * 0.73, -d / 2 + 0.16, w - 0.16, h * 0.56, 0.1, -0.3, color, "satin");
+      for (const sx of [-1, 1]) {
+        lean(sx * (w / 2 - 0.06), 0.5, 0.02, 0.1, 0.03, d * 0.55, -0.1, shell, "satin");
+        lean(sx * (w / 2 - 0.06), 0.53, 0.02, 0.09, 0.04, d * 0.5, -0.1, color, "satin");
+        lean(sx * (w / 2 - 0.06), 0.42, 0.02, 0.03, 0.12, 0.03, -0.1, DARK, "metal");
+      }
+      break;
+    }
+    case "pouf":
+      drum(0, h, w, d, color);
+      drum(h - 0.012, h + 0.002, w * 0.98, d * 0.98, shade(color, 0.9));
+      break;
+    case "round-table":
+      drum(0, 0.02, w * 0.5, d * 0.5, shade(color, 0.85), "satin");
+      drum(0.02, h - 0.03, w * 0.45, d * 0.45, shade(color, 0.92), "satin");
+      drum(h - 0.03, h, w, d, color, "satin");
+      break;
+    case "floor-lamp": {
+      const shadeD = Math.min(w, d);
+      drum(0, 0.025, shadeD * 0.7, shadeD * 0.7, DARK, "metal");
+      cyl(0, (h - 0.3) / 2, 0, 0.022, h - 0.3, DARK, "metal");
+      drum(h - 0.33, h, shadeD, shadeD, color);
+      drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      break;
+    }
+    case "media-unit": {
+      // A wall-hung box with fluted, handleless fronts.
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      const n = Math.max(1, Math.round(w / 0.6));
+      for (let i = 1; i < n; i++) box(-w / 2 + (i * w) / n, h / 2, d / 2, 0.004, h - 0.02, 0.006, DARK);
+      const flutes = Math.round(w / 0.05);
+      for (let i = 0; i < flutes; i++) box(-w / 2 + ((i + 0.5) * w) / flutes, h / 2, d / 2 + 0.004, 0.022, h - 0.04, 0.008, shade(color, 1.08), "satin");
+      break;
+    }
+    case "rug":
+      box(0, h / 2, 0, w, h, d, color);
+      box(0, h + 0.001, 0, w - Math.min(0.24, w * 0.16), 0.002, d - Math.min(0.24, d * 0.16), shade(color, 0.88));
+      break;
     case "table":
       box(0, h - 0.02, 0, w, 0.04, d, color, "satin");
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.05), (h - 0.04) / 2, sz * (d / 2 - 0.05), 0.06, h - 0.04, 0.06, color);

@@ -284,6 +284,19 @@ describe("fixtures", () => {
     expect([...overlappingIds(solids)].sort()).toEqual(["a", "c"]);
   });
 
+  it("leaves rugs out of clash checks so furniture can stand on them", () => {
+    const rug: CatalogueItem = { id: "rug", name: "Rug", category: "Living", w: 3, d: 2, h: 0.01, color: "#ddd", symbol: "rug" };
+    const solids = fixtureSolids(
+      [
+        { id: "r", type: "rug", x: 0, y: 0, rot: 0 },
+        { id: "a", type: "base", x: 0, y: 0, rot: 0 },
+      ],
+      100,
+      (id) => (id === "rug" ? rug : items[id]),
+    );
+    expect(solids.map((s) => s.id)).toEqual(["a"]);
+  });
+
   it("turns in steps and wraps round", () => {
     expect(turn(270, 90)).toBe(0);
     expect(turn(0, -15)).toBe(345);

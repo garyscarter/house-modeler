@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import { mountOf, type CatalogueItem } from "./catalogue";
+import { isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
 import { polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -509,12 +509,12 @@ export function fixtureBox(fx: Fixture, item: CatalogueItem): { w: number; d: nu
   return { w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h, z0: mountOf(fx, item) };
 }
 
-/** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids are skipped. */
+/** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids and rugs are skipped. */
 export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: string) => CatalogueItem | undefined): Solid[] {
   const out: Solid[] = [];
   for (const fx of fixtures) {
     const item = lookup(fx.type);
-    if (!item) continue;
+    if (!item || isFloorCovering(item)) continue;
     const b = fixtureBox(fx, item);
     out.push({ id: fx.id, corners: rectCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot), z0: b.z0, z1: b.z0 + b.h });
   }

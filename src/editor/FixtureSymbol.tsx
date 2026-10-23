@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, radiatorPanels, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, radiatorPanels, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 
 /**
  * Plan symbol for a catalogue item, drawn in a local frame centred on (0,0)
@@ -160,6 +160,67 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <polyline key="b" points={`${x1 - arm},${y0 + back} ${x0 + back},${y0 + back} ${x0 + back},${y1 - arm}`} {...line} />,
         <line key="ra" x1={x1 - arm} y1={y0 + back} x2={x1 - arm} y2={y0 + s} {...line} />,
         <line key="ba" x1={x0 + back} y1={y1 - arm} x2={x0 + s} y2={y1 - arm} {...line} />,
+      );
+    }
+    case "low-sofa": {
+      const back = Math.min(0.2 * m, d * 0.25);
+      const arm = Math.min(0.14 * m, w * 0.1);
+      const n = Math.max(1, Math.round((w - arm * 2) / (0.75 * m)));
+      return g(
+        body(r * 0.5),
+        <line key="b" x1={x0 + arm} y1={y0 + back} x2={x1 - arm} y2={y0 + back} {...line} />,
+        <line key="l" x1={x0 + arm} y1={y0} x2={x0 + arm} y2={y1} {...line} />,
+        <line key="r" x1={x1 - arm} y1={y0} x2={x1 - arm} y2={y1} {...line} />,
+        ...Array.from({ length: n - 1 }, (_, i) => {
+          const x = x0 + arm + ((i + 1) * (w - arm * 2)) / n;
+          return <line key={i} x1={x} y1={y0 + back} x2={x} y2={y1} {...thin} />;
+        }),
+      );
+    }
+    case "chaise-sofa": {
+      // A low sofa along the back with a chaise running forward on the right.
+      const { s, c, back, arm } = chaiseSizes(w / m, d / m);
+      const [sp, cp, bp, ap] = [s * m, c * m, back * m, arm * m];
+      const pts = [
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x1 - cp, y1],
+        [x1 - cp, y0 + sp],
+        [x0, y0 + sp],
+      ];
+      return g(
+        <polygon key="o" points={pts.map((p) => p.join(",")).join(" ")} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} strokeLinejoin="round" />,
+        <line key="b" x1={x0 + ap} y1={y0 + bp} x2={x1 - ap} y2={y0 + bp} {...line} />,
+        <line key="l" x1={x0 + ap} y1={y0} x2={x0 + ap} y2={y0 + sp} {...line} />,
+        <line key="r" x1={x1 - ap} y1={y0} x2={x1 - ap} y2={y1} {...line} />,
+        <line key="c" x1={x1 - cp} y1={y0 + bp} x2={x1 - cp} y2={y0 + sp} {...thin} />,
+      );
+    }
+    case "lounge-chair": {
+      const arm = Math.min(0.1 * m, w * 0.14);
+      return g(
+        body(Math.min(w, d) * 0.2),
+        <path key="b" d={`M ${x0 + arm} ${y0 + d * 0.3} Q 0 ${y0 + d * 0.18} ${x1 - arm} ${y0 + d * 0.3}`} {...line} />,
+        <line key="l" x1={x0 + arm} y1={y0 + d * 0.15} x2={x0 + arm} y2={y1 - d * 0.12} {...line} />,
+        <line key="r" x1={x1 - arm} y1={y0 + d * 0.15} x2={x1 - arm} y2={y1 - d * 0.12} {...line} />,
+      );
+    }
+    case "pouf":
+    case "round-table":
+    case "floor-lamp":
+      return g(
+        <ellipse key="o" cx={0} cy={0} rx={w / 2} ry={d / 2} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        item.symbol === "pouf" && <ellipse key="s" cx={0} cy={0} rx={w * 0.38} ry={d * 0.38} {...thin} />,
+        item.symbol === "floor-lamp" && <circle key="s" cx={0} cy={0} r={Math.min(w, d) * 0.08} {...line} />,
+      );
+    case "media-unit":
+      return g(body(0), ...dividers(0.6), front(Math.min(0.03 * m, d * 0.1)));
+    case "rug": {
+      const inset = Math.min(0.12 * m, w * 0.08, d * 0.08);
+      return g(
+        <rect key="o" x={x0} y={y0} width={w} height={d} fill={fill} fillOpacity={ghost ? fo : 0.45} stroke={outline} strokeWidth={sw * 0.6} />,
+        <rect key="i" x={x0 + inset} y={y0 + inset} width={w - inset * 2} height={d - inset * 2} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
       );
     }
     case "table":

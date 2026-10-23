@@ -19,6 +19,14 @@ export type Symbol =
   | "car"
   | "sofa"
   | "corner-sofa"
+  | "low-sofa"
+  | "chaise-sofa"
+  | "lounge-chair"
+  | "pouf"
+  | "round-table"
+  | "media-unit"
+  | "floor-lamp"
+  | "rug"
   | "table"
   | "chair"
   | "appliance"
@@ -63,6 +71,7 @@ export interface CatalogueItem {
 /** Kitchen carcass colour shared by the units so a run reads as one kitchen. */
 const UNIT = "#e0dccf";
 const WOOD = "#c9a26b";
+const WALNUT = "#6b4a2f";
 /** Worktop colour of kitchen units unless a fixture sets its own. */
 export const DEFAULT_WORKTOP = "#4a4d52";
 
@@ -115,6 +124,18 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bookcase", name: "Bookcase", category: "Living", w: 0.80, d: 0.30, h: 1.8, color: WOOD, symbol: "shelves" },
   { id: "fireplace", name: "Fireplace (gas fire)", category: "Living", w: 1.40, d: 0.50, h: 1.15, color: "#5a2a1c", symbol: "fireplace", note: "Carved timber surround, marble hearth and back panel, brass gas fire" },
   { id: "sideboard", name: "Sideboard", category: "Living", w: 1.60, d: 0.45, h: 0.8, color: WOOD, symbol: "cabinet" },
+  // Modern lounge: low, deep seating on slim legs, round tables, a floating media unit and rugs
+  { id: "sofa-low-3", name: "Modern sofa (3 seat)", category: "Living", w: 2.30, d: 1.00, h: 0.75, color: "#bdb5a6", symbol: "low-sofa", note: "Low and deep, slim track arms, on black metal legs" },
+  { id: "sofa-low-2", name: "Modern sofa (2 seat)", category: "Living", w: 1.80, d: 1.00, h: 0.75, color: "#bdb5a6", symbol: "low-sofa", note: "Low and deep, slim track arms, on black metal legs" },
+  { id: "sofa-chaise", name: "Chaise sofa", category: "Living", w: 2.70, d: 1.65, h: 0.75, color: "#7d8a7a", symbol: "chaise-sofa", note: "Modern low sofa with a chaise end on the right" },
+  { id: "lounge-chair", name: "Lounge chair (mid-century)", category: "Living", w: 0.85, d: 0.85, h: 0.85, color: "#3a3634", symbol: "lounge-chair", note: "Reclined leather seat in a walnut shell, on a swivel base" },
+  { id: "pouf", name: "Pouffe (round)", category: "Living", w: 0.55, d: 0.55, h: 0.42, color: "#c9b79c", symbol: "pouf" },
+  { id: "coffee-table-round", name: "Coffee table (round)", category: "Living", w: 0.90, d: 0.90, h: 0.38, color: "#d9cfc0", symbol: "round-table", note: "Stone top on a drum pedestal" },
+  { id: "side-table-round", name: "Side table (round)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: "#2b2b2b", symbol: "round-table" },
+  { id: "media-unit", name: "Media unit (floating)", category: "Living", w: 1.80, d: 0.40, h: 0.40, color: WALNUT, symbol: "media-unit", mount: 0.25, note: "Wall-hung, fluted handleless fronts" },
+  { id: "floor-lamp", name: "Floor lamp", category: "Living", w: 0.40, d: 0.40, h: 1.60, color: "#f1ece2", symbol: "floor-lamp", note: "Linen drum shade on a slim black stem" },
+  { id: "rug-large", name: "Rug (200 × 300)", category: "Living", w: 3.00, d: 2.00, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
+  { id: "rug-medium", name: "Rug (160 × 230)", category: "Living", w: 2.30, d: 1.60, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
 
   // Dining
   { id: "table-4", name: "Dining table (4)", category: "Dining", w: 1.20, d: 0.80, h: 0.75, color: WOOD, symbol: "table" },
@@ -161,6 +182,16 @@ export const CATALOGUE: CatalogueItem[] = [
 ];
 
 /**
+ * Proportions of a chaise sofa `w` by `d` metres, shared by the plan and 3D view:
+ * seat depth `s` of the run along the back, width `c` of the chaise on the right
+ * (which runs the full depth), and back and arm thicknesses.
+ */
+export function chaiseSizes(w: number, d: number): { s: number; c: number; back: number; arm: number } {
+  const s = Math.min(1.0, d * 0.62);
+  return { s, c: Math.min(0.95, w * 0.38), back: Math.min(0.2, s * 0.25), arm: Math.min(0.14, w * 0.06) };
+}
+
+/**
  * Burner positions on a cooker or range top as fractions of its width and
  * depth from the centre: four on a 600 mm cooker, five on a range.
  */
@@ -193,6 +224,11 @@ export function radiatorPanels(d: number): 1 | 2 {
 /** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */
 export function hasWorktop(item: CatalogueItem): boolean {
   return item.category === "Kitchen" && (item.symbol === "worktop" || item.symbol === "sink" || item.symbol === "island" || item.symbol === "cabinet");
+}
+
+/** Whether an item lies flat on the floor under other furniture (rugs): drawn first on the plan and left out of clash checks. */
+export function isFloorCovering(item: Pick<CatalogueItem, "symbol">): boolean {
+  return item.symbol === "rug";
 }
 
 /** Height of a fixture's base above the floor: its own override, else the catalogue's, else 0 (on the floor). */
