@@ -18,9 +18,21 @@ export function useClashCount(floor: Floor): number {
 export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: Floor }) {
   const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
   const updateModel = useStore((s) => s.updateModel);
+  const updateFloor = useStore((s) => s.updateFloor);
+  const allLocked = floor.rooms.length > 0 && floor.rooms.every((r) => r.locked);
   return (
     <div className="mode-summary">
       <p className="summary-line">{buildSummary(floor)}</p>
+      {floor.rooms.length > 0 && (
+        <div className="row">
+          <button
+            title="Locked rooms keep their corners and size when you drag on the plan"
+            onClick={() => updateFloor(variant, floor.id, (f) => ({ ...f, rooms: f.rooms.map((r) => ({ ...r, locked: allLocked ? undefined : true })) }))}
+          >
+            {allLocked ? "Unlock all rooms" : "Lock all rooms"}
+          </button>
+        </div>
+      )}
       <div className="inspector">
         <Section id="build.house" title="House" summary={`Ceiling ${(ceilingHeight ?? 0).toFixed(2)} m`}>
           <label>
