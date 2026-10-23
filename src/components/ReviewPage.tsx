@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { useStore } from "../store";
 import { Icon } from "./icons";
 import { PlanningBody, PLANNING_TITLE, usePlanningCheck } from "./PlanningPanel";
+import { SavedViewsSection } from "./SavedViews";
 import { AreaCheck, Areas, Changes, Costs, Exports, Notes, useReportData } from "./ReportPanel";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "../lib/reviewSummary";
 import type { VariantKey } from "../types";
@@ -66,6 +67,7 @@ function ReviewDocument() {
   const rootRef = useRef<HTMLDivElement>(null);
   const data = useReportData();
   const { check, wing, setWing } = usePlanningCheck();
+  const savedViews = useStore((s) => s.savedViews);
   const { variants, areas, changes, estimate, notes, noteCount, both } = data;
 
   const scrollTo = (id: string) => {
@@ -158,6 +160,12 @@ function ReviewDocument() {
             </RvSection>
           </div>
         </div>
+
+        {savedViews.length > 0 && (
+          <RvSection id="rv-views" title="Saved views" count={savedViews.length}>
+            <SavedViewsSection views={savedViews} />
+          </RvSection>
+        )}
 
         <RvSection id="rv-exports" title="Exports">
           <Exports areas={areas} changes={changes} />

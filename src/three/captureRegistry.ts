@@ -38,6 +38,9 @@ export function getCapture(id?: string): CaptureTarget | undefined {
   return registry.values().next().value;
 }
 
+/** The ids of the viewers registered right now, outside React. */
+export const captureIds = (): string[] => ids;
+
 /** Ids of the 3D viewers on screen ("main", or "current" and "proposed" side by side), for the export buttons. */
 export function useCaptureIds(): string[] {
   return useSyncExternalStore(
