@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, byId, radiatorPanels, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, byId, filterCatalogue, radiatorPanels, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -26,5 +26,38 @@ describe("fitted wardrobes", () => {
   it("keeps the flat-door pitch of the plain fitted wardrobe, and always has a door", () => {
     expect(wardrobeDoorCount("fitted-wardrobe", 2.2)).toBe(4);
     expect(wardrobeDoorCount("shaker-wardrobe", 0.2)).toBe(1);
+  });
+});
+
+describe("filterCatalogue", () => {
+  const first = CATALOGUE[0];
+  it("returns everything for an empty query and All", () => {
+    expect(filterCatalogue("", "All")).toHaveLength(CATALOGUE.length);
+    expect(filterCatalogue("   ", "All")).toHaveLength(CATALOGUE.length);
+  });
+  it("ignores case", () => {
+    expect(filterCatalogue(first.name.toUpperCase(), "All").map((c) => c.id)).toContain(first.id);
+  });
+  it("needs every word to match, in any order", () => {
+    const words = first.name.split(/\s+/);
+    const reversed = [...words].reverse().join("  ");
+    expect(filterCatalogue(reversed, "All").map((c) => c.id)).toContain(first.id);
+    expect(filterCatalogue(`${words[0]} zzzznothing`, "All")).toEqual([]);
+  });
+  it("restricts to a category and matches the category name", () => {
+    const cat = CATEGORIES[0];
+    const inCat = filterCatalogue("", cat);
+    expect(inCat.length).toBeGreaterThan(0);
+    expect(inCat.every((c) => c.category === cat)).toBe(true);
+    expect(filterCatalogue("", "No such category")).toEqual([]);
+    expect(filterCatalogue(cat.toLowerCase(), "All").length).toBeGreaterThanOrEqual(inCat.length);
+  });
+  it("matches the note", () => {
+    const withNote = CATALOGUE.find((c) => c.note)!;
+    const word = withNote.note!.split(/\s+/).find((w) => w.length > 3)!;
+    expect(filterCatalogue(word, "All").map((c) => c.id)).toContain(withNote.id);
+  });
+  it("finds nothing for a nonsense query", () => {
+    expect(filterCatalogue("qqqqxx", "All")).toEqual([]);
   });
 });

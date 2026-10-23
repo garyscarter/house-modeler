@@ -63,9 +63,26 @@
   .plan-zoom button { min-width: 44px; min-height: 40px; font-size: 16px; }
   .side .anchor-grid { grid-template-columns: repeat(2, 34px); }
   .side .anchor-grid button { height: 32px; font-size: 15px; }
-  .side .inspector button, .palette-items button { min-height: 38px; }
+  .side .inspector button { min-height: 38px; }
   .edge-input input { width: 96px; font-size: 16px; }
 }
+
+/* Add furniture popover (Furnish) */
+.add-item { position: relative; display: inline-block; }
+.add-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  width: 320px; max-height: 60vh; overflow: hidden; display: flex; flex-direction: column;
+  padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+.catalogue-picker { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.catalogue-picker > input { width: 100%; padding: 6px 8px; font: inherit; }
+.catalogue-picker .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.catalogue-picker .chip { padding: 2px 9px; font-size: 12px; border-radius: 999px; }
+.catalogue-picker .chip.active, .picker-rows button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.picker-rows { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; }
+.picker-rows button { display: flex; justify-content: space-between; gap: 6px; padding: 4px 8px; text-align: left; font-size: 12px; }
+.picker-rows button.active .muted { color: #dbe4ff; }
 
 /* Narrow screens: one scrolling row of tools rather than a tall wrapped block. */
 @media (max-width: 700px) {
