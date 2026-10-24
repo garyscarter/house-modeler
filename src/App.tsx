@@ -6,7 +6,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
-import { LayoutsDialog, openLayouts } from "./components/LayoutsDialog";
+import { LayoutsDialog } from "./components/LayoutsDialog";
 import { PhotosDialog } from "./components/PhotosDialog";
 import { TopBar } from "./components/TopBar";
 import { Dock } from "./components/Dock";
@@ -25,7 +25,8 @@ import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
 import { Loader } from "./components/Loader";
-import { BrandMark } from "./components/BrandMark";
+import { Welcome } from "./components/Welcome";
+import { CoachStrip } from "./components/CoachStrip";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -67,7 +68,8 @@ export default function App() {
       await startSync();
       const { variants, sites } = useStore.getState();
       const prompt = decideStartupPrompt(variants, PRESETS, LISTING_PRESET.id, readRemembered(), decideSiteUpdate(variants, sites));
-      if (prompt) void runStartupPrompt(prompt);
+      // The first-run Welcome card handles "load"; only the update questions are asked as dialogs.
+      if (prompt && prompt.kind !== "load") void runStartupPrompt(prompt);
     })();
   }, [hydrated]);
 
@@ -158,19 +160,10 @@ export default function App() {
   return (
     <div className="app" data-mode={mode} data-tab={tab} data-look={look}>
       <TopBar />
-      <div className="narrow-note">Storey is designed for a desktop or laptop.</div>
+      <div className="narrow-note">Storey works best in a window at least 1180 px wide.</div>
 
       <main data-tab={tab}>
-        {!model && (
-          <div className="empty">
-            <BrandMark outline size={72} />
-            <h2>Load the listing</h2>
-            <p>Open Layouts and choose Load listing 91770873 to see the house in 3D.</p>
-            <button className="primary" onClick={openLayouts}>
-              Open layouts
-            </button>
-          </div>
-        )}
+        {!model && <Welcome />}
         {model && opened3d && (
           <div className="view3d" hidden={!show3d}>
             <Suspense
@@ -274,6 +267,7 @@ export default function App() {
             <ModePanel />
           </InspectorCard>
         )}
+        {model && <CoachStrip />}
         {model && <Dock />}
         {peek && <div className="peek-badge">Showing {VARIANT_LABEL[activeVariant]} · release Space</div>}
       </main>
