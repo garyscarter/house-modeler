@@ -45,3 +45,4 @@
 .site-clear { width: 100%; border-collapse: collapse; font-size: 13px; }
 .site-clear td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .site-clear td + td { text-align: right; font-weight: 600; }
+.site-edge-hit, .site-edge-sel { cursor: move; }

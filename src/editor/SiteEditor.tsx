@@ -18,7 +18,10 @@ import {
   rectPoly,
   removeBoundaryVertex,
   sideClearances,
+  edgeNormal,
   simpleSite,
+  slideEdge,
+  snapEdgeOffset,
 } from "../lib/site";
 import { SlopeFields } from "../components/SlopeFields";
 import { PlotPanel } from "../components/PlotPanel";
@@ -49,6 +52,7 @@ type Sel =
 type Drag =
   | { kind: "vertex"; sel: NonNullable<Sel>; index: number; slide?: SlideAlong }
   | { kind: "move"; sel: NonNullable<Sel>; start: WPt; orig: WPt[] }
+  | { kind: "edge"; sel: NonNullable<Sel>; index: number; orig: WPt[]; start: WPt; snapshot: Site }
   | { kind: "pan"; sx: number; sy: number; cx: number; cy: number; moved: boolean }
   | { kind: "rect"; start: WPt }
   | { kind: "pinch"; d0: number; ppm0: number; world: WPt };
@@ -100,6 +104,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   const [sel, setSel] = useState<Sel>(null);
   const [draft, setDraft] = useState<{ a: WPt; b: WPt } | null>(null);
   const drag = useRef<Drag | null>(null);
+  const [dragging, setDragging] = useState<Drag["kind"] | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
 
   const outlines = useMemo(() => (model ? houseOutlines(model) : []), [model]);
@@ -242,6 +247,13 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
       if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
       return;
     }
+    if (e.key === "Escape" && drag.current?.kind === "edge") {
+      const snap0 = drag.current.snapshot;
+      drag.current = null;
+      setDragging(null);
+      updateSite(() => snap0);
+      return;
+    }
     if (e.key === "Escape") {
       setSel(null);
       setDraft(null);
@@ -307,6 +319,8 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     setSel(s);
     // Dragging an already selected surface or building moves it.
     if (already && s.type !== "boundary") drag.current = { kind: "move", sel: s, start: toWorld(e), orig: polyOf(s) };
+    else if (already && s.type === "boundary" && s.edge !== null) drag.current = { kind: "edge", sel: s, index: s.edge, start: toWorld(e), orig: polyOf(s), snapshot: site };
+    if (drag.current?.kind === "edge") setDragging("edge");
     else drag.current = { kind: "pan", sx: e.clientX, sy: e.clientY, cx: v.cx, cy: v.cy, moved: true };
   };
   /** Corners of a selected opening slide along the wall beside them, so the boundary line holds. */
@@ -322,6 +336,14 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     if (capture(e)) return;
     setSel({ ...s, vertex: index } as Sel);
     drag.current = { kind: "vertex", sel: s, index, slide: slideFor(s, index) };
+  };
+  /** Pressing a selected surface or building's edge slides it (the boundary's own edges go through onItemDown). */
+  const onEdgeDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.stopPropagation();
+    if (capture(e)) return;
+    drag.current = { kind: "edge", sel: s, index, start: toWorld(e), orig: polyOf(s), snapshot: site };
+    setDragging("edge");
   };
   const onMidDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -372,9 +394,32 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         const q = snap(p, { sel: d.sel, index: d.index });
         editPoly(d.sel, (poly) => poly.map((o, i) => (i === d.index ? q : o)));
       }
+    } else if (d.kind === "edge") {
+      const n = edgeNormal(d.orig, d.index);
+      if (!n) return;
+      let off = (p.x - d.start.x) * n.x + (p.y - d.start.y) * n.y;
+      if (!e.altKey) {
+        // Snap the moved line through a corner of the house or of any other polygon (Alt turns snapping off).
+        const targets: WPt[] = outlines.flatMap((o) => o.polys.flat());
+        if (d.sel.type !== "boundary") site.boundary.forEach((q) => targets.push(q));
+        site.surfaces.forEach((x) => (d.sel.type === "surface" && d.sel.id === x.id ? 0 : x.polygon.forEach((q) => targets.push(q))));
+        site.neighbours.forEach((x) => (d.sel.type === "neighbour" && d.sel.id === x.id ? 0 : x.polygon.forEach((q) => targets.push(q))));
+        off = snapEdgeOffset(d.orig, d.index, off, targets, SNAP_PX * px);
+      }
+      const moved = slideEdge(d.orig, d.index, off);
+      const j = (d.index + 1) % moved.length;
+      if (d.sel.type === "boundary") {
+        // Same path as a corner drag, so surface corners that met the boundary go along.
+        updateSite((st) => moveBoundaryCorner(moveBoundaryCorner(st, d.index, moved[d.index]), j, moved[j]));
+      } else editPoly(d.sel, () => moved);
     } else if (d.kind === "move") {
-      const dx = p.x - d.start.x;
-      const dy = p.y - d.start.y;
+      let dx = p.x - d.start.x;
+      let dy = p.y - d.start.y;
+      if (e.shiftKey) {
+        // Shift holds the move to one axis, whichever the pointer has travelled further along.
+        if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+        else dx = 0;
+      }
       editPoly(d.sel, () => d.orig.map((o) => ({ x: o.x + dx, y: o.y + dy })));
     }
   };
@@ -388,6 +433,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
       return;
     }
     drag.current = null;
+    setDragging(null);
     if (d?.kind === "pan" && !d.moved) setSel(null);
     if (d?.kind === "rect" && draft) {
       const { a, b } = draft;
@@ -477,7 +523,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               const e = edges[i];
               const isSel = sel?.type === "boundary" && sel.edge === i;
               return (
-                <g key={i} onPointerDown={(ev) => onItemDown(ev, { type: "boundary", edge: i, vertex: null })}>
+                <g key={i} className={isSel && tool === "select" ? "site-edge-sel" : undefined} onPointerDown={(ev) => onItemDown(ev, { type: "boundary", edge: i, vertex: null })}>
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={16 * px} />
                   {isSel && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#93c5fd" strokeWidth={9 * px} strokeLinecap="round" />}
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`site-edge edge-${e.kind}`} strokeWidth={(e.kind === "hedge" ? 5 : e.kind === "wall" ? 4 : e.kind === "fence" ? 3 : 1.5) * px} strokeDasharray={e.kind === "open" ? `${6 * px} ${4 * px}` : undefined} />
@@ -527,6 +573,11 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
             {sel && selPoly.length > 0 && (
               <g>
+                {sel.type !== "boundary" &&
+                  selPoly.map((a, i) => {
+                    const b = selPoly[(i + 1) % selPoly.length];
+                    return <line key={"e" + i} className="site-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={10 * px} onPointerDown={(ev) => onEdgeDown(ev, sel, i)} />;
+                  })}
                 {selPoly.map((a, i) => {
                   const b = selPoly[(i + 1) % selPoly.length];
                   const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -591,6 +642,11 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         </button>
       </div>
 
+      {!peeking && tool === "select" && dragging === "edge" && (
+        <div className="site-status float-card" role="status">
+          <span>Drag to move the edge · Esc cancels</span>
+        </div>
+      )}
       {!peeking && tool !== "select" && (
         <div className="site-status float-card" role="status">
           <span>Drag out a rectangle.</span>
