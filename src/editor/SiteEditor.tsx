@@ -6,6 +6,7 @@ import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { bbox, polygonArea, polygonCentroid } from "../lib/geometry";
+import { siteWalls } from "../lib/siteWalls";
 import { boundaryWallSegments, groundAlong, resolveFollow } from "../lib/wallSteps";
 import { bearingToWorld } from "../lib/sun";
 import {
@@ -102,11 +103,13 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
 
   const outlines = useMemo(() => (model ? houseOutlines(model) : []), [model]);
+  // Clearances run from the outer wall faces (outlines carry them), not the wall centre lines.
   const clearances = useMemo(() => sideClearances(outlines, site.boundary), [outlines, site.boundary]);
+  const walls = useMemo(() => (model ? siteWalls(model) : []), [model]);
 
   // Fit the plot, house and neighbours (not the long road): on first show and on "Fit".
   const fitView = (w: number, h: number) => {
-    const pts = [...site.boundary, ...outlines.flatMap((o) => o.polys.flat()), ...site.neighbours.flatMap((n) => n.polygon)];
+    const pts = [...site.boundary, ...outlines.flatMap((o) => o.polys.flat()), ...walls.flatMap((l) => l.walls.flatMap((w) => w.poly)), ...site.neighbours.flatMap((n) => n.polygon)];
     const b = pts.length ? bbox(pts) : { x0: -10, y0: -10, x1: 10, y1: 10, w: 20, h: 20 };
     const ppm = Math.max(2, Math.min(400, Math.min(w / (b.w + 4), h / (b.h + 4))));
     return { cx: (b.x0 + b.x1) / 2, cy: (b.y0 + b.y1) / 2, ppm };
@@ -460,16 +463,12 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
               );
             })}
 
-            {/* The house: ground floor filled, upper floors dashed. */}
+            {/* The house: ground floor as room fills under wall bands at their real thickness; upper floors as dashed outer faces. */}
             <g pointerEvents="none">
-              {outlines.map((o, li) =>
-                o.polys.map((poly, i) =>
-                  li === 0 ? (
-                    <polygon key={`${li}-${i}`} points={svgPoints(poly)} fill="#efe6cf" stroke="#7a4a3a" strokeWidth={1.2 * px} />
-                  ) : (
-                    <polygon key={`${li}-${i}`} points={svgPoints(poly)} fill="none" stroke="#7a4a3a" strokeWidth={1.2 * px} strokeDasharray={`${5 * px} ${4 * px}`} />
-                  ),
-                ),
+              {outlines[0]?.polys.map((poly, i) => <polygon key={`fill-${i}`} points={svgPoints(poly)} fill="#efe6cf" />)}
+              {walls[0]?.walls.map((w, i) => <polygon key={`wall-${i}`} points={svgPoints(w.poly)} fill="#7a4a3a" stroke="#7a4a3a" strokeWidth={0.3 * px} strokeLinejoin="round" />)}
+              {outlines.slice(1).map((o) =>
+                (o.faces ?? []).map((f, i) => <line key={`${o.level}-${i}`} x1={f.a.x} y1={f.a.y} x2={f.b.x} y2={f.b.y} stroke="#7a4a3a" strokeWidth={1.2 * px} strokeDasharray={`${5 * px} ${4 * px}`} />),
               )}
             </g>
 
