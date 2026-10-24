@@ -405,6 +405,8 @@ export function usePlanDrag(args: PlanDragArgs) {
         const adj = poly0 && !m.alt ? snapShift(poly0, shift.dx, shift.dy, L.current.geo.snapTargets, tol()) : shift;
         L.current.sel.setCanopies(() => moveCanopy(list0, idx, adj.dx, adj.dy));
       },
+      // A tap reaches the plan under it, as the old click did (a room over the canopy wins; Shift knocks through).
+      tap: (m) => backgroundTap(m),
     });
   };
   const canopyCornerDown = (e: React.PointerEvent, idx: number) => {
@@ -429,6 +431,8 @@ export function usePlanDrag(args: PlanDragArgs) {
       kind: "stairs",
       data: null,
       move: (m) => updateFloor({ stairs: { x: m.at.x + dx, y: m.at.y + dy } }),
+      // A tap on the marker selects the room under it, as the old click did.
+      tap: (m) => backgroundTap(m),
     });
   };
 
@@ -470,8 +474,12 @@ export function usePlanDrag(args: PlanDragArgs) {
     // Ctrl/Cmd+click picks the item alone, even inside a group; a plain click takes its whole group.
     const ids = e.ctrlKey || e.metaKey ? [fx.id] : sel.liveIds.includes(fx.id) ? sel.liveIds : expandToGroups([fx.id], sel.allFixtures);
     if (ids !== sel.liveIds) sel.select({ fixtures: ids });
-    // A locked item selects but never drags; the press falls through to the background, which pans.
-    if (sel.anyLocked(ids)) return;
+    // A locked item selects but never drags; the press pans instead, and its release must not deselect it again
+    // (a fall-through to the background would run backgroundTap, whose Furnish branch clears the selection).
+    if (sel.anyLocked(ids)) {
+      drag.beginPan(e);
+      return;
+    }
     const f0 = getFloor();
     const ppm = f0.pxPerM;
     const p = atOf(e);
