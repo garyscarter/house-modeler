@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { MODE_LABEL } from "../lib/modes";
 import { usePanelPrefs } from "./panelPrefs";
 import { Icon } from "./icons";
+import "./Inspector.css";
 
 /**
  * The floating card that holds a mode's inspector. Renders nothing without content, scrolls its body,
