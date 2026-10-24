@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, MyPiece, Photo, Room, SavedView, Site, VariantKey } from "./types";
 import { applyPiece, unlinkPiece } from "./lib/myFurniture";
-import { imageAwareStorage } from "./lib/persist";
+import { imageAwareStorage, useHydration } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
@@ -174,6 +174,33 @@ export function holdUndo(on: boolean) {
   held = on;
   heldPushed = false;
   if (!on) lastPush = 0;
+}
+
+/**
+ * Run `fn` as one undo step: push a snapshot now, then let every setter inside record nothing more.
+ * Use it for actions that make several store changes (loading a layout, applying a review).
+ */
+export function transact(fn: () => void) {
+  const st = useStore.getState();
+  const wasHeld = held;
+  const wasPushed = heldPushed;
+  const past = [...st.past, { variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces }].slice(-HISTORY_LIMIT);
+  useStore.setState({ past, future: [] });
+  lastPush = Date.now();
+  held = true;
+  heldPushed = true;
+  try {
+    fn();
+  } finally {
+    held = wasHeld;
+    heldPushed = wasPushed;
+  }
+}
+
+/** Forget all undo and redo steps (after a load from the server, so Ctrl+Z cannot cross it). */
+export function clearHistory() {
+  lastPush = 0;
+  useStore.setState({ past: [], future: [] });
 }
 
 /** The variant photos are matched against (rooms are named from it). */
@@ -427,10 +454,22 @@ export const useStore = create<State>()(
         modeBeforeReview: s.modeBeforeReview,
       }),
       version: PERSIST_VERSION,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) useHydration.setState({ error });
+      },
       migrate: (persisted, version) => migratePersisted(persisted, version) as unknown as Persisted,
       // Older saves lack the newer persisted fields; keep the defaults for those.
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<Persisted>) };
+        // Drop a project part of the wrong basic shape rather than hand it to the renderers.
+        const isObj = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
+        if (!isObj(merged.variants)) merged.variants = {};
+        if (!isObj(merged.sites)) merged.sites = {};
+        if (!Array.isArray(merged.photos)) merged.photos = [];
+        for (const k of Object.keys(merged.variants) as VariantKey[]) {
+          const m = merged.variants[k] as { floors?: unknown } | undefined;
+          if (!m || !Array.isArray(m.floors)) delete merged.variants[k];
+        }
         if (!Array.isArray(merged.pieces)) merged.pieces = [];
         if (!Array.isArray(merged.savedViews)) merged.savedViews = [];
         if (!isMode(merged.mode)) merged.mode = "build";

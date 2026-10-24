@@ -1,0 +1,9 @@
+.recovery { height: 100vh; height: 100dvh; display: flex; background: var(--bg); overflow: auto; }
+.recovery .empty { max-width: 460px; }
+.recovery-error { font-family: var(--font-mono); word-break: break-word; margin-bottom: 18px; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
+
+/* A card shown in place of a panel that hit a problem (3D view, plan). */
+.panel-problem { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 0 16px; color: var(--muted); }
+.panel-problem h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); }
+.panel-problem p { margin: 0; }

@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Recovery } from "./components/Recovery";
 import { useStore } from "./store";
 import "@fontsource-variable/bricolage-grotesque/wght.css";
 import "@fontsource/ibm-plex-sans/latin-400.css";
@@ -15,6 +17,8 @@ if (import.meta.env.DEV) Object.assign(window, { __houseStore: useStore });
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary fallback={(error, reset) => <Recovery error={error} onRetry={reset} />}>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -2,6 +2,7 @@ import { useStore } from "../store";
 import { ask } from "./Dialogs";
 import { applyProject, syncNow, useSyncStatus } from "../lib/sync";
 import { statusText } from "../lib/syncLogic";
+import { useStorageStatus } from "../lib/persist";
 import { Loader } from "./Loader";
 import { BrandMark } from "./BrandMark";
 import { BRAND_NAME, downloadPrefix } from "../lib/brand";
@@ -88,7 +89,7 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
         className="danger"
         onClick={async () => {
           onDone?.();
-          if (await ask("Clear both models, the site and all photos? Undo can bring them back.", { ok: "Clear", danger: true })) reset();
+          if (await ask("Clear both models, the site and all photos? Undo brings back the layouts, plot and photos, but not saved views.", { ok: "Clear", danger: true })) reset();
         }}
       >
         Clear all…
@@ -110,6 +111,21 @@ export function SyncStatus() {
       <button onClick={syncNow} disabled={sync.kind === "saving"}>
         Sync now
       </button>
+    </p>
+  );
+}
+
+/** Says so when changes aren't being saved on this device; nothing when all is well. */
+export function StorageStatus() {
+  const s = useStorageStatus();
+  if (s.kind === "ok" || s.kind === "idle") return null;
+  const readonly = s.kind === "readonly";
+  return (
+    <p className="small muted sync-status" role="status">
+      <span>
+        {!readonly && <Loader kind="lift" size={14} />}
+        {readonly ? "Another tab has this project open, so changes here aren't saved" : `${s.message ?? "Couldn't save on this device"}. Trying again with your next change`}
+      </span>
     </p>
   );
 }

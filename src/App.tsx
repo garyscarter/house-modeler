@@ -26,6 +26,10 @@ import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
 import { Loader } from "./components/Loader";
 import { BrandMark } from "./components/BrandMark";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PanelProblem } from "./components/PanelProblem";
+import { Recovery } from "./components/Recovery";
+import { useHydration } from "./lib/persist";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -52,6 +56,7 @@ export default function App() {
   const peek = useStore((s) => s.peek);
   const peekReturn = useStore((s) => s.peekReturn);
   const look = usePanelPrefs((s) => s.look);
+  const hydrationError = useHydration((s) => s.error);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
 
   useStudioKeys();
@@ -145,6 +150,7 @@ export default function App() {
   const [opened3d, setOpened3d] = useState(show3d);
   if (show3d && !opened3d) setOpened3d(true);
 
+  if (!hydrated && hydrationError) return <Recovery kind="open" error={hydrationError} />;
   if (!hydrated)
     return (
       <div className="loading" role="status">
@@ -173,6 +179,10 @@ export default function App() {
         )}
         {model && opened3d && (
           <div className="view3d" hidden={!show3d}>
+            <ErrorBoundary
+              resetKeys={[model]}
+              fallback={(error, reset) => <PanelProblem title="The 3D view hit a problem" button="Reload 3D view" error={error} reset={reset} />}
+            >
             <Suspense
               fallback={
                 <div className="viewer-loading" role="status">
@@ -253,9 +263,14 @@ export default function App() {
                 />
               )}
             </Suspense>
+            </ErrorBoundary>
           </div>
         )}
         {model && tab === "plan" && (
+          <ErrorBoundary
+            resetKeys={[model]}
+            fallback={(error, reset) => <PanelProblem title="The plan hit a problem" button="Reload plan" error={error} reset={reset} />}
+          >
           <Suspense
             fallback={
               <div className="viewer-loading" role="status">
@@ -267,6 +282,7 @@ export default function App() {
             {editingSite && <SiteEditor />}
             {!editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
           </Suspense>
+          </ErrorBoundary>
         )}
 
         {showInspector && (

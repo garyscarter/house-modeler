@@ -15,7 +15,7 @@ import { uid } from "../types";
 
 /** Prefix that marks a reference to an image stored under its own key. */
 export const IMG_REF = "@@img:";
-const IMG_KEY_PREFIX = "house-modeler/img/";
+export const IMG_KEY_PREFIX = "house-modeler/img/";
 /** Strings shorter than this stay inline. */
 const MIN_INLINE = 512;
 /** 1x1 transparent PNG used when a referenced image is missing. */

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useStore } from "../store";
+import { clearHistory, transact, useStore } from "../store";
 import { choose } from "../components/Dialogs";
 import {
   CONFLICT_CHOICES,
@@ -111,12 +111,16 @@ export function applyProject(data: unknown, fromServer = false): boolean {
   applying = fromServer; // the server's own copy is not a local change to send back
   try {
     // One undoable step: replace everything at once.
-    useStore.setState({ costRates: project.costRates });
-    if (project.savedViews) useStore.setState({ savedViews: project.savedViews });
-    useStore.getState().setVariant("current", project.variants.current);
-    useStore.getState().setVariant("proposed", project.variants.proposed);
-    useStore.setState({ photos: project.photos, sites: project.sites });
-    if (project.pieces) useStore.setState({ pieces: project.pieces });
+    transact(() => {
+      useStore.setState({ costRates: project.costRates });
+      if (project.savedViews) useStore.setState({ savedViews: project.savedViews });
+      useStore.getState().setVariant("current", project.variants.current);
+      useStore.getState().setVariant("proposed", project.variants.proposed);
+      useStore.setState({ photos: project.photos, sites: project.sites });
+      if (project.pieces) useStore.setState({ pieces: project.pieces });
+    });
+    // Undo must not cross a load from the server: it would put the old project back and upload it over the server's.
+    if (fromServer) clearHistory();
   } finally {
     applying = false;
   }
@@ -129,8 +133,9 @@ function goOffline() {
   retryTimer = setTimeout(() => void serial(check), RETRY_MS);
 }
 
-async function loadServerCopy(): Promise<void> {
-  const { reply } = await call("GET", "/api/project", undefined, SAVE_TIMEOUT_MS);
+/** Load the server's copy; pass the reply of a GET that already carries it to save a second download. */
+async function loadServerCopy(have?: Reply): Promise<void> {
+  const reply = have ?? (await call("GET", "/api/project", undefined, SAVE_TIMEOUT_MS)).reply;
   if (!reply || reply.status !== 200 || !applyProject(reply.json.data, true)) return goOffline();
   persistent = reply.json.persistent !== false;
   dirty = false;
@@ -180,6 +185,12 @@ async function conflict(server: Partial<Revision>): Promise<void> {
 /** Compare with the server and do what is needed. Also the first thing that runs, and what a retry does. */
 async function check(): Promise<void> {
   if (noServer) return;
+  if (!enabled) {
+    // Read what this browser remembers before the first request, so `since` is right and an unchanged project isn't downloaded.
+    const saved = readMemory();
+    last = saved.revision ? { revision: saved.revision, savedAt: saved.savedAt ?? "" } : null;
+    dirty = saved.dirty ?? false;
+  }
   const since = last && !dirty ? `?since=${last.revision}` : "";
   const { reply, unreachable } = await call("GET", `/api/project${since}`);
   if (!reply || (reply.status !== 200 && reply.status !== 404)) {
@@ -191,10 +202,7 @@ async function check(): Promise<void> {
   }
   persistent = reply.json.persistent !== false;
   if (!enabled) {
-    const saved = readMemory();
     enabled = true;
-    last = saved.revision ? { revision: saved.revision, savedAt: saved.savedAt ?? "" } : null;
-    dirty = saved.dirty ?? false;
     useStore.subscribe((s, prev) => {
       if (applying) return;
       if (s.variants !== prev.variants || s.photos !== prev.photos || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
@@ -203,7 +211,8 @@ async function check(): Promise<void> {
   const server: Revision | null = reply.status === 404 ? null : { revision: reply.json.revision, savedAt: reply.json.savedAt };
   const action = decideSync({ local: last, server, dirty, localEmpty: isProjectEmpty(useStore.getState()) });
   if (action === "none") return setStatus({ kind: "synced", savedAt: server?.savedAt ?? null, persistent });
-  if (action === "load") return loadServerCopy();
+  // A GET with `since` that matches answers without the data; only a full reply can be applied as it is.
+  if (action === "load") return loadServerCopy(reply.status === 200 && reply.json.data !== undefined ? reply : undefined);
   if (action === "upload") return push(server?.revision ?? 0);
   return conflict(server!);
 }

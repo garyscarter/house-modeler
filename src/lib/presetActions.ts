@@ -1,4 +1,4 @@
-import { useStore } from "../store";
+import { transact, useStore } from "../store";
 import type { HouseModel, Site, VariantKey } from "../types";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
@@ -16,13 +16,15 @@ export async function loadListing(variant: VariantKey): Promise<void> {
   // The listing's own floorplan sits behind the tracing; fall back to a placeholder offline.
   const image = await listingFloorplan().catch(() => placeholderImage());
   const st = useStore.getState();
-  st.setVariant(variant, build(image));
-  const sites = useStore.getState().sites;
-  if (!sites[variant]) {
-    const from = variant === "proposed" ? sites.current : undefined;
-    st.setSite(from ? structuredClone(from) : listingSite(), variant);
-  }
-  st.setUi({ activeVariant: variant });
+  transact(() => {
+    st.setVariant(variant, build(image));
+    const sites = useStore.getState().sites;
+    if (!sites[variant]) {
+      const from = variant === "proposed" ? sites.current : undefined;
+      st.setSite(from ? structuredClone(from) : listingSite(), variant);
+    }
+    st.setUi({ activeVariant: variant });
+  });
 }
 
 /** Replace a built-in variant with the registry's latest tracing (this discards edits; it is one undo step). */
@@ -125,9 +127,11 @@ export function applyListingReview(review: ListingReview, selected: Iterable<str
   const st = useStore.getState();
   const model = applyChanges(review.model, review.changes, ids);
   model.basedOn = { id: LISTING_PRESET.id, version: review.version };
-  st.setVariant(review.variant, model);
-  if (review.plot) {
-    const chosen = review.plot.changes.filter((c) => ids.includes(c.id));
-    if (chosen.length) st.setSite(applyChanges(review.plot.site, review.plot.changes, ids), review.plot.variant);
-  }
+  transact(() => {
+    st.setVariant(review.variant, model);
+    if (review.plot) {
+      const chosen = review.plot.changes.filter((c) => ids.includes(c.id));
+      if (chosen.length) st.setSite(applyChanges(review.plot.site, review.plot.changes, ids), review.plot.variant);
+    }
+  });
 }
