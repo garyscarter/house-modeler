@@ -93,3 +93,28 @@
 }
 .plan-distance { font-family: var(--font-mono); }
 .plan-guide { vector-effect: none; }
+
+/* ---- Touch and the phone chassis (Madonna's shell sets the data attributes on .app) ---- */
+.app[data-touch] .plan-canvas svg { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+/* The rail: 44 px targets in a 54 px column. A finger cannot hover, so a tap flashes the flyout label for a moment instead. */
+.app[data-touch] .tool-rail { width: 54px; }
+.app[data-touch] .tool-rail .icon-btn, .app[data-touch] .plan-zoom .icon-btn { width: 44px; height: 44px; }
+.app[data-touch] .rail-chev { width: 18px; height: 18px; }
+.app[data-touch] .rail-item:hover .rail-fly, .app[data-touch] .rail-item:focus-within:has(:focus-visible) .rail-fly { display: none; }
+.app[data-touch] .rail-item[data-flash] .rail-fly { display: inline-flex; }
+.app[data-touch] .plan-zoom { padding: 2px; }
+/* The length field: 16 px so iOS does not zoom the page on focus. */
+.app[data-touch] .edge-input input { font-size: 16px; width: 96px; padding: 6px 8px; }
+.app[data-touch] .edge-input { padding: 6px 8px; font-size: 14px; }
+
+.app[data-chassis="phone"] .tool-rail { top: var(--float-gap); }
+/* Zoom cluster: top right (fit and fit-image only; pinch zooms). */
+.app[data-chassis="phone"] .plan-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
+/* Status pill: above the dock, which sits above the sheet at peek; it gives way when the sheet is raised. */
+.app[data-chassis="phone"] .plan-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
+.app[data-chassis="phone"][data-sheet="half"] .plan-status, .app[data-chassis="phone"][data-sheet="full"] .plan-status { opacity: 0; pointer-events: none; }
+/* Add furniture: a bottom popover across the width, above the tab bar. */
+.app[data-chassis="phone"] .add-pop { position: fixed; left: 12px; right: 12px; width: auto; top: auto; bottom: calc(var(--tabbar-h) + 12px); max-height: 60dvh; }
+.app[data-touch] .catalogue-picker > input { font-size: 16px; padding: 10px 12px; }
+.app[data-touch] .catalogue-picker .chip { padding: 8px 14px; font-size: 13px; }
+.app[data-touch] .picker-rows button { padding: 11px 12px; font-size: 14px; }

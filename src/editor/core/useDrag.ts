@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { CLICK_SLOP_PX, IDLE, pinchOf, reduceDrag, type DragEffect, type DragEvent, type DragPhase } from "../../lib/editorCore";
+import { canLongPress, CLICK_SLOP_PX, IDLE, LONG_PRESS_MS, pinchOf, reduceDrag, type DragEffect, type DragEvent, type DragPhase } from "../../lib/editorCore";
 import { panCam, pinchCam, type Cam } from "../../lib/planMath";
 import { holdUndo, useStore } from "../../store";
 import type { Pt } from "../../types";
@@ -62,6 +62,11 @@ export interface DragOptions {
   hover?(m: Move | null): void;
   /** e.g. peek: presses are ignored. */
   disabled?(): boolean;
+  /**
+   * Touch and pen only: a press held LONG_PRESS_MS without moving, with one pointer down. Firing it cancels the
+   * press (no tap, no drag) and the machine returns to idle; the editor opens its context menu here.
+   */
+  onLongPress?(p: { client: Pt; local: Pt; at: Pt }): void;
 }
 
 export interface DragApi {
@@ -111,6 +116,11 @@ export function useDrag(o: DragOptions): DragApi {
   const phase = useRef<DragPhase>(IDLE);
   const run = useRef<Run | null>(null);
   const pinch = useRef<{ c0: Cam; m0: Pt; d0: number } | null>(null);
+  const longPress = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const clearLongPress = () => {
+    clearTimeout(longPress.current);
+    longPress.current = undefined;
+  };
 
   /** Client px to px local to the camera's element (the frame the Cam is in), not the SVG's own box. */
   const localOf = (c: Pt): Pt => {
@@ -215,6 +225,19 @@ export function useDrag(o: DragOptions): DragApi {
     const d: ActiveDrag = { ...spec, press, moved: false };
     run.current = { d, snapshot, pending: null, raf: 0, last: moveOf(e, press) };
     dispatch({ type: "press", pointerId: e.pointerId, client: press.client, slop: spec.slop ?? CLICK_SLOP_PX });
+    clearLongPress();
+    if (opts.current.onLongPress && press.pointerType !== "mouse") {
+      longPress.current = setTimeout(() => {
+        longPress.current = undefined;
+        const cur = run.current;
+        if (!cur || cur.d.press.pointerId !== press.pointerId || cur.d.moved) return;
+        if (!canLongPress(press.pointerType, pointers.current.size, press.client, cur.last.client)) return;
+        // Cancel the press (restores the snapshot, releases the pointer, no tap) before the menu opens.
+        const at = { client: press.client, local: press.local, at: press.at };
+        dispatch({ type: "cancel" });
+        opts.current.onLongPress?.(at);
+      }, LONG_PRESS_MS);
+    }
   };
 
   const panSpec = (tap?: (m: Move) => void): DragSpec => {
@@ -240,6 +263,7 @@ export function useDrag(o: DragOptions): DragApi {
   };
 
   const cancel = useCallback((): boolean => {
+    clearLongPress();
     if (pinch.current) {
       endPinch(false);
       return true;
@@ -264,6 +288,9 @@ export function useDrag(o: DragOptions): DragApi {
     }
     // A mouse has one pointer; clear any press whose release happened off the canvas.
     if (e.pointerType === "mouse") pointers.current.clear();
+    // A finger that lifted off the canvas (or was cancelled by the system) can leave a stale pointer behind, which
+    // would make the next lone touch look like the start of a pinch. With nothing running, none can be real.
+    else if (!run.current && !pinch.current) pointers.current.clear();
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size >= 2 && !pinch.current && opts.current.camera.cam) {
       // A second pointer cancels whatever the first began and pinches instead; the press never reaches a handle.
@@ -313,6 +340,7 @@ export function useDrag(o: DragOptions): DragApi {
     if (cur) {
       if (e.pointerId !== cur.d.press.pointerId) return;
       cur.last = moveOf(e, cur.d.press);
+      if (longPress.current && !canLongPress(cur.d.press.pointerType, pointers.current.size, cur.d.press.client, cur.last.client)) clearLongPress();
       dispatch({ type: "move", pointerId: e.pointerId, client: cur.last.client });
       return;
     }
@@ -320,6 +348,7 @@ export function useDrag(o: DragOptions): DragApi {
   };
 
   const finishPointer = (e: React.PointerEvent, type: "up" | "lost") => {
+    clearLongPress();
     pointers.current.delete(e.pointerId);
     if (pinch.current) {
       if (pointers.current.size < 2) endPinch(true);
@@ -354,6 +383,7 @@ export function useDrag(o: DragOptions): DragApi {
   // Unmount cancels and makes sure undo is not left held.
   useEffect(
     () => () => {
+      clearLongPress();
       pinch.current = null;
       if (run.current) dispatch({ type: "cancel" });
       holdUndo(false);

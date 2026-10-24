@@ -437,6 +437,20 @@ describe("fitCamInset", () => {
     expect(c.s).toBeCloseTo(0.25);
     expect((100 - c.x) / c.s).toBeLessThan(656);
   });
+  it("centres the rect above a bottom inset (the phone's sheet and dock)", () => {
+    const el = { w: 400, h: 800 };
+    const c = fitCamInset(r, el, 0, 0, 200);
+    expect(c.s).toBeCloseTo(0.25);
+    // The rect's centre sits in the middle of the top 600 px, and its bottom edge clears the inset.
+    expect((50 - c.y) / c.s).toBeCloseTo(300);
+    expect((100 - c.y) / c.s).toBeLessThanOrEqual(600);
+    expect((50 - c.x) / c.s).toBeCloseTo(200);
+  });
+  it("keeps a third of the height visible however large the bottom inset", () => {
+    const c = fitCamInset(r, { w: 400, h: 300 }, 0, 0, 900);
+    expect(100 / c.s).toBeLessThanOrEqual(100 + 1);
+    expect(Number.isFinite(c.s) && c.s > 0).toBe(true);
+  });
   it("shrinks to fit a narrow visible width", () => {
     const c = fitCamInset(r, { w: 600, h: 600 }, 344, 0);
     expect(100 / c.s).toBeLessThanOrEqual(600 - 200 + 1);

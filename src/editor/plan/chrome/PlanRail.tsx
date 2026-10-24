@@ -6,6 +6,8 @@ import { PLAN_TOOLS, type Mode, type Tool } from "../../../lib/modes";
 import { imageForState, imageStateOf, type ImageState } from "../../../lib/planMath";
 import { TOOL_KEY, TOOL_LABEL } from "../../../lib/shortcuts";
 import { useStore } from "../../../store";
+import { useChassis } from "../../../components/useChassis";
+import { toolAllowed } from "../../../lib/chassis";
 import { AddPopover } from "../../AddItem";
 import { ToolRail, type RailItem } from "../../ToolRail";
 import { IMAGE_STATES } from "../useKeys";
@@ -46,8 +48,9 @@ export const PlanRail = memo(function PlanRail({
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
   const setImageState = (st: ImageState) => setUi({ planImage: imageForState(st, planImage.opacity) });
   const furnish = mode === "furnish";
+  const chassis = useChassis((s) => s.chassis);
   const groups = useMemo(() => {
-    const has = (t: Tool) => PLAN_TOOLS[mode].includes(t);
+    const has = (t: Tool) => PLAN_TOOLS[mode].includes(t) && toolAllowed(chassis, t);
     const toolItems = (list: [Tool, IconName][]): RailItem[] =>
       list.filter(([t]) => has(t)).map(([t, icon]) => ({ id: t, icon, label: TOOL_LABEL[t], shortcut: TOOL_KEY[t], active: tool === t, onClick: () => onPick(t) }));
     const cycleImage = () => setImageState(IMAGE_STATES[(IMAGE_STATES.indexOf(imageState) + 1) % IMAGE_STATES.length]);
@@ -94,7 +97,8 @@ export const PlanRail = memo(function PlanRail({
     ];
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, tool, addOpen, activeId, clipboardCount, pasteLabel, imageState, imgOpacity, planImage.show, planImage.opacity, wallsOn]);
-  const footer = useMemo(() => <Info label="How this works">{selectHintFor(mode)}</Info>, [mode]);
+  }, [mode, chassis, tool, addOpen, activeId, clipboardCount, pasteLabel, imageState, imgOpacity, planImage.show, planImage.opacity, wallsOn]);
+  const touch = useChassis((s) => s.touch);
+  const footer = useMemo(() => <Info label="How this works">{selectHintFor(mode, touch)}</Info>, [mode, touch]);
   return <ToolRail groups={groups} footer={footer} />;
 });

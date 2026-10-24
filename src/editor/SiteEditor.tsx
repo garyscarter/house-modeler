@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
 import { SURFACE_LABEL, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
@@ -18,7 +19,7 @@ import { InspectorCard } from "../components/InspectorCard";
 import { Info } from "../components/Info";
 import { Icon } from "../components/icons";
 import { BrandMark } from "../components/BrandMark";
-import { useCanvasCamera, useEditorKeys } from "./core";
+import { lowerSheet, raiseSheet, useCameraInsets, useCanvasCamera, useEditorKeys } from "./core";
 import { slideFor, useSiteDrag } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
 import type { Draft, Item, Sel, Tool } from "./site/types";
@@ -71,7 +72,9 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     const b = pts.length ? bbox(pts) : { x0: -10, y0: -10, x1: 10, y1: 10, w: 20, h: 20 };
     return { x0: b.x0 - 2, y0: b.y0 - 2, x1: b.x1 + 2, y1: b.y1 + 2 };
   }, [site.boundary, site.neighbours, outlines, walls]);
-  const camera = useCanvasCamera(svgRef as unknown as RefObject<HTMLElement | null>, { home, fitKey: "site", unitsPerM: 1, limits: SITE_LIMITS, anchor: "centre", padFrac: 0 });
+  const touch = useChassis((s) => s.touch);
+  const insets = useCameraInsets();
+  const camera = useCanvasCamera(svgRef as unknown as RefObject<HTMLElement | null>, { home, fitKey: `site:${insets.fitSuffix}`, insetRight: insets.insetRight, insetBottom: insets.insetBottom, unitsPerM: 1, limits: SITE_LIMITS, anchor: "centre", padFrac: 0 });
   const { cam, size } = camera;
   const px = camera.px; // one screen pixel in metres
   const peeking = useStore((s) => s.peek);
@@ -150,6 +153,16 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     }
   });
 
+  // On the phone a tap that selects a plot item brings the inspector sheet up; clearing the selection drops it.
+  const selKey = sel ? `${sel.type}:${"id" in sel ? sel.id : ""}` : "";
+  const prevSelKey = useRef(selKey);
+  useEffect(() => {
+    if (prevSelKey.current === selKey) return;
+    prevSelKey.current = selKey;
+    if (selKey) raiseSheet();
+    else lowerSheet();
+  }, [selKey]);
+
   const selPoly = sel ? polyOf(sel) : [];
   const north = bearingToWorld(site.frontBearing, 0);
   const northDeg = (Math.atan2(north.x, -north.z) * 180) / Math.PI;
@@ -201,19 +214,25 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
           ]}
           footer={
             <Info label="How this works">
-              Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10).
+              {touch
+                ? "Tap a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan; pinch to zoom."
+                : "Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10)."}
             </Info>
           }
         />
       )}
 
       <div className="site-zoom float-card" role="group" aria-label="Zoom">
-        <button type="button" className="icon-btn" onClick={() => camera.zoomBy(1.4)} aria-label="Zoom in (+)" title="Zoom in (+)">
-          <Icon name="zoomIn" size={20} />
-        </button>
-        <button type="button" className="icon-btn" onClick={() => camera.zoomBy(1 / 1.4)} aria-label="Zoom out (−)" title="Zoom out (−)">
-          <Icon name="zoomOut" size={20} />
-        </button>
+        {!touch && (
+          <>
+            <button type="button" className="icon-btn" onClick={() => camera.zoomBy(1.4)} aria-label="Zoom in (+)" title="Zoom in (+)">
+              <Icon name="zoomIn" size={20} />
+            </button>
+            <button type="button" className="icon-btn" onClick={() => camera.zoomBy(1 / 1.4)} aria-label="Zoom out (−)" title="Zoom out (−)">
+              <Icon name="zoomOut" size={20} />
+            </button>
+          </>
+        )}
         <button type="button" className="icon-btn" onClick={() => camera.fit()} aria-label="Fit the plot (F)" title="Fit the plot (F)">
           <Icon name="fit" size={20} />
         </button>
@@ -221,7 +240,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
       {!peeking && tool === "select" && drag.kind === "poly-edge" && (
         <div className="site-status float-card" role="status">
-          <span>Drag to move the edge · Esc cancels</span>
+          <span>{touch ? "Drag to move the edge" : "Drag to move the edge · Esc cancels"}</span>
         </div>
       )}
       {!peeking && tool !== "select" && (

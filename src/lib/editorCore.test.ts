@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLICK_SLOP_PX,
+  canLongPress,
   DOUBLE_PRESS_MS,
   IDLE,
   chipSize,
@@ -110,6 +111,19 @@ describe("chipSize and pinchOf", () => {
   it("finds the midpoint and a non-zero spread", () => {
     expect(pinchOf({ x: 0, y: 0 }, { x: 6, y: 8 })).toEqual({ m: { x: 3, y: 4 }, d: 10 });
     expect(pinchOf({ x: 1, y: 1 }, { x: 1, y: 1 }).d).toBe(1);
+  });
+});
+
+describe("canLongPress", () => {
+  const o = { x: 100, y: 100 };
+  it("accepts a still finger or pen, alone", () => {
+    expect(canLongPress("touch", 1, o, { x: 103, y: 102 })).toBe(true);
+    expect(canLongPress("pen", 1, o, o)).toBe(true);
+  });
+  it("refuses a mouse, a second pointer and a moved finger", () => {
+    expect(canLongPress("mouse", 1, o, o)).toBe(false);
+    expect(canLongPress("touch", 2, o, o)).toBe(false);
+    expect(canLongPress("touch", 1, o, { x: 108, y: 100 })).toBe(false);
   });
 });
 

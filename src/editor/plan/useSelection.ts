@@ -5,6 +5,7 @@ import { getClipboardFixtures, setClipboardFixtures } from "../../lib/clipboard"
 import { duplicateFixtures, expandToGroups, groupFixtures, positionsCentre } from "../../lib/fixtureGroups";
 import { pasteAt } from "../../lib/nudge";
 import { useStore } from "../../store";
+import { raiseSheet } from "../core";
 import { uid, type Fixture, type Floor, type Opening, type Pt, type VariantKey, type Wall } from "../../types";
 
 export type Selection = { room?: string; opening?: string; wall?: string; fixtures?: string[]; canopy?: number };
@@ -52,6 +53,8 @@ export function usePlanSelection(variant: VariantKey, floor: Floor, viewCentre: 
   }, [selectedRoomId]);
 
   const select = (s: Selection) => {
+    // On the phone, selecting something brings the inspector sheet up from peek.
+    if (s.room || s.opening || s.wall || s.fixtures?.length || s.canopy !== undefined) raiseSheet();
     setSelectedOpeningId(s.opening ?? null);
     setSelectedWallId(s.wall ?? null);
     setSelectedFixtureIds(s.fixtures ?? []);

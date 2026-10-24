@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useChassis } from "../../../components/useChassis";
 import { EXT_WALL_T, WALL_T } from "../../../lib/geometry";
 import { outsideSide } from "../../../lib/planMath";
 import type { Floor } from "../../../types";
@@ -24,6 +25,7 @@ export const Openings = memo(function Openings({
   px: number;
   onDown: (e: React.PointerEvent, o: Opening) => void;
 }) {
+  const touch = useChassis((s) => s.touch);
   return (
     <>
       {openings.map((o) => {
@@ -35,6 +37,10 @@ export const Openings = memo(function Openings({
         return (
           <g key={o.id} transform={`translate(${o.x} ${o.y}) rotate(${o.orientation === "v" ? 90 : 0})`}>
             <OpeningSymbol opening={o} len={len} t={t} m={ppm} px={px} outside={outside} selected={sel} />
+            {touch && build && (
+              // A finger is wider than the drawn hit strip: a transparent strip 30 screen px thick takes the press too.
+              <rect x={-len / 2 - px * 6} y={-px * 15} width={len + px * 12} height={px * 30} fill="transparent" className="plan-hit plan-opening" onPointerDown={(e) => onDown(e, o)} />
+            )}
             <rect
               x={-len / 2}
               y={-hitT / 2}

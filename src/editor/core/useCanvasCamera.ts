@@ -16,6 +16,8 @@ export interface CameraOptions {
   anchor?: "topLeft" | "centre";
   /** Width the floating inspector card covers on the right. Default: INSPECTOR_INSET when the enclosing main has one. */
   insetRight?: () => number;
+  /** Height the phone's bottom sheet and dock cover at the bottom. Default 0. */
+  insetBottom?: () => number;
   /** Padding Fit adds around `home`, as a fraction of its larger side. Default 0.06 (the plan); the site passes 0. */
   padFrac?: number;
 }
@@ -75,6 +77,8 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
     return main?.querySelector(".inspector-card") ? INSPECTOR_INSET : 0;
   }, [el]);
 
+  const coveredBottom = useCallback(() => opts.current.insetBottom?.() ?? 0, []);
+
   const writeTransform = useCallback(() => {
     const g = layerRef.current;
     const c = camRef.current;
@@ -113,10 +117,10 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   useEffect(() => {
     const s = sizeRef.current;
     if (!s) return;
-    const c = fitCamInset(opts.current.home, s, coveredRight(), opts.current.padFrac);
+    const c = fitCamInset(opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom());
     liveRef.current = c;
     setCamState(c);
-  }, [o.fitKey, hasSize, coveredRight]);
+  }, [o.fitKey, hasSize, coveredRight, coveredBottom]);
 
   // A committed camera replaces the live transform in the same commit.
   useLayoutEffect(() => {
@@ -166,9 +170,9 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   const fit = useCallback(
     (r?: Rect) => {
       const s = sizeRef.current;
-      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight(), opts.current.padFrac));
+      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom()));
     },
-    [coveredRight, setCam],
+    [coveredRight, coveredBottom, setCam],
   );
 
   const zoomBy = useCallback(
