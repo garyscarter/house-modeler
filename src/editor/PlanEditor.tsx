@@ -63,6 +63,10 @@ import {
   rectCorners,
   svgPoints,
   edgeChipCentre,
+  edgeNormalOffset,
+  slideEdge,
+  snapEdgeOffset,
+  openingsOnEdge,
   imageClipRect,
   imageForState,
   imageStateOf,
@@ -89,6 +93,10 @@ type Drag =
   | { kind: "canopy"; idx: number; p0: Pt; x0: number; y0: number; list0: Pt[][]; moved: boolean }
   | { kind: "stairs"; dx: number; dy: number; x0: number; y0: number; moved: boolean }
   | { kind: "wallEnd"; wallId: string; end: "a" | "b"; x0: number; y0: number; moved: boolean }
+  /** A room's edge slides along its normal; poly0 and ops0 are the polygon and the openings on that edge at the press. */
+  | { kind: "edge"; roomId: string; idx: number; poly0: Pt[]; ops0: { id: string; x: number; y: number }[]; x0: number; y0: number; moved: boolean }
+  /** A free-standing wall moves as a whole; a0, b0 are its ends at the press. */
+  | { kind: "wall"; wallId: string; a0: Pt; b0: Pt; x0: number; y0: number; moved: boolean }
   /** Moves once the press wanders beyond a few pixels; a click on an item that was already selected picks the next item under it. */
   | { kind: "fixture"; fixtureId: string; ids: string[]; dx: number; dy: number; x0: number; y0: number; moved: boolean; wasSelected: boolean }
   /** Shift+drag on empty canvas in Furnish: a rubber band that selects the furniture inside it. */
@@ -140,6 +148,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [measure, setMeasure] = useState<Pt[]>([]);
   const [edgeEdit, setEdgeEdit] = useState<{ roomId: string; idx: number } | null>(null);
   /** The selected room's wall lit from its row in the inspector. */
+  /** True while a wall is being dragged, for the status line. */
+  const [movingWall, setMovingWall] = useState(false);
   const [litEdge, setLitEdge] = useState<number | null>(null);
   const [selectedOpeningId, setSelectedOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
@@ -635,6 +645,46 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         patchWall(d.wallId, { [d.end]: p });
         return;
       }
+      case "edge": {
+        // Slide the edge along its normal; openings in it go with it. Other rooms' corners are not dragged along (the corner drag does not either).
+        let off = edgeNormalOffset(d.poly0, d.idx, (e.clientX - d.x0) * px, (e.clientY - d.y0) * px);
+        if (!e.altKey) {
+          const targets = [...floor.rooms.filter((r) => r.id !== d.roomId).flatMap((r) => r.polygon), ...(floor.walls ?? []).flatMap((w) => [w.a, w.b])];
+          off = snapEdgeOffset(d.poly0, d.idx, off, targets, snapTol);
+        }
+        const n = edgeNormalOffset(d.poly0, d.idx, 1, 0) * off;
+        const m = edgeNormalOffset(d.poly0, d.idx, 0, 1) * off;
+        const polygon = slideEdge(d.poly0, d.idx, off);
+        const moved = new Map(d.ops0.map((o) => [o.id, o]));
+        updateFloor(variant, floor.id, (f) => ({
+          ...f,
+          rooms: f.rooms.map((r) => (r.id === d.roomId ? { ...r, polygon } : r)),
+          openings: f.openings.map((o) => {
+            const o0 = moved.get(o.id);
+            return o0 ? { ...o, x: o0.x + n, y: o0.y + m } : o;
+          }),
+        }));
+        return;
+      }
+      case "wall": {
+        let dx = (e.clientX - d.x0) * px;
+        let dy = (e.clientY - d.y0) * px;
+        if (e.shiftKey) {
+          // Constrain to the wall's normal so it slides parallel.
+          const len = dist(d.a0, d.b0) || 1;
+          const nx = -(d.b0.y - d.a0.y) / len;
+          const ny = (d.b0.x - d.a0.x) / len;
+          const t = dx * nx + dy * ny;
+          dx = nx * t;
+          dy = ny * t;
+        }
+        if (!e.altKey && !e.shiftKey) {
+          const targets = [...floor.rooms.flatMap((r) => r.polygon), ...(floor.walls ?? []).filter((w) => w.id !== d.wallId).flatMap((w) => [w.a, w.b])];
+          ({ dx, dy } = snapShift([d.a0, d.b0], dx, dy, targets, snapTol));
+        }
+        patchWall(d.wallId, { a: { x: d.a0.x + dx, y: d.a0.y + dy }, b: { x: d.b0.x + dx, y: d.b0.y + dy } });
+        return;
+      }
       case "corner": {
         const room = floor.rooms.find((r) => r.id === d.roomId);
         const p = snap(raw, room?.polygon[d.idx], e.altKey);
@@ -692,6 +742,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     } else {
       drag.current = null;
       holdUndo(false);
+      setMovingWall(false);
     }
   };
 
@@ -702,6 +753,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     holdUndo(true);
     rememberPress();
     drag.current = d;
+    if (d.kind === "edge" || d.kind === "wall") setMovingWall(true);
   };
 
   /** Esc during a drag: put everything back as it was at the press. False when no such drag is running. */
@@ -713,6 +765,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     else if (press0.current) useStore.setState(press0.current);
     drag.current = null;
     holdUndo(false);
+    setMovingWall(false);
     suppressClick.current = true;
     setGuides([]);
     if (capturedId.current !== null) {
@@ -1276,6 +1329,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         if (placing?.item.symbol === "window-seat") return "Click in front of a window to fit the seat to it (Alt places freely). R turns 90°, Esc finishes.";
         return placing ? `Click to place ${placing.item.name}; it snaps to walls (Alt places freely). R turns 90°, Shift+R 15°, Esc finishes.` : null;
       default:
+        if (movingWall) return "Drag to move the wall · Esc cancels";
         return roomHint && selectedRoomId ? "Right-click a room for more" : null;
     }
   })();
@@ -1573,12 +1627,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     style={build || decorate ? undefined : { pointerEvents: "none" }}
                     onPointerDown={(e) => {
                       if (tool !== "select") return;
-                      e.stopPropagation();
                       select({ wall: w.id });
+                      if (sel && build && e.button === 0) startDrag(e, { kind: "wall", wallId: w.id, a0: w.a, b0: w.b, x0: e.clientX, y0: e.clientY, moved: false });
+                      else e.stopPropagation();
                     }}
                     onClick={(e) => tool === "select" && e.stopPropagation()}
                   >
-                    <title>Wall{w.height !== undefined ? ` (${w.height} m high)` : ""}. Click to edit, drag the ends to move.</title>
+                    <title>Wall{w.height !== undefined ? ` (${w.height} m high)` : ""}. Click to edit, drag the ends or the selected wall to move.</title>
                   </line>
                   {tool === "select" && build &&
                     (["a", "b"] as const).map((end) => (
@@ -1609,6 +1664,44 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               window.addEventListener("pointercancel", () => setStairsActive(false), { once: true });
               startDrag(e, { kind: "stairs", dx: floor.stairs!.x - toImage(e).x, dy: floor.stairs!.y - toImage(e).y, x0: e.clientX, y0: e.clientY, moved: false });
             }} />}
+
+            {build && tool === "select" && selected && !selected.locked && (() => {
+              const r = selected;
+              return (
+                <g>
+                {
+                  r.polygon.map((p, i) => {
+                      const q = r.polygon[(i + 1) % r.polygon.length];
+                      return (
+                        <line
+                          key={"e" + i}
+                          x1={p.x}
+                          y1={p.y}
+                          x2={q.x}
+                          y2={q.y}
+                          stroke="transparent"
+                          strokeWidth={px * 10}
+                          className="plan-edge-hit"
+                          onPointerDown={(e) =>
+                            startDrag(e, {
+                              kind: "edge",
+                              roomId: r.id,
+                              idx: i,
+                              poly0: r.polygon,
+                              ops0: openingsOnEdge(floor, r.id, i, (EXT_WALL_T / 2) * ppm).map((o) => ({ id: o.id, x: o.x, y: o.y })),
+                              x0: e.clientX,
+                              y0: e.clientY,
+                              moved: false,
+                            })
+                          }
+                        >
+                          <title>Drag to move the wall</title>
+                        </line>
+                      );
+                    })}
+                </g>
+              );
+            })()}
 
             {floor.openings.map((o) => {
               const len = o.widthM * ppm;

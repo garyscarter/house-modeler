@@ -78,6 +78,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ["Esc"], action: "Cancel or deselect" },
       { keys: ["Shift", "click"], action: "Knock a neighbouring room through" },
       { keys: ["Shift", "click"], action: "Add furniture to the selection" },
+      { keys: ["drag", "a wall"], action: "Move a selected room's wall (Alt: no snap; Shift: constrain a free wall)" },
       { keys: ["Shift", "drag"], action: "Select furniture in an area" },
       { keys: ["⌘/Ctrl", "click"], action: "Pick one item in a group" },
       { keys: ["⌘/Ctrl", "G"], action: "Group furniture" },

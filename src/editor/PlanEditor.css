@@ -21,6 +21,7 @@
 .plan-handle { cursor: move; }
 .plan-handle.add { cursor: copy; }
 .plan-hit, .plan-canopy { cursor: pointer; }
+.plan-edge-hit { cursor: move; }
 /* While Space is held the plan shows the other layout and ignores the pointer. */
 .plan-canvas svg.peeking { pointer-events: none; }
 .plan-text { font-family: var(--font-ui); font-weight: 500; }

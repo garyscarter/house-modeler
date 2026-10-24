@@ -704,3 +704,72 @@ export function placeFromEnd(floor: Floor, o: Pick<Opening, "x" | "y" | "orienta
 
 /** An SVG points attribute for a polygon. */
 export const svgPoints = (poly: Pt[]) => poly.map((p) => `${p.x},${p.y}`).join(" ");
+
+/** Unit normal of edge i pointing out of the polygon. */
+const outwardNormal = (poly: Pt[], i: number): Pt => {
+  const n = inwardNormals(poly)[i];
+  return { x: -n.x, y: -n.y };
+};
+
+/** The component of the vector (dx, dy) along the outward normal of edge i. */
+export function edgeNormalOffset(poly: Pt[], i: number, dx: number, dy: number): number {
+  const n = outwardNormal(poly, i);
+  return dx * n.x + dy * n.y;
+}
+
+/**
+ * Move edge i (from corner i to corner i+1) by offsetPx along its outward
+ * normal. Both ends move together so the edge stays parallel to where it was;
+ * the neighbouring edges stretch to follow.
+ */
+export function slideEdge(poly: Pt[], i: number, offsetPx: number): Pt[] {
+  if (poly.length < 3) return poly;
+  const n = outwardNormal(poly, i);
+  const j = (i + 1) % poly.length;
+  return poly.map((p, k) => (k === i || k === j ? { x: p.x + n.x * offsetPx, y: p.y + n.y * offsetPx } : p));
+}
+
+/**
+ * Adjust an edge offset so the moved edge's line passes through the nearest
+ * target within tol (targets are measured along the edge's outward normal).
+ * Returns the offset unchanged when nothing is close.
+ */
+export function snapEdgeOffset(poly: Pt[], i: number, offsetPx: number, targets: Pt[], tol: number): number {
+  const a = poly[i];
+  const n = outwardNormal(poly, i);
+  let best = offsetPx;
+  let bestD = tol;
+  for (const t of targets) {
+    const s = (t.x - a.x) * n.x + (t.y - a.y) * n.y;
+    const d = Math.abs(s - offsetPx);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/**
+ * Openings that sit on edge i of a room: the same orientation as the edge,
+ * within tol of its line and between its ends. Only axis-aligned edges carry
+ * openings (an opening is either "h" or "v").
+ */
+export function openingsOnEdge(floor: Floor, roomId: string, idx: number, tol: number): Opening[] {
+  const room = floor.rooms.find((r) => r.id === roomId);
+  if (!room) return [];
+  const a = room.polygon[idx];
+  const b = room.polygon[(idx + 1) % room.polygon.length];
+  if (!a || !b) return [];
+  const o: "h" | "v" | null = Math.abs(a.y - b.y) <= 0.5 ? "h" : Math.abs(a.x - b.x) <= 0.5 ? "v" : null;
+  if (!o) return [];
+  const h = o === "h";
+  const lo = Math.min(h ? a.x : a.y, h ? b.x : b.y);
+  const hi = Math.max(h ? a.x : a.y, h ? b.x : b.y);
+  return floor.openings.filter((p) => {
+    if (p.orientation !== o) return false;
+    const perp = Math.abs(h ? p.y - a.y : p.x - a.x);
+    const along = h ? p.x : p.y;
+    return perp <= tol && along >= lo - tol && along <= hi + tol;
+  });
+}
