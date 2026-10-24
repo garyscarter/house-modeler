@@ -28,6 +28,8 @@ export interface Move {
   shift: boolean;
   alt: boolean;
   mod: boolean;
+  /** In `end` only: the drag ended because the capture was lost (pointercancel), not because the pointer was released. */
+  lost: boolean;
 }
 
 export interface DragSpec<K extends string = string, D = unknown> {
@@ -128,6 +130,7 @@ export function useDrag(o: DragOptions): DragApi {
       shift: e.shiftKey,
       alt: e.altKey,
       mod: e.ctrlKey || e.metaKey,
+      lost: false,
     };
   };
 
@@ -324,7 +327,7 @@ export function useDrag(o: DragOptions): DragApi {
     }
     const cur = run.current;
     if (!cur || e.pointerId !== cur.d.press.pointerId) return;
-    cur.last = moveOf(e, cur.d.press);
+    cur.last = { ...moveOf(e, cur.d.press), lost: type === "lost" };
     dispatch({ type, pointerId: e.pointerId });
   };
 
