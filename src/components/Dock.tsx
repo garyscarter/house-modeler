@@ -27,6 +27,7 @@ export function Dock() {
   const setUi = useStore((s) => s.setUi);
   const sunOpen = usePanelPrefs((s) => s.sunOpen);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
+  const setSun = useStore((s) => s.setSun);
   if (!floors) return null;
 
   const ui = { tab, maxLevel, editFloorId };
@@ -37,12 +38,12 @@ export function Dock() {
   const compareLabel = COMPARE.find(([k]) => k === (both ? viewMode : "single"))?.[1] ?? "Single";
 
   return (
-    <div className="dock float-card" role="toolbar" aria-label="View">
+    <div className="dock float-card" role="group" aria-label="View">
       <div className="seg" role="group" aria-label="Plan or 3D">
-        <button className={tab === "plan" ? "active" : ""} title="Plan (Tab)" onClick={() => setUi(tabSwitchPatch(ui, floors, "plan"))}>
+        <button className={tab === "plan" ? "active" : ""} aria-pressed={tab === "plan"} title="Plan (Tab)" onClick={() => setUi(tabSwitchPatch(ui, floors, "plan"))}>
           Plan
         </button>
-        <button className={tab === "3d" ? "active" : ""} title="3D (Tab)" onClick={() => setUi(tabSwitchPatch(ui, floors, "3d"))}>
+        <button className={tab === "3d" ? "active" : ""} aria-pressed={tab === "3d"} title="3D (Tab)" onClick={() => setUi(tabSwitchPatch(ui, floors, "3d"))}>
           3D
         </button>
       </div>
@@ -50,12 +51,12 @@ export function Dock() {
       {showFloors && (
         <div className="seg" role="group" aria-label="Floor">
           {tab === "3d" && (
-            <button className={active === "all" ? "active" : ""} title="All floors (0)" onClick={() => setUi(dockFloorPick(ui, floors, "all"))}>
+            <button className={active === "all" ? "active" : ""} aria-pressed={active === "all"} title="All floors (0)" onClick={() => setUi(dockFloorPick(ui, floors, "all"))}>
               All
             </button>
           )}
           {sorted.map((f, i) => (
-            <button key={f.id} className={active === f.id ? "active" : ""} title={`${floorDisplayName(f.name)}${keyOf(i)}`} onClick={() => setUi(dockFloorPick(ui, floors, f.id))}>
+            <button key={f.id} className={active === f.id ? "active" : ""} aria-pressed={active === f.id} title={`${floorDisplayName(f.name)}${keyOf(i)}`} onClick={() => setUi(dockFloorPick(ui, floors, f.id))}>
               {floorDisplayName(f.name)}
             </button>
           ))}
@@ -81,7 +82,11 @@ export function Dock() {
             aria-pressed={sunOpen}
             disabled={!hasSite}
             title={hasSite ? "Sun study" : "Add a plot under Plot to use the sun study"}
-            onClick={() => setPrefs({ sunOpen: !sunOpen })}
+            onClick={() => {
+              // Opening the panel turns the sun on; closing it turns it off.
+              setSun({ enabled: !sunOpen });
+              setPrefs({ sunOpen: !sunOpen });
+            }}
           >
             <Icon name="sun" />
           </button>

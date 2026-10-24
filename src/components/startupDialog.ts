@@ -1,7 +1,6 @@
 import { ask, choose } from "./Dialogs";
-import { useStore } from "../store";
 import { VARIANT_LABEL, type VariantKey } from "../types";
-import { applyBoundaryUpdate, loadListing, planBoundaryUpdate, updatePreset, updateSitePreset } from "../lib/presetActions";
+import { applyBoundaryUpdate, planBoundaryUpdate, updatePreset, updateSitePreset } from "../lib/presetActions";
 import { describeBoundaryChanges } from "../lib/siteMerge";
 import { describeUpdate, notNowRemembers, remember, type Remembered, type StartupPrompt } from "../lib/startupPrompt";
 import { openListingReview } from "./ListingUpdatesDialog";
@@ -25,15 +24,8 @@ export async function confirmBoundaryUpdates(variants: VariantKey[]): Promise<((
 
 /** Ask the startup question for `prompt` and carry out the answer; "not now" answers are remembered per version. */
 export async function runStartupPrompt(prompt: StartupPrompt): Promise<void> {
-  if (prompt.kind === "load") {
-    const choices = prompt.withProposed ? ["Load As listed", "Load As listed and the proposed extension", "Not now"] : ["Load As listed", "Not now"];
-    const i = await choose("Load the plans for listing 91770873 to see the house in 3D?", choices);
-    if (i === null || i === choices.length - 1) return remember("load", prompt.version);
-    await loadListing("current");
-    if (i === 1) await loadListing("proposed");
-    useStore.getState().setUi({ activeVariant: "current", tab: "3d" });
-    return;
-  }
+  // The first-run Welcome card (components/Welcome.tsx) is the empty state: nothing to ask here.
+  if (prompt.kind === "load") return;
   const { message, choices } = describeUpdate(prompt);
   const i = await choose(
     message,

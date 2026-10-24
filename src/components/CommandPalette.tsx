@@ -128,10 +128,16 @@ function Palette({ close }: { close: () => void }) {
 
   return (
     <div className="cmdk-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="cmdk-panel" role="dialog" aria-label="Command palette" onKeyDown={onKeyDown}>
+      <div className="cmdk-panel" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={onKeyDown}>
         <input
           className="cmdk-input"
           autoFocus
+          role="combobox"
+          aria-label="Jump to a room or do something"
+          aria-expanded={results.length > 0}
+          aria-controls="cmdk-list"
+          aria-autocomplete="list"
+          aria-activedescendant={results[idx] ? `cmdk-opt-${results[idx].id}` : undefined}
           placeholder="Search rooms and commands"
           value={query}
           onChange={(e) => {
@@ -142,9 +148,9 @@ function Palette({ close }: { close: () => void }) {
         {results.length === 0 ? (
           <div className="cmdk-empty">No matching commands</div>
         ) : (
-          <ul className="cmdk-list" ref={listRef} role="listbox">
+          <ul className="cmdk-list" id="cmdk-list" ref={listRef} role="listbox" aria-label="Results">
             {results.map((c, i) => (
-              <li key={c.id} role="option" aria-selected={i === idx} className={`cmdk-row${i === idx ? " active" : ""}`} onMouseEnter={() => setActive(i)} onClick={() => run(i)}>
+              <li key={c.id} id={`cmdk-opt-${c.id}`} role="option" aria-selected={i === idx} className={`cmdk-row${i === idx ? " active" : ""}`} onMouseEnter={() => setActive(i)} onClick={() => run(i)}>
                 <span className="cmdk-title">{c.title}</span>
                 {c.hint && (
                   <span className="shortcuts-keys">

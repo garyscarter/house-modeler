@@ -58,6 +58,11 @@ export function SunControls() {
     return () => cancelAnimationFrame(raf);
   }, [playing, open, sun.enabled, rise, set, setSun]);
 
+  // The panel being open means the sun is on (a saved "open" can come back with the sun off).
+  useEffect(() => {
+    if (open && !useStore.getState().sun.enabled) setSun({ enabled: true });
+  }, [open, setSun]);
+
   if (!open || !site || !info) return null;
 
   /** Change the day, keeping the time within that day's daylight. */
@@ -73,23 +78,20 @@ export function SunControls() {
     <>
       <div className="sun-panel float-card" role="group" aria-label="Sun study">
         <div className="sun-head">
-          <label className="sun-toggle" title="See where the sun and shadows fall on any day, from sunrise to sunset.">
-            <input
-              type="checkbox"
-              checked={sun.enabled}
-              onChange={(e) => {
-                setSun({ enabled: e.target.checked });
-                if (!e.target.checked) setPlaying(false);
-              }}
-            />
+          <span className="sun-toggle" title="See where the sun and shadows fall on any day, from sunrise to sunset.">
             Sun study
-          </label>
+          </span>
           {sun.enabled && (
             <span className="sun-brief">
               {formatDay(SUN_YEAR, sun.dayOfYear)}, {formatClock(sun.hour)}
             </span>
           )}
-          <button className="icon-btn sun-close" onClick={() => setPrefs({ sunOpen: false })} aria-label="Close sun study" title="Close">
+          <button className="icon-btn sun-close" onClick={() => {
+              setPlaying(false);
+              setSun({ enabled: false });
+              setPrefs({ sunOpen: false });
+            }}
+            aria-label="Close sun study" title="Close">
             <Icon name="close" size={16} />
           </button>
         </div>

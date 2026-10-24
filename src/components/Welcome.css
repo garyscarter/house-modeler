@@ -1,0 +1,41 @@
+/* First run: the empty state, and the coach strip that follows it. */
+.welcome { margin: auto; width: 100%; max-width: 720px; padding: 24px 16px; }
+.welcome-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 36px 32px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card);
+}
+.welcome-card > .brand-outline, .welcome-card > svg:first-child { color: var(--brand); }
+.welcome h1 { margin: 14px 0 6px; font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.welcome-lede { margin: 0 0 24px; color: var(--muted); font-size: 15px; }
+.welcome-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; }
+.welcome-tile {
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 10px 10px 14px; text-align: left;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.welcome-tile:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); box-shadow: var(--shadow-card); transform: translateY(-1px); }
+.welcome-tile:disabled { opacity: 1; cursor: progress; }
+.welcome-tile:disabled:not([aria-busy="true"]) { opacity: .5; }
+.welcome-pic { position: relative; display: block; margin-bottom: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
+.welcome-plan { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
+.welcome-plan path { stroke-linejoin: round; }
+.wp-upper path { fill: var(--surface-3); stroke: var(--line); stroke-width: 1; }
+.wp-ground path { fill: var(--panel); stroke: var(--text); stroke-width: 1.1; }
+.wp-ext path { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; fill-opacity: .9; }
+.welcome-busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: color-mix(in srgb, var(--panel) 80%, transparent); font-size: 13px; color: var(--text); }
+.welcome-busy .loader { margin: 0; }
+.welcome-title { padding: 0 4px; font-weight: 600; font-size: 15px; }
+.welcome-caption { padding: 0 4px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.welcome-import { margin-top: 18px; font-size: 13px; }
+.welcome-import:hover:not(:disabled) { background: none; color: var(--text); }
+@media (max-width: 600px) { .welcome-tiles { grid-template-columns: 1fr; } }
+
+/* The coach strip: three first steps, above the dock. */
+.coach-strip {
+  position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float);
+  display: flex; align-items: center; gap: 14px; max-width: min(780px, calc(100% - 320px)); padding: 8px 8px 8px 14px; font-size: 13px;
+}
+.coach-steps { display: flex; align-items: center; gap: 16px; margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
+.coach-steps li { display: inline-flex; white-space: nowrap; align-items: center; gap: 7px; }
+.coach-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; flex: none; }
+.coach-strip .icon-btn { width: 24px; height: 24px; flex: none; color: var(--muted); }
