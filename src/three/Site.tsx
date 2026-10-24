@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
 import { useStore } from "../store";
+import { usePanelPrefs } from "../components/panelPrefs";
 import { useViewedSite } from "./viewedVariant";
 import { roofGeometry, type RoofEnd } from "../lib/roof";
 import { bbox, polygonCentroid, roomWorldPolygon, type V2 } from "../lib/geometry";
@@ -26,22 +27,22 @@ export const GROUND_Y = -0.26;
  * Ground, plot, garden surfaces, boundary treatments and neighbouring
  * buildings. `model` is the house this viewer shows; fences stop at its walls.
  */
-export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model?: HouseModel }) {
+export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model: HouseModel }) {
   const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
-  const active = useStore((s) => s.variants[s.activeVariant]);
+  const quiet = usePanelPrefs((s) => s.quiet);
   if (!site || !showSite) {
     return (
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.z]} receiveShadow>
         <planeGeometry args={[size * 4, size * 4]} />
-        <meshStandardMaterial color="#cfd6cc" />
+        <meshStandardMaterial color={quiet ? QUIET_FALLBACK_GROUND : "#cfd6cc"} />
       </mesh>
     );
   }
-  return <SiteContent site={site} house={model ?? active} centre={centre} />;
+  return <SiteContent quiet={quiet} site={site} house={model} centre={centre} />;
 }
 
-function SiteContent({ site, house, centre: houseCentre }: { site: Site; house?: HouseModel; centre: THREE.Vector3 }) {
+function SiteContent({ site, house, centre: houseCentre, quiet }: { quiet: boolean; site: Site; house?: HouseModel; centre: THREE.Vector3 }) {
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const sunHours = useSiteView((s) => s.sunHours);
   const sunOn = useStore((s) => s.sun.enabled);
@@ -57,13 +58,13 @@ function SiteContent({ site, house, centre: houseCentre }: { site: Site; house?:
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} geometry={farGround()} material={surfaceMaterial("ground")} receiveShadow />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} geometry={farGround()} material={quiet ? quietGround() : surfaceMaterial("ground")} receiveShadow />
       {surfaces.map((s) => (
         <Surface key={s.id} surface={s} />
       ))}
       <Boundary site={site} buildings={buildings} />
       {site.neighbours.map((n) => (
-        <NeighbourMass key={n.id} n={n} ghost={ghost} house={houseCentre} />
+        <NeighbourMass key={n.id} n={n} ghost={ghost} house={houseCentre} quiet={quiet} />
       ))}
       {sunHours && sunOn && house && <SunHoursOverlay site={site} model={house} y={GROUND_Y + 0.07} />}
     </group>
@@ -548,6 +549,21 @@ const CARD_WALL = "#eef0ee";
 const CARD_ROOF = "#cfd3d1";
 const CARD_FLAT_ROOF = "#c4c8c6";
 
+/** Quiet canvas neighbours: matte warm greys (walls, roofs). */
+const QUIET_WALL = "#d9dbd6";
+const QUIET_ROOF = "#c3c5c0";
+/** The page colour (--bg) the quiet ground is toned towards, and by how much. */
+const PAGE_TONE = "#eef0ec";
+const GROUND_TONE = 0.2;
+/** Mean of the grass texture's base colour (hsl 88, 14%, 60%), toned towards the page. */
+const QUIET_GROUND = new THREE.Color().setHSL(88 / 360, 0.14, 0.6).lerp(new THREE.Color(PAGE_TONE), GROUND_TONE);
+/** The plain ground drawn when no plot is shown: the old #cfd6cc toned towards the page. */
+const QUIET_FALLBACK_GROUND = "#" + new THREE.Color("#cfd6cc").lerp(new THREE.Color(PAGE_TONE), GROUND_TONE).getHexString();
+let quietGroundMat: THREE.Material | undefined;
+function quietGround(): THREE.Material {
+  return (quietGroundMat ??= new THREE.MeshStandardMaterial({ color: QUIET_GROUND, roughness: 1 }));
+}
+
 /** Neighbours sit in the background: their colours are pulled toward grey and their relief eased. */
 const WALL_DESAT = 0.35;
 const ROOF_DESAT = 0.15;
@@ -585,6 +601,9 @@ function neighbourRoofBase(color: string): THREE.MeshStandardMaterial {
     const tex = tileTextures("plain");
     return new THREE.MeshStandardMaterial({ color: mixToGrey(color, ROOF_DESAT), map: tex.map, bumpMap: tex.bump, bumpScale: 2 * NEIGHBOUR_BUMP, roughness: tex.roughness, side: THREE.DoubleSide });
   });
+}
+function quietBase(color: string): THREE.MeshStandardMaterial {
+  return neighbourBase(`quiet|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.95 }));
 }
 function cardBase(color: string): THREE.MeshStandardMaterial {
   return neighbourBase(`card|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.92 }));
@@ -649,7 +668,7 @@ const GHOST_OPACITY = 0.3;
  * writes go off but the meshes keep casting shadows (it is still a building),
  * and a faint outline keeps the mass readable.
  */
-function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; house: THREE.Vector3 }) {
+function NeighbourMass({ n, ghost, house, quiet }: { n: Neighbour; ghost: boolean; house: THREE.Vector3; quiet: boolean }) {
   const invalidate = useThree((s) => s.invalidate);
   const geo = useMemo(() => neighbourGeometry(n), [n]);
   useDisposeAll(useMemo(() => [geo.walls, geo.slopes, geo.gables], [geo]));
@@ -671,6 +690,10 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
       return m;
     };
     // Extrude groups: 0 = top and bottom caps (a flat roof), 1 = the walls.
+    if (quiet) {
+      // Quiet canvas: matte warm grey massing with no relief, so the house is the only textured object.
+      return [make(quietBase(QUIET_ROOF)), make(quietBase(QUIET_WALL)), make(quietBase(QUIET_ROOF), THREE.DoubleSide), make(quietBase(QUIET_WALL), THREE.DoubleSide)];
+    }
     if (!trueColours) {
       // Quiet "card model": plain pale massing, no textures.
       return [make(cardBase(CARD_FLAT_ROOF)), make(cardBase(CARD_WALL)), make(cardBase(CARD_ROOF), THREE.DoubleSide), make(cardBase(CARD_WALL), THREE.DoubleSide)];
@@ -678,7 +701,7 @@ function NeighbourMass({ n, ghost, house }: { n: Neighbour; ghost: boolean; hous
     const wall = neighbourWallBase(n.color ?? NEIGHBOUR_WALL);
     const roof = neighbourRoofBase(n.roofColor ?? NEIGHBOUR_ROOF);
     return [make(neighbourFlatBase()), make(wall), make(roof, THREE.DoubleSide), make(wall, THREE.DoubleSide)];
-  }, [n.color, n.roofColor, ghost, trueColours]);
+  }, [n.color, n.roofColor, ghost, trueColours, quiet]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
 
   const box = useMemo(() => {

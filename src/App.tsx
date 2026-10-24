@@ -237,7 +237,7 @@ export default function App() {
                   selectedRoomId={selectedRoomId}
                   onSelectRoom={onSelectRoom}
                   onPickWall={pickWall}
-                  title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (red = removed, green = new)`}
+                  title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (teal = new, red = removed)`}
                   maxLevel={maxLevel}
                   showExterior={showExterior}
                 />
