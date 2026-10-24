@@ -117,3 +117,12 @@
   gap: 4px;
   flex-shrink: 0;
 }
+
+
+.app[data-chassis="phone"] .cmdk-backdrop { padding-top: 0; }
+.app[data-chassis="phone"] .cmdk-panel { position: fixed; top: 8px; left: 8px; right: 8px; width: auto; max-width: none; max-height: calc(100dvh - 16px - var(--tabbar-h)); display: flex; flex-direction: column; }
+.app[data-chassis="phone"] .cmdk-list { max-height: none; min-height: 0; flex: 1 1 auto; }
+.app[data-chassis="phone"] .shortcuts-panel { max-height: 92dvh; max-width: calc(100vw - 16px); padding: 8px 16px 18px; }
+.app[data-touch] .cmdk-input { font-size: 16px; }
+.app[data-touch] .cmdk-row { height: 44px; }
+

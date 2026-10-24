@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store";
+import "./PhotoLightbox.css";
 
 /** Swipes shorter than this (pixels) are clicks. */
 const SWIPE = 50;

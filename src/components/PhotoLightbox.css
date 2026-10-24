@@ -1,0 +1,6 @@
+/* Touch: 44 px targets, kept inside the safe area. */
+.app[data-touch] .lightbox-close { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); min-width: 44px; min-height: 44px; }
+.app[data-touch] .lightbox .nav { min-width: 44px; min-height: 44px; padding: 12px; }
+.app[data-touch] .lightbox .prev { left: max(6px, env(safe-area-inset-left)); }
+.app[data-touch] .lightbox .next { right: max(6px, env(safe-area-inset-right)); }
+.app[data-chassis="phone"] .lightbox figure, .app[data-chassis="phone"] .lightbox img { max-width: 100vw; }

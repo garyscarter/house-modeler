@@ -13,3 +13,8 @@
 .review-group details { margin-top: 4px; font-size: 12px; }
 .review-group summary { cursor: pointer; }
 .review-left li { padding: 3px 0 3px 22px; line-height: 1.35; }
+
+
+.app[data-chassis="phone"] .review-dialog { width: 100%; }
+.app[data-touch] .review-all .link { min-height: 44px; padding: 0 8px; }
+

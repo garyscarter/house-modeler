@@ -20,3 +20,13 @@
 }
 .photo-pin svg { width: 14px; height: 14px; }
 .photo-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* Phone: captions sit under the layout pill. */
+.app[data-chassis="phone"] .viewer-title {
+  top: calc(var(--float-gap) + 44px); left: 50%; right: auto; bottom: auto; transform: translateX(-50%);
+  max-width: calc(100% - 24px); font-size: 12px; white-space: normal; text-align: center;
+}
+.viewer canvas { touch-action: none; }
+.viewer .room-label, .viewer .room-label * { pointer-events: none; }
+

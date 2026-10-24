@@ -11,3 +11,11 @@
 .sl .sl-loss td { background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .sl .sl-change.neg { color: var(--warn); font-weight: 600; }
 .sl .sl-change { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+
+.sl .sl-dates { max-width: 100%; }
+.sl .sl-table { display: block; overflow-x: auto; }
+.sl .sl-hours { min-width: 96px; }
+.sl .sun-quick { flex-wrap: wrap; }
+.app[data-touch] .sl .sun-quick button { min-height: 44px; }
+

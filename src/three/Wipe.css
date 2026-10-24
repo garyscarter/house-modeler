@@ -41,3 +41,7 @@
   .wipe-handle { transition: none; }
   .wipe-divider:hover .wipe-handle, .wipe.dragging .wipe-handle { transform: none; }
 }
+
+
+.app[data-touch] .wipe-divider { width: 44px; margin-left: -22px; }
+
