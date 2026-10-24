@@ -493,37 +493,3 @@ export function sunHoursGridFromSamples(boundary: V2[], prisms: Prism[], samples
   }
   return { x0: b.x0, y0: b.y0, cell, nx, ny, hours };
 }
-
-/** Unit normal of edge `i` (from vertex i to i+1, rotated a quarter turn), or null for a zero-length edge. */
-export function edgeNormal(poly: V2[], i: number): V2 | null {
-  const a = poly[i];
-  const b = poly[(i + 1) % poly.length];
-  if (!a || !b) return null;
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  return len < 1e-9 ? null : { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
-}
-
-/** Move edge `i` by `offset` metres along its normal; both ends move together so it stays parallel. */
-export function slideEdge(poly: V2[], i: number, offset: number): V2[] {
-  const n = edgeNormal(poly, i);
-  if (!n) return poly.map((p) => ({ ...p }));
-  const j = (i + 1) % poly.length;
-  return poly.map((p, k) => (k === i || k === j ? { ...p, x: p.x + n.x * offset, y: p.y + n.y * offset } : { ...p }));
-}
-
-/** Nudge `offset` so the slid edge's line passes through the nearest target within `tol` of it. */
-export function snapEdgeOffset(poly: V2[], i: number, offset: number, targets: V2[], tol: number): number {
-  const n = edgeNormal(poly, i);
-  if (!n) return offset;
-  const a = poly[i];
-  let best = offset;
-  let bestD = tol;
-  for (const t of targets) {
-    const d = (t.x - a.x) * n.x + (t.y - a.y) * n.y;
-    if (Math.abs(d - offset) <= bestD) {
-      bestD = Math.abs(d - offset);
-      best = d;
-    }
-  }
-  return best;
-}
