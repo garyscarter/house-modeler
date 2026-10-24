@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { fitCam, panCam, zoomCam, type Cam, type Rect, type Size } from "../lib/planMath";
+import { fitCamInset, INSPECTOR_INSET, panCam, zoomCam, type Cam, type Rect, type Size } from "../lib/planMath";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
 
 /**
@@ -27,6 +27,12 @@ export function usePlanCamera(el: RefObject<HTMLElement | null>, home: Rect, fit
     return () => ro.disconnect();
   }, [el]);
 
+  /** Width the floating inspector card covers on the right of the element, if the enclosing main has one. */
+  const coveredRight = useCallback(() => {
+    const main = el.current?.closest("main");
+    return main?.querySelector(".inspector-card") ? INSPECTOR_INSET : 0;
+  }, [el]);
+
   const hasSize = size !== null;
   const homeRef = useRef(home);
   homeRef.current = home;
@@ -34,12 +40,12 @@ export function usePlanCamera(el: RefObject<HTMLElement | null>, home: Rect, fit
   sizeRef.current = size;
   // Fit once the element has a size, and again whenever a different floor is shown.
   useEffect(() => {
-    if (sizeRef.current) setCam(fitCam(homeRef.current, sizeRef.current));
-  }, [fitKey, hasSize]);
+    if (sizeRef.current) setCam(fitCamInset(homeRef.current, sizeRef.current, coveredRight()));
+  }, [fitKey, hasSize, coveredRight]);
 
   const fit = useCallback((r?: Rect) => {
-    if (sizeRef.current) setCam(fitCam(r ?? homeRef.current, sizeRef.current));
-  }, []);
+    if (sizeRef.current) setCam(fitCamInset(r ?? homeRef.current, sizeRef.current, coveredRight()));
+  }, [coveredRight]);
 
   const zoomBy = useCallback((factor: number, at?: { x: number; y: number }) => {
     const s = sizeRef.current;
