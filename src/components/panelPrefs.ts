@@ -19,7 +19,13 @@ interface PanelPrefs {
   inspectorCollapsed: boolean;
   /** Studio (solid) or Glass (translucent floating cards). Per browser, not synced. */
   look: Look;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look">>) => void;
+  /** Quiet canvas: matte grey neighbours, a ground that fades into the page, neutral room fills and handles only on the selected room. */
+  quiet: boolean;
+  /** Photo pins and exterior photo billboards in the 3D view (off by default; "Show" menu). */
+  showPins: boolean;
+  /** The one-time three-step coach strip after the first load has been dismissed. */
+  coachDone: boolean;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "showPins" | "coachDone">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -31,12 +37,15 @@ export const usePanelPrefs = create<PanelPrefs>()(
       sunOpen: false,
       inspectorCollapsed: false,
       look: "studio",
+      quiet: true,
+      showPins: false,
+      coachDone: false,
       setPrefs: (p) => set(p),
     }),
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look }),
+      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, showPins: s.showPins, coachDone: s.coachDone }),
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<PanelPrefs>) };
         if (!isLook(merged.look)) merged.look = "studio";

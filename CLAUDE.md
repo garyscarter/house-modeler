@@ -33,5 +33,5 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
   - built-in house: `houses/listing91770873.ts` (+ `listingAssets.ts`), loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
   - shared project sync with the server: `sync.ts`, `syncLogic.ts`; `migrate.ts` for old saves
 - `src/three/` 3D view: `Viewer.tsx`, `House.tsx`, `shell.ts` (wall and slab meshes), `Roof.tsx`, `Fixtures.tsx`, `Site.tsx`, `Lighting.tsx`, `textures.ts` (procedural finishes)
-- `src/editor/` 2D plan: `PlanEditor.tsx` (about 1,400 lines; search before reading), `Inspectors.tsx`, `SiteEditor.tsx`, symbols
+- `src/editor/` 2D plan: `PlanEditor.tsx` (about 2,100 lines; search before reading), `Inspectors.tsx`, `SiteEditor.tsx`, symbols
 - `src/components/` side panels and dialogs; `server/` passcode-protected Node server; `scripts/build-hosted.mjs` the hosted single-file build
