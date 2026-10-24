@@ -176,6 +176,58 @@ function installRegistry() {
       }
       return null;
     },
+    /** Every corner a site drag could snap to (house outline, boundary, surfaces, neighbours), in metres. */
+    async siteTargets() {
+      const { houseOutlines } = await import("/src/lib/site.ts");
+      const s = reg.st();
+      const site = reg.site();
+      const model = s.variants[s.activeVariant];
+      return [
+        ...houseOutlines(model).flatMap((o) => o.polys.flat()),
+        ...site.boundary,
+        ...site.surfaces.flatMap((x) => x.polygon),
+        ...site.neighbours.flatMap((x) => x.polygon),
+      ];
+    },
+    /** A client-px direction (unit) along which a drop `dist` px from model point p is far from every snap target. */
+    async siteFreeDirection(p, dist, clearPx = 20) {
+      const targets = (await reg.siteTargets()).filter((t) => Math.hypot(t.x - p.x, t.y - p.y) > 1e-6);
+      const v = reg.vb();
+      const ppm = 1 / v.s;
+      for (const deg of [0, 180, 90, 270, 45, 135, 225, 315]) {
+        const d = { x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) };
+        const drop = { x: p.x + (d.x * dist) / ppm, y: p.y + (d.y * dist) / ppm };
+        const c = reg.toClient(drop);
+        const blocked = document.elementFromPoint(c.x, c.y)?.closest(".float-card, .tool-rail, .site-north, .site-scale");
+        if (!blocked && targets.every((t) => Math.hypot(t.x - drop.x, t.y - drop.y) * ppm > clearPx)) return d;
+      }
+      return null;
+    },
+    /** An empty stretch of site canvas that can hold a w x h px rectangle, clear of every snap target; its client top-left. */
+    async siteEmptySpot(w, h, clearPx = 30) {
+      const targets = await reg.siteTargets();
+      const v = reg.vb();
+      const ppm = 1 / v.s;
+      const svg = reg.svg();
+      const card = document.querySelector(".inspector-card")?.getBoundingClientRect();
+      const onGrid = (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        return !!el && el.closest("svg") === svg && !["polygon", "line", "circle", "path", "text"].includes(el.tagName.toLowerCase());
+      };
+      for (let y = v.top + 120; y < v.top + v.ch - 160; y += 12) {
+        for (let x = v.left + 120; x < v.left + v.cw - 120; x += 12) {
+          if (card && x + w > card.left - 20) continue;
+          const pts = [[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x + w / 2, y + h / 2]];
+          if (!pts.every(([px, py]) => onGrid(px, py))) continue;
+          const clear = pts.every(([px, py]) => {
+            const m = reg.fromClient({ x: px, y: py });
+            return targets.every((t) => Math.hypot(t.x - m.x, t.y - m.y) * ppm > clearPx);
+          });
+          if (clear) return { x, y };
+        }
+      }
+      return null;
+    },
     /** A room that shares a wall with the given room and can be knocked through (as lib/mergeRooms). */
     neighbourOf(roomId) {
       const f = reg.floor();
@@ -220,13 +272,13 @@ const assert = (cond, msg) => {
 const near = (a, b, tol, msg) => assert(Math.abs(a - b) <= tol, `${msg}: ${a} vs ${b} (tol ${tol})`);
 const jeq = (a, b, msg) => assert(JSON.stringify(a) === JSON.stringify(b), `${msg}: changed`);
 
-async function check(suite, name, fn, { expected } = {}) {
+async function check(suite, name, fn, { expected, reason } = {}) {
   const full = `${suite} ${name}`;
   if (GREP && !full.includes(GREP)) return;
   if (expected === "post-core" && !GREP) {
     // Skipped unless asked for with --grep, so the chunk that makes it true can try it.
     results.push("skip");
-    console.log(`SKIP ${full}  (expected: post-core; true only after the editors use the core)`);
+    console.log(`SKIP ${full}  (expected: post-core; ${reason ?? "true only after the editors use the core"})`);
     return;
   }
   const t0 = Date.now();
@@ -926,7 +978,356 @@ async function planSuite() {
 // ---------------------------------------------------------------------------------------------------------------
 async function siteSuite() {
   await newContext();
-  // (filled in below)
+
+  /** Client midpoint of boundary edge i. */
+  const edgeMid = (i) =>
+    reg((i) => {
+      const b = window.__reg.site().boundary;
+      const a = b[i];
+      const c = b[(i + 1) % b.length];
+      return window.__reg.toClient({ x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 });
+    }, i);
+  /** Client point 25% along boundary edge i: clear of its corner handles and of the midpoint handle. */
+  const edgeQuarter = (i) =>
+    reg((i) => {
+      const b = window.__reg.site().boundary;
+      const a = b[i];
+      const c = b[(i + 1) % b.length];
+      return window.__reg.toClient({ x: a.x + (c.x - a.x) * 0.25, y: a.y + (c.y - a.y) * 0.25 });
+    }, i);
+  const vertexClient = (i) => reg((i) => window.__reg.toClient(window.__reg.site().boundary[i]), i);
+  /** Select boundary edge i by tapping it; returns once its group carries .site-edge-sel. */
+  const selectEdge = async (i) => {
+    await tap(await edgeMid(i));
+    await page.waitForFunction((i) => [...window.__reg.svg().querySelectorAll("line.site-edge")].map((l) => l.parentElement)[i]?.classList.contains("site-edge-sel"), i, { timeout: 3000 });
+  };
+  /** A point on the bare grid, clear of every item and of the floating panels. */
+  const plainBackground = async () => {
+    const c = await reg(() => {
+      const v = window.__reg.vb();
+      const svg = window.__reg.svg();
+      for (let dy = 20; dy < v.ch / 2; dy += 10) {
+        for (let dx = 120; dx < v.cw / 2; dx += 10) {
+          const c = { x: v.left + dx, y: v.top + dy };
+          const el = document.elementFromPoint(c.x, c.y);
+          if (el && el.closest("svg") === svg && !["polygon", "line", "circle", "path", "text"].includes(el.tagName.toLowerCase())) return c;
+        }
+      }
+      return null;
+    });
+    assert(c, "no plain background point on the canvas");
+    return c;
+  };
+  const boundaryNow = async () => (await siteNow()).boundary;
+  /** Add a surface through the store in an empty stretch of canvas; returns its id and its centre (client px). */
+  const addSurface = async (w, h) => {
+    const spot = await reg(([w, h]) => window.__reg.siteEmptySpot(w, h), [w, h]);
+    assert(spot, "no empty stretch of canvas for a new surface");
+    const id = await reg(([spot, w, h]) => {
+      const a = window.__reg.fromClient(spot);
+      const b = window.__reg.fromClient({ x: spot.x + w, y: spot.y + h });
+      const id = "reg-surface";
+      window.__houseStore.getState().updateSite((st) => ({ ...st, surfaces: [...st.surfaces, { id, kind: "lawn", polygon: [{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }] }] }));
+      return id;
+    }, [spot, w, h]);
+    await settle(250);
+    return { id, c: { x: spot.x + w / 2, y: spot.y + h / 2 } };
+  };
+  const surfaceNow = async (id) => (await siteNow()).surfaces.find((s) => s.id === id).polygon;
+  const midClient = () =>
+    reg(() => {
+      const b = window.__reg.site().boundary;
+      return window.__reg.toClient({ x: (b[0].x + b[1].x) / 2, y: (b[0].y + b[1].y) / 2 });
+    });
+
+  await check("site", "01 fit", async () => {
+    await page.mouse.move(700, 400);
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(400);
+    await page.keyboard.press("f");
+    await page.waitForTimeout(400);
+    const r = await reg(() => {
+      const v = window.__reg.vb();
+      return window.__reg.site().boundary.every((p) => p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h);
+    });
+    assert(r, "a boundary vertex is outside the viewBox after Fit");
+  });
+
+  await check("site", "01b fit leaves the inspector card clear", async () => {
+    await page.mouse.move(700, 400);
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(400);
+    await page.keyboard.press("f");
+    await page.waitForTimeout(400);
+    const r = await reg(() => ({ right: Math.max(...window.__reg.site().boundary.map((p) => window.__reg.toClient(p).x)), cardLeft: document.querySelector(".inspector-card")?.getBoundingClientRect().left }));
+    assert(r.cardLeft, "no .inspector-card");
+    assert(r.right < r.cardLeft, `right-most boundary vertex ${r.right.toFixed(0)} is not left of the card ${r.cardLeft.toFixed(0)}`);
+    return `right ${r.right.toFixed(0)} < card ${r.cardLeft.toFixed(0)}`;
+  });
+
+  await check("site", "02 pan", async () => {
+    const bg = await plainBackground();
+    const before = await vbNow();
+    const s0 = await st();
+    await dragBy(bg, { x: 90, y: 40 });
+    const after = await vbNow();
+    const s1 = await st();
+    near(after.x - before.x, -90 * before.s, before.s, "viewBox x");
+    near(after.y - before.y, -40 * before.s, before.s, "viewBox y");
+    assert(s1.sites === s0.sites && s1.variants === s0.variants, "pan changed the model");
+    assert(s1.past === s0.past, "pan made an undo step");
+    return `dx ${(after.x - before.x).toFixed(2)} m`;
+  });
+
+  await check("site", "03 wheel zoom", async () => {
+    const b = (await siteNow()).boundary;
+    const m0 = { x: b.reduce((a, p) => a + p.x, 0) / b.length, y: b.reduce((a, p) => a + p.y, 0) / b.length };
+    const c = await toClient(m0);
+    const before = await vbNow();
+    await page.mouse.move(c.x, c.y);
+    await page.mouse.wheel(0, -100);
+    await page.waitForTimeout(500);
+    const after = await vbNow();
+    assert(after.w < before.w, "viewBox did not shrink");
+    const c1 = await toClient(m0);
+    near(c1.x, c.x, 1, "model point under the cursor drifted in x");
+    near(c1.y, c.y, 1, "model point under the cursor drifted in y");
+    return `width ${before.w.toFixed(1)} -> ${after.w.toFixed(1)} m`;
+  });
+
+  await check("site", "04 select an edge", async () => {
+    await selectEdge(0);
+    const sel = await reg(() => document.querySelectorAll(".site-edge-sel").length);
+    assert(sel === 1, `${sel} edges are selected`);
+  });
+
+  await check("site", "05 corner drag carries the surface corners", async () => {
+    const pick = await reg(() => {
+      const site = window.__reg.site();
+      const n = site.boundary.length;
+      for (let i = 0; i < n; i++) {
+        const open = (k) => site.boundaryEdges?.[k]?.kind === "open";
+        if (open(i) || open((i + n - 1) % n)) continue;
+        const v = site.boundary[i];
+        const shared = site.surfaces.filter((s) => s.polygon.some((q) => Math.abs(q.x - v.x) < 1e-6 && Math.abs(q.y - v.y) < 1e-6));
+        if (shared.length) return { i, v, ids: shared.map((s) => s.id) };
+      }
+      return null;
+    });
+    assert(pick, "no boundary vertex is shared with a surface corner");
+    await selectEdge(pick.i);
+    const dir = await reg(([v]) => window.__reg.siteFreeDirection(v, 30), [pick.v]);
+    assert(dir, "no snap-free direction to drag in");
+    const s0 = await st();
+    const v = await vbNow();
+    await dragBy(await vertexClient(pick.i), { x: dir.x * 30, y: dir.y * 30 });
+    const site = await siteNow();
+    const moved = site.boundary[pick.i];
+    near(moved.x - pick.v.x, dir.x * 30 * v.s, v.s, "boundary dx");
+    near(moved.y - pick.v.y, dir.y * 30 * v.s, v.s, "boundary dy");
+    for (const id of pick.ids) {
+      const surf = site.surfaces.find((s) => s.id === id);
+      assert(surf.polygon.some((q) => Math.abs(q.x - moved.x) < 1e-6 && Math.abs(q.y - moved.y) < 1e-6), `surface ${id} did not follow the corner`);
+    }
+    assert((await st()).past === s0.past + 1, "not exactly one undo step");
+    return `${pick.ids.length} surface(s) followed`;
+  });
+
+  await check("site", "06 edge slide", async () => {
+    await selectEdge(0);
+    const site0 = await siteNow();
+    const [a, b] = [site0.boundary[0], site0.boundary[1]];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    // Drag perpendicular to the edge, towards the outside of the plot.
+    const nrm = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
+    const area = site0.boundary.reduce((acc, p, k) => acc + (p.x * site0.boundary[(k + 1) % site0.boundary.length].y - site0.boundary[(k + 1) % site0.boundary.length].x * p.y), 0);
+    const out = area >= 0 ? nrm : { x: -nrm.x, y: -nrm.y };
+    const s0 = await st();
+    const v = await vbNow();
+    const d = await dragBy(await edgeQuarter(0), { x: out.x * 40, y: out.y * 40 }, { alt: true, release: false });
+    const status = await reg(() => document.querySelector(".site-status")?.textContent ?? "");
+    assert(status.includes("Drag to move the edge · Esc cancels"), `status was "${status}"`);
+    await d.up();
+    const site1 = await siteNow();
+    const d0 = { x: site1.boundary[0].x - a.x, y: site1.boundary[0].y - a.y };
+    const d1 = { x: site1.boundary[1].x - b.x, y: site1.boundary[1].y - b.y };
+    near(d0.x, d1.x, 1e-6, "the ends moved differently in x");
+    near(d0.y, d1.y, 1e-6, "the ends moved differently in y");
+    near(d0.x, out.x * 40 * v.s, v.s, "edge shift x");
+    near(d0.y, out.y * 40 * v.s, v.s, "edge shift y");
+    assert((await st()).past === s0.past + 1, "not exactly one undo step");
+  });
+
+  await check("site", "06b Esc during an edge slide restores the site", async () => {
+    await selectEdge(0);
+    const site0 = await siteNow();
+    const [a, b] = [site0.boundary[0], site0.boundary[1]];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const nrm = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
+    const before = JSON.stringify(site0);
+    const d = await dragBy(await edgeQuarter(0), { x: nrm.x * 40, y: nrm.y * 40 }, { alt: true, release: false });
+    assert(JSON.stringify(await siteNow()) !== before, "the edge did not move before Esc");
+    await page.keyboard.press("Escape");
+    await d.up();
+    assert(JSON.stringify(await siteNow()) === before, "Esc did not restore the site");
+  });
+
+  await check(
+    "site",
+    "06c Esc during an edge slide leaves no undo step",
+    async () => {
+      await selectEdge(0);
+      const site0 = await siteNow();
+      const [a, b] = [site0.boundary[0], site0.boundary[1]];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const nrm = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len };
+      const s0 = await st();
+      const d = await dragBy(await edgeQuarter(0), { x: nrm.x * 40, y: nrm.y * 40 }, { alt: true, release: false });
+      await page.keyboard.press("Escape");
+      await d.up();
+      const s1 = await st();
+      assert(s1.past === s0.past, `past ${s0.past} -> ${s1.past}`);
+    },
+    { expected: "post-core" },
+  );
+
+  await check("site", "07 midpoint insert", async () => {
+    await selectEdge(0);
+    const b0 = await boundaryNow();
+    const mid = { x: (b0[0].x + b0[1].x) / 2, y: (b0[0].y + b0[1].y) / 2 };
+    const dir = await reg(([mid]) => window.__reg.siteFreeDirection(mid, 20), [mid]);
+    assert(dir, "no snap-free direction to drag in");
+    const s0 = await st();
+    const v = await vbNow();
+    await dragBy(await midClient(), { x: dir.x * 20, y: dir.y * 20 });
+    const b1 = await boundaryNow();
+    assert(b1.length === b0.length + 1, `vertices ${b0.length} -> ${b1.length}`);
+    near(b1[1].x, mid.x + dir.x * 20 * v.s, v.s, "new vertex x");
+    near(b1[1].y, mid.y + dir.y * 20 * v.s, v.s, "new vertex y");
+    assert((await st()).past === s0.past + 1, "not exactly one undo step");
+    await reg(() => window.__houseStore.getState().undo());
+    await settle(200);
+    jeq(await boundaryNow(), b0, "undo did not remove the vertex");
+  });
+
+  await check("site", "08 double-press removes a corner", async () => {
+    await selectEdge(0);
+    const b0 = await boundaryNow();
+    await tap(await midClient()); // a press and release on the midpoint inserts a vertex
+    const b1 = await boundaryNow();
+    assert(b1.length === b0.length + 1, `setup: vertices ${b0.length} -> ${b1.length}`);
+    const c = await vertexClient(1);
+    await page.mouse.dblclick(c.x, c.y);
+    await settle(250);
+    const n = (await boundaryNow()).length;
+    assert(n === b0.length, `vertices ${n}, expected ${b0.length}`);
+  });
+
+  await check("site", "09 an open edge's corner slides along its wall", async () => {
+    await reg(() => window.__houseStore.getState().updateSite((st) => ({ ...st, boundaryEdges: st.boundaryEdges.map((e, i) => (i === 1 ? { kind: "open", height: 0 } : e)) })));
+    await settle(250);
+    await selectEdge(1);
+    const b0 = await boundaryNow();
+    const [a, c] = [b0[0], b0[1]];
+    const len = Math.hypot(c.x - a.x, c.y - a.y);
+    // 30 px off the line of edge 0 (the wall before this corner), perpendicular to it.
+    const nrm = { x: (c.y - a.y) / len, y: -(c.x - a.x) / len };
+    await dragBy(await vertexClient(1), { x: nrm.x * 30, y: nrm.y * 30 });
+    const b1 = await boundaryNow();
+    const cross = (b1[1].x - a.x) * (c.y - a.y) - (b1[1].y - a.y) * (c.x - a.x);
+    assert(Math.abs(cross) < 1e-6 * len * len, `the corner left its wall: cross ${cross}`);
+  });
+
+  await check("site", "10 draw a rectangle", async () => {
+    const spot = await reg(() => window.__reg.siteEmptySpot(80, 60));
+    assert(spot, "no empty stretch of canvas for a rectangle");
+    const n0 = (await siteNow()).surfaces.length;
+    const v = await vbNow();
+    await page.keyboard.press("r");
+    await settle(200);
+    await dragBy(spot, { x: 80, y: 60 });
+    const site = await siteNow();
+    assert(site.surfaces.length === n0 + 1, `surfaces ${n0} -> ${site.surfaces.length}`);
+    const poly = site.surfaces[site.surfaces.length - 1].polygon;
+    assert(poly.length === 4, `${poly.length} corners`);
+    const xs = poly.map((p) => p.x);
+    const ys = poly.map((p) => p.y);
+    near(Math.max(...xs) - Math.min(...xs), 80 * v.s, v.s, "width (m)");
+    near(Math.max(...ys) - Math.min(...ys), 60 * v.s, v.s, "height (m)");
+    const status = await reg(() => document.querySelector(".site-status")?.textContent ?? "");
+    assert(!status.includes("Drag out a rectangle"), "the tool did not return to Select");
+  });
+
+  await check(
+    "site",
+    "11 move a surface with Shift",
+    async () => {
+      const sf = await addSurface(80, 60);
+      await tap(sf.c);
+      const before = await surfaceNow(sf.id);
+      const v = await vbNow();
+      await dragBy(sf.c, { x: 50, y: 10 }, { shift: true });
+      const after = await surfaceNow(sf.id);
+      for (let k = 0; k < 4; k++) {
+        near(after[k].x - before[k].x, 50 * v.s, v.s * 0.6, `corner ${k} dx`);
+        near(after[k].y - before[k].y, 0, 1e-9, `corner ${k} dy`);
+      }
+    },
+    {
+      expected: "post-core",
+      reason: "today a press on an already selected surface pans: onItemDown sets the `move` drag and then overwrites it with `pan` (SiteEditor.tsx onItemDown), so a surface cannot be dragged",
+    },
+  );
+
+  await check("site", "12 nudge and delete a corner", async () => {
+    const sf = await addSurface(80, 60);
+    await tap(sf.c);
+    await tap(await reg((id) => window.__reg.toClient(window.__reg.site().surfaces.find((s) => s.id === id).polygon[0]), sf.id));
+    const p0 = await surfaceNow(sf.id);
+    await page.keyboard.press("ArrowRight");
+    await settle();
+    const p1 = await surfaceNow(sf.id);
+    near(p1[0].x - p0[0].x, 0.01, 1e-9, "ArrowRight step (m)");
+    await page.keyboard.press("Delete");
+    await settle();
+    const p2 = await surfaceNow(sf.id);
+    assert(p2.length === p0.length - 1, `corners ${p0.length} -> ${p2.length}`);
+  });
+
+  // Chunk B adds the checks that only the core makes true.
+  await check(
+    "site",
+    "13 Esc cancels a corner drag",
+    async () => {
+      await selectEdge(0);
+      const b0 = await boundaryNow();
+      const dir = await reg(([v]) => window.__reg.siteFreeDirection(v, 30), [b0[0]]);
+      assert(dir, "no snap-free direction to drag in");
+      const d = await dragBy(await vertexClient(0), { x: dir.x * 30, y: dir.y * 30 }, { release: false });
+      assert(JSON.stringify(await boundaryNow()) !== JSON.stringify(b0), "the corner did not move before Esc");
+      await page.keyboard.press("Escape");
+      await d.up();
+      jeq(await boundaryNow(), b0, "Esc did not restore the corner");
+    },
+    { expected: "post-core" },
+  );
+
+  await check(
+    "site",
+    "14 a pan starts only after the 6 px slop",
+    async () => {
+      const bg = await plainBackground();
+      const before = await vbNow();
+      await page.mouse.move(bg.x, bg.y);
+      await page.mouse.down();
+      await page.mouse.move(bg.x + 4, bg.y);
+      await settle();
+      const mid = await vbNow();
+      await page.mouse.up();
+      near(mid.x, before.x, 1e-9, "the view moved inside the slop");
+    },
+    { expected: "post-core" },
+  );
 }
 
 // ---------------------------------------------------------------------------------------------------------------
