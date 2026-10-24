@@ -13,6 +13,8 @@
   font-weight: 600;
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
   cursor: pointer;
+  /* Sits just under the room label, which is centred on the same point. */
+  transform: translateY(20px);
   user-select: none;
   white-space: nowrap;
 }
