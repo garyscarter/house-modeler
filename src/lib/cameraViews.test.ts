@@ -45,6 +45,46 @@ describe("homeView", () => {
   });
 });
 
+describe("homeView with the inspector card open", () => {
+  const box = { x0: -5, x1: 15, y0: -8, y1: 20, height: 8 };
+  it("pitches down about 35 degrees", () => {
+    const pose = homeView(box, 45, 1.6);
+    const dy = pose.position.y - pose.target.y;
+    const dh = Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z);
+    expect((Math.atan2(dy, dh) * 180) / Math.PI).toBeCloseTo(35, 5);
+  });
+  it("centres the box in the strip left of the card and keeps it in frame", () => {
+    const W = 1400;
+    const H = 875;
+    const pose = homeView(box, 45, W / H, 35, 35, 0.15, 344, W);
+    const centre = { x: (box.x0 + box.x1) / 2, y: box.height / 2, z: (box.y0 + box.y1) / 2 };
+    const c = project(pose, centre, 45, W / H);
+    // nx is |.| in y only; x sign is checked via the corners' extent below.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const x of [box.x0, box.x1])
+      for (const z of [box.y0, box.y1])
+        for (const y of [0, box.height]) {
+          const f = { x: pose.target.x - pose.position.x, y: pose.target.y - pose.position.y, z: pose.target.z - pose.position.z };
+          const rl = Math.hypot(f.x, f.z);
+          const right = { x: -f.z / rl, z: f.x / rl };
+          const d = { x: x - pose.position.x, y: y - pose.position.y, z: z - pose.position.z };
+          const depth = (d.x * f.x + d.y * f.y + d.z * f.z) / Math.hypot(f.x, f.y, f.z);
+          const nx = (d.x * right.x + d.z * right.z) / (depth * Math.tan((45 * Math.PI) / 360) * (W / H));
+          minX = Math.min(minX, nx);
+          maxX = Math.max(maxX, nx);
+        }
+    expect(c.ny).toBeLessThan(1);
+    const px = (n: number) => ((n + 1) / 2) * W;
+    expect(px(minX)).toBeGreaterThanOrEqual(0);
+    expect(px(maxX)).toBeLessThanOrEqual(W - 344 + 1);
+    expect((px(minX) + px(maxX)) / 2).toBeLessThan(W / 2 - 100);
+  });
+  it("is unchanged without an inset", () => {
+    expect(homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1400)).toEqual(homeView(box, 45, 1.6));
+  });
+});
+
 describe("fitDistance", () => {
   it("is larger for a narrow canvas and more margin", () => {
     expect(fitDistance(10, 45, 0.5, 0.1)).toBeGreaterThan(fitDistance(10, 45, 2, 0.1));
@@ -101,9 +141,9 @@ describe("frameFor", () => {
   const plot = listingSite().boundary;
 
   it("contains each model's own box", () => {
-    const u = frameFor([A, B], [plot]);
+    const u = frameFor([A, B]);
     for (const m of [A, B]) {
-      const f = frameFor([m], []);
+      const f = frameFor([m]);
       expect(u.x0).toBeLessThanOrEqual(f.x0);
       expect(u.x1).toBeGreaterThanOrEqual(f.x1);
       expect(u.y0).toBeLessThanOrEqual(f.y0);
@@ -111,14 +151,14 @@ describe("frameFor", () => {
       expect(u.height).toBeGreaterThanOrEqual(f.height);
     }
   });
-  it("includes plot points", () => {
-    const u = frameFor([A], [[{ x: -50, y: -60 }, { x: 70, y: 80 }]]);
-    expect(u.x0).toBe(-50);
-    expect(u.y1).toBe(80);
+  it("frames the houses, not the plot", () => {
+    const u = frameFor([A, B]);
+    expect(u.x0).toBeGreaterThan(Math.min(...plot.map((p) => p.x)));
+    expect(u.y1).toBeLessThan(Math.max(...plot.map((p) => p.y)));
   });
   it("gives the listing's two layouts one pose whichever is active", () => {
-    const one = homeView(frameFor([A, B], [plot, plot]), 45, 1.6);
-    const two = homeView(frameFor([B, A], [plot, plot]), 45, 1.6);
+    const one = homeView(frameFor([A, B]), 45, 1.6);
+    const two = homeView(frameFor([B, A]), 45, 1.6);
     expect(two).toEqual(one);
   });
 });
@@ -148,7 +188,7 @@ describe("poseFits", () => {
     expect(poseFits(at({ x: 5, y: 1, z: 5 }, 200), box, 120)).toBe(false);
   });
   it("accepts the listing's home view for both layouts", () => {
-    const f = frameFor([listing91770873("data:,"), listing91770873Proposed("data:,")], [listingSite().boundary]);
+    const f = frameFor([listing91770873("data:,"), listing91770873Proposed("data:,")]);
     expect(poseFits(homeView(f, 45, 1.6), f, 60)).toBe(true);
   });
 });

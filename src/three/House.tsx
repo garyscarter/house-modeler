@@ -1,6 +1,8 @@
 import { Suspense, memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
+import { usePanelPrefs } from "../components/panelPrefs";
+import { usePhotoThumb } from "./photoThumbs";
 import { useLoader, useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
@@ -84,6 +86,7 @@ export function House({
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
   const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
+  const showPins = usePanelPrefs((s) => s.showPins);
   // Stairwells depend on structure only, so recolouring leaves them (and every floor group's props) as they were.
   const structure = modelStructure(model);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,7 +94,7 @@ export function House({
   return (
     <group>
       {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
-      {showExterior && !ghost && <ExteriorPins model={model} photos={photos} />}
+      {showExterior && !ghost && showPins && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (
         <FloorGroup
           key={floor.id}
@@ -100,6 +103,7 @@ export function House({
           photos={photos}
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
+          showPins={showPins && !ghost && floor.level === labelLevel}
           roofOver={!!showExterior && !ghost && ext.showRoof}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
@@ -132,6 +136,7 @@ function FloorGroupInner({
   photos,
   ghost,
   showLabels,
+  showPins,
   roofOver,
   showCeilings,
   doorsOpen,
@@ -147,6 +152,8 @@ function FloorGroupInner({
   photos: Photo[];
   ghost: boolean;
   showLabels: boolean;
+  /** Photo pins for this floor (the label level only, and only when the person has them switched on). */
+  showPins: boolean;
   /** The roof is drawn over this floor, so only the selected room is labelled. */
   roofOver: boolean;
   showCeilings: boolean;
@@ -193,7 +200,7 @@ function FloorGroupInner({
       <group position={[0, y0, 0]}>
         {(otherWalls ? changed : allWalls).map((w, i) => (
           <WallBox key={i} piece={{ a: w.a, b: w.b, y0: 0, y1: w.height ?? H }} thickness={wallThickness(w)}>
-            <meshStandardMaterial color="#e0332f" transparent opacity={0.28} depthWrite={false} />
+            <meshStandardMaterial color={OVERLAY_REMOVED} transparent opacity={0.22} depthWrite={false} />
           </WallBox>
         ))}
       </group>
@@ -212,7 +219,7 @@ function FloorGroupInner({
       {otherWalls &&
         changed.map((w, i) => (
           <WallBox key={"new" + i} piece={{ a: w.a, b: w.b, y0: 0, y1: H }} thickness={wallThickness(w) + 0.04}>
-            <meshStandardMaterial color="#16a34a" transparent opacity={0.55} depthWrite={false} />
+            <meshStandardMaterial color={OVERLAY_NEW} transparent opacity={0.6} depthWrite={false} />
           </WallBox>
         ))}
 
@@ -224,9 +231,10 @@ function FloorGroupInner({
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
 
-      {floor.rooms.map((room) => (
-        <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />
-      ))}
+      {showPins &&
+        floor.rooms
+          .filter((room) => !roofOver || room.id === selectedRoomId)
+          .map((room) => <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />)}
     </group>
   );
 }
@@ -578,10 +586,22 @@ function Stairs({ floor, flight: f }: { floor: Floor; flight: FlightShape | null
   );
 }
 
+/** Compare overlay: new walls in the app accent teal (--accent), removed walls in a warm red at low opacity. Colour-blind safe against each other. */
+const OVERLAY_NEW = "#0f6e66";
+const OVERLAY_REMOVED = "#b42318";
+
 /** Painted understairs panelling and beige stair carpet, as in the listing photos. */
 const UNDERSTAIRS: MatSpec = { kind: "paint", color: "#f1eee8" };
 const STAIR_CARPET: MatSpec = { kind: "plain", color: "#c7b9a5", roughness: 1 };
 
+const CAMERA_GLYPH = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+    <path d="M2 5.5h2.2L5.4 4h5.2l1.2 1.5H14v7H2z" strokeLinejoin="round" />
+    <circle cx="8" cy="8.8" r="2.2" />
+  </svg>
+);
+
+/** A small camera badge at the room's floor level; a click opens the room's first photo in the lightbox. */
 function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: Photo[] }) {
   const mine = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
   const c = useMemo(() => polygonCentroid(roomWorldPolygon(floor, room)), [floor, room]);
@@ -589,68 +609,66 @@ function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: P
   if (!mine.length) return null;
   const first = mine[0];
   return (
-    <Billboard position={[c.x, 1.55, c.y]}>
+    <Html position={[c.x, 0.1, c.y]} center zIndexRange={[10, 0]}>
+      <button type="button" className="photo-pin" title={`${room.name}: ${mine.length} photo${mine.length > 1 ? "s" : ""}`} onClick={() => setUi({ selectedRoomId: room.id, selectedPhotoId: first.id })}>
+        {CAMERA_GLYPH}
+        {mine.length > 1 && mine.length}
+      </button>
+    </Html>
+  );
+}
+
+/** One exterior photo on a Billboard, drawn from its 256 px thumbnail. */
+function ExteriorThumb({ photo, count, position }: { photo: Photo; count: number; position: [number, number, number] }) {
+  const setUi = useUiSetter();
+  const url = usePhotoThumb(photo);
+  return (
+    <Billboard position={position}>
       <Suspense fallback={null}>
         <DreiImage
-          url={first.dataUrl}
-          scale={[1.1, 0.8]}
+          url={url}
+          scale={[1.8, 1.35]}
           transparent
-          onClick={(e) => {
-            e.stopPropagation();
-            setUi({ selectedRoomId: room.id, selectedPhotoId: first.id });
+          onClick={(ev) => {
+            ev.stopPropagation();
+            setUi({ selectedPhotoId: photo.id });
           }}
         />
       </Suspense>
-      {mine.length > 1 && (
-        <Html position={[0.5, 0.35, 0]} center style={{ pointerEvents: "none" }}>
-          <div className="pin-badge">{mine.length}</div>
+      {count > 1 && (
+        <Html position={[0.8, 0.6, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
+          <div className="pin-badge">{count}</div>
         </Html>
       )}
     </Billboard>
   );
 }
 
-/** Exterior photos float beside the elevation they show. */
+/** Exterior photos: one pin beside each side of the house that has any (its first photo). */
 function ExteriorPins({ model, photos }: { model: HouseModel; photos: Photo[] }) {
   const b = useMemo(() => modelBounds(model.floors), [model]);
-  const setUi = useUiSetter();
-  const byElev = new Map<Elevation, Photo[]>();
-  for (const p of photos) if (p.elevation) byElev.set(p.elevation, [...(byElev.get(p.elevation) ?? []), p]);
+  const bySide = new Map<Elevation, Photo[]>();
+  for (const p of photos) if (p.elevation) bySide.set(p.elevation, [...(bySide.get(p.elevation) ?? []), p]);
   const cx = (b.x0 + b.x1) / 2;
   const cz = (b.y0 + b.y1) / 2;
   const GAP = 2.6;
-  const place = (e: Elevation, i: number, n: number): [number, number, number] => {
-    const t = (i - (n - 1) / 2) * 2.4;
+  const place = (e: Elevation): [number, number, number] => {
     switch (e) {
       case "front":
-        return [cx + t, 1.8, b.y1 + GAP];
+        return [cx, 1.8, b.y1 + GAP];
       case "rear":
-        return [cx - t, 1.8, b.y0 - GAP];
+        return [cx, 1.8, b.y0 - GAP];
       case "left":
-        return [b.x0 - GAP, 1.8, cz - t];
+        return [b.x0 - GAP, 1.8, cz];
       case "right":
-        return [b.x1 + GAP, 1.8, cz + t];
+        return [b.x1 + GAP, 1.8, cz];
     }
   };
   return (
     <group>
-      {[...byElev.entries()].flatMap(([e, list]) =>
-        list.map((p, i) => (
-          <Billboard key={p.id} position={place(e, i, list.length)}>
-            <Suspense fallback={null}>
-              <DreiImage
-                url={p.dataUrl}
-                scale={[2.2, 1.5]}
-                transparent
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  setUi({ selectedPhotoId: p.id });
-                }}
-              />
-            </Suspense>
-          </Billboard>
-        )),
-      )}
+      {[...bySide.entries()].map(([e, list]) => (
+        <ExteriorThumb key={e} photo={list[0]} count={list.length} position={place(e)} />
+      ))}
     </group>
   );
 }

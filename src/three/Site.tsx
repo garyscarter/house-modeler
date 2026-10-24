@@ -26,10 +26,9 @@ export const GROUND_Y = -0.26;
  * Ground, plot, garden surfaces, boundary treatments and neighbouring
  * buildings. `model` is the house this viewer shows; fences stop at its walls.
  */
-export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model?: HouseModel }) {
+export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size: number; model: HouseModel }) {
   const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
-  const active = useStore((s) => s.variants[s.activeVariant]);
   if (!site || !showSite) {
     return (
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.z]} receiveShadow>
@@ -38,7 +37,7 @@ export function SiteScene({ centre, size, model }: { centre: THREE.Vector3; size
       </mesh>
     );
   }
-  return <SiteContent site={site} house={model ?? active} centre={centre} />;
+  return <SiteContent site={site} house={model} centre={centre} />;
 }
 
 function SiteContent({ site, house, centre: houseCentre }: { site: Site; house?: HouseModel; centre: THREE.Vector3 }) {

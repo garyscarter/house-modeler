@@ -6,7 +6,7 @@
 
 import { elevationFraming } from "./viewFraming";
 import type { HouseModel } from "../types";
-import { modelBounds, type V2 } from "./geometry";
+import { modelBounds } from "./geometry";
 
 export interface V3 {
   x: number;
@@ -32,28 +32,23 @@ export type ViewRequest = ViewSide | "home";
 const ROOF_ALLOWANCE = 3.5;
 
 /**
- * The box the opening view frames: every floor of every model given (with its
- * roof allowance) and every plot boundary. Passing both layouts and both plots
- * makes As listed and Proposed open on the same camera.
+ * The box the opening view frames: every floor of every model given, with its
+ * roof allowance. The plots are left out, so the house fills the frame.
+ * Passing both layouts makes As listed and Proposed open on the same camera.
  */
-export function frameFor(models: HouseModel[], boundaries: V2[][], roofAllowance = ROOF_ALLOWANCE): FrameBox {
+export function frameFor(models: HouseModel[], roofAllowance = ROOF_ALLOWANCE): FrameBox {
   const b = modelBounds(models.flatMap((m) => m.floors));
-  const box = { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1 };
   let height = roofAllowance;
   for (const m of models) {
     if (!m.floors.length) continue;
     const top = Math.max(...m.floors.map((f) => f.level));
     height = Math.max(height, (top + 1) * (m.ceilingHeight + m.slabThickness) + roofAllowance);
   }
-  for (const poly of boundaries)
-    for (const p of poly) {
-      box.x0 = Math.min(box.x0, p.x);
-      box.x1 = Math.max(box.x1, p.x);
-      box.y0 = Math.min(box.y0, p.y);
-      box.y1 = Math.max(box.y1, p.y);
-    }
-  return { ...box, height };
+  return { x0: b.x0, x1: b.x1, y0: b.y0, y1: b.y1, height };
 }
+
+/** Width the floating inspector card takes on the right of the canvas: 320 px card, 12 px gap, 12 px edge. */
+export const INSPECTOR_INSET_PX = 344;
 
 /** A camera pose that is safe to apply: every coordinate finite and the camera not on its target. */
 export function isValidPose(p: unknown): p is CameraPose {
@@ -83,8 +78,8 @@ export function poseFits(p: unknown, box: FrameBox, maxDistance: number): p is C
 }
 
 const HOME_AZIMUTH_DEG = 35;
-const HOME_ELEVATION_DEG = 28;
-const HOME_MARGIN = 0.12;
+const HOME_ELEVATION_DEG = 35;
+const HOME_MARGIN = 0.15;
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -97,8 +92,10 @@ export function fitDistance(radius: number, fovDeg: number, aspect: number, marg
 
 /**
  * Front three-quarter view (front-right: +x, +z) that fits the whole box in
- * frame. The box corners are projected on the view axes, so a wide plot is
- * fitted horizontally and a tall house vertically.
+ * frame. The box corners are projected on the view axes, so a wide house is
+ * fitted horizontally and a tall one vertically. With `rightInsetPx` of the
+ * canvas (of `canvasWidthPx`) covered on the right, the box is fitted to the
+ * visible part and centred in it.
  */
 export function homeView(
   box: FrameBox,
@@ -107,6 +104,8 @@ export function homeView(
   azimuthDeg = HOME_AZIMUTH_DEG,
   elevationDeg = HOME_ELEVATION_DEG,
   margin = HOME_MARGIN,
+  rightInsetPx = 0,
+  canvasWidthPx = 0,
 ): CameraPose {
   const target: V3 = { x: (box.x0 + box.x1) / 2, y: box.height / 2, z: (box.y0 + box.y1) / 2 };
   const az = rad(azimuthDeg);
@@ -122,7 +121,10 @@ export function homeView(
     z: back.x * right.y - back.y * right.x,
   };
   const tanV = Math.tan(rad(fovDeg) / 2);
-  const tanH = tanV * Math.max(aspect, 0.01);
+  const tanFull = tanV * Math.max(aspect, 0.01);
+  const inset = canvasWidthPx > 0 ? Math.min(Math.max(rightInsetPx, 0) / canvasWidthPx, 0.6) : 0;
+  // The visible strip is (1 - inset) of the width, so it behaves like a narrower canvas.
+  const tanH = tanFull * (1 - inset);
   let dist = 1;
   for (const x of [box.x0, box.x1]) {
     for (const z of [box.y0, box.y1]) {
@@ -136,7 +138,10 @@ export function homeView(
       }
     }
   }
-  return { position: { x: target.x + back.x * dist, y: target.y + back.y * dist, z: target.z + back.z * dist }, target };
+  // Slide the camera to the right of the box so the box sits in the middle of the visible strip.
+  const slide = inset * dist * tanFull;
+  const shifted: V3 = { x: target.x + right.x * slide, y: target.y, z: target.z + right.z * slide };
+  return { position: { x: shifted.x + back.x * dist, y: shifted.y + back.y * dist, z: shifted.z + back.z * dist }, target: shifted };
 }
 
 /** What the elevation presets fit: the house's height (ridge included) and the camera's lens. */

@@ -7,9 +7,8 @@ import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
-import { siteOf } from "../lib/sites";
 import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
-import { easeInOut, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
+import { easeInOut, frameFor, homeView, INSPECTOR_INSET_PX, isValidPose, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube } from "./ViewCube";
 import { requestView } from "./viewRequest";
@@ -24,6 +23,7 @@ import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 import { Loader } from "../components/Loader";
+import "./Viewer.css";
 
 interface ViewerProps {
   model: HouseModel;
@@ -64,8 +64,11 @@ export const Viewer = memo(ViewerImpl, (prev, next) => prev.active === false && 
 
 function ViewerImpl(props: ViewerProps) {
   const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
-  const variants = useStore((s) => s.variants);
-  const sites = useStore((s) => s.sites);
+  // Subscribed only while shown: a store subscription would re-render this hidden view on every plan edit, memo or not.
+  const liveVariants = useStore((s) => (active ? s.variants : null));
+  const seenVariants = useRef(liveVariants ?? useStore.getState().variants);
+  if (liveVariants) seenVariants.current = liveVariants;
+  const variants = seenVariants.current;
   // Both layouts and both plots frame the same camera, so As listed and Proposed open on one view.
   const framed = useMemo(() => {
     const list: HouseModel[] = [];
@@ -81,16 +84,24 @@ function ViewerImpl(props: ViewerProps) {
   const cap = maxLevel ?? null;
   const levels = [...new Set([...model.floors, ...(ghost?.floors ?? [])].map((f) => f.level))];
   const visibleLevels = cap === null ? null : levels.filter((l) => l <= cap);
-  // What the opening view frames: both houses with their roofs, and both plots.
-  const frame = useMemo<FrameBox>(
-    () => frameFor(framed, [siteOf(sites, "current"), siteOf(sites, "proposed")].flatMap((st) => (st?.boundary ? [st.boundary] : []))),
-    [framed, sites],
-  );
+  // What the opening view frames: both houses with their roofs.
+  const frame = useMemo<FrameBox>(() => frameFor(framed), [framed]);
   // The elevation presets frame the house's real height (ridge included); worked out when a preset is chosen, not on every edit.
   const heightOf = useCallback(() => Math.max(houseHeight(model), ghost ? houseHeight(ghost) : 0), [model, ghost]);
 
   // Frames are drawn on demand, and held until the shaders for this quality have compiled.
   const [compiled, setCompiled] = useState<string | null>(null);
+  // A lost WebGL context (GPU reset, too many contexts) remounts the canvas, which rebuilds the renderer from the scene.
+  const [canvasKey, setCanvasKey] = useState(0);
+  const [lost, setLost] = useState(false);
+  const restoreTimer = useRef(0);
+  const restore = useCallback(() => {
+    window.clearTimeout(restoreTimer.current);
+    setLost(false);
+    setCompiled(null);
+    setCanvasKey((k) => k + 1);
+  }, []);
+  useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
   const frameloop = active && compiled === quality ? "demand" : "never";
   const before = useCallback(() => (quality === "high" ? loadEffects() : Promise.resolve()), [quality]);
 
@@ -145,13 +156,14 @@ function ViewerImpl(props: ViewerProps) {
       {chrome && <ViewCube />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
-      {compiled === null && (
+      {(compiled === null || lost) && (
         <div className="viewer-loading" role="status">
           <Loader kind="blueprint" size={40} />
-          Preparing the 3D view
+          {lost ? "Restoring the 3D view" : "Preparing the 3D view"}
         </div>
       )}
       <Canvas
+        key={canvasKey}
         shadows="percentage"
         gl={{ toneMapping: THREE.NeutralToneMapping }}
         frameloop={frameloop}
@@ -161,6 +173,15 @@ function ViewerImpl(props: ViewerProps) {
           // Checking every program's log stalls on each link; only worth it while developing.
           gl.debug.checkShaderErrors = import.meta.env.DEV;
           gl.shadowMap.autoUpdate = false;
+          const el = gl.domElement;
+          el.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            setLost(true);
+            window.clearTimeout(restoreTimer.current);
+            restoreTimer.current = window.setTimeout(restore, 2000);
+          });
+          // The canvas is replaced on restore, so these listeners go with the old element.
+          el.addEventListener("webglcontextrestored", restore);
         }}
         onPointerMissed={() => {}}
       >
@@ -266,10 +287,12 @@ function Orbit({
   const latest = useRef({ aspect, frame, bounds, size, centre, heightOf, maxDistance });
   latest.current = { aspect, frame, bounds, size, centre, heightOf, maxDistance };
 
+  /** Width of the canvas the floating inspector card covers, if it is open over this view. */
+  const coveredRight = () => (gl.domElement.closest("main")?.querySelector(".inspector-card") ? INSPECTOR_INSET_PX : 0);
   const poseFor = (side: ViewRequest): CameraPose => {
     const l = latest.current;
     return side === "home"
-      ? homeView(l.frame, camera.fov, l.aspect)
+      ? homeView(l.frame, camera.fov, l.aspect, undefined, undefined, undefined, coveredRight(), canvasSize.width)
       : presetView(side, l.bounds, l.size, { x: l.centre.x, y: l.centre.y, z: l.centre.z }, { height: l.heightOf(), fovDeg: camera.fov, aspect: l.aspect });
   };
   const current = (): CameraPose => {
