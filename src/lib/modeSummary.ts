@@ -14,24 +14,34 @@ import {
   type Site,
 } from "../types";
 import { areaM2, axisRect, formatArea } from "./planMath";
-import { bbox, pointInPolygon } from "./geometry";
+import { bbox } from "./geometry";
 import { isUnheated } from "./report";
 import { swatchName } from "./paintPalette";
 import { exteriorOf } from "./roof";
+import { floorDisplayName } from "./studio";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const colourName = (hex: string) => swatchName(hex) ?? hex;
 const dirWord = (d: string) => d[0].toUpperCase() + d.slice(1);
 
-/** "7 rooms · 58.2 m² · 12 doors and windows · stairs up" */
-export function buildSummary(floor: Floor): string {
-  if (!floor.rooms.length) return "No rooms yet";
+export interface Stat {
+  /** The number, set in mono. */
+  value: string;
+  /** What it counts, set muted under it. */
+  label: string;
+}
+
+/** The floor at a glance: "76.0 m²", "7 rooms", "19 openings". Empty when there are no rooms. */
+export function buildStats(floor: Floor): Stat[] {
+  if (!floor.rooms.length) return [];
   const area = floor.rooms.reduce((s, r) => s + areaM2(r.polygon, floor.pxPerM), 0);
-  const parts = [plural(floor.rooms.length, "room", "rooms"), `${area.toFixed(1)} m²`];
+  const stats: Stat[] = [
+    { value: area.toFixed(1), label: "m²" },
+    { value: String(floor.rooms.length), label: floor.rooms.length === 1 ? "room" : "rooms" },
+  ];
   const n = floor.openings.length;
-  if (n) parts.push(n === 1 ? "1 door or window" : `${n} doors and windows`);
-  if (floor.stairs) parts.push("stairs up");
-  return parts.join(" · ");
+  if (n) stats.push({ value: String(n), label: n === 1 ? "opening" : "openings" });
+  return stats;
 }
 
 /** Edge keys of a room's wallFinishes that still name an edge. */
@@ -56,18 +66,11 @@ export function decorateSummary(floor: Floor): string {
   return parts.join(" · ");
 }
 
-/** "14 items · Kitchen 5, Living room 4 … · 1 overlap" */
+/** "14 pieces on this floor · 1 overlap" */
 export function furnishSummary(floor: Floor, clashes: number): string {
-  const fixtures = floor.fixtures ?? [];
-  if (!fixtures.length) return "No furniture yet";
-  const parts = [plural(fixtures.length, "item", "items")];
-  const per = new Map<string, number>();
-  for (const f of fixtures) {
-    const room = floor.rooms.find((r) => pointInPolygon(f, r.polygon));
-    if (room) per.set(room.name, (per.get(room.name) ?? 0) + 1);
-  }
-  const sorted = [...per].sort((a, b) => b[1] - a[1]);
-  if (sorted.length) parts.push(sorted.slice(0, 2).map(([n, c]) => `${n} ${c}`).join(", ") + (sorted.length > 2 ? " …" : ""));
+  const n = (floor.fixtures ?? []).length;
+  if (!n) return "No furniture yet";
+  const parts = [`${plural(n, "piece", "pieces")} on this floor`];
   if (clashes > 0) parts.push(plural(clashes, "overlap", "overlaps"));
   return parts.join(" · ");
 }
@@ -90,8 +93,8 @@ export function detailsSummary(room: Room, photoCount: number): string {
   return parts.join(" · ");
 }
 
-/** "2 neighbouring rooms" */
-export const knockSummary = (n: number) => plural(n, "neighbouring room", "neighbouring rooms");
+/** "into 2 rooms" */
+export const knockSummary = (n: number) => `into ${plural(n, "room", "rooms")}`;
 
 /** "Herringbone wood or LVT · 45° · #c8a97e" */
 export function floorSummary(room: Room): string {
@@ -109,12 +112,12 @@ export function wallsSummary(room: Room): string {
   return parts.join(" · ");
 }
 
-/** "2 of 4 walls have their own finish" */
+/** "4 walls, 1 feature" */
 export function eachWallSummary(room: Room): string {
   const n = room.polygon.length;
   const k = featureKeys(room).length;
-  if (!k) return `All ${n} walls follow the room`;
-  return `${k} of ${n} walls ${k === 1 ? "has its" : "have their"} own finish`;
+  const walls = plural(n, "wall", "walls");
+  return k ? `${walls}, ${plural(k, "feature", "features")}` : walls;
 }
 
 /** "House default" or the finish's name. */
@@ -133,8 +136,8 @@ export function openingLookSummary(o: Opening): string {
   return parts.length ? parts.join(" · ") : "Standard look";
 }
 
-/** "Level 0 · 41.3 px/m" */
-export const floorSettingsSummary = (floor: Floor) => `Level ${floor.level} · ${floor.pxPerM.toFixed(1)} px/m`;
+/** "Ground floor · scale set" */
+export const floorSettingsSummary = (floor: Floor) => `${floorDisplayName(floor.name)} · scale set`;
 
 /** "Up · 2.6 × 0.9 m" or "None" */
 export function stairsSummary(floor: Floor): string {
@@ -153,4 +156,23 @@ export function exteriorSummary(model: HouseModel): string {
   const ext = exteriorOf(model);
   const roof = ext.showRoof ? `${ext.roofStyle === "hip" ? "Hip" : "Gable"} roof` : "No roof";
   return `${roof} · ${WALL_FINISH_LABEL[ext.wallFinish ?? "render"]}`;
+}
+
+/**
+ * The chip under the printed-size fields when the traced size is more than 5% out:
+ * a short line ("10% narrower than printed") and the full sentence for its tooltip.
+ * Null when the sizes agree.
+ */
+export function printedChip(cmp: { w: number; h: number; worst: number; swapped: boolean }, traced: { w: number; h: number }, printed: { w: number; h: number }): { text: string; tip: string } | null {
+  if (cmp.worst <= 5) return null;
+  const widthWorst = Math.abs(cmp.w) >= Math.abs(cmp.h);
+  const pct = widthWorst ? cmp.w : cmp.h;
+  const word = widthWorst ? (pct < 0 ? "narrower" : "wider") : pct < 0 ? "shallower" : "deeper";
+  const signed = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  return {
+    text: `${Math.round(Math.abs(pct))}% ${word} than printed`,
+    tip:
+      `Traced ${traced.w.toFixed(2)} × ${traced.h.toFixed(2)} m against printed ${printed.w.toFixed(2)} × ${printed.h.toFixed(2)} m: ${signed(cmp.w)} / ${signed(cmp.h)}` +
+      `${cmp.swapped ? " (printed the other way round)" : ""}. More than 5% out: check the tracing or the floor's scale.`,
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildSummary,
+  buildStats,
   decorateSummary,
   detailsSummary,
   eachWallSummary,
@@ -10,6 +10,7 @@ import {
   furnishSummary,
   knockSummary,
   openingLookSummary,
+  printedChip,
   outsideSummary,
   shapeSummary,
   siteSummary,
@@ -37,10 +38,18 @@ describe("floor summaries", () => {
     ] },
   );
 
-  it("buildSummary", () => {
-    expect(buildSummary(f)).toBe("3 rooms · 30.0 m² · 2 doors and windows · stairs up");
-    expect(buildSummary(floor([]))).toBe("No rooms yet");
-    expect(buildSummary(floor([rect("A", 0, 0, 100, 100)], [door("a")]))).toBe("1 room · 1.0 m² · 1 door or window");
+  it("buildStats", () => {
+    expect(buildStats(f)).toEqual([
+      { value: "30.0", label: "m²" },
+      { value: "3", label: "rooms" },
+      { value: "2", label: "openings" },
+    ]);
+    expect(buildStats(floor([]))).toEqual([]);
+    expect(buildStats(floor([rect("A", 0, 0, 100, 100)], [door("a")]))).toEqual([
+      { value: "1.0", label: "m²" },
+      { value: "1", label: "room" },
+      { value: "1", label: "opening" },
+    ]);
   });
 
   it("decorateSummary", () => {
@@ -48,13 +57,14 @@ describe("floor summaries", () => {
   });
 
   it("furnishSummary", () => {
-    expect(furnishSummary(f, 0)).toBe("4 items · Kitchen 2, Hall 1 …");
+    expect(furnishSummary(f, 0)).toBe("4 pieces on this floor");
     expect(furnishSummary(f, 1)).toContain("1 overlap");
     expect(furnishSummary(floor([]), 0)).toBe("No furniture yet");
   });
 
   it("floorSettingsSummary and stairsSummary", () => {
-    expect(floorSettingsSummary(f)).toBe("Level 0 · 100.0 px/m");
+    expect(floorSettingsSummary({ ...f, name: "Ground Floor" })).toBe("Ground floor · scale set");
+    expect(floorSettingsSummary({ ...f, name: "Floor 1" })).toBe("First floor · scale set");
     expect(stairsSummary(f)).toBe("Up · 2.6 × 0.9 m");
     expect(stairsSummary(floor([]))).toBe("None");
   });
@@ -84,8 +94,8 @@ describe("room summaries", () => {
   });
 
   it("knockSummary", () => {
-    expect(knockSummary(1)).toBe("1 neighbouring room");
-    expect(knockSummary(3)).toBe("3 neighbouring rooms");
+    expect(knockSummary(1)).toBe("into 1 room");
+    expect(knockSummary(3)).toBe("into 3 rooms");
   });
 
   it("floorSummary, wallsSummary", () => {
@@ -96,8 +106,8 @@ describe("room summaries", () => {
   });
 
   it("eachWallSummary ignores edges that no longer exist", () => {
-    expect(eachWallSummary(room)).toBe("2 of 4 walls have their own finish");
-    expect(eachWallSummary(rect("A", 0, 0, 1, 1))).toBe("All 4 walls follow the room");
+    expect(eachWallSummary(room)).toBe("4 walls, 2 features");
+    expect(eachWallSummary(rect("A", 0, 0, 1, 1))).toBe("4 walls");
   });
 
   it("outsideSummary", () => {
@@ -119,5 +129,17 @@ describe("other summaries", () => {
     const model = { floors: [], ceilingHeight: 2.4, slabThickness: 0.2 } as HouseModel;
     expect(exteriorSummary(model)).toBe("Gable roof · Smooth render");
     expect(exteriorSummary({ ...model, exterior: { roofStyle: "hip", wallFinish: "brick" } as HouseModel["exterior"] })).toBe("Hip roof · Brick");
+  });
+});
+
+describe("printedChip", () => {
+  it("is null within 5%", () => {
+    expect(printedChip({ w: 1, h: 2, worst: 2, swapped: false }, { w: 3, h: 2 }, { w: 3, h: 2 })).toBeNull();
+  });
+  it("names the worse dimension", () => {
+    const c = printedChip({ w: -10.2, h: 1.6, worst: 10.2, swapped: false }, { w: 2.74, h: 1.89 }, { w: 3.05, h: 1.86 });
+    expect(c?.text).toBe("10% narrower than printed");
+    expect(c?.tip).toContain("-10.2% / +1.6%");
+    expect(printedChip({ w: 1, h: 8, worst: 8, swapped: false }, { w: 1, h: 1 }, { w: 1, h: 1 })?.text).toBe("8% deeper than printed");
   });
 });

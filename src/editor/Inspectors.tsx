@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Section } from "../components/Section";
+import { NumberField, DangerZone, PairField, StatHeader } from "../components/inspector";
 import type { Mode } from "../lib/modes";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
-import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, shapeSummary, stairsSummary } from "../lib/modeSummary";
+import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, printedChip, shapeSummary, stairsSummary } from "../lib/modeSummary";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
@@ -61,14 +62,12 @@ export function hoverRoom(id: string) {
   };
 }
 
-const fmt2 =(v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
-
 /**
  * A name input that commits when you leave it or press Enter (Escape undoes
  * the edit), so a rename is one undo step and photos follow the room or floor
  * from its old name to the new one, never to a half-typed name on the way.
  */
-export function NameField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+export function NameField({ value, onCommit, className, label }: { value: string; onCommit: (v: string) => void; className?: string; label?: string }) {
   const [text, setText] = useState(value);
   const [focused, setFocused] = useState(false);
   useEffect(() => {
@@ -81,6 +80,8 @@ export function NameField({ value, onCommit }: { value: string; onCommit: (v: st
   };
   return (
     <input
+      className={className}
+      aria-label={label}
       value={text}
       onFocus={() => setFocused(true)}
       onChange={(e) => setText(e.target.value)}
@@ -99,74 +100,7 @@ export function NameField({ value, onCommit }: { value: string; onCommit: (v: st
   );
 }
 
-/**
- * A number input that commits each valid value as it is typed (so spinners
- * and typing both update live) but never rewrites the text while it has focus,
- * so "3." or a half-typed value is not snatched away.
- */
-export function NumberField({
-  value,
-  onCommit,
-  step = 0.01,
-  min = 0,
-  max,
-  placeholder,
-  label,
-  autoFocus,
-  onDone,
-  onClear,
-  disabled,
-}: {
-  value: number | undefined;
-  onCommit: (v: number) => void;
-  step?: number;
-  /** Values must be greater than this. */
-  min?: number;
-  max?: number;
-  placeholder?: string;
-  label?: string;
-  autoFocus?: boolean;
-  /** Called on Enter or Escape (e.g. to close a pop-up field). */
-  onDone?: () => void;
-  /** Called when the field is emptied, for values that fall back to a default. */
-  onClear?: () => void;
-  disabled?: boolean;
-}) {
-  const [text, setText] = useState(fmt2(value));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    if (!focused) setText(fmt2(value));
-  }, [value, focused]);
-  return (
-    <input
-      type="number"
-      inputMode="decimal"
-      step={step}
-      value={text}
-      placeholder={placeholder}
-      aria-label={label}
-      autoFocus={autoFocus}
-      disabled={disabled}
-      onFocus={(e) => {
-        setFocused(true);
-        e.target.select();
-      }}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => {
-        setText(e.target.value);
-        if (e.target.value === "" && onClear) return onClear();
-        const v = parseFloat(e.target.value);
-        if (Number.isFinite(v) && v > min && (max === undefined || v <= max)) onCommit(v);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === "Escape") {
-          e.currentTarget.blur();
-          onDone?.();
-        }
-      }}
-    />
-  );
-}
+export { NumberField };
 
 const CORNERS: [Corner, string, string][] = [
   ["tl", "↖", "top-left"],
@@ -175,7 +109,7 @@ const CORNERS: [Corner, string, string][] = [
   ["br", "↘", "bottom-right"],
 ];
 
-/** Build's panel for a picked room: its name, shape and size, details, knock-through and delete. Finishes live in Decorate. */
+/** Build's panel for a picked room: its name and area, shape and size, details, knock-through and delete. Finishes live in Decorate. */
 export function BuildRoomPanel({
   variant,
   floor,
@@ -192,6 +126,7 @@ export function BuildRoomPanel({
   const updateFloor = useStore((s) => s.updateFloor);
   const photos = useStore((s) => s.photos);
   const setUi = useStore((s) => s.setUi);
+  // The corner that stays put when the size changes: top-left unless Advanced says otherwise.
   const [anchor, setAnchor] = useState<Corner>("tl");
   const roomPhotos = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
   const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor, room.id]);
@@ -201,42 +136,31 @@ export function BuildRoomPanel({
   const tracedW = (r ? r.x1 - r.x0 : b.w) / ppm;
   const tracedH = (r ? r.y1 - r.y0 : b.h) / ppm;
   const cmp = room.dims ? comparePrinted(tracedW, tracedH, room.dims) : null;
-  const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  const chip = cmp && room.dims ? printedChip(cmp, { w: tracedW, h: tracedH }, room.dims) : null;
+  const area = areaM2(room.polygon, ppm);
   const resize = (w: number, h: number) => {
     if (!room.locked) onChange({ polygon: resizeRect(room.polygon, w * ppm, h * ppm, anchor) });
   };
+  const anchorName = CORNERS.find(([c]) => c === anchor)?.[2] ?? "top-left";
 
   return (
     <div className="inspector room-inspector">
-      <label {...hoverRoom(room.id)}>
-        Name
-        <NameField value={room.name} onCommit={(name) => onChange({ name })} />
-      </label>
+      <StatHeader
+        {...hoverRoom(room.id)}
+        title={<NameField className="stat-name" label="Room name" value={room.name} onCommit={(name) => onChange({ name })} />}
+        stat={`${area.toFixed(1)} m²`}
+        sub={`${Math.round(area * 10.7639)} ft²${room.locked ? " · shape locked" : ""}`}
+      />
 
       <Section id="build.room.shape" title="Shape & size" summary={shapeSummary(room, ppm)} defaultOpen>
-        <p className="muted small">Floor area {formatArea(areaM2(room.polygon, ppm))}</p>
-        <label className="check" title="Keep the corners and edge lengths from being dragged or typed over by accident">
-          <input type="checkbox" checked={!!room.locked} onChange={(e) => onChange({ locked: e.target.checked || undefined })} /> Lock shape
-        </label>
         {r ? (
-          <div className="field">
-            <span className="field-label">
-              Traced size, width × depth (m)
-              <Info>The highlighted corner stays put. Click an edge length on the plan to type a new one.</Info>
-            </span>
-            <div className="size-row">
-              <NumberField value={tracedW} label="Width" disabled={room.locked} onCommit={(w) => resize(w, tracedH)} />
-              <span>×</span>
-              <NumberField value={tracedH} label="Depth" disabled={room.locked} onCommit={(h) => resize(tracedW, h)} />
-              <div className="anchor-grid" role="group" aria-label="Corner that stays put">
-                {CORNERS.map(([c, arrow, name]) => (
-                  <button key={c} disabled={room.locked} className={anchor === c ? "active" : ""} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
-                    {arrow}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <PairField
+            label="Size on this plan"
+            info={<Info>The {anchorName} corner stays put when you change the size. Click an edge length on the plan to type a new one. Advanced has the other corners.</Info>}
+            a={{ prefix: "W", value: tracedW, label: "Width", onCommit: (w) => resize(w, tracedH) }}
+            b={{ prefix: "D", value: tracedH, label: "Depth", onCommit: (h) => resize(tracedW, h) }}
+            disabled={room.locked}
+          />
         ) : (
           <p className="muted small">
             Traced extent {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m
@@ -244,21 +168,39 @@ export function BuildRoomPanel({
           </p>
         )}
 
-        <div className="field">
-          <span className="field-label">Printed size on the plan (m)</span>
-          <div className="size-row">
-            <NumberField value={room.dims?.w} placeholder="w" label="Printed width" onCommit={(w) => onChange({ dims: { w, h: room.dims?.h ?? 0 } })} />
-            <span>×</span>
-            <NumberField value={room.dims?.h} placeholder="d" label="Printed depth" onCommit={(h) => onChange({ dims: { w: room.dims?.w ?? 0, h } })} />
-          </div>
-          {cmp && (
-            <p className={`small ${cmp.worst > 5 ? "warn" : "muted"}`}>
-              Traced {tracedW.toFixed(2)} × {tracedH.toFixed(2)} m against printed {room.dims!.w.toFixed(2)} × {room.dims!.h.toFixed(2)} m: {pct(cmp.w)} / {pct(cmp.h)}
-              {cmp.swapped ? " (printed the other way round)" : ""}.
-              {cmp.worst > 5 && " More than 5% out: check the tracing or the floor's scale."}
+        <PairField
+          label="Size printed on the listing"
+          a={{ prefix: "W", value: room.dims?.w, placeholder: "w", label: "Printed width", onCommit: (w) => onChange({ dims: { w, h: room.dims?.h ?? 0 } }) }}
+          b={{ prefix: "D", value: room.dims?.h, placeholder: "d", label: "Printed depth", onCommit: (h) => onChange({ dims: { w: room.dims?.w ?? 0, h } }) }}
+        >
+          {chip && (
+            <p className="kit-chip" title={chip.tip}>
+              <span>{chip.text}</span>
+              <span aria-hidden="true">·</span>
+              <span>Check scale</span>
             </p>
           )}
-        </div>
+        </PairField>
+
+        <label className="check" title="Keep the corners and edge lengths from being dragged or typed over by accident">
+          <input type="checkbox" checked={!!room.locked} onChange={(e) => onChange({ locked: e.target.checked || undefined })} /> Lock shape
+        </label>
+
+        {r && (
+          <details className="advanced">
+            <summary>Advanced</summary>
+            <div className="field">
+              <span className="kit-label">Corner that stays put</span>
+              <div className="anchor-grid" role="group" aria-label="Corner that stays put">
+                {CORNERS.map(([c, arrow, name]) => (
+                  <button key={c} disabled={room.locked} className={anchor === c ? "active" : ""} aria-pressed={anchor === c} title={`Keep the ${name} corner fixed`} onClick={() => setAnchor(c)}>
+                    {arrow}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
       </Section>
 
       <Section id="build.room.details" title="Details" summary={detailsSummary(room, roomPhotos.length)}>
@@ -266,13 +208,14 @@ export function BuildRoomPanel({
           Notes
           <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
         </label>
-        <label className="check">
-          <input type="checkbox" checked={isUnheated(room)} onChange={(e) => onChange({ unheated: e.target.checked })} /> Not heated (garage, store): left out of
-          the heated area
-        </label>
+        <div className="row check-row">
+          <label className="check">
+            <input type="checkbox" checked={isUnheated(room)} onChange={(e) => onChange({ unheated: e.target.checked })} /> Unheated (garage, store)
+          </label>
+          <Info>An unheated room is left out of the heated area in the report.</Info>
+        </div>
         <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
-          <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Part of
-          an extension (separate roof)
+          <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Extension room (gets its own roof)
         </label>
         {roomPhotos.length > 0 && (
           <div className="thumbs">
@@ -289,16 +232,14 @@ export function BuildRoomPanel({
         </Section>
       )}
 
-      <button
-        className="danger"
-        onClick={async () => {
-          if (!(await ask(`Delete ${room.name}?`, { ok: "Delete", danger: true }))) return;
+      <DangerZone
+        label="Delete room"
+        question={`Delete ${room.name}?`}
+        onConfirm={() => {
           updateFloor(variant, floor.id, (f) => ({ ...f, rooms: f.rooms.filter((x) => x.id !== room.id) }));
           setUi({ selectedRoomId: null });
         }}
-      >
-        Delete room
-      </button>
+      />
     </div>
   );
 }
@@ -1076,9 +1017,20 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
   const model = useStore((s) => s.variants[variant]);
   const setUi = useStore((s) => s.setUi);
   const withDims = floor.rooms.filter((r) => r.dims && r.dims.w > 0 && r.dims.h > 0).length;
+  const allLocked = floor.rooms.length > 0 && floor.rooms.every((r) => r.locked);
   return (
     <div className="inspector">
       <Section id="build.floor.settings" title="Floor settings" summary={floorSettingsSummary(floor)}>
+      {floor.rooms.length > 0 && (
+        <label className="check" title="Locked rooms keep their corners and size when you drag on the plan">
+          <input
+            type="checkbox"
+            checked={allLocked}
+            onChange={() => updateFloor(variant, floor.id, (f) => ({ ...f, rooms: f.rooms.map((r) => ({ ...r, locked: allLocked ? undefined : true })) }))}
+          />{" "}
+          Lock rooms on this floor
+        </label>
+      )}
       <label>
         Floor name
         <NameField value={floor.name} onCommit={(name) => updateFloor(variant, floor.id, { name })} />

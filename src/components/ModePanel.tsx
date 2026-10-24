@@ -5,6 +5,7 @@ import { BuildSummary, DecorateSummary, FurnishSummary, useClashCount } from "..
 import { DecoratePanel } from "../editor/DecoratePanel";
 import { BuildRoomPanel } from "../editor/Inspectors";
 import { PlotPanel } from "./PlotPanel";
+import { requestAddPicker } from "../editor/addPicker";
 
 /**
  * The panel beside the canvas: what the current mode shows for
@@ -48,12 +49,15 @@ export function ModePanel() {
         );
       case "furnish":
         return (
-          <>
-            <FurnishSummary floor={floor} clashes={clashes} />
-            <button className="big" onClick={() => setUi({ tab: "plan" })}>
-              Place furniture on the plan
-            </button>
-          </>
+          <FurnishSummary
+            floor={floor}
+            clashes={clashes}
+            onAdd={() => {
+              // One entry point: the picker lives on the plan, so go there and open it.
+              setUi({ tab: "plan" });
+              requestAddPicker();
+            }}
+          />
         );
     }
   })();
