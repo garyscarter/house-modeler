@@ -13,6 +13,10 @@ npm run dev
 
 Then open the URL Vite prints. `npm run check` runs the type check and the unit tests; `npm run build` produces a static site in `dist/` that can be served from anywhere. On an iPad or phone, **Add to Home Screen** installs it as an app.
 
+### On a phone or iPad
+
+The app picks a layout from the screen (`src/lib/chassis.ts`): on a **phone**, and on an iPad held upright, the five modes are a tab bar along the bottom and the inspector is a sheet you pull up from the bottom edge (a tap on a room raises it; drag the handle or tap its title to move it). Plan / 3D and the floor sit in a pill over the canvas, with compare, the sun study and the view options beside them. Touch and hold a room, opening or piece of furniture for its actions. Everything works on a phone except drawing new rooms, walls and canopies and calibrating the plan, which need a tablet or desktop; doors, windows, measuring, typing sizes, decorating, furnishing and the plot all work. An **iPad on its side** keeps the desktop layout with larger targets. Side-by-side compare, saved camera views and the Glass look are desktop only.
+
 ## Hosting on Render
 
 `render.yaml` describes a small Node web service (`server/server.mjs`, no extra dependencies) that serves the built site only to people who have entered a passcode, so it can be opened on a desktop, iPad or phone. Once signed in, a browser stays signed in for 30 days.

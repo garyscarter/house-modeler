@@ -25,6 +25,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 ## Code map
 
 - `src/types.ts` model types; `src/store.ts` zustand store (undo/redo, persisted via `lib/persist.ts`); `src/App.tsx` layout and panels.
+- Chassis: `src/lib/chassis.ts` (phone / tablet / desktop from width, height and pointer; `FEATURES` per chassis), `components/useChassis.ts` (sets `data-chassis` and `data-touch` on `.app`), `components/mobile/` (tab bar, bottom sheet, `sheet.ts` store). Scope every small-screen rule under those attributes; the desktop must not change. `scripts/shoot-chassis.cjs` screenshots every mode at phone and iPad sizes; `scripts/test-touch-plan.cjs` runs the touch checks. See docs/review-mobile-2026-10.md.
 - `src/lib/` pure logic, each file with a `.test.ts`:
   - plan and walls: `geometry.ts` (plan to world, wall thickness), `planWalls.ts`, `walls.ts` (3D wall faces), `wallSteps.ts`, `featureWalls.ts`, `mergeRooms.ts` (knock-through), `planMath.ts` (editor maths, in pixels)
   - openings, stairs, fixtures: `openings.ts`, `bifold.ts`, `boundaryOpening.ts`, `stairs.ts`, `stairwell.ts`, `catalogue.ts`
