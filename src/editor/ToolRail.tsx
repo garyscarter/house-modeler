@@ -16,7 +16,7 @@ export interface RailItem {
   extra?: ReactNode;
 }
 
-/** One rail button; the tooltip carries the shortcut, "Rectangle room (R)". */
+/** One rail button. Its name and key appear at once in a flyout pill on hover or focus (CSS only); aria-label carries the same for assistive tech. */
 export function RailButton({ item }: { item: RailItem }) {
   const t = tip(item.label, item.shortcut);
   const button = (
@@ -25,21 +25,22 @@ export function RailButton({ item }: { item: RailItem }) {
       className={item.active ? "icon-btn active" : "icon-btn"}
       data-tool={item.id}
       aria-label={t}
-      title={t}
-      aria-pressed={item.toggle ? !!item.active : undefined}
+      aria-pressed={item.toggle || item.active !== undefined ? !!item.active : undefined}
       disabled={item.disabled}
       onClick={item.onClick}
     >
       <Icon name={item.icon} size={20} />
     </button>
   );
-  return item.extra ? (
-    <div className="rail-slot">
+  return (
+    <div className={item.extra ? "rail-slot rail-item" : "rail-item"}>
       {button}
+      <span className="rail-fly" aria-hidden="true">
+        {item.label}
+        {item.shortcut && <kbd className="keycap">{item.shortcut}</kbd>}
+      </span>
       {item.extra}
     </div>
-  ) : (
-    button
   );
 }
 

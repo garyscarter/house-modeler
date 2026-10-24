@@ -9,6 +9,11 @@ import {
   doorSwing,
   edgeLengthsM,
   fitCam,
+  fitCamInset,
+  edgeChipCentre,
+  imageClipRect,
+  imageStateOf,
+  imageForState,
   fixtureSolids,
   formatLength,
   inwardNormals,
@@ -416,4 +421,50 @@ describe("fixtureBox", () => {
 
 describe("svgPoints", () => {
   it("joins x,y pairs", () => expect(svgPoints([{ x: 1, y: 2 }, { x: 3, y: 4 }])).toBe("1,2 3,4"));
+});
+
+describe("fitCamInset", () => {
+  const r = { x0: 0, y0: 0, x1: 100, y1: 100 };
+  it("equals fitCam with no inset", () => {
+    expect(fitCamInset(r, { w: 800, h: 400 }, 0)).toEqual(fitCam(r, { w: 800, h: 400 }));
+  });
+  it("centres the rect in the visible part, left of the card", () => {
+    const el = { w: 1000, h: 400 };
+    const c = fitCamInset(r, el, 344, 0);
+    expect((50 - c.x) / c.s).toBeCloseTo(328);
+    expect((50 - c.y) / c.s).toBeCloseTo(200);
+    expect(c.s).toBeCloseTo(0.25);
+    expect((100 - c.x) / c.s).toBeLessThan(656);
+  });
+  it("shrinks to fit a narrow visible width", () => {
+    const c = fitCamInset(r, { w: 600, h: 600 }, 344, 0);
+    expect(100 / c.s).toBeLessThanOrEqual(600 - 200 + 1);
+  });
+});
+
+describe("image state", () => {
+  it("maps the persisted value", () => {
+    expect(imageStateOf({ show: false, opacity: 0.9 })).toBe("off");
+    expect(imageStateOf({ show: true, opacity: 0.3 })).toBe("faint");
+    expect(imageStateOf({ show: true, opacity: 0.5 })).toBe("trace");
+    expect(imageStateOf(imageForState("trace", 0.3))).toBe("trace");
+    expect(imageStateOf(imageForState("faint", 0.9))).toBe("faint");
+    expect(imageForState("off", 0.4)).toEqual({ show: false, opacity: 0.4 });
+  });
+  it("clips to the rooms plus a margin, inside the image", () => {
+    const c = imageClipRect({ x0: 100, y0: 5, x1: 400, y1: 300 }, 100, { w: 500, h: 800 }, 1.5);
+    expect(c).toEqual({ x0: 0, y0: 0, x1: 500, y1: 450 });
+  });
+});
+
+describe("edgeChipCentre", () => {
+  it("sits outside a top edge, clear by the gap", () => {
+    // Top edge of a room, inside is +y, so the chip goes above (-y).
+    const c = edgeChipCentre({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 1 }, 40, 20, 4);
+    expect(c).toEqual({ x: 50, y: -14 });
+  });
+  it("clears a vertical edge by half its width, not its height", () => {
+    const c = edgeChipCentre({ x: 0, y: 0 }, { x: 0, y: 100 }, { x: 1, y: 0 }, 40, 20, 4);
+    expect(c).toEqual({ x: -24, y: 50 });
+  });
 });

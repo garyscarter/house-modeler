@@ -27,6 +27,7 @@ import { usePanelPrefs } from "../components/panelPrefs";
 import { pickInPlan } from "../lib/decorPick";
 import { PLAN_TOOLS, pruneSelection, type Tool } from "../lib/modes";
 import { usePlanCamera } from "./usePlanCamera";
+import { StairsSymbol } from "./StairsSymbol";
 import { uid } from "../types";
 import { holdUndo, useStore } from "../store";
 import { bbox, EXT_WALL_T, pointInPolygon, polygonCentroid, WALL_T } from "../lib/geometry";
@@ -61,6 +62,11 @@ import {
   type Size,
   rectCorners,
   svgPoints,
+  edgeChipCentre,
+  imageClipRect,
+  imageForState,
+  imageStateOf,
+  type ImageState,
 } from "../lib/planMath";
 import { roomColor } from "../lib/roomColor";
 import { planWallLines, planWalls } from "../lib/planWalls";
@@ -102,6 +108,10 @@ const CLICK_SLOP = 6;
 
 /** One zoom button press or key press. */
 const ZOOM_STEP = 1.4;
+/** The "Right-click a room for more" hint is shown once per session, on the first room selection. */
+let roomHintShown = false;
+const IMAGE_STATES: ImageState[] = ["off", "faint", "trace"];
+const IMAGE_STATE_LABEL: Record<ImageState, string> = { off: "Off", faint: "Faint", trace: "Trace" };
 
 /**
  * 2D check-and-fix view: the geometry drawn over the source image. Used to
@@ -147,6 +157,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
+  const quiet = usePanelPrefs((s) => s.quiet);
+  const [roomHint, setRoomHint] = useState(false);
+  const [stairsActive, setStairsActive] = useState(false);
+  // The first room selected in a session earns a one-off pointer to the context menu.
+  useEffect(() => {
+    if (!selectedRoomId || roomHintShown) return;
+    roomHintShown = true;
+    setRoomHint(true);
+    const t = window.setTimeout(() => setRoomHint(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [selectedRoomId]);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const peeking = useStore((s) => s.peek);
   const hoveredRoomId = useStore((s) => s.hoveredRoomId);
@@ -447,7 +468,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       else if ("rotate" in act) {
         if (placing) setPlacing({ ...placing, rot: turn(placing.rot, act.rotate) });
         else if (liveIds.length && !anyLocked(liveIds)) setFixtures((all) => rotateFixtures(all, liveIds, act.rotate));
-      } else if ("image" in act) setUi({ planImage: { ...planImage, show: !planImage.show } });
+      } else if ("image" in act) setUi({ planImage: imageForState(IMAGE_STATES[(IMAGE_STATES.indexOf(imageStateOf(planImage)) + 1) % IMAGE_STATES.length], planImage.opacity) });
       else if ("zoom" in act) zoomBy(act.zoom > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
       else if ("fit" in act) fit();
       else if ("add" in act) setAddOpen(true);
@@ -1146,6 +1167,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const halo = { paintOrder: "stroke" as const, stroke: "#fff", strokeWidth: px * 3, strokeLinejoin: "round" as const };
 
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
+  const imageState = imageStateOf(planImage);
+  const setImageState = (st: ImageState) => setUi({ planImage: imageForState(st, planImage.opacity) });
+  const cycleImage = () => setImageState(IMAGE_STATES[(IMAGE_STATES.indexOf(imageState) + 1) % IMAGE_STATES.length]);
+  const clip = imageClipRect(roomsRect, ppm, { w: floor.imageW, h: floor.imageH });
+  const neutralFills = quiet && (build || furnish);
+  const showRoomLabels = !(planImage.show && imageState === "trace");
 
   // ---- The tool rail: only the tools the mode offers, grouped, with the image controls last.
   const has = (t: Tool) => PLAN_TOOLS[mode].includes(t);
@@ -1177,11 +1204,11 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
       {
         id: "image",
         icon: "image",
-        label: planImage.show ? "Hide floorplan image" : "Show floorplan image",
+        label: `Floorplan image: ${IMAGE_STATE_LABEL[imageState]}`,
         shortcut: "I",
         toggle: true,
         active: planImage.show,
-        onClick: toggleImage,
+        onClick: cycleImage,
         extra: (
           <>
             <button type="button" className="rail-chev" aria-label="Image and wall options" aria-expanded={imageOpen} title="Image and wall options" onClick={() => setImageOpen(!imageOpen)}>
@@ -1189,6 +1216,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             </button>
             {imageOpen && (
               <div className="rail-pop popover" ref={imagePop}>
+                <div className="seg rail-image-state" role="group" aria-label="Floorplan image">
+                  {IMAGE_STATES.map((st) => (
+                    <button key={st} type="button" className={st === imageState ? "active" : undefined} aria-pressed={st === imageState} onClick={() => setImageState(st)}>
+                      {IMAGE_STATE_LABEL[st]}
+                    </button>
+                  ))}
+                </div>
+                <details className="rail-more">
+                <summary>More…</summary>
                 <label className="rail-opacity">
                   <span>Image opacity</span>
                   <input
@@ -1202,6 +1238,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   />
                   <span className="num">{Math.round(imgOpacity * 100)}%</span>
                 </label>
+                </details>
                 <label className="rail-check" title="Draw the walls at their real thickness, so furniture can be placed against the true wall faces">
                   <input type="checkbox" checked={wallsOn} onChange={() => setUi({ planWalls: !wallsOn })} /> Walls at real thickness
                 </label>
@@ -1239,7 +1276,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
         if (placing?.item.symbol === "window-seat") return "Click in front of a window to fit the seat to it (Alt places freely). R turns 90°, Esc finishes.";
         return placing ? `Click to place ${placing.item.name}; it snaps to walls (Alt places freely). R turns 90°, Shift+R 15°, Esc finishes.` : null;
       default:
-        return null;
+        return roomHint && selectedRoomId ? "Right-click a room for more" : null;
     }
   })();
   const selectHint =
@@ -1272,8 +1309,21 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             onContextMenu={onContextMenu}
             className={`tool-${tool}${peeking ? " peeking" : ""}`}
           >
-            {planImage.show && <image href={floor.image} x={0} y={0} width={floor.imageW} height={floor.imageH} opacity={imgOpacity} />}
+            {planImage.show && (
+              <image
+                href={floor.image}
+                x={0}
+                y={0}
+                width={floor.imageW}
+                height={floor.imageH}
+                opacity={imgOpacity}
+                clipPath={imageState === "faint" ? "url(#plan-image-clip)" : undefined}
+              />
+            )}
             <defs>
+              <clipPath id="plan-image-clip">
+                <rect x={clip.x0} y={clip.y0} width={clip.x1 - clip.x0} height={clip.y1 - clip.y0} />
+              </clipPath>
               <pattern id="canopy-hatch" patternUnits="userSpaceOnUse" width={px * 8} height={px * 8} patternTransform="rotate(45)">
                 <rect width={px * 8} height={px * 8} fill="#67e8f9" fillOpacity={0.16} />
                 <line x1={0} y1={0} x2={0} y2={px * 8} stroke="#0e7490" strokeOpacity={0.55} strokeWidth={px * 1.2} />
@@ -1286,7 +1336,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   key={"c" + i}
                   points={c.map((p) => `${p.x},${p.y}`).join(" ")}
                   fill="url(#canopy-hatch)"
-                  stroke={sel ? "#d97706" : "#0e7490"}
+                  stroke={sel ? "var(--plan-sel)" : "#0e7490"}
                   strokeWidth={stroke * (sel ? 2.2 : 1.5)}
                   strokeDasharray={`${px * 7} ${px * 4}`}
                   strokeLinejoin="round"
@@ -1302,7 +1352,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               );
             })}
             {floor.rooms.length === 0 && tool === "select" && build && (
-              <text x={vb.x + vb.w / 2} y={vb.y + vb.h * 0.08} fontSize={fontSize * 1.2} textAnchor="middle" fill="#2563eb" fontWeight={600} {...halo}>
+              <text x={vb.x + vb.w / 2} y={vb.y + vb.h * 0.08} fontSize={fontSize * 1.2} textAnchor="middle" fill="var(--plan-handle)" fontWeight={600} {...halo}>
                 No rooms yet. Pick "Rectangle room" and click two opposite corners of each room.
               </text>
             )}
@@ -1310,9 +1360,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               <polygon
                 key={r.id}
                 points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={roomColor(r)}
-                fillOpacity={r.id === selectedRoomId ? 0.7 : 0.42}
-                stroke={wallsOn ? "none" : r.id === selectedRoomId ? "#d97706" : "#1f2937"}
+                fill={
+                  neutralFills
+                    ? r.id === selectedRoomId
+                      ? "var(--plan-sel-soft)"
+                      : `color-mix(in srgb, ${roomColor(r)} 8%, white)`
+                    : roomColor(r)
+                }
+                fillOpacity={neutralFills ? (r.id === selectedRoomId ? 0.85 : 0.7) : r.id === selectedRoomId ? 0.7 : 0.42}
+                stroke={wallsOn ? "none" : r.id === selectedRoomId ? "var(--plan-sel)" : "#1f2937"}
                 strokeWidth={stroke * (r.id === selectedRoomId ? 2.2 : 1.2)}
                 strokeLinejoin="round"
                 onPointerEnter={() => {
@@ -1335,7 +1391,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 {orderedRooms
                   .filter((r) => r.id === selectedRoomId)
                   .map((r) => (
-                    <polygon key={"rs" + r.id} points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#d97706" strokeWidth={stroke * 2.2} strokeLinejoin="round" />
+                    <polygon key={"rs" + r.id} points={r.polygon.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--plan-sel)" strokeWidth={stroke * 2.2} strokeLinejoin="round" />
                   ))}
               </g>
             )}
@@ -1346,15 +1402,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 fillOpacity={0.08}
                 strokeWidth={px * 2}
                 strokeLinejoin="round"
-                style={{ pointerEvents: "none", fill: "var(--hover-room, #0f6e66)", stroke: "var(--hover-room, #0f6e66)" }}
+                style={{ pointerEvents: "none", fill: "var(--hover-room, var(--plan-sel))", stroke: "var(--hover-room, var(--plan-sel))" }}
               />
             )}
             {canopies.map((c, i) => (
               <CanopyLabel key={"cl" + i} poly={c} ppm={ppm} px={px} fontSize={fontSize} />
             ))}
-            {orderedRooms.map((r) => (
-              <RoomLabel key={"l" + r.id} room={r} ppm={ppm} px={px} fontSize={fontSize} />
-            ))}
+            {showRoomLabels && orderedRooms.map((r) => <RoomLabel key={"l" + r.id} room={r} ppm={ppm} px={px} fontSize={fontSize} />)}
 
             {drawOrder.map((fx) => {
               const item = byId(fx.type);
@@ -1426,7 +1480,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 height={selBox.y1 - selBox.y0 + px * 12}
                 rx={px * 6}
                 fill="none"
-                stroke="#d97706"
+                stroke="var(--plan-sel)"
                 strokeWidth={px * 1.5}
                 strokeDasharray={`${px * 6} ${px * 4}`}
                 style={{ pointerEvents: "none" }}
@@ -1440,7 +1494,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 height={hoverBox.y1 - hoverBox.y0 + px * 8}
                 rx={px * 5}
                 fill="none"
-                stroke="#d97706"
+                stroke="var(--plan-sel)"
                 strokeOpacity={0.45}
                 strokeWidth={px}
                 strokeDasharray={`${px * 4} ${px * 4}`}
@@ -1453,9 +1507,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 y={Math.min(marquee.a.y, marquee.b.y)}
                 width={Math.abs(marquee.a.x - marquee.b.x)}
                 height={Math.abs(marquee.a.y - marquee.b.y)}
-                fill="#d97706"
+                fill="var(--plan-sel)"
                 fillOpacity={0.08}
-                stroke="#d97706"
+                stroke="var(--plan-sel)"
                 strokeWidth={px * 1.25}
                 strokeDasharray={`${px * 5} ${px * 3}`}
                 style={{ pointerEvents: "none" }}
@@ -1501,7 +1555,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                       y1={w.a.y}
                       x2={w.b.x}
                       y2={w.b.y}
-                      stroke={sel ? "#d97706" : w.color ?? "#1f2937"}
+                      stroke={sel ? "var(--plan-sel)" : w.color ?? "#1f2937"}
                       strokeOpacity={wallsOn ? 0.6 : 1}
                       strokeWidth={Math.max(WALL_T * ppm, stroke * 3)}
                       strokeLinecap={wallsOn ? "butt" : "round"}
@@ -1534,7 +1588,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         r={sel ? handleR : dotR}
                         hit={sel ? hitR : hitSmall}
                         fill="#fff"
-                        ink={sel ? "#d97706" : "#6b7280"}
+                        ink={sel ? "var(--plan-sel)" : "#6b7280"}
                         sw={stroke * 1.5}
                         onPointerDown={(e) => {
                           select({ wall: w.id });
@@ -1549,7 +1603,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {tool === "wall" && draft.length === 1 && hover && (
               <line x1={draft[0].x} y1={draft[0].y} x2={hover.x} y2={hover.y} stroke="#16a34a" strokeWidth={stroke * 3} strokeLinecap="round" style={{ pointerEvents: "none" }} />
             )}
-            {floor.stairs && <StairsMarker floor={floor} stroke={stroke} handleR={handleR} interactive={build && tool === "select"} onPointerDown={(e) => startDrag(e, { kind: "stairs", dx: floor.stairs!.x - toImage(e).x, dy: floor.stairs!.y - toImage(e).y, x0: e.clientX, y0: e.clientY, moved: false })} />}
+            {floor.stairs && <StairsMarker floor={floor} px={px} active={stairsActive} interactive={build && tool === "select"} onPointerDown={(e) => {
+              setStairsActive(true);
+              window.addEventListener("pointerup", () => setStairsActive(false), { once: true });
+              window.addEventListener("pointercancel", () => setStairsActive(false), { once: true });
+              startDrag(e, { kind: "stairs", dx: floor.stairs!.x - toImage(e).x, dy: floor.stairs!.y - toImage(e).y, x0: e.clientX, y0: e.clientY, moved: false });
+            }} />}
 
             {floor.openings.map((o) => {
               const len = o.widthM * ppm;
@@ -1565,7 +1624,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                     y={-hitT / 2}
                     width={len}
                     height={hitT}
-                    fill={sel ? "#d97706" : "transparent"}
+                    fill={sel ? "var(--plan-sel)" : "transparent"}
                     fillOpacity={sel ? 0.18 : 0}
                     className="plan-hit plan-opening"
                     style={build ? undefined : { pointerEvents: "none" }}
@@ -1590,10 +1649,19 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             })}
 
             {build && tool === "select" &&
-              orderedRooms.map((r) => {
+              orderedRooms.filter((r) => !quiet || r.id === selectedRoomId || r.id === hoveredRoomId).map((r) => {
                 const sel = r.id === selectedRoomId;
                 return (
-                  <g key={"h" + r.id}>
+                  <g
+                    key={"h" + r.id}
+                    opacity={quiet && !sel ? 0.5 : undefined}
+                    onPointerEnter={() => {
+                      if (!drag.current) setUi({ hoveredRoomId: r.id });
+                    }}
+                    onPointerLeave={() => {
+                      if (useStore.getState().hoveredRoomId === r.id) setUi({ hoveredRoomId: null });
+                    }}
+                  >
                     {sel && !r.locked &&
                       r.polygon.map((p, i) => {
                         const q = r.polygon[(i + 1) % r.polygon.length];
@@ -1604,7 +1672,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                             r={handleR * 0.6}
                             hit={hitSmall}
                             fill="#fff"
-                            ink="#d97706"
+                            ink="var(--plan-sel)"
                             sw={stroke}
                             className="plan-handle add"
                             onPointerDown={(e) => e.stopPropagation()}
@@ -1623,8 +1691,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                         at={p}
                         r={sel ? handleR : dotR}
                         hit={sel ? hitR : hitSmall}
-                        fill={sel ? "#fff7ed" : "#fff"}
-                        ink={sel ? "#d97706" : "#2563eb"}
+                        fill={sel ? "var(--plan-sel-soft)" : "#fff"}
+                        ink={sel ? "var(--plan-sel)" : "var(--plan-handle)"}
                         sw={stroke * (sel ? 2 : 1.3)}
                         style={r.locked ? { pointerEvents: "none" } : undefined}
                         onPointerDown={(e) => {
@@ -1651,8 +1719,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                   at={p}
                   r={handleR}
                   hit={hitR}
-                  fill="#fff7ed"
-                  ink="#d97706"
+                  fill="var(--plan-sel-soft)"
+                  ink="var(--plan-sel)"
                   sw={stroke * 2}
                   onPointerDown={(e) => startDrag(e, { kind: "canopyCorner", idx: i, x0: e.clientX, y0: e.clientY, moved: false })}
                   onClick={(e) => e.stopPropagation()}
@@ -1755,6 +1823,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               ppm={ppm}
               toScreen={toScreen}
               px={px}
+              fontSize={fontSize}
               bounds={size}
               onCommit={(m) => updateRoom(variant, floor.id, editRoom.id, { polygon: setEdgeLength(editRoom.polygon, edgeEdit.idx, m * ppm) })}
               onClose={() => setEdgeEdit(null)}
@@ -1966,15 +2035,17 @@ function CanopyLabel({ poly, ppm, px, fontSize }: { poly: Pt[]; ppm: number; px:
   );
 }
 
-/** Where an edge's length label sits: inside the room, just off the edge's midpoint. */
-function edgeLabelAt(room: Room, i: number, px: number): { p: Pt; angle: number } {
+/** Size of an edge chip for its text, in image px. */
+function chipSize(text: string, px: number, fontSize: number) {
+  return { w: text.length * fontSize * 0.56 + px * 8, h: fontSize * 1.35 };
+}
+
+/** Where an edge's length chip sits: horizontal, just outside the edge's midpoint. */
+function edgeLabelAt(room: Room, i: number, px: number, fontSize: number, ppm: number): Pt {
   const a = room.polygon[i];
   const b = room.polygon[(i + 1) % room.polygon.length];
-  const n = inwardNormals(room.polygon)[i];
-  let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
-  if (angle > 90) angle -= 180;
-  if (angle <= -90) angle += 180;
-  return { p: { x: (a.x + b.x) / 2 + n.x * px * 16, y: (a.y + b.y) / 2 + n.y * px * 16 }, angle };
+  const { w, h } = chipSize(formatLength(edgeLengthsM(room.polygon, ppm)[i]), px, fontSize);
+  return edgeChipCentre(a, b, inwardNormals(room.polygon)[i], w, h, px * 3);
 }
 
 /** One of the room's walls picked out on the plan, numbered as in the inspector's list. */
@@ -2002,14 +2073,13 @@ function EdgeLabels({ room, ppm, px, fontSize, editing, onEdit }: { room: Room; 
     <g>
       {lens.map((len, i) => {
         if (i === editing || len * ppm < px * 30) return null;
-        const { p, angle } = edgeLabelAt(room, i, px);
+        const p = edgeLabelAt(room, i, px, fontSize, ppm);
         const text = formatLength(len);
-        const w = text.length * fontSize * 0.56 + px * 8;
-        const h = fontSize * 1.35;
+        const { w, h } = chipSize(text, px, fontSize);
         return (
           <g
             key={i}
-            transform={`translate(${p.x} ${p.y}) rotate(${angle})`}
+            transform={`translate(${p.x} ${p.y})`}
             className="plan-edge-label"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -2017,8 +2087,8 @@ function EdgeLabels({ room, ppm, px, fontSize, editing, onEdit }: { room: Room; 
               onEdit(i);
             }}
           >
-            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} fill="#fff" stroke="#d97706" strokeWidth={px} />
-            <text y={0} dy="0.35em" fontSize={fontSize * 0.85} textAnchor="middle" fill="#92400e" fontWeight={600}>
+            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} fill="var(--plan-chip-bg)" stroke="var(--plan-sel)" strokeWidth={px} />
+            <text y={0} dy="0.35em" fontSize={fontSize * 0.85} textAnchor="middle" fill="var(--plan-sel-ink)" fontWeight={600}>
               {text}
             </text>
             <title>Click to type a new length; the edge's end corner moves</title>
@@ -2035,6 +2105,7 @@ function EdgeLengthInput({
   idx,
   ppm,
   px,
+  fontSize,
   toScreen,
   bounds,
   onCommit,
@@ -2044,6 +2115,7 @@ function EdgeLengthInput({
   idx: number;
   ppm: number;
   px: number;
+  fontSize: number;
   toScreen: (p: Pt) => Pt;
   bounds: Size;
   onCommit: (m: number) => void;
@@ -2051,7 +2123,7 @@ function EdgeLengthInput({
 }) {
   // Pinned where it opened (the label moves as the length changes, the field should not), and kept on screen.
   const [s] = useState(() => {
-    const p = toScreen(edgeLabelAt(room, idx, px).p);
+    const p = toScreen(edgeLabelAt(room, idx, px, fontSize, ppm));
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(Math.max(lo, hi), v));
     return { x: clamp(p.x, 72, bounds.w - 72), y: clamp(p.y, 24, bounds.h - 24) };
   });
@@ -2094,14 +2166,14 @@ function MeasureLine({ a, b, ppm, px, fontSize }: { a: Pt; b: Pt; ppm: number; p
 
 function StairsMarker({
   floor,
-  stroke,
-  handleR,
+  px,
+  active,
   interactive,
   onPointerDown,
 }: {
   floor: Floor;
-  stroke: number;
-  handleR: number;
+  px: number;
+  active: boolean;
   interactive: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
 }) {
@@ -2112,10 +2184,6 @@ function StairsMarker({
   const horiz = d === "left" || d === "right";
   const rw = horiz ? len : w;
   const rh = horiz ? w : len;
-  const ax = d === "left" ? -1 : d === "right" ? 1 : 0;
-  const ay = d === "up" ? -1 : d === "down" ? 1 : 0;
-  const tip = { x: s.x + (ax * len) / 2, y: s.y + (ay * len) / 2 };
-  const tail = { x: s.x - (ax * len) / 2, y: s.y - (ay * len) / 2 };
   // Winder lines at a turned foot or head, in image px.
   const side = (t?: "left" | "right") => (t === "left" ? -1 : t === "right" ? 1 : 0);
   const winders = flightWinders({
@@ -2129,13 +2197,9 @@ function StairsMarker({
   });
   return (
     <g className={interactive ? "plan-handle" : undefined} style={interactive ? undefined : { pointerEvents: "none" }} onPointerDown={onPointerDown} onClick={(e) => e.stopPropagation()}>
-      <rect x={s.x - rw / 2} y={s.y - rh / 2} width={rw} height={rh} fill="#7c3aed" fillOpacity={0.2} stroke="#7c3aed" strokeWidth={stroke} />
-      {winders.map((pts, i) => (
-        <polyline key={i} points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#7c3aed" strokeWidth={stroke * 0.7} />
-      ))}
-      <line x1={tail.x} y1={tail.y} x2={tip.x} y2={tip.y} stroke="#7c3aed" strokeWidth={stroke * 2} />
-      <circle cx={tip.x} cy={tip.y} r={handleR * 0.7} fill="#7c3aed" />
-      <title>Stairs (rise towards the dot). Drag to move; set direction and size in the floor panel.</title>
+      <rect x={s.x - rw / 2} y={s.y - rh / 2} width={rw} height={rh} fill="transparent" />
+      <StairsSymbol centre={s} run={len} width={w} ppm={floor.pxPerM} dir={d} winders={winders} px={px} active={active} label="UP" />
+      <title>Stairs (they rise towards the arrow). Drag to move; set direction and size in the floor panel.</title>
     </g>
   );
 }

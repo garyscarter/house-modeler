@@ -1,5 +1,15 @@
 /* Plan editor: the canvas fills the editor; the tool rail, zoom cluster, status line and inspector card float over it. */
 
+/* Plan colours, from the app tokens: the accent marks selection, hover and measurement chips (orange is the warning colour). */
+.plan-editor {
+  --plan-sel: var(--accent);
+  --plan-sel-soft: color-mix(in srgb, var(--accent) 12%, white);
+  --plan-sel-ink: var(--accent);
+  --plan-handle: var(--accent);
+  --plan-chip-bg: #fff;
+  --plan-stairs: var(--text);
+  --plan-stairs-fill: #fff;
+}
 .plan-editor { position: relative; flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
 .plan-editor .inspector label { margin: 6px 0; font-size: 13px; }
 
@@ -26,7 +36,16 @@
 .tool-rail .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
 .tool-rail .icon-btn:focus-visible, .plan-zoom .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .rail-sep { width: 20px; height: 0; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
-.rail-slot { position: relative; }
+.rail-slot, .rail-item { position: relative; }
+.rail-item { display: flex; }
+/* Instant labelled flyout: a dark pill to the right of the button, shown on hover and keyboard focus. */
+.rail-fly { position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); z-index: var(--z-pop); display: none; align-items: center; gap: 8px; padding: 5px 8px 5px 12px; border-radius: var(--pill); background: var(--text); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.2; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+.rail-fly .keycap { min-width: 18px; padding: 0 5px; border-color: rgba(255, 255, 255, 0.35); border-bottom-width: 1px; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 11px; }
+.rail-item:hover .rail-fly, .rail-item:focus-within:has(:focus-visible) .rail-fly { display: inline-flex; }
+.rail-slot:has(.rail-pop) .rail-fly { display: none; }
+.rail-image-state { display: flex; }
+.rail-image-state button { flex: 1; }
+.rail-more > summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .rail-chev { position: absolute; right: -1px; bottom: -1px; width: 14px; height: 14px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
 .rail-chev:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
 .rail-pop { top: 0; left: calc(100% + 12px); width: 232px; display: flex; flex-direction: column; gap: 10px; padding: 12px; font-size: 13px; }
@@ -49,7 +68,7 @@
 .hint-row { display: flex; align-items: center; gap: 6px; }
 .inspector h4 .info, .field-label .info { margin-left: 6px; }
 
-.edge-input { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border: 1px solid #d97706; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); font-size: 13px; }
+.edge-input { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border: 1px solid var(--plan-sel); border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); font-size: 13px; }
 .edge-input input { width: 80px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; font: inherit; font-family: var(--font-mono); }
 
 .side .field { margin: 8px 0; }

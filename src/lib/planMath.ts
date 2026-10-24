@@ -466,6 +466,57 @@ export function fitCam(r: Rect, el: Size, padFrac = 0.06): Cam {
 }
 
 /**
+ * Centre of a horizontal w x h chip for the edge a to b: just outside the edge's midpoint, pushed out along the
+ * outward normal (the reverse of `inward`) until the chip's box clears the edge by `gap`.
+ */
+export function edgeChipCentre(a: Pt, b: Pt, inward: Pt, w: number, h: number, gap: number): Pt {
+  const ox = -inward.x;
+  const oy = -inward.y;
+  const d = Math.abs(ox) * (w / 2) + Math.abs(oy) * (h / 2) + gap;
+  return { x: (a.x + b.x) / 2 + ox * d, y: (a.y + b.y) / 2 + oy * d };
+}
+
+/** Width taken by the floating inspector card on the plan: 320 px card plus a 12 px gap either side. */
+export const INSPECTOR_INSET = 344;
+
+/** Like fitCam, but fits rect r into the part of the element not covered by `rightInset` px on its right. */
+export function fitCamInset(r: Rect, el: Size, rightInset = 0, padFrac = 0.06): Cam {
+  // Keep at least a third of the element visible, so a narrow window still gets a sensible fit.
+  const inset = Math.max(0, Math.min(rightInset, el.w * (2 / 3)));
+  if (inset === 0) return fitCam(r, el, padFrac);
+  const visible = { w: Math.max(el.w - inset, 1), h: el.h };
+  const c = fitCam(r, visible, padFrac);
+  return { x: (r.x0 + r.x1) / 2 - (visible.w * c.s) / 2, y: c.y, s: c.s };
+}
+
+/** The rect the floorplan image is clipped to in its faint state: the rooms' bounds plus a margin in metres. */
+export function imageClipRect(rooms: Rect, pxPerM: number, image: Size, marginM = 0.3): Rect {
+  const m = marginM * pxPerM;
+  return {
+    x0: Math.max(0, rooms.x0 - m),
+    y0: Math.max(0, rooms.y0 - m),
+    x1: Math.min(image.w, rooms.x1 + m),
+    y1: Math.min(image.h, rooms.y1 + m),
+  };
+}
+
+export type ImageState = "off" | "faint" | "trace";
+export const IMAGE_FAINT = 0.18;
+export const IMAGE_TRACE = 0.65;
+
+/** Which of the rail's three image states a persisted value means. */
+export function imageStateOf(img: { show: boolean; opacity: number }): ImageState {
+  if (!img.show) return "off";
+  return img.opacity >= 0.5 ? "trace" : "faint";
+}
+
+/** The persisted value for a state (the opacity of an off image is kept so the slider has somewhere to return to). */
+export function imageForState(state: ImageState, opacity: number): { show: boolean; opacity: number } {
+  if (state === "off") return { show: false, opacity };
+  return { show: true, opacity: state === "trace" ? IMAGE_TRACE : IMAGE_FAINT };
+}
+
+/**
  * Two-finger gesture: the image point that was under screen point m0 ends up
  * under m1, and the scale changes by the ratio of finger spreads d0 / d1. A
  * wheel zoom is the same with m0 = m1. Screen points are element-relative px;

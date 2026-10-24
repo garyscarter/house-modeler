@@ -59,7 +59,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       ...(Object.keys(TOOL_KEY) as Tool[]).map((t) => ({ keys: [TOOL_KEY[t] as string], action: TOOL_LABEL[t] })),
       { keys: ["A"], action: "Add furniture (Furnish)" },
-      { keys: ["I"], action: "Show or hide the floorplan image" },
+      { keys: ["I"], action: "Floorplan image: off, faint, trace" },
       { keys: ["F"], action: "Fit the rooms" },
       { keys: ["+", "−"], action: "Zoom in, zoom out" },
     ],
