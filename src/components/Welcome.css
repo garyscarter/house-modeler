@@ -33,9 +33,9 @@
 /* The coach strip: three first steps, above the dock. */
 .coach-strip {
   position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float);
-  display: flex; align-items: center; gap: 14px; max-width: calc(100% - 2 * var(--float-gap) - 360px); padding: 8px 8px 8px 14px; font-size: 13px;
+  display: flex; align-items: center; gap: 14px; max-width: min(780px, calc(100% - 320px)); padding: 8px 8px 8px 14px; font-size: 13px;
 }
 .coach-steps { display: flex; align-items: center; gap: 16px; margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
-.coach-steps li { display: inline-flex; align-items: center; gap: 7px; }
+.coach-steps li { display: inline-flex; white-space: nowrap; align-items: center; gap: 7px; }
 .coach-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; flex: none; }
 .coach-strip .icon-btn { width: 24px; height: 24px; flex: none; color: var(--muted); }
