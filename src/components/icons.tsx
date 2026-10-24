@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "select" | "rect" | "polygon" | "wall" | "canopy" | "door" | "window" | "gap" | "measure" | "image" | "walls"
   | "zoomIn" | "zoomOut" | "fit" | "fitImage" | "undo" | "redo" | "search" | "help" | "sun" | "eye" | "compare"
-  | "chevronDown" | "chevronRight" | "close" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil";
+  | "chevronDown" | "chevronRight" | "close" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil" | "brush" | "sofa" | "tree" | "clipboard" | "keyboard";
 
 /** Inline 24-viewBox stroke icons; they take their colour from the text (currentColor). */
 const PATHS: Record<IconName, ReactNode> = {
@@ -38,6 +38,11 @@ const PATHS: Record<IconName, ReactNode> = {
   house: <><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></>,
   layers: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.1" /></>,
+  brush: <><path d="M14 4l6 6-8 8H6v-6z" /><path d="M6 18c0 2-1 3-3 3 2 0 4-1 3-3z" /><path d="M12 6l6 6" /></>,
+  sofa: <><path d="M5 11V8a2 2 0 012-2h10a2 2 0 012 2v3" /><path d="M3 13a2 2 0 014 0v2h10v-2a2 2 0 014 0v5H3z" /><path d="M5 18v2M19 18v2" /></>,
+  tree: <><path d="M12 21v-6" /><path d="M12 3c4 0 7 3 7 6.5S16 15 12 15 5 13 5 9.5 8 3 12 3z" /><path d="M12 11l2-2" /></>,
+  clipboard: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9z" /><path d="M9 12h6M9 16h4" /></>,
+  keyboard: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" /></>,
   more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
 };
 

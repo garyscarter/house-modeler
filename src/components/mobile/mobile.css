@@ -1,0 +1,60 @@
+/* The phone chassis: the mode tab bar, the inspector sheet, the layout pill and the action sheet. All scoped to phone-only markup. */
+
+/* ---- Tab bar ---- */
+.tab-bar {
+  position: relative; z-index: var(--z-top); flex: none; display: flex;
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+.tab-bar button {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; line-height: 1.1;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-bar button:hover:not(:disabled) { background: transparent; }
+.tab-bar button.active { color: var(--accent); font-weight: 600; }
+.tab-bar button:focus-visible { outline-offset: -3px; }
+
+/* ---- Layout pill: Listed | Proposed, top-centre over the canvas ---- */
+.layout-pill {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: var(--z-float);
+  border-radius: var(--pill); padding: 3px; gap: 2px;
+}
+.layout-pill .lay-full { display: none; }
+.layout-pill .lay-short { display: inline; }
+.layout-pill button { padding: 6px 12px; white-space: nowrap; }
+
+/* ---- Bottom sheet ---- */
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: var(--z-float);
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 16px 16px 0 0; border-bottom: 0; box-shadow: 0 -4px 20px rgba(29, 36, 34, 0.14);
+  transition: height .25s cubic-bezier(.2, .8, .2, 1);
+}
+.sheet[data-detent="peek"] { height: var(--sheet-peek); }
+.sheet[data-detent="half"] { height: 50%; }
+.sheet[data-detent="full"] { height: calc(100% - 8px); }
+.sheet.dragging { transition: none; }
+.sheet.peeking { opacity: 0.55; pointer-events: none; }
+.sheet-head { flex: none; padding: 8px 16px 6px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.sheet-handle { display: block; width: 36px; height: 4px; margin: 0 auto 8px; border-radius: 2px; background: var(--line); }
+.sheet-title { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; border-radius: var(--radius-s); }
+.sheet-title:hover:not(:disabled) { background: transparent; }
+.sheet-title h2 { margin: 0; font: 600 14px/1.3 var(--font-ui); letter-spacing: 0.01em; }
+.sheet-title .mode-sub { margin: 1px 0 0; font-size: 12px; font-weight: 400; color: var(--muted); }
+.sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+@media (prefers-reduced-motion: reduce) { .sheet { transition: none; } }
+
+/* ---- Action sheet (the context menu on a phone). It is portalled to body, outside .app. ---- */
+.ctx-menu.ctx-sheet {
+  left: 8px; right: 8px; top: auto; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
+  min-width: 0; max-height: 70dvh; overflow-y: auto; padding: 6px; border-radius: var(--radius-l);
+}
+.ctx-sheet button[role="menuitem"] { min-height: 48px; font-size: 16px; padding: 8px 14px; }
+.ctx-sheet .ctx-cancel { justify-content: center; margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-s) var(--radius-s); font-weight: 600; color: var(--accent); }
+.ctx-menu.ctx-sheet button.ctx-cancel[role="menuitem"] { justify-content: center; }
+.app[data-sheet="full"] .layout-pill { opacity: 0; pointer-events: none; }
+.layout-pill { transition: opacity .2s; }
