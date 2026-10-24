@@ -288,8 +288,16 @@ async function check(suite, name, fn, { expected, reason } = {}) {
     results.push("pass");
     console.log(`PASS ${full}${detail ? "  " + detail : ""}  (${Date.now() - t0} ms)`);
   } catch (e) {
-    results.push("fail");
-    console.log(`FAIL ${full}  ${e.message.split("\n")[0]}`);
+    if (e instanceof Skip) {
+      results.push("skip");
+      console.log(`SKIP ${full}  (${e.message})`);
+    } else {
+      results.push("fail");
+      console.log(`FAIL ${full}  ${e.message.split("\n")[0]}`);
+    }
+    // A check that threw mid-gesture must not leave the button or a modifier down for the next one.
+    await page?.mouse.up().catch(() => {});
+    for (const k of ["Alt", "Shift"]) await page?.keyboard.up(k).catch(() => {});
   }
 }
 
@@ -906,6 +914,10 @@ async function planSuite() {
     const cy = v.top + 300;
     const touch = async (type, a, b) =>
       cdp.send("Input.dispatchTouchEvent", { type, touchPoints: [a, b].filter(Boolean).map((p, id) => ({ x: p.x, y: p.y, id })) });
+    // The first finger lands and stirs (inside the slop) before the second: that is when a core that let go of
+    // the first pointer's capture would get a lostpointercapture mid-pinch.
+    await touch("touchStart", { x: cx - 52, y: cy });
+    await touch("touchMove", { x: cx - 50, y: cy });
     await touch("touchStart", { x: cx - 50, y: cy }, { x: cx + 50, y: cy });
     for (let i = 1; i <= 10; i++) await touch("touchMove", { x: cx - 50 - i * 5, y: cy }, { x: cx + 50 + i * 5, y: cy });
     await touch("touchEnd");
@@ -1316,15 +1328,21 @@ async function siteSuite() {
     "site",
     "14 a pan starts only after the 6 px slop",
     async () => {
+      // During a gesture the core moves a layer <g>, not the viewBox, so read where model content is drawn.
+      const shown = () => reg(() => window.__reg.svg().querySelector("line.site-edge").getScreenCTM().e);
       const bg = await plainBackground();
-      const before = await vbNow();
+      const before = await shown();
       await page.mouse.move(bg.x, bg.y);
       await page.mouse.down();
       await page.mouse.move(bg.x + 4, bg.y);
       await settle();
-      const mid = await vbNow();
+      const mid = await shown();
+      await page.mouse.move(bg.x + 24, bg.y);
+      await settle();
+      const far = await shown();
       await page.mouse.up();
-      near(mid.x, before.x, 1e-9, "the view moved inside the slop");
+      near(mid, before, 1e-6, "the view moved inside the slop");
+      near(far - before, 24, 1, "the view did not follow the pointer past the slop");
     },
     { expected: "post-core" },
   );

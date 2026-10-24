@@ -110,15 +110,18 @@ export function useDrag(o: DragOptions): DragApi {
   const run = useRef<Run | null>(null);
   const pinch = useRef<{ c0: Cam; m0: Pt; d0: number } | null>(null);
 
-  const rect = () => opts.current.svg.current?.getBoundingClientRect() ?? { left: 0, top: 0 };
+  /** Client px to px local to the camera's element (the frame the Cam is in), not the SVG's own box. */
+  const localOf = (c: Pt): Pt => {
+    const frame = opts.current.camera.frame();
+    return frame.toScreen(frame.fromClient({ clientX: c.x, clientY: c.y }));
+  };
 
   const moveOf = (e: { clientX: number; clientY: number; shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }, press: Press | null): Move => {
     const frame = opts.current.camera.frame();
-    const r = rect();
     const at = frame.fromClient(e);
     return {
       client: { x: e.clientX, y: e.clientY },
-      local: { x: e.clientX - r.left, y: e.clientY - r.top },
+      local: frame.toScreen(at),
       at,
       delta: press ? { x: at.x - press.at.x, y: at.y - press.at.y } : { x: 0, y: 0 },
       screen: press ? { x: e.clientX - press.client.x, y: e.clientY - press.client.y } : { x: 0, y: 0 },
@@ -263,18 +266,21 @@ export function useDrag(o: DragOptions): DragApi {
       // A second pointer cancels whatever the first began and pinches instead; the press never reaches a handle.
       e.stopPropagation();
       cancel();
-      try {
-        opts.current.svg.current?.setPointerCapture(e.pointerId);
-      } catch {
-        /* the pointer is already gone */
+      // cancel() released the first pointer; take it back (and the new one) before the browser processes the
+      // release, so no lostpointercapture arrives to end the pinch it is part of.
+      for (const id of pointers.current.keys()) {
+        try {
+          opts.current.svg.current?.setPointerCapture(id);
+        } catch {
+          /* the pointer is already gone */
+        }
       }
       const [a, b] = [...pointers.current.values()];
-      const r = rect();
       const { m, d } = pinchOf(a, b);
       const c0 = opts.current.camera.live();
       if (!c0) return;
       opts.current.camera.gesture.begin();
-      pinch.current = { c0, m0: { x: m.x - r.left, y: m.y - r.top }, d0: d };
+      pinch.current = { c0, m0: localOf(m), d0: d };
     } else if (pinch.current) {
       e.stopPropagation();
     }
@@ -295,10 +301,9 @@ export function useDrag(o: DragOptions): DragApi {
     if (pz) {
       if (pointers.current.size < 2) return;
       const [a, b] = [...pointers.current.values()];
-      const r = rect();
       const { m, d } = pinchOf(a, b);
       const { minS, maxS } = opts.current.camera.limits();
-      opts.current.camera.gesture.update(pinchCam(pz.c0, pz.m0, { x: m.x - r.left, y: m.y - r.top }, pz.d0, d, minS, maxS));
+      opts.current.camera.gesture.update(pinchCam(pz.c0, pz.m0, localOf(m), pz.d0, d, minS, maxS));
       return;
     }
     const cur = run.current;
@@ -360,7 +365,12 @@ export function useDrag(o: DragOptions): DragApi {
       onPointerMove,
       onPointerUp: (e) => finishPointer(e, "up"),
       onPointerCancel: (e) => finishPointer(e, "lost"),
-      onLostPointerCapture: (e) => finishPointer(e, "lost"),
+      onLostPointerCapture: (e) => {
+        // Only the SVG's own capture counts (the event bubbles from any child that captured), and a pinch keeps
+        // its pointers until they lift: a lost capture there is the release cancel() made, not the finger going.
+        if (e.target !== e.currentTarget || pinch.current) return;
+        finishPointer(e, "lost");
+      },
       onPointerLeave: () => {
         if (!run.current && !pinch.current) opts.current.hover?.(null);
       },

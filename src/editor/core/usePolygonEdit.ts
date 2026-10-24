@@ -16,7 +16,7 @@ export interface PolygonTarget<C = unknown> {
   minVertices?: number;
   /** Default true. */
   snapAxis?: boolean;
-  /** Called once at press. */
+  /** Called once: at the press for an edge, when a vertex drag starts moving (after a midpoint's insert). Read the store, not render state. */
   snapTargets(ex: { vertex?: number; edge?: number }): Pt[];
   skipSnap?(q: Pt, vertex: number): boolean;
   /** A constrained corner: no snapping; moveVertex applies the constraint. */
@@ -46,13 +46,21 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
   return useMemo(() => {
     const tolNow = () => SNAP_PX * live.current.camera.frame().unitsPerPx;
 
-    /** A vertex drag of vertex i; also what a midpoint press continues as. */
-    const vertexSpec = (t: PolygonTarget, i: number) => {
-      const targets = t.snapTargets({ vertex: i });
-      const slides = !!t.slides?.(i);
+    /**
+     * A vertex drag of vertex i; also what a midpoint press continues as (`fresh`: a corner just inserted, which
+     * never slides). Snap targets and `slides` are read once, when the drag starts moving: after a midpoint's
+     * insert, so a target that reads the store sees the new corner.
+     */
+    const vertexSpec = (t: PolygonTarget, i: number, fresh = false) => {
+      let targets: Pt[] = [];
+      let slides = false;
       return {
         kind: "poly-vertex" as const,
         data: { key: t.key, vertex: i },
+        start() {
+          targets = t.snapTargets({ vertex: i });
+          slides = !fresh && !!t.slides?.(i);
+        },
         move(m: { at: Pt; alt: boolean }) {
           let p = m.at;
           if (!m.alt && !slides) {
@@ -95,7 +103,7 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
     const midDown = (e: React.PointerEvent, t: PolygonTarget, i: number) => {
       if (t.locked || !isPrimary(e)) return;
       const { drag: dg } = live.current;
-      const spec = vertexSpec(t, i + 1);
+      const spec = vertexSpec(t, i + 1, true);
       // begin() snapshots first, so the insert and the drag that follows share one undo step and Esc removes the corner again.
       dg.begin(e, spec);
       if (!dg.active()) return;

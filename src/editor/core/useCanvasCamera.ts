@@ -16,6 +16,8 @@ export interface CameraOptions {
   anchor?: "topLeft" | "centre";
   /** Width the floating inspector card covers on the right. Default: INSPECTOR_INSET when the enclosing main has one. */
   insetRight?: () => number;
+  /** Padding Fit adds around `home`, as a fraction of its larger side. Default 0.06 (the plan); the site passes 0. */
+  padFrac?: number;
 }
 
 export interface CanvasCamera {
@@ -111,7 +113,7 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   useEffect(() => {
     const s = sizeRef.current;
     if (!s) return;
-    const c = fitCamInset(opts.current.home, s, coveredRight());
+    const c = fitCamInset(opts.current.home, s, coveredRight(), opts.current.padFrac);
     liveRef.current = c;
     setCamState(c);
   }, [o.fitKey, hasSize, coveredRight]);
@@ -164,7 +166,7 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   const fit = useCallback(
     (r?: Rect) => {
       const s = sizeRef.current;
-      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight()));
+      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight(), opts.current.padFrac));
     },
     [coveredRight, setCam],
   );
