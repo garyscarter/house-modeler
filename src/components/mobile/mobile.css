@@ -28,7 +28,7 @@
 .sheet {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: calc(var(--z-float) + 2); /* above the rail, zoom and status pills */
   display: flex; flex-direction: column; overflow: hidden;
-  border-radius: 16px 16px 0 0; border-bottom: 0; box-shadow: 0 -4px 20px rgba(29, 36, 34, 0.14);
+  border-radius: 16px 16px 0 0; border-bottom: 0; box-shadow: var(--shadow-sheet);
   transition: height .25s cubic-bezier(.2, .8, .2, 1);
 }
 .sheet[data-detent="peek"] { height: var(--sheet-peek); }

@@ -69,6 +69,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   }, [floor.rooms, floor.imageW, floor.imageH]);
   // Scale limits: from 1 m filling about 2000 screen px to the whole image at a third of the element.
   const touch = useChassis((s) => s.touch);
+  const chassis = useChassis((s) => s.chassis);
   const insets = useCameraInsets();
   const camera = useCanvasCamera(wrapRef, {
     home: roomsRect,
@@ -104,7 +105,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const longPress = useRef<(p: { client: Pt }) => void>(undefined);
   const drag = usePlanDrag({
-    onLongPress: (p) => longPress.current?.(p),
+    onLongPress: chassis === "desktop" ? undefined : (p) => longPress.current?.(p),
     variant, floor, mode, peeking, svgRef, camera, sel: selection, tools,
     geo: { segs: geo.segs, snapTargets: geo.snapTargets, corners: geo.corners, hitShapes, faceLines, fitPlacing, snapFixture },
     selectedRoomId,

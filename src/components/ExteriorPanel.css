@@ -14,7 +14,7 @@
 .chimney-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
 
-.exterior-panel select, .exterior-panel input[type="number"], .exterior-panel input[type="text"] { width: 100%; box-sizing: border-box; min-width: 0; }
+.app:not([data-chassis="desktop"]) :is(.exterior-panel select, .exterior-panel input[type="number"], .exterior-panel input[type="text"]) { width: 100%; box-sizing: border-box; min-width: 0; }
 .app[data-chassis="tablet"] .exterior-panel .ext-grid { grid-template-columns: minmax(0, 1fr); }
 .app[data-touch] .exterior-panel select, .app[data-touch] .exterior-panel input[type="number"], .app[data-touch] .exterior-panel button { min-height: 44px; }
 

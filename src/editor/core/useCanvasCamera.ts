@@ -76,7 +76,11 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
     const custom = opts.current.insetRight;
     if (custom) return custom();
     const main = el.current?.closest("main");
-    return main?.querySelector(".inspector-card") ? INSPECTOR_INSET : 0;
+    const card = main?.querySelector(".inspector-card");
+    if (!card) return 0;
+    // The card's measured width plus the gaps either side; INSPECTOR_INSET (320 + 24) when it hasn't laid out yet.
+    const w = card.getBoundingClientRect().width;
+    return w > 0 ? Math.round(w) + 24 : INSPECTOR_INSET;
   }, [el]);
 
   const coveredBottom = useCallback(() => opts.current.insetBottom?.() ?? 0, []);

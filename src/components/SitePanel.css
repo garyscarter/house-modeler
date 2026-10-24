@@ -63,11 +63,11 @@ label .site-bearing .pair-input input[type="number"] { width: 100%; margin: 0; p
 
 
 /* Fluid fields for a 300 px card and a full-width phone sheet. */
-.site-panel select, .site-panel input[type="text"] { max-width: 100%; box-sizing: border-box; }
-.site-orient { flex-wrap: wrap; }
-.site-figures { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-.site-depths { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); }
+.app:not([data-chassis="desktop"]) :is(.site-panel select, .site-panel input[type="text"]) { max-width: 100%; box-sizing: border-box; }
+.app:not([data-chassis="desktop"]) .site-orient { flex-wrap: wrap; }
+.app:not([data-chassis="desktop"]) .site-figures { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.app:not([data-chassis="desktop"]) .site-depths { grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); }
 .app[data-chassis="tablet"] .site-gaps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.site-item.site-neighbour { grid-template-columns: minmax(56px, 70px) minmax(0, 1fr) auto; }
+.app:not([data-chassis="desktop"]) .site-item.site-neighbour { grid-template-columns: minmax(56px, 70px) minmax(0, 1fr) auto; }
 .app[data-touch] .site-remove, .app[data-touch] .site-item select, .app[data-touch] .site-item input { min-height: 44px; }
 

@@ -226,7 +226,9 @@ export function useDrag(o: DragOptions): DragApi {
     run.current = { d, snapshot, pending: null, raf: 0, last: moveOf(e, press) };
     dispatch({ type: "press", pointerId: e.pointerId, client: press.client, slop: spec.slop ?? CLICK_SLOP_PX });
     clearLongPress();
-    if (opts.current.onLongPress && press.pointerType !== "mouse") {
+    // Handles and edge grips are for dragging: a finger that rests on one before moving must not open the menu.
+    const onHandle = !!(e.target as Element).closest?.(".plan-handle, .plan-edge-hit, .core-handle, .core-mid, .site-handle, .site-mid");
+    if (opts.current.onLongPress && press.pointerType !== "mouse" && !onHandle) {
       longPress.current = setTimeout(() => {
         longPress.current = undefined;
         const cur = run.current;

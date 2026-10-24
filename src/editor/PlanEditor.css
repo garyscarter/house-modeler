@@ -108,6 +108,10 @@
 .app[data-touch] .edge-input { padding: 6px 8px; font-size: 14px; }
 
 .app[data-chassis="phone"] .tool-rail { top: var(--float-gap); }
+/* A phone on its side: the rail would run under the sheet, so it scrolls instead. */
+@media (max-height: 500px) { .app[data-chassis="phone"] .tool-rail { max-height: calc(100% - var(--sheet-peek) - 24px); overflow-y: auto; } }
+/* The edge-length box must stay tappable above a raised sheet. */
+.app[data-chassis="phone"] .edge-input { z-index: calc(var(--z-float) + 3); }
 /* Zoom cluster: top right (fit and fit-image only; pinch zooms). */
 .app[data-chassis="phone"] .plan-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
 /* Status pill: above the dock, which sits above the sheet at peek; it gives way when the sheet is raised. */

@@ -46,8 +46,8 @@
 .pl-caveats li { margin: 3px 0; }
 
 
-.pl-rule-title, .pl-headline, .pl-verdict li { overflow-wrap: anywhere; }
-.pl-row-head { flex-wrap: wrap; }
+.app:not([data-chassis="desktop"]) :is(.pl-rule-title, .pl-headline, .pl-verdict li) { overflow-wrap: anywhere; }
+.app:not([data-chassis="desktop"]) .pl-row-head { flex-wrap: wrap; }
 .app[data-touch] .pl-wing { min-height: 44px; }
 .app[data-touch] .pl-skipped summary { min-height: 44px; }
 

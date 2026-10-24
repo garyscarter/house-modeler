@@ -28,13 +28,15 @@ export function startChassisWatch(): void {
   if (watching || typeof window === "undefined") return;
   watching = true;
   const update = () => {
+    // A soft keyboard shrinks the viewport while a field has focus; re-read once it closes (focusout) instead of flipping chassis.
+    if (document.activeElement?.matches("input, textarea, select")) return;
     const next = read();
     const cur = useChassis.getState();
     if (next.chassis !== cur.chassis || next.touch !== cur.touch || next.width !== cur.width || next.height !== cur.height) useChassis.setState(next);
   };
   window.addEventListener("resize", update);
   window.addEventListener("orientationchange", update);
-  window.visualViewport?.addEventListener("resize", update);
+  document.addEventListener("focusout", () => setTimeout(update, 50));
   window.matchMedia?.("(pointer: coarse)").addEventListener?.("change", update);
   update();
 }

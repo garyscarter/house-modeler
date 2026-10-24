@@ -96,29 +96,38 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
 
   // A pull-down that starts with the body scrolled to the top lowers the sheet; anything else scrolls. Touch events, so the
   // browser's own scroll can be cancelled (a pointer drag would be cancelled by the scroll instead).
+  // The handlers are bound once (the body element is stable while the sheet is open) and reach the latest begin/move/end
+  // through a ref, so a re-render mid-gesture (move() sets state) doesn't swap in a fresh closure that has forgotten the touch.
+  const fns = useRef({ begin, move, end });
+  fns.current = { begin, move, end };
+  const touch = useRef<{ active: boolean; x0: number; y0: number; ignore: boolean } | null>(null);
   useEffect(() => {
     const el = body.current;
     if (!el) return;
-    let active = false;
-    let y0 = 0;
     const start = (e: TouchEvent) => {
-      active = false;
-      y0 = e.touches[0].clientY;
+      const t = e.touches[0];
+      // A slider, field or button is dragged or tapped in place; it never pulls the sheet.
+      const ignore = !!(e.target as Element).closest?.("input, select, textarea, button, [role='slider']");
+      touch.current = { active: false, x0: t.clientX, y0: t.clientY, ignore };
     };
     const mv = (e: TouchEvent) => {
-      const y = e.touches[0].clientY;
-      if (!active) {
-        if (el.scrollTop > 0 || y - y0 < SLOP) return;
-        if (!begin(y0)) return;
-        active = true;
+      const s = touch.current;
+      if (!s || s.ignore || e.touches.length !== 1) return;
+      const { clientX: x, clientY: y } = e.touches[0];
+      if (!s.active) {
+        const dy = y - s.y0;
+        if (el.scrollTop > 0 || dy < SLOP || Math.abs(x - s.x0) > dy) return; // scrolling, or a sideways drag
+        if (!fns.current.begin(s.y0)) return;
+        s.active = true;
       }
       if (e.cancelable) e.preventDefault();
-      move(y);
+      fns.current.move(y);
     };
     const fin = (e: TouchEvent) => {
-      if (!active) return;
-      active = false;
-      end(e.changedTouches[0]?.clientY ?? y0);
+      const s = touch.current;
+      touch.current = null;
+      if (!s?.active) return;
+      fns.current.end(e.changedTouches[0]?.clientY ?? s.y0);
     };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", mv, { passive: false });
@@ -130,7 +139,7 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
       el.removeEventListener("touchend", fin);
       el.removeEventListener("touchcancel", fin);
     };
-  });
+  }, [detent !== "peek"]);
 
   return (
     <section

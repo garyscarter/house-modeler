@@ -117,7 +117,7 @@ export function Dock() {
           >
             <Icon name="sun" />
           </button>
-          <Popover className="dock-view" align="end" label={phone ? <Icon name="eye" /> : "View"} chevron={!phone} ariaLabel="View options" title="View options">
+          <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "View"} chevron={!phone} ariaLabel="View options" title={phone ? "View options" : undefined}>
             <ViewToggles />
           </Popover>
           {features.savedViews && <SavedViewsMenu />}

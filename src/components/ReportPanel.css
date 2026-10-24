@@ -70,7 +70,7 @@
 /* Fluid in a full-width phone sheet or a 300 px card. */
 .app[data-chassis="phone"] .rp-areas, .app[data-chassis="tablet"] .rp-areas { overflow-x: auto; }
 .app[data-chassis="phone"] .rp-areas thead th, .app[data-chassis="tablet"] .rp-areas thead th { white-space: nowrap; }
-.rp-money input { max-width: 100%; }
-.rp-cost-row > span { min-width: 0; }
+.app:not([data-chassis="desktop"]) .rp-money input { max-width: 100%; }
+.app:not([data-chassis="desktop"]) .rp-cost-row > span { min-width: 0; }
 .app[data-touch] .rp-unit button, .app[data-touch] .rp-export .row button { min-height: 44px; }
 

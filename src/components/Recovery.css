@@ -9,5 +9,5 @@
 .panel-problem p { margin: 0; }
 
 
-.recovery .empty { max-width: min(460px, 100%); box-sizing: border-box; padding-left: 16px; padding-right: 16px; }
+.app:not([data-chassis="desktop"]) .recovery .empty { max-width: min(460px, 100%); box-sizing: border-box; padding-left: 16px; padding-right: 16px; }
 

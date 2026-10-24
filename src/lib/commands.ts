@@ -2,6 +2,8 @@ import { FLOOR_FINISH_LABEL, VARIANT_LABEL, type Floor, type FloorFinish, type H
 import { PAINT_PALETTE } from "./paintPalette";
 import { MODES, MODE_LABEL, type Mode } from "./modes";
 import { usePanelPrefs } from "../components/panelPrefs";
+import { useChassis } from "../components/useChassis";
+import { FEATURES } from "./chassis";
 import { floorDisplayName, type Look } from "./studio";
 
 export interface Command {
@@ -133,7 +135,11 @@ export function buildCommands(c: CommandContext): Command[] {
   add("view:plan", "Plan", "View", () => c.setUi({ tab: "plan" }), { keywords: ["2d", "plan"] });
   if (c.variants.current && c.variants.proposed) {
     const modes = [["single", "Single"], ["side-by-side", "Side by side"], ["overlay", "Overlay"], ["wipe", "Wipe"]] as const;
-    for (const [m, label] of modes) add(`compare:${m}`, `Compare: ${label}`, "View", () => c.setUi({ viewMode: m }), { keywords: ["view mode"] });
+    const sideBySide = FEATURES[useChassis.getState().chassis].sideBySide;
+    for (const [m, label] of modes) {
+      if (m === "side-by-side" && !sideBySide) continue;
+      add(`compare:${m}`, `Compare: ${label}`, "View", () => c.setUi({ viewMode: m }), { keywords: ["view mode"] });
+    }
   }
 
   const toggle = (id: string, noun: string, on: boolean, key: string) =>
