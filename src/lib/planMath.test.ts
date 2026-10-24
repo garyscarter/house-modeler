@@ -33,10 +33,7 @@ import {
   wallRun,
   openingEnds,
   placeFromEnd,
-  slideEdge,
-  snapEdgeOffset,
   openingsOnEdge,
-  edgeNormalOffset,
   viewBoxOf,
   wallLines,
   zoomCam,
@@ -473,28 +470,7 @@ describe("edgeChipCentre", () => {
   });
 });
 
-describe("sliding an edge", () => {
-  const poly = rect("R", 0, 0, 300, 400).polygon;
-  it("moves both ends along the normal and changes the area by offset x length", () => {
-    const out = slideEdge(poly, 1, 50); // right edge, outward is +x
-    expect(out[1]).toEqual({ x: 350, y: 0 });
-    expect(out[2]).toEqual({ x: 350, y: 400 });
-    expect(out[0]).toEqual(poly[0]);
-    expect(areaM2(out, PX) - areaM2(poly, PX)).toBeCloseTo((50 * 400) / (PX * PX));
-    expect(slideEdge(poly, 0, 20)[0].y).toBe(-20);
-  });
-  it("keeps the direction of a sloping edge", () => {
-    const tri = [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 0, y: 300 }];
-    const out = slideEdge(tri, 1, 30);
-    const d0 = { x: tri[2].x - tri[1].x, y: tri[2].y - tri[1].y };
-    const d1 = { x: out[2].x - out[1].x, y: out[2].y - out[1].y };
-    expect(d0.x * d1.y - d0.y * d1.x).toBeCloseTo(0);
-    expect(edgeNormalOffset(tri, 1, out[1].x - tri[1].x, out[1].y - tri[1].y)).toBeCloseTo(30);
-  });
-  it("snaps the moved line to a target within tolerance", () => {
-    expect(snapEdgeOffset(poly, 1, 48, [{ x: 355, y: 90 }], 10)).toBe(55);
-    expect(snapEdgeOffset(poly, 1, 30, [{ x: 355, y: 90 }], 10)).toBe(30);
-  });
+describe("openings on an edge", () => {
   it("finds the openings on an edge", () => {
     const door = { id: "d", kind: "door", x: 150, y: 2, orientation: "h", widthM: 0.9 } as Opening;
     const far = { id: "w", kind: "window", x: 150, y: 200, orientation: "h", widthM: 0.9 } as Opening;

@@ -101,40 +101,7 @@ export function comparePrinted(tracedW: number, tracedH: number, printed: { w: n
   return { ...best, worst: worst(best) };
 }
 
-export interface SnapResult {
-  p: Pt;
-  kind: "corner" | "axis" | "none";
-}
-
-/** Snap to the nearest corner within tol, else line up x and y with the nearest corners. */
-export function snapPoint(p: Pt, corners: Pt[], tol: number): SnapResult {
-  let best: Pt | null = null;
-  let bestD = tol;
-  let sx: number | null = null;
-  let sy: number | null = null;
-  let dx = tol;
-  let dy = tol;
-  for (const v of corners) {
-    const d = dist(v, p);
-    if (d < bestD) {
-      bestD = d;
-      best = v;
-    }
-    const ax = Math.abs(v.x - p.x);
-    const ay = Math.abs(v.y - p.y);
-    if (ax < dx) {
-      dx = ax;
-      sx = v.x;
-    }
-    if (ay < dy) {
-      dy = ay;
-      sy = v.y;
-    }
-  }
-  if (best) return { p: { x: best.x, y: best.y }, kind: "corner" };
-  if (sx === null && sy === null) return { p, kind: "none" };
-  return { p: { x: sx ?? p.x, y: sy ?? p.y }, kind: "axis" };
-}
+export { snapPoint, type SnapResult } from "./polygonEdit";
 
 export type Seg = [Pt, Pt];
 
@@ -704,51 +671,6 @@ export function placeFromEnd(floor: Floor, o: Pick<Opening, "x" | "y" | "orienta
 
 /** An SVG points attribute for a polygon. */
 export const svgPoints = (poly: Pt[]) => poly.map((p) => `${p.x},${p.y}`).join(" ");
-
-/** Unit normal of edge i pointing out of the polygon. */
-const outwardNormal = (poly: Pt[], i: number): Pt => {
-  const n = inwardNormals(poly)[i];
-  return { x: -n.x, y: -n.y };
-};
-
-/** The component of the vector (dx, dy) along the outward normal of edge i. */
-export function edgeNormalOffset(poly: Pt[], i: number, dx: number, dy: number): number {
-  const n = outwardNormal(poly, i);
-  return dx * n.x + dy * n.y;
-}
-
-/**
- * Move edge i (from corner i to corner i+1) by offsetPx along its outward
- * normal. Both ends move together so the edge stays parallel to where it was;
- * the neighbouring edges stretch to follow.
- */
-export function slideEdge(poly: Pt[], i: number, offsetPx: number): Pt[] {
-  if (poly.length < 3) return poly;
-  const n = outwardNormal(poly, i);
-  const j = (i + 1) % poly.length;
-  return poly.map((p, k) => (k === i || k === j ? { x: p.x + n.x * offsetPx, y: p.y + n.y * offsetPx } : p));
-}
-
-/**
- * Adjust an edge offset so the moved edge's line passes through the nearest
- * target within tol (targets are measured along the edge's outward normal).
- * Returns the offset unchanged when nothing is close.
- */
-export function snapEdgeOffset(poly: Pt[], i: number, offsetPx: number, targets: Pt[], tol: number): number {
-  const a = poly[i];
-  const n = outwardNormal(poly, i);
-  let best = offsetPx;
-  let bestD = tol;
-  for (const t of targets) {
-    const s = (t.x - a.x) * n.x + (t.y - a.y) * n.y;
-    const d = Math.abs(s - offsetPx);
-    if (d < bestD) {
-      bestD = d;
-      best = s;
-    }
-  }
-  return best;
-}
 
 /**
  * Openings that sit on edge i of a room: the same orientation as the edge,

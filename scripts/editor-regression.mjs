@@ -628,7 +628,6 @@ async function planSuite() {
       await d.up();
       jeq(await polyOf(roomId), poly0, "Esc did not remove the new corner");
     },
-    { expected: "post-core" },
   );
 
   await check("plan", "10 double-press removes a corner", async () => {
@@ -947,7 +946,6 @@ async function planSuite() {
       jeq(await polyOf(roomId), poly0, "the half-done drag was kept");
       assert((await st()).past === s0.past, "an undo step was left behind");
     },
-    { expected: "post-core" },
   );
 
   await check(
@@ -962,7 +960,6 @@ async function planSuite() {
       await d.up();
       jeq(await polyOf(roomId), poly0, "blur did not cancel the drag");
     },
-    { expected: "post-core" },
   );
 
   if (PERF) {
