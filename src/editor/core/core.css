@@ -1,0 +1,6 @@
+/* Shared editor-core pieces. Zero specificity (:where) so an editor's own rules always win; tokens only, no colours. */
+:where(.core-handle) { cursor: move; }
+:where(.core-mid) { cursor: copy; }
+:where(.core-edge-hit) { cursor: move; }
+:where(.core-chip) { cursor: text; }
+:where(.core-chip) text { font-family: var(--font-mono); user-select: none; -webkit-user-select: none; }

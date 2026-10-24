@@ -91,3 +91,64 @@ export function frameOf(cam: Cam, rect: { left: number; top: number }, unitsPerM
     fromClient: (c) => ({ x: cam.x + (c.clientX - rect.left) * cam.s, y: cam.y + (c.clientY - rect.top) * cam.s }),
   };
 }
+
+/** Size of a horizontal dimension chip for its text, in model units (px is model units per screen px). */
+export function chipSize(text: string, px: number, fontSize: number): { w: number; h: number } {
+  return { w: text.length * fontSize * 0.56 + px * 8, h: fontSize * 1.35 };
+}
+
+/** Midpoint and spread of two pointers (client px). The spread is never 0, so it is safe to divide by. */
+export function pinchOf(a: Pt, b: Pt): { m: Pt; d: number } {
+  return { m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+}
+
+/**
+ * The drag state machine, as a pure reducer so the hook around it (useDrag) only has to carry out effects.
+ * idle -> pressed (captured) -> moving (slop crossed) -> idle. Events from another pointer are ignored.
+ */
+export type DragPhase =
+  | { tag: "idle" }
+  | { tag: "pressed"; pointerId: number; origin: Pt; slop: number }
+  | { tag: "moving"; pointerId: number };
+
+export type DragEvent =
+  | { type: "press"; pointerId: number; client: Pt; slop: number }
+  | { type: "move"; pointerId: number; client: Pt }
+  | { type: "up"; pointerId: number }
+  /** pointercancel or lostpointercapture: ends the drag and keeps the changes. */
+  | { type: "lost"; pointerId: number }
+  /** Esc, blur, a second pointer, a mode change, unmount: puts everything back. */
+  | { type: "cancel" };
+
+/**
+ * What the hook must do, in order. "flush" applies the newest pending move at once; "restore" puts the snapshot
+ * back; "finish" releases capture and the undo hold and forgets the drag; "cancelled" calls the spec's hook.
+ */
+export type DragEffect = "start" | "move" | "flush" | "end" | "tap" | "restore" | "finish" | "cancelled";
+
+export const IDLE: DragPhase = { tag: "idle" };
+
+export function reduceDrag(phase: DragPhase, ev: DragEvent): { phase: DragPhase; effects: DragEffect[] } {
+  const same = (id: number) => phase.tag !== "idle" && phase.pointerId === id;
+  switch (ev.type) {
+    case "press":
+      if (phase.tag !== "idle") return { phase, effects: [] };
+      return { phase: { tag: "pressed", pointerId: ev.pointerId, origin: ev.client, slop: ev.slop }, effects: [] };
+    case "move":
+      if (!same(ev.pointerId)) return { phase, effects: [] };
+      if (phase.tag === "pressed") {
+        if (!pastSlop(phase.origin, ev.client, phase.slop)) return { phase, effects: [] };
+        return { phase: { tag: "moving", pointerId: phase.pointerId }, effects: ["start", "move"] };
+      }
+      return { phase, effects: ["move"] };
+    case "up":
+      if (!same(ev.pointerId)) return { phase, effects: [] };
+      return { phase: IDLE, effects: phase.tag === "moving" ? ["flush", "end", "finish"] : ["tap", "finish"] };
+    case "lost":
+      if (!same(ev.pointerId)) return { phase, effects: [] };
+      return { phase: IDLE, effects: phase.tag === "moving" ? ["flush", "end", "finish"] : ["finish"] };
+    case "cancel":
+      if (phase.tag === "idle") return { phase, effects: [] };
+      return { phase: IDLE, effects: ["restore", "finish", "cancelled"] };
+  }
+}

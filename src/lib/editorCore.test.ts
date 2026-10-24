@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   CLICK_SLOP_PX,
   DOUBLE_PRESS_MS,
+  IDLE,
+  chipSize,
   clampScale,
+  pinchOf,
+  reduceDrag,
+  type DragEvent,
+  type DragPhase,
   frameOf,
   isDoublePress,
   liveTransform,
@@ -92,6 +98,61 @@ describe("frameOf", () => {
     const back = f.fromClient({ clientX: s.x + 30, clientY: s.y + 20 });
     expect(back.x).toBeCloseTo(p.x);
     expect(back.y).toBeCloseTo(p.y);
+  });
+});
+
+describe("chipSize and pinchOf", () => {
+  it("sizes a chip from its text", () => {
+    const c = chipSize("3.00 m", 2, 10);
+    expect(c.w).toBeCloseTo(6 * 10 * 0.56 + 16);
+    expect(c.h).toBeCloseTo(13.5);
+  });
+  it("finds the midpoint and a non-zero spread", () => {
+    expect(pinchOf({ x: 0, y: 0 }, { x: 6, y: 8 })).toEqual({ m: { x: 3, y: 4 }, d: 10 });
+    expect(pinchOf({ x: 1, y: 1 }, { x: 1, y: 1 }).d).toBe(1);
+  });
+});
+
+describe("reduceDrag", () => {
+  const run = (events: DragEvent[], from: DragPhase = IDLE) => {
+    let phase = from;
+    const all: string[][] = [];
+    for (const ev of events) {
+      const r = reduceDrag(phase, ev);
+      phase = r.phase;
+      all.push(r.effects);
+    }
+    return { phase, all };
+  };
+  const press: DragEvent = { type: "press", pointerId: 1, client: { x: 100, y: 100 }, slop: 6 };
+
+  it("stays pressed inside the slop, then starts and moves", () => {
+    const r = run([press, { type: "move", pointerId: 1, client: { x: 103, y: 100 } }, { type: "move", pointerId: 1, client: { x: 110, y: 100 } }, { type: "move", pointerId: 1, client: { x: 120, y: 100 } }]);
+    expect(r.all).toEqual([[], [], ["start", "move"], ["move"]]);
+    expect(r.phase.tag).toBe("moving");
+  });
+  it("a slop of 0 moves from the first event", () => {
+    const r = run([{ ...press, slop: 0 } as DragEvent, { type: "move", pointerId: 1, client: { x: 100, y: 100 } }]);
+    expect(r.all[1]).toEqual(["start", "move"]);
+  });
+  it("a release inside the slop is a tap; after moving it flushes then ends", () => {
+    expect(run([press, { type: "up", pointerId: 1 }]).all[1]).toEqual(["tap", "finish"]);
+    const moved = run([press, { type: "move", pointerId: 1, client: { x: 150, y: 100 } }, { type: "up", pointerId: 1 }]);
+    expect(moved.all[2]).toEqual(["flush", "end", "finish"]);
+    expect(moved.phase).toEqual(IDLE);
+  });
+  it("cancel restores, finishes and notifies, and is a no-op when idle", () => {
+    expect(run([press, { type: "cancel" }]).all[1]).toEqual(["restore", "finish", "cancelled"]);
+    expect(run([{ type: "cancel" }]).all[0]).toEqual([]);
+  });
+  it("lost capture keeps the changes; before the slop it just finishes", () => {
+    expect(run([press, { type: "move", pointerId: 1, client: { x: 150, y: 100 } }, { type: "lost", pointerId: 1 }]).all[2]).toEqual(["flush", "end", "finish"]);
+    expect(run([press, { type: "lost", pointerId: 1 }]).all[1]).toEqual(["finish"]);
+  });
+  it("ignores another pointer and a second press", () => {
+    const r = run([press, { type: "move", pointerId: 2, client: { x: 300, y: 300 } }, { type: "up", pointerId: 2 }, press]);
+    expect(r.all).toEqual([[], [], [], []]);
+    expect(r.phase.tag).toBe("pressed");
   });
 });
 
