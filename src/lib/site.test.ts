@@ -13,6 +13,7 @@ import {
   removeBoundaryVertex,
   segmentSegmentClosest,
   sideClearances,
+  sideClearancesFromFaces,
   simpleSite,
   sunHoursGrid,
 } from "./site";
@@ -110,8 +111,9 @@ describe("sideClearances", () => {
     const d = Object.fromEntries(res.map((r) => [r.side, r.distance]));
     expect(d.right).toBeLessThan(0.1);
     expect(d.left).toBeLessThan(0.1);
-    expect(d.front).toBeCloseTo(2.9, 1);
-    expect(d.rear).toBeCloseTo(5.65, 1);
+    // Measured from the outer wall faces (125 mm closer than the centre lines: 2.9 and 5.65).
+    expect(d.front).toBeCloseTo(2.77, 1);
+    expect(d.rear).toBeCloseTo(5.53, 1);
   });
 });
 
@@ -222,5 +224,20 @@ describe("boundary prisms", () => {
     // A 1.8 m fence at 20 degrees shades 1.8 / tan(20) = 4.9 m.
     expect(grid.hours[0]).toBe(0);
     expect(grid.hours[7 * grid.nx + 5]).toBe(4);
+  });
+});
+
+describe("sideClearancesFromFaces", () => {
+  it("measures from the outer wall face, 0.125 m inside the centre-line distance", () => {
+    const boundary = [
+      { x: -5, y: -5 },
+      { x: 5, y: -5 },
+      { x: 5, y: 3 },
+      { x: -5, y: 3 },
+    ];
+    // Room right edge on the centre line x = 2; boundary at x = 5 is 3.0 m away.
+    const faces = [{ level: 0, segments: [{ a: { x: 2.125, y: -1.125 }, b: { x: 2.125, y: 1.125 }, n: { x: 1, y: 0 } }] }];
+    const right = sideClearancesFromFaces(faces, boundary).find((c) => c.side === "right")!;
+    expect(right.distance).toBeCloseTo(2.875, 9);
   });
 });
