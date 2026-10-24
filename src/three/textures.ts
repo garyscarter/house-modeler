@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type { FloorFinish, WallFinish } from "../types";
+import type { FloorFinish, WallCovering, WallFinish } from "../types";
 import { overflow } from "../lib/cache";
-import type { Pattern } from "../lib/wallCovering";
+import { wallAccent, wallBase, type Pattern } from "../lib/wallCovering";
 import { drawModern, isModern, modernBump, modernRoughness, modernTile } from "./wallTextures";
 import { DEFAULT_GROUT, FLOOR_COLOUR, takesGrout, type TexturedFloor } from "../lib/floorFinish";
 import { chevronBlocks, herringboneBlocks, hexagons, hexTile, parquetTile, type Block, type XY } from "../lib/floorPattern";
@@ -1701,4 +1701,62 @@ export function getMaterial(s: MatSpec): THREE.Material {
     }
   }
   return m;
+}
+
+// ---------------------------------------------------------------------------
+// Thumbnails for the inspector's finish pickers
+
+const thumbnails = new Map<string, string>();
+/** How much of a finish a thumbnail shows, metres: about half a metre, so boards and tiles read at their real scale. */
+const THUMB_SPAN_M = 0.5;
+
+/**
+ * A small data-URL picture of a floor or wall finish, drawn with the same
+ * generators as the 3D maps (one repeat, cropped to about half a metre and
+ * scaled down). `colour` overrides the finish's own colour. Plain floors and
+ * paint, and any finish that fails to draw, come back as a flat swatch.
+ * Cached by kind, finish, colour and size. Drawn at twice `size` for sharp screens.
+ */
+export function finishThumbnail(kind: "floor" | "wall", finish: string, colour: string | undefined, size = 56): string {
+  const key = `${kind}|${finish}|${colour ?? ""}|${size}`;
+  const hit = thumbnails.get(key);
+  if (hit) return hit;
+  const px = size * 2;
+  const [out, o] = canvas(px, px);
+  let tile: [number, number] = [1, 1];
+  let src: HTMLCanvasElement | null = null;
+  let base = colour ?? "#cccccc";
+  try {
+    if (kind === "floor") {
+      base = colour ?? (finish === "plain" ? "#d9d4c8" : (FLOOR_COLOUR[finish as TexturedFloor] ?? base));
+      if (finish !== "plain" && finish in FLOOR_TILE) {
+        tile = FLOOR_TILE[finish as TexturedFloor];
+        src = drawFloor(finish as TexturedFloor, base).color;
+      }
+    } else {
+      const look = { wallCovering: finish as WallCovering, wallPaint: colour };
+      base = wallBase(look);
+      if (finish !== "paint") {
+        const accent = wallAccent(look);
+        tile = coverTile(finish as Pattern, accent !== null && finish === "tiles");
+        src = drawCover(finish as Pattern, base, accent).color;
+      }
+    }
+  } catch {
+    src = null;
+  }
+  if (src) {
+    // Crop to the sampled span (or the whole repeat when it is smaller), keeping the picture square.
+    const pxPerM = src.width / tile[0];
+    const side = Math.min(src.width, src.height, THUMB_SPAN_M * pxPerM);
+    const sx = Math.max(0, (src.width - side) / 2);
+    const sy = Math.max(0, (src.height - side) / 2);
+    o.drawImage(src, sx, sy, side, side, 0, 0, px, px);
+  } else {
+    o.fillStyle = base;
+    o.fillRect(0, 0, px, px);
+  }
+  const url = out.toDataURL("image/png");
+  thumbnails.set(key, url);
+  return url;
 }

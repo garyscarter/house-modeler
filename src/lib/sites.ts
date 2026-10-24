@@ -53,6 +53,14 @@ export function updateSiteOf(sites: Sites, k: VariantKey, patch: Partial<Site> |
   return { ...sites, [k]: next };
 }
 
+/** True when the two layouts show plots that differ (a shared or identical plot, or none, is not a difference). */
+export function plotsDiffer(sites: Sites | undefined): boolean {
+  const a = siteOf(sites, "current");
+  const b = siteOf(sites, "proposed");
+  if (a === b) return false;
+  return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+}
+
 /** Copy one variant's plot onto another (Copy As listed to start, Reset to a copy of As listed). */
 export function copySiteOf(sites: Sites, from: VariantKey, to: VariantKey): Sites {
   const s = siteOf(sites, from);

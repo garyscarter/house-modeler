@@ -1,8 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { useStore } from "../store";
-import { MODE_LABEL } from "../lib/modes";
+import { MODE_LABEL, MODE_SUBTITLE } from "../lib/modes";
 import { usePanelPrefs } from "./panelPrefs";
 import { Icon } from "./icons";
+import "./Inspector.css";
 
 /**
  * The floating card that holds a mode's inspector. Renders nothing without content, scrolls its body,
@@ -24,7 +25,10 @@ export function InspectorCard({ title, className = "", children }: { title?: str
     <section className={`inspector-card float-card ${className}${peek ? " peeking" : ""}`.trim()}
       inert={peek} aria-label={title ?? `${MODE_LABEL[mode]} inspector`}>
       <div className="inspector-card-head">
-        <h2>{heading}</h2>
+        <div className="inspector-card-title">
+          <h2>{heading}</h2>
+          {heading === MODE_LABEL[mode] &&<p className="mode-sub">{MODE_SUBTITLE[mode]}</p>}
+        </div>
         <button
           type="button"
           className="inspector-card-toggle"

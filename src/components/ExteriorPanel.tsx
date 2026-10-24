@@ -4,6 +4,7 @@ import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, 
 import { chimneyOnRidge, defaultChimney, exteriorOf, planRoofs } from "../lib/roof";
 import { modelBounds } from "../lib/geometry";
 import { Info } from "./Info";
+import { SwatchField } from "./inspector";
 import "./ExteriorPanel.css";
 
 /** A typical colour for each covering, applied when the covering changes (the user can adjust it after). */
@@ -141,9 +142,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
           <Field label="Eaves overhang (m)">
             <NumberField value={ext.overhang} step={0.05} min={0} max={1} onChange={(overhang) => set({ overhang })} />
           </Field>
-          <Field label="Roof colour">
-            <input type="color" value={ext.roofColor} onChange={(e) => set({ roofColor: e.target.value })} />
-          </Field>
+          <SwatchField label="Roof colour" value={ext.roofColor} isSet onChange={(roofColor) => set({ roofColor })} />
         </div>
       </section>
 
@@ -262,12 +261,8 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
               ))}
             </select>
           </Field>
-          <Field label="Wall colour">
-            <input type="color" value={ext.wallColor} onChange={(e) => set({ wallColor: e.target.value })} />
-          </Field>
-          <Field label="Window frames">
-            <input type="color" value={ext.trimColor} onChange={(e) => set({ trimColor: e.target.value })} />
-          </Field>
+          <SwatchField label="Wall colour" value={ext.wallColor} isSet onChange={(wallColor) => set({ wallColor })} />
+          <SwatchField label="Window frames" value={ext.trimColor} isSet onChange={(trimColor) => set({ trimColor })} />
         </div>
         <p className="muted small">Rooms can have their own outside finish and colour in Plan.</p>
       </section>

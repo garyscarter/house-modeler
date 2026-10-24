@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Floor, VariantKey } from "../types";
-import { buildSummary, decorateSummary, furnishSummary } from "../lib/modeSummary";
+import { buildStats, decorateSummary, furnishSummary } from "../lib/modeSummary";
+import { Info } from "../components/Info";
 import { byId } from "../lib/catalogue";
 import { fixtureSolids, overlappingIds } from "../lib/planMath";
 import { FloorSettings, NumberField } from "./Inspectors";
@@ -14,23 +15,32 @@ export function useClashCount(floor: Floor): number {
   return useMemo(() => overlappingIds(fixtureSolids(fixtures ?? [], floor.pxPerM, byId), 0.5).size, [fixtures, floor.pxPerM]);
 }
 
-/** Build, nothing selected: a line about the floor, then its settings and stairs. */
+/** Build, nothing selected: what to do, the floor at a glance, then the house and floor settings. */
 export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: Floor }) {
   const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
   const updateModel = useStore((s) => s.updateModel);
-  const updateFloor = useStore((s) => s.updateFloor);
-  const allLocked = floor.rooms.length > 0 && floor.rooms.every((r) => r.locked);
+  const stats = buildStats(floor);
   return (
     <div className="mode-summary">
-      <p className="summary-line">{buildSummary(floor)}</p>
-      {floor.rooms.length > 0 && (
-        <div className="row">
-          <button
-            title="Locked rooms keep their corners and size when you drag on the plan"
-            onClick={() => updateFloor(variant, floor.id, (f) => ({ ...f, rooms: f.rooms.map((r) => ({ ...r, locked: allLocked ? undefined : true })) }))}
-          >
-            {allLocked ? "Unlock all rooms" : "Lock all rooms"}
-          </button>
+      <p className="instruction">
+        {floor.rooms.length ? (
+          <>
+            Click a room to check its size, or draw one with <kbd className="keycap">R</kbd>
+          </>
+        ) : (
+          <>
+            No rooms yet. Draw one with <kbd className="keycap">R</kbd>
+          </>
+        )}
+      </p>
+      {stats.length > 0 && (
+        <div className="stat-row" aria-label="This floor">
+          {stats.map((st) => (
+            <div key={st.label}>
+              <b>{st.value}</b>
+              <span>{st.label}</span>
+            </div>
+          ))}
         </div>
       )}
       <div className="inspector">
@@ -50,28 +60,26 @@ export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: F
 export function DecorateSummary({ floor }: { floor: Floor }) {
   return (
     <div className="mode-summary">
-      <p className="summary-line">{decorateSummary(floor)}</p>
-      <p className="muted small">Click a floor, or a wall near its edge, to decorate it.</p>
+      <p className="instruction">Click a floor, or a wall near its edge, to decorate it.</p>
+      <p className="muted small">{decorateSummary(floor)}</p>
     </div>
   );
 }
 
-/** Furnish, nothing selected: what is on the floor, with Add (and Paste when something is copied). */
-export function FurnishSummary({ floor, clashes, onAdd, onPaste }: { floor: Floor; clashes: number; onAdd?: () => void; onPaste?: () => void }) {
+/** Furnish, nothing selected: what is on the floor, with one Add button (and Paste when something is copied). */
+export function FurnishSummary({ floor, clashes, onAdd, onPaste }: { floor: Floor; clashes: number; onAdd: () => void; onPaste?: () => void }) {
   return (
     <div className="mode-summary">
-      <p className="summary-line">{furnishSummary(floor, clashes)}</p>
-      {onAdd && <p className="muted small">Shift+click adds items to the selection; Ctrl/⌘+G groups them so they move together.</p>}
-      {(onAdd || onPaste) && (
-        <div className="row">
-          {onAdd && (
-            <button className="primary big" onClick={onAdd}>
-              Add furniture
-            </button>
-          )}
-          {onPaste && <button onClick={onPaste}>Paste</button>}
-        </div>
-      )}
+      <p className="instruction with-info">
+        {furnishSummary(floor, clashes)}
+        <Info label="Selecting several pieces">Shift+click adds items to the selection; Ctrl/⌘+G groups them so they move together.</Info>
+      </p>
+      <div className="row">
+        <button className="primary big" onClick={onAdd}>
+          Add furniture
+        </button>
+        {onPaste && <button onClick={onPaste}>Paste</button>}
+      </div>
       <MyFurnitureList />
     </div>
   );

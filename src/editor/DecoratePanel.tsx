@@ -1,18 +1,19 @@
 import { Section } from "../components/Section";
-import { WALL_COVERING_LABEL, WALL_FINISH_LABEL, FLOOR_FINISH_LABEL, type Floor, type FloorFinish, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
+import { WALL_COVERING_LABEL, WALL_FINISH_LABEL, FLOOR_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallFinish } from "../types";
 import type { EdgePick } from "../lib/decorPick";
-import { eachWallSummary, floorSummary, outsideSummary, wallsSummary } from "../lib/modeSummary";
+import { eachWallSummary, outsideSummary } from "../lib/modeSummary";
 import { edgeLabel, isOutsideEdge } from "../lib/featureWalls";
-import { areaM2, edgeLengthsM, formatArea, formatLength } from "../lib/planMath";
+import { areaM2, edgeLengthsM, formatLength } from "../lib/planMath";
 import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../lib/wallCovering";
 import { skirtingColour } from "../lib/skirting";
-import { finishColour, floorAngle, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
+import { finishColour, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
 import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
 import { roomColor } from "../lib/roomColor";
 import { useSite, useStore } from "../store";
-import { ColourSwatches } from "./ColourSwatches";
 import { FeatureWalls, WallFinishRow } from "./FeatureWalls";
-import { hoverRoom, NumberField } from "./Inspectors";
+import { hoverRoom } from "./Inspectors";
+import { DirectionField, FinishPicker, StatHeader, SwatchField } from "../components/inspector";
+import { FLOOR_GROUPS, FLOOR_TILE_NAME, WALL_GROUPS, WALL_TILE_NAME } from "../lib/finishGroups";
 
 /**
  * Decorate's panel for a picked room: its floor and walls, or one wall face
@@ -47,12 +48,7 @@ export function DecoratePanel({
     const side = edge.side === "outside" && isOutsideEdge(floor, room, i) ? "outside" : "inside";
     return (
       <div className="inspector decorate-panel decorate-wall">
-        <h4 className="decor-head">
-          Wall {i + 1} · {formatLength(len)} · {edgeLabel(floor, room, i, frontBearing)}
-        </h4>
-        <p className="muted small">
-          {room.name} · {side === "outside" ? "outside face" : "inside face"}
-        </p>
+        <StatHeader title={`Wall ${i + 1}`} stat={formatLength(len)} sub={`${room.name} · ${side === "outside" ? "outside face" : "inside face"} · ${edgeLabel(floor, room, i, frontBearing)}`} />
         <div className="feature-walls single-wall">
           <WallFinishRow key={`${room.id}:${i}:${side}`} floor={floor} room={room} edge={i} onChange={onChange} alwaysSwatches side={side} variant={variant} />
         </div>
@@ -66,147 +62,104 @@ export function DecoratePanel({
   const covering = room.wallCovering ?? "paint";
   const accented = covering !== "paint" && hasAccent(covering);
   const hasOutside = room.polygon.some((_, i) => isOutsideEdge(floor, room, i));
+  const floorFinishNow = room.floorFinish ?? "plain";
+  const short = (label: string) => label.replace(/ colour$/i, "");
 
   return (
     <div className="inspector decorate-panel">
-      <h4 className="decor-head" {...hoverRoom(room.id)}>
-        {room.name}
-      </h4>
-      <p className="muted small">Floor area {formatArea(areaM2(room.polygon, floor.pxPerM))}</p>
+      <StatHeader title={room.name} stat={`${areaM2(room.polygon, floor.pxPerM).toFixed(1)} m²`} {...hoverRoom(room.id)} />
 
-      <Section id="decorate.floor" title="Floor" summary={floorSummary(room)} defaultOpen>
-        <label>
-          Floor finish
-          <select
-            value={room.floorFinish ?? "plain"}
-            onChange={(e) => {
-              const f = e.target.value as FloorFinish;
-              // A new textured finish starts in its own typical colour (light oak for herringbone);
-              // pick a colour after choosing the finish to change it.
-              onChange({ floorFinish: f === "plain" ? undefined : f, ...(f !== "plain" && room.color ? { color: undefined } : {}) });
-            }}
-          >
-            {(Object.keys(FLOOR_FINISH_LABEL) as FloorFinish[]).map((k) => (
-              <option key={k} value={k}>
-                {FLOOR_FINISH_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="deco-block">
+        <div className="deco-head">
+          <h4>Floor</h4>
+          <span className="deco-value">{FLOOR_FINISH_LABEL[floorFinishNow]}</span>
+        </div>
+        <FinishPicker
+          kind="floor"
+          label="Floor finish"
+          value={floorFinishNow}
+          groups={FLOOR_GROUPS}
+          names={FLOOR_TILE_NAME}
+          titles={FLOOR_FINISH_LABEL}
+          selectedColour={finishColour(room)}
+          fallbackColour={room.color ?? roomColor(room)}
+          onPick={(f) =>
+            // A new textured finish starts in its own typical colour (light oak for herringbone);
+            // pick a colour after choosing the finish to change it.
+            onChange({ floorFinish: f === "plain" ? undefined : f, ...(f !== "plain" && room.color ? { color: undefined } : {}) })
+          }
+        />
         {takesAngle(room.floorFinish) && (
-          <div className="field">
-            <span className="field-label">Pattern direction (degrees)</span>
-            <div className="size-row floor-angle">
-              <NumberField value={room.floorAngle ?? 0} min={-361} max={360} step={5} label="Floor pattern angle" onCommit={(a) => onChange({ floorAngle: normaliseAngle(a) || undefined })} />
-              {[0, 45, 90].map((a) => (
-                <button key={a} className={floorAngle(room) === a ? "active" : ""} onClick={() => onChange({ floorAngle: a || undefined })}>
-                  {a}°
-                </button>
-              ))}
-              <button title="Run the pattern along the room's longest wall" onClick={() => onChange({ floorAngle: longAxisAngle(room.polygon) || undefined })}>
-                Along room
-              </button>
-            </div>
-          </div>
+          <DirectionField angle={room.floorAngle ?? 0} alongRoom={longAxisAngle(room.polygon)} onChange={(a) => onChange({ floorAngle: normaliseAngle(a) || undefined })} />
         )}
+        <SwatchField
+          label="Colour"
+          value={finishColour(room) ?? roomColor(room)}
+          isSet={!!room.color}
+          onChange={(color) => onChange({ color })}
+          onReset={() => onChange({ color: undefined })}
+          resetLabel={floorFinishNow === "plain" ? "Back to default" : "Back to the finish's own colour"}
+        />
         {takesGrout(room.floorFinish) && (
-          <div className="colour-row">
-            <label>
-              Grout colour
-              <span className="colour-pick">
-                <input type="color" value={groutColour(room)} onChange={(e) => onChange({ floorGrout: e.target.value })} />
-                {room.floorGrout && (
-                  <button className="link" onClick={() => onChange({ floorGrout: undefined })}>
-                    Clear
-                  </button>
-                )}
-              </span>
-            </label>
-          </div>
+          <SwatchField label="Grout" value={groutColour(room) ?? "#b9b4aa"} isSet={!!room.floorGrout} onChange={(floorGrout) => onChange({ floorGrout })} onReset={() => onChange({ floorGrout: undefined })} />
         )}
-        <div className="colour-row">
-          <label>
-            Floor colour
-            <span className="colour-pick">
-              <input type="color" value={finishColour(room) ?? roomColor(room)} onChange={(e) => onChange({ color: e.target.value })} />
-              {room.color && room.floorFinish && room.floorFinish !== "plain" && (
-                <button className="link" title="Back to the finish's own colour" onClick={() => onChange({ color: undefined })}>
-                  Clear
-                </button>
-              )}
-            </span>
-          </label>
-        </div>
-        <label>
-          Floor texture from photo
-          <select value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>
-            <option value="">None</option>
-            {photos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </Section>
+        <Section id="decorate.floor.photo" title="Use a photo as the floor" summary={photos.find((p) => p.id === room.floorPhotoId)?.name ?? "None"}>
+          {photos.length === 0 ? (
+            <p className="muted small">Add photos to the house first, then pick one here.</p>
+          ) : (
+            <select aria-label="Floor photo" value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>
+              <option value="">None</option>
+              {photos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Section>
+      </div>
 
-      <Section id="decorate.walls" title="Walls" summary={wallsSummary(room)} defaultOpen>
-        <label>
-          Wall covering
-          <select value={covering} onChange={(e) => onChange({ wallCovering: e.target.value === "paint" ? undefined : (e.target.value as WallCovering) })}>
-            {(Object.keys(WALL_COVERING_LABEL) as WallCovering[]).map((k) => (
-              <option key={k} value={k}>
-                {WALL_COVERING_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="colour-row">
-          <label>
-            {BASE_LABEL[covering]}
-            <span className="colour-pick">
-              <input type="color" value={wallBase(room)} onChange={(e) => onChange({ wallPaint: e.target.value })} />
-              {room.wallPaint && (
-                <button className="link" onClick={() => onChange({ wallPaint: undefined })}>
-                  Clear
-                </button>
-              )}
-            </span>
-          </label>
-          <label>
-            Skirting colour
-            <span className="colour-pick">
-              <input type="color" value={skirtingColour(room)} onChange={(e) => onChange({ skirtingColor: e.target.value })} />
-              {room.skirtingColor && (
-                <button className="link" onClick={() => onChange({ skirtingColor: undefined })}>
-                  Clear
-                </button>
-              )}
-            </span>
-          </label>
+      <div className="deco-block">
+        <div className="deco-head">
+          <h4>Walls</h4>
+          <span className="deco-value">{WALL_COVERING_LABEL[covering]}</span>
         </div>
+        <FinishPicker
+          kind="wall"
+          label="Wall covering"
+          value={covering}
+          groups={WALL_GROUPS}
+          names={WALL_TILE_NAME}
+          titles={WALL_COVERING_LABEL}
+          selectedColour={room.wallPaint}
+          fallbackColour={wallBase(room)}
+          onPick={(c) => onChange({ wallCovering: c === "paint" ? undefined : c })}
+        />
+        <SwatchField
+          label={short(BASE_LABEL[covering])}
+          value={wallBase(room)}
+          isSet={!!room.wallPaint}
+          onChange={(wallPaint) => onChange({ wallPaint })}
+          onReset={() => onChange({ wallPaint: undefined })}
+        />
         {accented && (
-          <label>
-            {ACCENT_LABEL[covering]}
-            <span className="colour-pick">
-              <input type="color" value={wallAccent(room) ?? wallBase(room)} onChange={(e) => onChange({ wallAccent: e.target.value })} />
-              {room.wallAccent && (
-                <button className="link" onClick={() => onChange({ wallAccent: undefined })}>
-                  {covering === "tiles" ? "None" : "Clear"}
-                </button>
-              )}
-            </span>
-          </label>
+          <SwatchField
+            label={short(ACCENT_LABEL[covering])}
+            value={wallAccent(room) ?? wallBase(room)}
+            isSet={!!room.wallAccent}
+            onChange={(wallAccent) => onChange({ wallAccent })}
+            onReset={() => onChange({ wallAccent: undefined })}
+            resetLabel={covering === "tiles" ? "No feature strip" : "Back to default"}
+          />
         )}
-        <span className="swatch-label">{BASE_LABEL[covering]}: quick colours</span>
-        <ColourSwatches label={BASE_LABEL[covering]} value={wallBase(room)} onPick={(hex) => onChange({ wallPaint: hex })} />
-        {accented && (
-          <>
-            <span className="swatch-label">{ACCENT_LABEL[covering]}: quick colours</span>
-            <ColourSwatches label={ACCENT_LABEL[covering]} value={wallAccent(room) ?? wallBase(room)} onPick={(hex) => onChange({ wallAccent: hex })} />
-          </>
-        )}
-      </Section>
+        <SwatchField
+          label="Skirting"
+          value={skirtingColour(room)}
+          isSet={!!room.skirtingColor}
+          onChange={(skirtingColor) => onChange({ skirtingColor })}
+          onReset={() => onChange({ skirtingColor: undefined })}
+        />
+      </div>
 
       <Section id="decorate.eachWall" title="Each wall" summary={eachWallSummary(room)}>
         <FeatureWalls variant={variant} floor={floor} room={room} onChange={onChange} onHighlight={onHighlightEdge} />
@@ -225,17 +178,14 @@ export function DecoratePanel({
               ))}
             </select>
           </label>
-          <label title="Colour of this room's external walls; blank uses the house's wall colour">
-            Outside wall colour
-            <span className="colour-pick">
-              <input type="color" value={room.exteriorColor ?? "#efe9d8"} onChange={(e) => onChange({ exteriorColor: e.target.value })} />
-              {room.exteriorColor && (
-                <button className="link" onClick={() => onChange({ exteriorColor: undefined })}>
-                  House colour
-                </button>
-              )}
-            </span>
-          </label>
+          <SwatchField
+            label="Outside wall colour"
+            value={room.exteriorColor ?? "#efe9d8"}
+            isSet={!!room.exteriorColor}
+            onChange={(exteriorColor) => onChange({ exteriorColor })}
+            onReset={() => onChange({ exteriorColor: undefined })}
+            resetLabel="Back to the house colour"
+          />
         </Section>
       )}
     </div>

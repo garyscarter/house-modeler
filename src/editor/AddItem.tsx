@@ -4,6 +4,7 @@ import { pieceItem } from "../lib/myFurniture";
 import { useStore } from "../store";
 import { PieceForm } from "./MyFurniture";
 import { usePanelPrefs } from "../components/panelPrefs";
+import { OPEN_ADD_EVENT, takePendingAdd } from "./addPicker";
 
 /**
  * The Add furniture popover: a search box and category chips in a card that opens to the right of its anchor
@@ -21,6 +22,16 @@ export function AddPopover({
   onOpenChange: (v: boolean) => void;
 }) {
   const pop = useRef<HTMLDivElement>(null);
+  // 3D's "Add furniture" switches to the plan and asks for the picker: open it on mount, or on the event if the plan is already up.
+  useEffect(() => {
+    if (takePendingAdd()) onOpenChange(true);
+    const openIt = () => {
+      takePendingAdd();
+      onOpenChange(true);
+    };
+    window.addEventListener(OPEN_ADD_EVENT, openIt);
+    return () => window.removeEventListener(OPEN_ADD_EVENT, openIt);
+  }, [onOpenChange]);
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => {
@@ -107,7 +118,7 @@ export function CataloguePicker({ activeId, onPick }: { activeId?: string | null
           />
         ) : (
           <div className="picker-foot">
-            <button onClick={() => setAdding(true)}>Add a piece I own</button>
+            <button onClick={() => setAdding(true)}>Add my own piece…</button>
           </div>
         ))}
     </div>

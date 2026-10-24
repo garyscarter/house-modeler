@@ -13,6 +13,14 @@ export const MODE_LABEL: Record<Mode, string> = {
   plot: "Plot",
   review: "Review",
 };
+/** The muted line under a mode's inspector title. */
+export const MODE_SUBTITLE: Record<Mode, string> = {
+  build: "Rooms, walls, doors and stairs",
+  decorate: "Floors, walls and colours",
+  furnish: "Place furniture",
+  plot: "Garden, boundaries, neighbours and roof",
+  review: "Areas, costs and planning",
+};
 export const isMode = (v: unknown): v is Mode => typeof v === "string" && (MODES as string[]).includes(v);
 
 export type Tool = "select" | "rect" | "canopy" | "room" | "door" | "window" | "gap" | "wall" | "measure" | "calibrate" | "place";

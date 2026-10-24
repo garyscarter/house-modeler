@@ -4,6 +4,7 @@ import { byId, CATALOGUE, CATEGORIES } from "../lib/catalogue";
 import { pieceWhereabouts, whereaboutsLine } from "../lib/myFurniture";
 import { useStore } from "../store";
 import { ask } from "../components/Dialogs";
+import { SwatchField } from "../components/inspector";
 import "./MyFurniture.css";
 
 let pendingPlace: string | null = null;
@@ -99,17 +100,15 @@ export function PieceForm({ initial, onSave, onCancel }: { initial?: MyPiece; on
       </div>
       {tried && !sizeOk && <p className="small warn">Enter all three sizes in centimetres.</p>}
       {tried && !name.trim() && <p className="small warn">Give the piece a name.</p>}
-      <label>
-        Colour
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => {
-            setColor(e.target.value);
-            setColorSet(true);
-          }}
-        />
-      </label>
+      <SwatchField
+        label="Colour"
+        value={color}
+        isSet={colorSet}
+        onChange={(c) => {
+          setColor(c);
+          setColorSet(true);
+        }}
+      />
       <label>
         Note
         <input value={note} placeholder="Optional" onChange={(e) => setNote(e.target.value)} />
@@ -160,10 +159,11 @@ export function MyFurnitureList() {
   const editing = form?.id ? pieces.find((p) => p.id === form.id) : undefined;
   const other: VariantKey = active === "current" ? "proposed" : "current";
 
+  // Nothing owned yet: the picker's "Mine" category explains and adds pieces. (The form still opens from "Edit piece".)
+  if (pieces.length === 0 && !form) return null;
   return (
     <div className="my-furniture">
       <h4>My furniture</h4>
-      {pieces.length === 0 && !form && <p className="muted small">Add the furniture you already own, with its real sizes, to see where it fits.</p>}
       {pieces.map((p) => {
         const here = where[p.id]?.[active];
         const there = where[p.id]?.[other];
@@ -201,9 +201,7 @@ export function MyFurnitureList() {
             setForm(null);
           }}
         />
-      ) : (
-        <button onClick={() => setForm({})}>Add a piece I own</button>
-      )}
+      ) : null}
     </div>
   );
 }

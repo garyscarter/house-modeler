@@ -14,6 +14,7 @@ import { useSiteView } from "../three/siteView";
 import { SlopeFields } from "./SlopeFields";
 import { SurfaceFinishField } from "./SurfaceFinishField";
 import { Info } from "./Info";
+import { Section } from "./Section";
 import "./SitePanel.css";
 
 const fmtArea = (a: number) => `${a.toFixed(a < 100 ? 1 : 0)} m²`;
@@ -72,36 +73,48 @@ export function SitePanel() {
             </label>
           </div>
 
-          <h4>Orientation and location</h4>
+          <h4 className="with-info">
+            Orientation
+            <Info>Drag the dial or type a bearing. North is up on the dial and the arrow is the front of the house.</Info>
+          </h4>
           <div className="site-orient">
             <CompassDial bearing={site.frontBearing} onChange={(b) => updateSite({ frontBearing: b })} />
             <div className="site-orient-fields">
               <label>
                 Front of the house faces
-                <span className="site-unit">
-                  <input
-                    type="number"
-                    min={0}
-                    max={359}
-                    value={Math.round(site.frontBearing)}
-                    onChange={(e) => updateSite({ frontBearing: ((num(e.target.value, site.frontBearing) % 360) + 360) % 360 })}
-                  />
-                  ° {compassPoint(site.frontBearing)}
+                <span className="site-bearing">
+                  <span className="pair-input">
+                    <input
+                      type="number"
+                      min={0}
+                      max={359}
+                      value={Math.round(site.frontBearing)}
+                      aria-label="Bearing in degrees"
+                      onChange={(e) => updateSite({ frontBearing: ((num(e.target.value, site.frontBearing) % 360) + 360) % 360 })}
+                    />
+                    <span className="pair-unit" aria-hidden="true">
+                      °
+                    </span>
+                  </span>
+                  <span className="compass-chip">{compassPoint(site.frontBearing)}</span>
                 </span>
               </label>
-              <div className="site-latlon">
-                <label>
-                  Latitude
-                  <input type="number" step={0.01} min={-90} max={90} value={site.latitude} onChange={(e) => updateSite({ latitude: num(e.target.value, site.latitude) })} />
-                </label>
-                <label>
-                  Longitude
-                  <input type="number" step={0.01} min={-180} max={180} value={site.longitude} onChange={(e) => updateSite({ longitude: num(e.target.value, site.longitude) })} />
-                </label>
-              </div>
             </div>
           </div>
-          <p className="muted small">Drag the dial or type a bearing. The town is close enough for the location; east is positive longitude.</p>
+
+          <Section id="plot.location" title="Location" summary={`${site.latitude.toFixed(2)}, ${site.longitude.toFixed(2)}`}>
+            <div className="site-latlon">
+              <label>
+                Latitude
+                <input type="number" step={0.01} min={-90} max={90} value={site.latitude} onChange={(e) => updateSite({ latitude: num(e.target.value, site.latitude) })} />
+              </label>
+              <label>
+                Longitude
+                <input type="number" step={0.01} min={-180} max={180} value={site.longitude} onChange={(e) => updateSite({ longitude: num(e.target.value, site.longitude) })} />
+              </label>
+            </div>
+            <p className="muted small">The town is close enough for the location; east is positive longitude.</p>
+          </Section>
 
           <SiteFigures site={site} model={model} />
 
@@ -249,11 +262,12 @@ function SiteFigures({ site, model }: { site: Site; model?: HouseModel }) {
           return (
             <div key={side}>
               <span className="muted small">{side}</span>
-              <b>{c ? (c.distance < 0.05 ? "on boundary" : c.distance.toFixed(2)) : "–"}</b>
+              <b>{c ? (c.distance < 0.05 ? "0" : c.distance.toFixed(2)) : "–"}</b>
+              <span className="muted gap-note">{c && c.distance < 0.05 ? "on boundary" : " "}</span>
             </div>
           );
         })}
-        <span className="muted small">metres, shortest, any floor</span>
+        <span className="muted small">Shortest distance, metres</span>
       </div>
     </>
   );
