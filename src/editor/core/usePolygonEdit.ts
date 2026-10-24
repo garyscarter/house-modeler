@@ -3,7 +3,7 @@ import { edgeOffset, midpointOf, outwardNormal, slideEdge, snapEdgeOffset, snapP
 import type { Pt } from "../../types";
 import type { useDoublePress } from "./useDoublePress";
 import type { CanvasCamera } from "./useCanvasCamera";
-import type { DragApi } from "./useDrag";
+import type { DragApi, Move } from "./useDrag";
 
 /** What the core needs to know to edit one polygon: the plan's room, the site's boundary, surface or neighbour. */
 export interface PolygonTarget<C = unknown> {
@@ -25,6 +25,8 @@ export interface PolygonTarget<C = unknown> {
   /** The context kept for an edge drag (plan: the openings on the edge). */
   edgeBegin?(i: number): C;
   setEdge(i: number, next: Pt[], shift: Pt, ctx: C): void;
+  /** A tap (press and release within the slop) on an edge hit; without it the tap is swallowed. */
+  edgeTap?(m: Move, i: number): void;
   /** The new vertex is i + 1. */
   insertVertex(i: number, p: Pt): void;
   removeVertex(i: number): void;
@@ -97,6 +99,7 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
           const n = outwardNormal(poly0, i);
           t.setEdge(i, slideEdge(poly0, i, off), n ? { x: n.x * off, y: n.y * off } : { x: 0, y: 0 }, ctx);
         },
+        tap: t.edgeTap ? (m: Move) => t.edgeTap!(m, i) : undefined,
       });
     };
 

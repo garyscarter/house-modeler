@@ -5,6 +5,7 @@ import type { LevelWalls } from "../../lib/siteWalls";
 import { edgeLength } from "../../lib/boundaryOpening";
 import { type Site, type SurfaceKind } from "../../types";
 import { sameItem, type Draft, type Item, type Sel, type Tool } from "./types";
+import { EdgeHit, Handle, MidpointHandle } from "../core/components";
 
 type Down = (e: React.PointerEvent, s: Item) => void;
 
@@ -142,24 +143,13 @@ export function SelectionLayer({ sel, poly, px, onEdgeDown, onMidDown, onVertexD
       {sel.type !== "boundary" &&
         poly.map((a, i) => {
           const b = poly[(i + 1) % poly.length];
-          return <line key={"e" + i} className="site-edge-hit" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={10 * px} onPointerDown={(ev) => onEdgeDown(ev, sel, i)} />;
+          return <EdgeHit key={"e" + i} a={a} b={b} px={px} width={10} className="site-edge-hit" onPointerDown={(ev) => onEdgeDown(ev, sel, i)} />;
         })}
-      {poly.map((a, i) => {
-        const b = poly[(i + 1) % poly.length];
-        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        return (
-          <g key={"m" + i} className="site-mid" onPointerDown={(e) => onMidDown(e, sel, i)}>
-            <circle cx={m.x} cy={m.y} r={9 * px} fill="transparent" stroke="none" />
-            <circle cx={m.x} cy={m.y} r={5 * px} strokeWidth={1.2 * px} />
-            <path d={`M ${m.x - 3 * px} ${m.y} H ${m.x + 3 * px} M ${m.x} ${m.y - 3 * px} V ${m.y + 3 * px}`} strokeWidth={1.2 * px} />
-          </g>
-        );
-      })}
+      {poly.map((a, i) => (
+        <MidpointHandle key={"m" + i} a={a} b={poly[(i + 1) % poly.length]} px={px} r={5} hit={9} plus className="site-mid" onPointerDown={(e) => onMidDown(e, sel, i)} />
+      ))}
       {poly.map((p, i) => (
-        <g key={"v" + i} className={`site-handle${sel.vertex === i ? " active" : ""}`} onPointerDown={(e) => onVertexDown(e, sel, i)}>
-          <circle cx={p.x} cy={p.y} r={12 * px} fill="transparent" stroke="none" />
-          <circle cx={p.x} cy={p.y} r={6 * px} strokeWidth={1.5 * px} />
-        </g>
+        <Handle key={"v" + i} at={p} px={px} r={6} hit={12} className={`site-handle${sel.vertex === i ? " active" : ""}`} onPointerDown={(e) => onVertexDown(e, sel, i)} />
       ))}
     </g>
   );

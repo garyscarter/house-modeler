@@ -285,6 +285,8 @@ export function usePlanDrag(args: PlanDragArgs) {
       moveVertex: (i, p) =>
         updateFloor((g) => ({ ...g, rooms: g.rooms.map((r) => (r.id === roomId ? { ...r, polygon: r.polygon.map((v, k) => (k === i ? p : v)) } : r)) })),
       edgeBegin: (i) => openingsOnEdge(getFloor(), roomId, i, (EXT_WALL_T / 2) * getFloor().pxPerM).map((o) => ({ id: o.id, x: o.x, y: o.y })),
+      // A tap on the edge hit reaches the plan under it, as the old click did: a neighbour within the hit width can be Shift-knocked through.
+      edgeTap: (m) => backgroundTap(m),
       // Slide the edge along its normal; openings in it go with it. Other rooms' corners are not dragged along (the corner drag does not either).
       setEdge: (_i, next, shift, ops0) => {
         const moved = new Map(ops0.map((o) => [o.id, o]));
