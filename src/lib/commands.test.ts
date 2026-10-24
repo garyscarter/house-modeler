@@ -1,3 +1,4 @@
+import { usePanelPrefs } from "../components/panelPrefs";
 import { describe, expect, it, vi } from "vitest";
 import { buildCommands, fuzzyScore, rankCommands, type CommandContext } from "./commands";
 import type { HouseModel } from "../types";
@@ -143,5 +144,18 @@ describe("studio commands", () => {
     expect(c.setMode).toHaveBeenCalledWith("plot");
     expect(c.setUi).toHaveBeenCalledWith({ tab: "plan" });
     expect(buildCommands(ctx({ look: "glass" })).some((x) => x.title === "Look: Studio")).toBe(true);
+  });
+
+  it("has canvas and photo pin commands that write the panel preferences", () => {
+    const cmds = buildCommands(ctx({}));
+    cmds.find((x) => x.title === "Canvas: Full")!.run();
+    expect(usePanelPrefs.getState().quiet).toBe(false);
+    cmds.find((x) => x.title === "Canvas: Quiet")!.run();
+    expect(usePanelPrefs.getState().quiet).toBe(true);
+    usePanelPrefs.getState().setPrefs({ showPins: false });
+    buildCommands(ctx({})).find((x) => x.title === "Photo pins: show")!.run();
+    expect(usePanelPrefs.getState().showPins).toBe(true);
+    expect(buildCommands(ctx({})).some((x) => x.title === "Photo pins: hide")).toBe(true);
+    usePanelPrefs.getState().setPrefs({ showPins: false });
   });
 });

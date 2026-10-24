@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
 import { Icon } from "./icons";
+import { usePanelPrefs } from "./panelPrefs";
 import "./ViewMenu.css";
 
 /**
@@ -72,6 +73,9 @@ export function ViewToggles() {
   const showSite = useStore((s) => s.showSite);
   const site = useStore((s) => !!siteOf(s.sites, s.activeVariant));
   const setUi = useStore((s) => s.setUi);
+  const showPins = usePanelPrefs((s) => s.showPins);
+  const setPrefs = usePanelPrefs((s) => s.setPrefs);
+  const hasPhotos = useStore((s) => s.photos.length > 0);
   return (
     <div className="view-toggles">
       <label className="check">
@@ -88,6 +92,9 @@ export function ViewToggles() {
       </label>
       <label className="check" title="Plot, garden and neighbouring buildings (set up under Plot)">
         <input type="checkbox" checked={showSite} disabled={!site} onChange={(e) => setUi({ showSite: e.target.checked })} /> Site
+      </label>
+      <label className="check" title={hasPhotos ? "Camera pins on the rooms and one photo pin beside each side of the house" : "No photos in this project yet"}>
+        <input type="checkbox" checked={showPins && hasPhotos} disabled={!hasPhotos} onChange={(e) => setPrefs({ showPins: e.target.checked })} /> Photos
       </label>
     </div>
   );

@@ -19,6 +19,7 @@ export function HouseMenu({ name }: { name: string }) {
   const proposed = useStore((s) => s.variants.proposed);
   const updates = useListingUpdateCount("proposed");
   const look = usePanelPrefs((s) => s.look);
+  const quiet = usePanelPrefs((s) => s.quiet);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const syncOff = useSyncStatus((s) => s.status.kind === "off");
 
@@ -84,6 +85,17 @@ export function HouseMenu({ name }: { name: string }) {
                 </button>
                 <button className={look === "glass" ? "active" : ""} onClick={() => setPrefs({ look: "glass" })}>
                   Glass
+                </button>
+              </div>
+            </div>
+            <div className="hm-row">
+              <span>Canvas</span>
+              <div className="seg" role="group" aria-label="Canvas">
+                <button className={quiet ? "active" : ""} onClick={() => setPrefs({ quiet: true })}>
+                  Quiet
+                </button>
+                <button className={!quiet ? "active" : ""} onClick={() => setPrefs({ quiet: false })}>
+                  Full
                 </button>
               </div>
             </div>

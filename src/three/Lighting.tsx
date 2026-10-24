@@ -1,3 +1,4 @@
+import { usePanelPrefs } from "../components/panelPrefs";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
@@ -285,6 +286,8 @@ const SUN_HAZE = new THREE.Color("#dbe3ea");
 const LOW_HAZE = new THREE.Color("#f0c8a0");
 /** Fog starts well beyond the plot so only the far ground fades; the colour is set as a prop. */
 const FOG_ARGS: [string, number, number] = ["#e2e9f0", 140, 420];
+/** Quiet canvas: fog starts about 60 m out and is solid by the edge of the 300 m ground, so no hard edge shows. */
+const QUIET_FOG: [number, number] = [60, 220];
 
 /**
  * The sky behind the scene: a physical sky lit by the sun during a sun
@@ -293,6 +296,7 @@ const FOG_ARGS: [string, number, number] = ["#e2e9f0", 140, 420];
  * far ground into the horizon.
  */
 export function SkyBackdrop() {
+  const quiet = usePanelPrefs((s) => s.quiet);
   const sun = useSunInfo();
   const camera = useThree((s) => s.camera);
   const dome = useRef<THREE.Mesh>(null);
@@ -342,7 +346,7 @@ export function SkyBackdrop() {
           <sphereGeometry args={[300, 32, 16]} />
         </mesh>
       )}
-      <fog attach="fog" args={FOG_ARGS} color={fog} />
+      <fog attach="fog" args={[FOG_ARGS[0], quiet ? QUIET_FOG[0] : FOG_ARGS[1], quiet ? QUIET_FOG[1] : FOG_ARGS[2]]} color={fog} />
     </>
   );
 }
