@@ -46,3 +46,17 @@
 .site-clear td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .site-clear td + td { text-align: right; font-weight: 600; }
 .site-edge-hit, .site-edge-sel { cursor: move; }
+
+/* ---- Touch and the phone chassis ---- */
+.app[data-touch] .site-canvas > svg { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.app[data-touch] .site-zoom { padding: 2px; }
+.app[data-touch] .site-zoom .icon-btn { width: 44px; height: 44px; }
+.app[data-touch] .site-status select { font-size: 16px; padding: 6px 8px; }
+/* Tablet: the card is 300 px wide, so the compass keeps clear of it. */
+.app[data-chassis="tablet"] .site-north { right: calc(var(--float-gap) + 312px); }
+.app[data-chassis="phone"] .site-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
+.app[data-chassis="phone"] .site-north { top: calc(var(--float-gap) + 48px); right: var(--float-gap); }
+.app[data-chassis="phone"] .site-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
+/* The scale bar sits one pill higher than the status so the two never overlap. */
+.app[data-chassis="phone"] .site-scale { left: var(--float-gap); bottom: calc(var(--sheet-peek) + 12px + 44px + 8px + 44px); }
+.app[data-chassis="phone"][data-sheet="half"] .site-status, .app[data-chassis="phone"][data-sheet="full"] .site-status { opacity: 0; pointer-events: none; }

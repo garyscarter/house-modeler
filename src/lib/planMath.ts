@@ -446,14 +446,18 @@ export function edgeChipCentre(a: Pt, b: Pt, inward: Pt, w: number, h: number, g
 /** Width taken by the floating inspector card on the plan: 320 px card plus a 12 px gap either side. */
 export const INSPECTOR_INSET = 344;
 
-/** Like fitCam, but fits rect r into the part of the element not covered by `rightInset` px on its right. */
-export function fitCamInset(r: Rect, el: Size, rightInset = 0, padFrac = 0.06): Cam {
+/**
+ * Like fitCam, but fits rect r into the part of the element not covered by `rightInset` px on its right and
+ * `bottomInset` px at its bottom (the phone's bottom sheet and dock).
+ */
+export function fitCamInset(r: Rect, el: Size, rightInset = 0, padFrac = 0.06, bottomInset = 0): Cam {
   // Keep at least a third of the element visible, so a narrow window still gets a sensible fit.
   const inset = Math.max(0, Math.min(rightInset, el.w * (2 / 3)));
-  if (inset === 0) return fitCam(r, el, padFrac);
-  const visible = { w: Math.max(el.w - inset, 1), h: el.h };
+  const below = Math.max(0, Math.min(bottomInset, el.h * (2 / 3)));
+  if (inset === 0 && below === 0) return fitCam(r, el, padFrac);
+  const visible = { w: Math.max(el.w - inset, 1), h: Math.max(el.h - below, 1) };
   const c = fitCam(r, visible, padFrac);
-  return { x: (r.x0 + r.x1) / 2 - (visible.w * c.s) / 2, y: c.y, s: c.s };
+  return { x: (r.x0 + r.x1) / 2 - (visible.w * c.s) / 2, y: (r.y0 + r.y1) / 2 - (visible.h * c.s) / 2, s: c.s };
 }
 
 /** The rect the floorplan image is clipped to in its faint state: the rooms' bounds plus a margin in metres. */

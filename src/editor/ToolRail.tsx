@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/icons";
 import { tip } from "../lib/shortcuts";
 
@@ -19,6 +19,16 @@ export interface RailItem {
 /** One rail button. Its name and key appear at once in a flyout pill on hover or focus (CSS only); aria-label carries the same for assistive tech. */
 export function RailButton({ item }: { item: RailItem }) {
   const t = tip(item.label, item.shortcut);
+  // A finger cannot hover: a tap shows the flyout for a moment (CSS shows .rail-fly while data-flash is set).
+  const [flash, setFlash] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const click = () => {
+    item.onClick();
+    setFlash(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setFlash(false), 1400);
+  };
   const button = (
     <button
       type="button"
@@ -27,13 +37,13 @@ export function RailButton({ item }: { item: RailItem }) {
       aria-label={t}
       aria-pressed={item.toggle || item.active !== undefined ? !!item.active : undefined}
       disabled={item.disabled}
-      onClick={item.onClick}
+      onClick={click}
     >
       <Icon name={item.icon} size={20} />
     </button>
   );
   return (
-    <div className={item.extra ? "rail-slot rail-item" : "rail-item"}>
+    <div className={item.extra ? "rail-slot rail-item" : "rail-item"} data-flash={flash || undefined}>
       {button}
       <span className="rail-fly" aria-hidden="true">
         {item.label}

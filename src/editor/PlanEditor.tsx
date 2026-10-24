@@ -11,7 +11,8 @@ import { refitFixture } from "../lib/recess";
 import { useClipboardFixtures } from "../lib/clipboard";
 import { selectionBounds } from "../lib/fixtureGroups";
 import { wallClearances } from "../lib/planGuides";
-import { useCanvasCamera } from "./core";
+import { useCameraInsets, useCanvasCamera } from "./core";
+import { useChassis } from "../components/useChassis";
 import { usePlanSelection } from "./plan/useSelection";
 import { usePlanTools } from "./plan/useTools";
 import { usePlanDrag } from "./plan/useDrag";
@@ -67,9 +68,13 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     return all.length >= 3 ? bbox(all) : { x0: 0, y0: 0, x1: floor.imageW, y1: floor.imageH };
   }, [floor.rooms, floor.imageW, floor.imageH]);
   // Scale limits: from 1 m filling about 2000 screen px to the whole image at a third of the element.
+  const touch = useChassis((s) => s.touch);
+  const insets = useCameraInsets();
   const camera = useCanvasCamera(wrapRef, {
     home: roomsRect,
-    fitKey: floor.id,
+    fitKey: `${floor.id}:${insets.fitSuffix}`,
+    insetRight: insets.insetRight,
+    insetBottom: insets.insetBottom,
     unitsPerM: ppm,
     limits: (s) => ({ minS: ppm / 2000, maxS: Math.max(floor.imageW / s.w, floor.imageH / s.h) * 3 }),
   });
@@ -96,7 +101,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     if (p) patchFixture(fx.id, p);
   };
 
+  const longPress = useRef<(p: { client: Pt }) => void>(undefined);
   const drag = usePlanDrag({
+    onLongPress: (p) => longPress.current?.(p),
     variant, floor, mode, peeking, svgRef, camera, sel: selection, tools,
     geo: { segs: geo.segs, snapTargets: geo.snapTargets, corners: geo.corners, hitShapes, faceLines, fitPlacing, snapFixture },
     selectedRoomId,
@@ -113,10 +120,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   });
 
   const pasteLabel = clipboard.length > 1 ? `Paste ${clipboard.length} items` : `Paste ${byId(clipboard[0]?.type ?? "")?.name ?? "item"}`;
-  const { menu, setMenu, onContextMenu } = usePlanMenu({
+  const { menu, setMenu, onContextMenu, openAt } = usePlanMenu({
     variant, floor, mode, peeking, camera, drag, sel: selection, tools, hitShapes,
     clipboardCount: clipboard.length, pasteLabel, placeOpeningAt, refit,
   });
+
+  longPress.current = (p) => openAt(p.client);
 
   const selected = floor.rooms.find((r) => r.id === selectedRoomId);
   const fixtures = floor.fixtures ?? EMPTY;
@@ -200,7 +209,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const statusText = statusTextFor({
     tool, draftLen: draft.length, measureLen: measure.length, calibLen: calib.length, placing,
-    movingWall: drag.movingWall, roomHint, hasSelectedRoom: !!selectedRoomId,
+    movingWall: drag.movingWall, roomHint, hasSelectedRoom: !!selectedRoomId, touch,
   });
 
   return (

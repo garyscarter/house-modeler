@@ -9,6 +9,9 @@ import type { Cam, Size } from "./planMath";
 /** A press and release closer than this (screen px) is a tap, not a drag. */
 export const CLICK_SLOP_PX = 6;
 /** Two presses on the same key within this many ms and DOUBLE_PRESS_PX make a double press. */
+/** A touch or pen press held this long without moving more than LONG_PRESS_SLOP_PX is a long press (the touch right-click). */
+export const LONG_PRESS_MS = 500;
+export const LONG_PRESS_SLOP_PX = 8;
 export const DOUBLE_PRESS_MS = 400;
 export const DOUBLE_PRESS_PX = 6;
 /** A wheel burst commits its camera after this much quiet (equal to wheelGesture's STICKY_MS). */
@@ -29,6 +32,9 @@ export interface Frame {
 }
 
 /** True once b is at least `slop` screen px from a. */
+/** Whether a press may still become a long press: a finger or pen (not a mouse), alone on the screen, within the slop. */
+export const canLongPress = (pointerType: string, pointerCount: number, from: Pt, to: Pt): boolean =>
+  pointerType !== "mouse" && pointerCount === 1 && !pastSlop(from, to, LONG_PRESS_SLOP_PX);
 export const pastSlop = (a: Pt, b: Pt, slop = CLICK_SLOP_PX) => Math.hypot(b.x - a.x, b.y - a.y) >= slop;
 
 /** One primary press: what was pressed (a key), when (ms, e.timeStamp) and where (client px). */

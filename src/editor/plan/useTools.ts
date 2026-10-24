@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CatalogueItem } from "../../lib/catalogue";
 import type { Mode, Tool } from "../../lib/modes";
 import { useStore } from "../../store";
+import { useChassis } from "../../components/useChassis";
+import { toolAllowed } from "../../lib/chassis";
 import type { Floor, Pt } from "../../types";
 import { pieceItem } from "../../lib/myFurniture";
 import { takePendingPlace } from "../MyFurniture";
@@ -13,7 +15,8 @@ import { PLAN_TOOL_EVENT, takePendingTool } from "../planTool";
  * `closeEdgeEdit` is the selection's: picking a tool closes the edge-length field.
  */
 export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void) {
-  const [tool, setTool] = useState<Tool>(mode === "build" && !floor.rooms.length ? "rect" : "select");
+  const chassis = useChassis((s) => s.chassis);
+  const [tool, setTool] = useState<Tool>(mode === "build" && !floor.rooms.length && toolAllowed(chassis, "rect") ? "rect" : "select");
   const [calib, setCalib] = useState<Pt[]>([]);
   const [draft, setDraft] = useState<Pt[]>([]);
   const [hover, setHover] = useState<Pt | null>(null);
@@ -22,6 +25,8 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
 
   const pick = (t: Tool) => {
+    // The phone has no drawing tools: their keys and requests from elsewhere do nothing.
+    if (!toolAllowed(useChassis.getState().chassis, t)) return;
     setTool(t);
     setCalib([]);
     setDraft([]);
@@ -36,6 +41,16 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
     setDraft([]);
     setMeasure([]);
   };
+
+  // The chassis changed (a rotation, a resize) to one that cannot offer the tool in hand: fall back to Select.
+  useEffect(() => {
+    if (!toolAllowed(chassis, tool)) {
+      setTool("select");
+      setDraft([]);
+      setCalib([]);
+      setMeasure([]);
+    }
+  }, [chassis, tool]);
 
   // A tool asked for from outside (Floor settings' "Calibrate from two points…"): on mount, or while the plan is open.
   const pickRef = useRef(pick);

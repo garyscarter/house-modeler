@@ -18,7 +18,7 @@ import { useStore } from "../../store";
 import { uid, type Fixture, type Floor, type JoineryConfig, type Opening, type Pt, type Room, type VariantKey, type Wall } from "../../types";
 import { askText } from "../../components/Dialogs";
 import { confirmKnockThrough } from "../KnockThrough";
-import { useDoublePress, useDrag as useCoreDrag, usePolygonEdit, type CanvasCamera, type DragSpec, type Move, type PolygonTarget, type Press } from "../core";
+import { lowerSheet, useDoublePress, useDrag as useCoreDrag, usePolygonEdit, type CanvasCamera, type DragSpec, type Move, type PolygonTarget, type Press } from "../core";
 import type { PlanSelection } from "./useSelection";
 import type { PlanTools } from "./useTools";
 
@@ -46,6 +46,8 @@ export interface PlanDragArgs {
   tools: PlanTools;
   geo: PlanGeo;
   selectedRoomId: string | null;
+  /** Touch: a press held in place; the plan opens its context menu there. */
+  onLongPress?(p: { client: Pt; local: Pt; at: Pt }): void;
 }
 
 const isMousePrimary = (e: React.PointerEvent) => e.pointerType !== "mouse" || e.button === 0;
@@ -212,12 +214,16 @@ export function usePlanDrag(args: PlanDragArgs) {
     } else if (decorate) {
       const hit = pickInPlan(floor.rooms.map((r) => ({ id: r.id, poly: r.polygon })), raw, 8 * camera.px + 0.12 * ppm);
       select({ room: hit?.roomId });
+      if (!hit) lowerSheet();
       if (hit) {
         useStore.getState().setUi({ selectedEdge: hit.edge === null ? null : { edge: hit.edge, side: hit.side } });
         if (hit.edge === null) usePanelPrefs.getState().setOpen("decorate.floor", true);
       }
     } else if (furnish) {
-      if (!m.shift) select({});
+      if (!m.shift) {
+        select({});
+        lowerSheet();
+      }
     } else if (build) {
       // Rooms sit over canopies, so they win where the two overlap.
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
@@ -229,6 +235,7 @@ export function usePlanDrag(args: PlanDragArgs) {
       }
       const roof = hit ? -1 : canopyAt(canopies, raw);
       select(roof >= 0 ? { canopy: roof } : { room: hit?.id });
+      if (!hit && roof < 0) lowerSheet();
     }
   };
 
@@ -251,6 +258,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     backgroundTap,
     hover,
     disabled: () => L.current.peeking,
+    onLongPress: (p) => L.current.onLongPress?.(p),
   });
   const poly = usePolygonEdit(drag, args.camera, dbl);
 

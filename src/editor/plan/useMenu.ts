@@ -50,8 +50,8 @@ export function usePlanMenu(a: PlanMenuArgs) {
     if (a.peeking) setMenu(null);
   }, [a.peeking]);
 
-  const onContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
+  /** Open the menu for whatever is under this client point: a right-click, or a long press on touch. */
+  const openAt = (client: Pt) => {
     if (!camera.cam || a.peeking) return;
     // A right-click mid-drag cancels the drag (snapshot restored) instead of leaving it half-done.
     drag.drag.cancel();
@@ -63,10 +63,17 @@ export function usePlanMenu(a: PlanMenuArgs) {
       return;
     }
     const frame = camera.frame();
-    const raw = frame.fromClient(e);
+    const raw = frame.fromClient({ clientX: client.x, clientY: client.y });
     const target = planTargetAt(floor, raw, mode, { hit: camera.px * 10, edge: camera.px * 12 }, a.hitShapes);
     const items = menuItemsFor(target, raw);
-    if (items.length) setMenu({ x: e.clientX, y: e.clientY, items });
+    if (items.length) setMenu({ x: client.x, y: client.y, items });
+  };
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // A long press on touch opens the menu itself (see openAt); the browser's own contextmenu for it is ignored.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    openAt({ x: e.clientX, y: e.clientY });
   };
 
   const toggleImage = () => {
@@ -212,5 +219,5 @@ export function usePlanMenu(a: PlanMenuArgs) {
     return empty;
   };
 
-  return { menu, setMenu, onContextMenu };
+  return { menu, setMenu, onContextMenu, openAt };
 }
