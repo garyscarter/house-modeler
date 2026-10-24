@@ -6,7 +6,7 @@
 .house-menu-btn:hover:not(:disabled), .house-menu-btn.active { background: var(--surface-2); }
 .house-menu-btn svg { color: var(--muted); }
 
-.house-pop { top: calc(100% + 10px); left: 0; width: 340px; max-height: 80vh; overflow-y: auto; padding: 6px; }
+.house-pop { top: calc(100% + 10px); left: 0; width: min(340px, calc(100vw - 24px)); max-height: 80vh; overflow-y: auto; padding: 6px; }
 .hm-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; text-align: left; background: transparent; border-radius: var(--radius-s); }
 .hm-item:hover:not(:disabled) { background: var(--surface-2); }
 .hm-item svg { color: var(--muted); flex: none; }
@@ -20,3 +20,5 @@
 .project-actions button, .project-actions label.file { padding: 6px 10px; font-size: 13px; margin: 0; }
 .hm-foot { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 10px 4px; }
 .sync-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; }
+/* On a phone the menu spans the screen, under the top bar. */
+.app[data-chassis="phone"] .house-pop { position: fixed; top: calc(var(--topbar-h) + 4px); left: 12px; width: calc(100vw - 24px); max-height: calc(100dvh - var(--topbar-h) - var(--tabbar-h) - 16px); }

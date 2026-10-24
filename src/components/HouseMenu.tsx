@@ -4,6 +4,9 @@ import { isListingDesign } from "../lib/presetActions";
 import { useSyncStatus } from "../lib/sync";
 import { Icon } from "./icons";
 import { usePanelPrefs } from "./panelPrefs";
+import { useChassis } from "./useChassis";
+import { FEATURES } from "../lib/chassis";
+import { OPEN_SHORTCUTS } from "../lib/studio";
 import { useListingUpdateCount } from "./ImportPanel";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
@@ -21,6 +24,7 @@ export function HouseMenu({ name }: { name: string }) {
   const look = usePanelPrefs((s) => s.look);
   const quiet = usePanelPrefs((s) => s.quiet);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
+  const chassis = useChassis((s) => s.chassis);
   const syncOff = useSyncStatus((s) => s.status.kind === "off");
 
   useEffect(() => {
@@ -70,6 +74,12 @@ export function HouseMenu({ name }: { name: string }) {
             <Icon name="image" />
             <span>Photos ({photos})…</span>
           </button>
+          {chassis !== "desktop" && (
+            <button className="hm-item" role="menuitem" onClick={run(() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS)))}>
+              <Icon name="keyboard" />
+              <span>Keyboard shortcuts…</span>
+            </button>
+          )}
 
           <div className="hm-group">
             <h3>Settings</h3>
@@ -77,6 +87,7 @@ export function HouseMenu({ name }: { name: string }) {
               <span>Render quality</span>
               <RenderQuality />
             </div>
+            {FEATURES[chassis].glass && (
             <div className="hm-row">
               <span>Look</span>
               <div className="seg" role="group" aria-label="Look">
@@ -88,6 +99,7 @@ export function HouseMenu({ name }: { name: string }) {
                 </button>
               </div>
             </div>
+            )}
             <div className="hm-row">
               <span>Canvas</span>
               <div className="seg" role="group" aria-label="Canvas">

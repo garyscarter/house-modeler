@@ -1,5 +1,6 @@
 import type { Tab } from "../store";
 import type { EdgePick } from "./decorPick";
+import type { IconName } from "../components/icons";
 
 /** editFloorId value that opens the site editor instead of a floor (re-exported by the store). */
 export const SITE_EDIT_ID = "site";
@@ -12,6 +13,14 @@ export const MODE_LABEL: Record<Mode, string> = {
   furnish: "Furnish",
   plot: "Plot",
   review: "Review",
+};
+/** The icon each mode shows in the phone tab bar. */
+export const MODE_ICON: Record<Mode, IconName> = {
+  build: "house",
+  decorate: "brush",
+  furnish: "sofa",
+  plot: "tree",
+  review: "clipboard",
 };
 /** The muted line under a mode's inspector title. */
 export const MODE_SUBTITLE: Record<Mode, string> = {

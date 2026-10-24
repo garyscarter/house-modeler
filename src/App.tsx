@@ -8,7 +8,7 @@ import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
 import { PhotosDialog } from "./components/PhotosDialog";
-import { TopBar } from "./components/TopBar";
+import { TopBar, LayoutSwitch } from "./components/TopBar";
 import { Dock } from "./components/Dock";
 import { InspectorCard } from "./components/InspectorCard";
 import { useStudioKeys } from "./components/useStudioKeys";
@@ -32,6 +32,8 @@ import { useHydration } from "./lib/persist";
 import { Welcome } from "./components/Welcome";
 import { CoachStrip } from "./components/CoachStrip";
 import { startChassisWatch, useChassis } from "./components/useChassis";
+import { TabBar } from "./components/mobile/TabBar";
+import { useSheet } from "./components/mobile/sheet";
 import { effectiveCompare, FEATURES } from "./lib/chassis";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
@@ -109,13 +111,14 @@ export default function App() {
   const onSelectRoom = useCallback(
     (floor: Floor, room: Room) => {
       if (mode === "plot") return;
+      if (chassis === "phone") useSheet.getState().raise();
       if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
       else if (mode === "decorate") {
         setUi({ selectedRoomId: room.id, selectedEdge: null, editFloorId: floor.id });
         usePanelPrefs.getState().setOpen("decorate.floor", true);
       } else setUi({ editFloorId: floor.id });
     },
-    [mode, setUi],
+    [mode, setUi, chassis],
   );
 
   // Decorate: a click on a wall in 3D picks that wall face of the room behind it.
@@ -124,9 +127,10 @@ export default function App() {
       const rooms = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));
       const pick = pickWallFace(rooms, hit, normal, { probe: 0.05, through: EXT_WALL_T / 2 + 0.1, maxDist: 0.5 }, bays);
       if (!pick || pick.edge === null) return;
+      if (chassis === "phone") useSheet.getState().raise();
       setUi({ selectedRoomId: pick.roomId, selectedEdge: { edge: pick.edge, side: pick.side }, editFloorId: floor.id });
     },
-    [setUi],
+    [setUi, chassis],
   );
   const pickWall = mode === "decorate" ? onPickWall : undefined;
   // Side by side and wipe: a pick in either view also makes that layout the active one.
@@ -173,7 +177,6 @@ export default function App() {
   return (
     <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined}>
       <TopBar />
-      <div className="narrow-note">Storey works best in a window at least 1180 px wide.</div>
 
       <main data-tab={tab}>
         {!model && <Welcome />}
@@ -290,10 +293,12 @@ export default function App() {
             <ModePanel />
           </InspectorCard>
         )}
+        {model && chassis === "phone" && both && <LayoutSwitch className="layout-pill float-card" />}
         {model && <CoachStrip />}
         {model && <Dock />}
         {peek && <div className="peek-badge">Showing {VARIANT_LABEL[activeVariant]} · release Space</div>}
       </main>
+      {model && chassis === "phone" && <TabBar />}
 
       <PhotoLightbox />
       <Dialogs />

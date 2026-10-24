@@ -5,6 +5,8 @@ import { usePanelPrefs } from "./panelPrefs";
 import { Popover, ViewToggles } from "./ViewMenu";
 import { Icon } from "./icons";
 import { SavedViewsMenu } from "./SavedViewsMenu";
+import { useChassis } from "./useChassis";
+import { FEATURES, effectiveCompare } from "../lib/chassis";
 import "./Dock.css";
 
 const COMPARE: [ViewMode, string][] = [
@@ -28,14 +30,21 @@ export function Dock() {
   const sunOpen = usePanelPrefs((s) => s.sunOpen);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const setSun = useStore((s) => s.setSun);
+  const chassis = useChassis((s) => s.chassis);
   if (!floors) return null;
+  const phone = chassis === "phone";
+  const features = FEATURES[chassis];
 
   const ui = { tab, maxLevel, editFloorId };
   const sorted = floorsByLevel(floors);
   const active = dockFloorActive(ui, floors);
   const showFloors = tab === "3d" ? sorted.length > 0 : mode !== "plot" && sorted.length > 1;
   const keyOf = (i: number) => (i < 9 ? ` (${i + 1})` : "");
-  const compareLabel = COMPARE.find(([k]) => k === (both ? viewMode : "single"))?.[1] ?? "Single";
+  // Side by side is off where two views don't fit: the app shows wipe instead, and so does this menu.
+  const shownMode = effectiveCompare<ViewMode>(viewMode, chassis, both, "single", "wipe", "side-by-side");
+  const compareRows = COMPARE.filter(([k]) => features.sideBySide || k !== "side-by-side");
+  const compareLabel = COMPARE.find(([k]) => k === shownMode)?.[1] ?? "Single";
+  const activeName = active === "all" ? "All" : floorDisplayName(sorted.find((f) => f.id === active)?.name ?? "");
 
   return (
     <div className="dock float-card" role="group" aria-label="View">
@@ -48,7 +57,25 @@ export function Dock() {
         </button>
       </div>
 
-      {showFloors && (
+      {showFloors && phone && (
+        <Popover className="dock-floors" align="start" label={activeName || "Floor"} title="Floor" ariaLabel={`Floor: ${activeName}`}>
+          <div className="compare-rows" role="radiogroup" aria-label="Floor">
+            {tab === "3d" && (
+              <button data-pick role="radio" aria-checked={active === "all"} className="compare-row" onClick={() => setUi(dockFloorPick(ui, floors, "all"))}>
+                <span className="radio" aria-hidden="true" />
+                All
+              </button>
+            )}
+            {sorted.map((f) => (
+              <button key={f.id} data-pick role="radio" aria-checked={active === f.id} className="compare-row" onClick={() => setUi(dockFloorPick(ui, floors, f.id))}>
+                <span className="radio" aria-hidden="true" />
+                {floorDisplayName(f.name)}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      )}
+      {showFloors && !phone && (
         <div className="seg" role="group" aria-label="Floor">
           {tab === "3d" && (
             <button className={active === "all" ? "active" : ""} aria-pressed={active === "all"} title="All floors (0)" onClick={() => setUi(dockFloorPick(ui, floors, "all"))}>
@@ -66,10 +93,10 @@ export function Dock() {
       {tab === "3d" && (
         <>
           <span className="dock-sep" aria-hidden="true" />
-          <Popover className="dock-compare" label={`Compare: ${compareLabel}`} disabled={!both} title={both ? "Compare As listed and Proposed" : "Load both layouts to compare them"}>
+          <Popover className="dock-compare" label={phone ? <Icon name="compare" /> : `Compare: ${compareLabel}`} chevron={!phone} ariaLabel={`Compare: ${compareLabel}`} disabled={!both} title={both ? "Compare As listed and Proposed" : "Load both layouts to compare them"}>
             <div className="compare-rows" role="radiogroup" aria-label="Compare">
-              {COMPARE.map(([k, label]) => (
-                <button key={k} data-pick role="radio" aria-checked={viewMode === k} className="compare-row" onClick={() => setUi({ viewMode: k })}>
+              {compareRows.map(([k, label]) => (
+                <button key={k} data-pick role="radio" aria-checked={shownMode === k} className="compare-row" onClick={() => setUi({ viewMode: k })}>
                   <span className="radio" aria-hidden="true" />
                   {label}
                 </button>
@@ -90,10 +117,10 @@ export function Dock() {
           >
             <Icon name="sun" />
           </button>
-          <Popover className="dock-view" label="View">
+          <Popover className="dock-view" align="end" label={phone ? <Icon name="eye" /> : "View"} chevron={!phone} ariaLabel="View options" title="View options">
             <ViewToggles />
           </Popover>
-          <SavedViewsMenu />
+          {features.savedViews && <SavedViewsMenu />}
         </>
       )}
     </div>

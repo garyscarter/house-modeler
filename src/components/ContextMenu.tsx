@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useChassis } from "./useChassis";
 
 export type MenuItem = { label: string; hint?: string; danger?: boolean; disabled?: boolean; run: () => void } | "sep";
 export interface MenuState {
@@ -11,6 +12,7 @@ export interface MenuState {
 /** A right-click menu at a viewport point, clamped to the window. Arrows move, Enter runs, Esc / outside click / wheel / blur close. */
 export function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const sheet = useChassis((s) => s.chassis) === "phone";
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   // Measure once rendered, then clamp into the viewport.
@@ -37,16 +39,16 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose
       }
     };
     window.addEventListener("pointerdown", down, true);
-    window.addEventListener("wheel", onClose, true);
+    if (!sheet) window.addEventListener("wheel", onClose, true);
     window.addEventListener("blur", onClose);
     window.addEventListener("keydown", key, true);
     return () => {
       window.removeEventListener("pointerdown", down, true);
-      window.removeEventListener("wheel", onClose, true);
+      if (!sheet) window.removeEventListener("wheel", onClose, true);
       window.removeEventListener("blur", onClose);
       window.removeEventListener("keydown", key, true);
     };
-  }, [menu, onClose]);
+  }, [menu, onClose, sheet]);
 
   if (!menu) return null;
 
@@ -64,9 +66,9 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose
   return createPortal(
     <div
       ref={ref}
-      className="ctx-menu"
+      className={sheet ? "ctx-menu ctx-sheet" : "ctx-menu"}
       role="menu"
-      style={{ left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, visibility: pos ? "visible" : "hidden" }}
+      style={sheet ? undefined : { left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, visibility: pos ? "visible" : "hidden" }}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -89,6 +91,11 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose
             {it.hint && <span className="ctx-hint">{it.hint}</span>}
           </button>
         ),
+      )}
+      {sheet && (
+        <button type="button" role="menuitem" className="ctx-cancel" onClick={onClose}>
+          <span>Cancel</span>
+        </button>
       )}
     </div>,
     document.body,

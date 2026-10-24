@@ -135,3 +135,7 @@
 .instruction .keycap { white-space: nowrap; }
 .inspector-card .seg.small button { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
 .danger-zone button.danger-ghost { margin-left: -12px; }
+
+/* Touch: the Inspector kit's own small controls. */
+.app[data-touch] .inspector .icon-btn { width: 36px; height: 36px; }
+.app[data-touch] .inspector .pair-input input { min-height: 38px; }

@@ -1,6 +1,7 @@
 import { useStore } from "../store";
 import { usePanelPrefs } from "./panelPrefs";
 import { Icon } from "./icons";
+import { useChassis } from "./useChassis";
 import "./Welcome.css";
 
 /** Three first steps above the dock, shown once after a house loads; the × remembers it was dismissed. */
@@ -9,8 +10,10 @@ export function CoachStrip() {
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const tab = useStore((s) => s.tab);
   const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
-  if (done || tab !== "3d") return null;
-  const steps = ["Click a room to check its size", "Decorate to try finishes", ...(both ? ["Hold Space to flip between As listed and Proposed"] : [])];
+  const chassis = useChassis((s) => s.chassis);
+  const touch = useChassis((s) => s.touch);
+  if (done || tab !== "3d" || chassis === "phone") return null;
+  const steps = [touch ? "Tap a room to check its size" : "Click a room to check its size", "Decorate to try finishes", ...(both && !touch ? ["Hold Space to flip between As listed and Proposed"] : [])];
   return (
     <div className="coach-strip float-card" role="region" aria-label="Getting started">
       <ol className="coach-steps">
