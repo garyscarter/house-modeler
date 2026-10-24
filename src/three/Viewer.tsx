@@ -288,11 +288,13 @@ function Orbit({
   latest.current = { aspect, frame, bounds, size, centre, heightOf, maxDistance };
 
   /** Width of the canvas the floating inspector card covers, if it is open over this view. */
+  // The dock (about 44 px) plus its 16 px gap plus breathing room covers the bottom of the canvas.
+  const DOCK_INSET_PX = 88;
   const coveredRight = () => (gl.domElement.closest("main")?.querySelector(".inspector-card") ? INSPECTOR_INSET_PX : 0);
   const poseFor = (side: ViewRequest): CameraPose => {
     const l = latest.current;
     return side === "home"
-      ? homeView(l.frame, camera.fov, l.aspect, undefined, undefined, undefined, coveredRight(), canvasSize.width)
+      ? homeView(l.frame, camera.fov, l.aspect, undefined, undefined, undefined, coveredRight(), canvasSize.width, DOCK_INSET_PX, canvasSize.height)
       : presetView(side, l.bounds, l.size, { x: l.centre.x, y: l.centre.y, z: l.centre.z }, { height: l.heightOf(), fovDeg: camera.fov, aspect: l.aspect });
   };
   const current = (): CameraPose => {

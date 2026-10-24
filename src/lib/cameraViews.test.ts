@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, poseFits, presetView } from "./cameraViews";
+import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose } from "./cameraViews";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
 
 const project = (pose: ReturnType<typeof homeView>, p: { x: number; y: number; z: number }, fov: number, aspect: number) => {
@@ -82,6 +82,16 @@ describe("homeView with the inspector card open", () => {
   });
   it("is unchanged without an inset", () => {
     expect(homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1400)).toEqual(homeView(box, 45, 1.6));
+  });
+
+  it("a bottom inset for the dock lifts the box and backs the camera off", () => {
+    const box = { x0: -5, x1: 5, y0: -4, y1: 4, height: 6 };
+    const plain = homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1280);
+    const docked = homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1280, 88, 800);
+    const dist = (p: CameraPose) => Math.hypot(p.position.x - p.target.x, p.position.y - p.target.y, p.position.z - p.target.z);
+    expect(dist(docked)).toBeGreaterThan(dist(plain));
+    // The target moves down the screen's up axis, which for a 35° pitch is mostly -y and a little toward the camera.
+    expect(docked.target.y).toBeLessThan(plain.target.y);
   });
 });
 

@@ -106,6 +106,8 @@ export function homeView(
   margin = HOME_MARGIN,
   rightInsetPx = 0,
   canvasWidthPx = 0,
+  bottomInsetPx = 0,
+  canvasHeightPx = 0,
 ): CameraPose {
   const target: V3 = { x: (box.x0 + box.x1) / 2, y: box.height / 2, z: (box.y0 + box.y1) / 2 };
   const az = rad(azimuthDeg);
@@ -123,8 +125,11 @@ export function homeView(
   const tanV = Math.tan(rad(fovDeg) / 2);
   const tanFull = tanV * Math.max(aspect, 0.01);
   const inset = canvasWidthPx > 0 ? Math.min(Math.max(rightInsetPx, 0) / canvasWidthPx, 0.6) : 0;
+  // The dock covers the bottom of the canvas the same way the inspector covers the right.
+  const insetB = canvasHeightPx > 0 ? Math.min(Math.max(bottomInsetPx, 0) / canvasHeightPx, 0.4) : 0;
   // The visible strip is (1 - inset) of the width, so it behaves like a narrower canvas.
   const tanH = tanFull * (1 - inset);
+  const tanVfit = tanV * (1 - insetB);
   let dist = 1;
   for (const x of [box.x0, box.x1]) {
     for (const z of [box.y0, box.y1]) {
@@ -134,13 +139,15 @@ export function homeView(
         const u = Math.abs(p.x * up.x + p.y * up.y + p.z * up.z);
         // Depth of the point from the camera is dist + (point along -back).
         const along = -(p.x * back.x + p.y * back.y + p.z * back.z);
-        dist = Math.max(dist, (r * (1 + margin)) / tanH - along, (u * (1 + margin)) / tanV - along);
+        dist = Math.max(dist, (r * (1 + margin)) / tanH - along, (u * (1 + margin)) / tanVfit - along);
       }
     }
   }
   // Slide the camera to the right of the box so the box sits in the middle of the visible strip.
   const slide = inset * dist * tanFull;
-  const shifted: V3 = { x: target.x + right.x * slide, y: target.y, z: target.z + right.z * slide };
+  // And down (along -up) so the box sits in the middle of the strip above the dock.
+  const drop = insetB * dist * tanV;
+  const shifted: V3 = { x: target.x + right.x * slide - up.x * drop, y: target.y - up.y * drop, z: target.z + right.z * slide - up.z * drop };
   return { position: { x: shifted.x + back.x * dist, y: shifted.y + back.y * dist, z: shifted.z + back.z * dist }, target: shifted };
 }
 
