@@ -28,3 +28,17 @@
 .sun-legend { margin-top: 6px; }
 .sun-legend-bar { height: 10px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.1); }
 .sun-legend-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+
+.sun-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.sun-quick { flex-wrap: wrap; }
+.sun-head { flex-wrap: wrap; }
+/* Phone: a full-width strip above the dock (dock 44 px at sheet-peek + 12), faded away when the sheet opens. */
+.app[data-chassis="phone"] .sun-panel { left: 12px; right: 12px; width: auto; top: auto; bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); padding: 2px 6px 2px 12px; transition: opacity .15s; }
+.app[data-chassis="phone"] .sun-row { margin: 2px 0; }
+.app[data-chassis="phone"] .sun-row input[type="range"] { height: 36px; }
+.app[data-chassis="phone"] .sun-hint, .app[data-chassis="phone"] .sun-hours-toggle { display: none; }
+.app[data-sheet="half"] .sun-panel, .app[data-sheet="full"] .sun-panel { opacity: 0; pointer-events: none; }
+.app[data-touch] .sun-quick button, .app[data-touch] .sun-play { min-height: 44px; }
+.app[data-touch] .sun-close { min-width: 44px; min-height: 44px; }
+

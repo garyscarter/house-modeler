@@ -102,3 +102,32 @@
 .review-page .rp-table td { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 .review-page .rp-table td:first-child, .review-page .rp-table th { font-family: var(--font-ui); }
 .app[data-look="glass"] .review-page { top: calc(var(--topbar-h) + 2 * var(--float-gap)); border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: var(--shadow-pop); }
+
+
+/* Phones: stop above the tab bar so modes can still be switched; one column everywhere. */
+.app[data-chassis="phone"] .review-page { bottom: var(--tabbar-h); }
+.app[data-chassis="phone"] .review-page .rv-bar-inner { padding: 12px 16px; }
+.app[data-chassis="phone"] .review-page .rv-bar h1 { font-size: 18px; }
+.app[data-chassis="phone"] .review-page .rv-body { padding: 16px 16px 48px; }
+.app[data-chassis="phone"] .review-page .rv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
+@media (max-width: 600px) { .app[data-chassis="phone"] .review-page .rv-tiles { grid-template-columns: minmax(0, 1fr); } }
+.app[data-chassis="phone"] .review-page .rv-columns { grid-template-columns: minmax(0, 1fr); }
+.app[data-chassis="phone"] .review-page .rv-section { padding: 18px 16px 20px; }
+.app[data-chassis="phone"] .review-page .rp-export { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.app[data-chassis="tablet"] .review-page .rp-export { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app[data-touch] .review-page .rv-close { width: 44px; height: 44px; }
+/* Areas table: never break headers letter by letter; scroll sideways inside the card as a last resort. */
+.app[data-chassis="phone"] .review-page .rp-areas { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.app[data-chassis="phone"] .review-page .rp-table { font-size: 13px; }
+.app[data-chassis="phone"] .review-page .rp-table th, .app[data-chassis="phone"] .review-page .rp-table td { padding: 8px 6px; overflow-wrap: normal; }
+.app[data-chassis="phone"] .review-page .rp-table td { font-size: 13px; }
+.app[data-chassis="phone"] .review-page .rp-areas thead th { white-space: nowrap; font-size: 13px; }
+.app[data-chassis="phone"] .review-page .rp-areas thead th:not(:first-child) { width: auto !important; }
+.app[data-chassis="phone"] .review-page .rp-areas th:first-child, .app[data-chassis="phone"] .review-page .rp-areas td:first-child { min-width: 0; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app[data-chassis="phone"] .review-page .rp-areas td:not(:first-child) { white-space: nowrap; }
+.app[data-chassis="phone"] .review-page .rp-money input { width: 96px; }
+.app[data-chassis="phone"] .review-page .pl-rule { grid-template-columns: 64px minmax(0, 1fr); gap: 4px 10px; }
+.app[data-chassis="phone"] .review-page .rp-changes li { grid-template-columns: auto minmax(0, 1fr); }
+.app[data-chassis="phone"] .review-page .rp-changes li .rp-qty { grid-column: 2; }
+.app[data-chassis="phone"] .review-page .rp-cost-row, .app[data-chassis="phone"] .review-page .rp-cost-head { flex-wrap: wrap; }
+

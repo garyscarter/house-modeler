@@ -44,3 +44,9 @@
 @media (prefers-reduced-motion: reduce) {
   .view-cube button { transition: none; }
 }
+
+
+/* Phone: 84 px cube at the top right of the 3D tab (layout pill is top-centre, plan rail top-left). */
+.app[data-chassis="phone"] .view-cube { top: var(--float-gap, 12px); bottom: auto; right: var(--float-gap, 12px); transform: scale(0.78); transform-origin: top right; }
+.app[data-touch] .view-cube button { touch-action: manipulation; }
+

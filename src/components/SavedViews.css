@@ -7,3 +7,7 @@
 .sv-figures img, .sv-figures .sv-blank { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: var(--radius-s); border: 1px solid var(--line); object-fit: cover; }
 .sv-figures .sv-blank { border-style: dashed; background: var(--surface-2); }
 .sv-figures figcaption { margin-top: 4px; font-size: 13px; color: var(--muted); }
+
+
+.sv-figures { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+

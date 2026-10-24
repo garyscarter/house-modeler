@@ -7,3 +7,7 @@
 .panel-problem { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 0 16px; color: var(--muted); }
 .panel-problem h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); }
 .panel-problem p { margin: 0; }
+
+
+.recovery .empty { max-width: min(460px, 100%); box-sizing: border-box; padding-left: 16px; padding-right: 16px; }
+
