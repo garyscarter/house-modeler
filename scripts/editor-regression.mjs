@@ -1200,7 +1200,6 @@ async function siteSuite() {
       const s1 = await st();
       assert(s1.past === s0.past, `past ${s0.past} -> ${s1.past}`);
     },
-    { expected: "post-core" },
   );
 
   await check("site", "07 midpoint insert", async () => {
@@ -1285,10 +1284,6 @@ async function siteSuite() {
         near(after[k].y - before[k].y, 0, 1e-9, `corner ${k} dy`);
       }
     },
-    {
-      expected: "post-core",
-      reason: "today a press on an already selected surface pans: onItemDown sets the `move` drag and then overwrites it with `pan` (SiteEditor.tsx onItemDown), so a surface cannot be dragged",
-    },
   );
 
   await check("site", "12 nudge and delete a corner", async () => {
@@ -1321,7 +1316,6 @@ async function siteSuite() {
       await d.up();
       jeq(await boundaryNow(), b0, "Esc did not restore the corner");
     },
-    { expected: "post-core" },
   );
 
   await check(
@@ -1344,7 +1338,6 @@ async function siteSuite() {
       near(mid, before, 1e-6, "the view moved inside the slop");
       near(far - before, 24, 1, "the view did not follow the pointer past the slop");
     },
-    { expected: "post-core" },
   );
 }
 
