@@ -31,6 +31,8 @@ import { Recovery } from "./components/Recovery";
 import { useHydration } from "./lib/persist";
 import { Welcome } from "./components/Welcome";
 import { CoachStrip } from "./components/CoachStrip";
+import { startChassisWatch, useChassis } from "./components/useChassis";
+import { effectiveCompare, FEATURES } from "./lib/chassis";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -56,11 +58,16 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const peek = useStore((s) => s.peek);
   const peekReturn = useStore((s) => s.peekReturn);
-  const look = usePanelPrefs((s) => s.look);
+  const lookPref = usePanelPrefs((s) => s.look);
+  const chassis = useChassis((s) => s.chassis);
+  const touch = useChassis((s) => s.touch);
+  // Glass needs a GPU with blur to spare: desktop only.
+  const look = FEATURES[chassis].glass ? lookPref : "studio";
   const hydrationError = useHydration((s) => s.error);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
 
   useStudioKeys();
+  useEffect(startChassisWatch, []);
   useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
 
   // Once saved work has loaded, offer the listing's plans (or an update to them), at most once per page load.
@@ -86,7 +93,7 @@ export default function App() {
   const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
   const otherModel = variants[other];
   const both = !!variants.current && !!variants.proposed;
-  const effectiveViewMode = both ? viewMode : "single";
+  const effectiveViewMode = effectiveCompare(viewMode, chassis, both, "single", "wipe", "side-by-side");
   // On the plan, Plot always shows the site editor and no other mode does.
   const editingSite = mode === "plot";
   // While peeking, the shown layout has other floor ids: follow the level of the floor you were on, and keep the editor's key.
@@ -164,7 +171,7 @@ export default function App() {
   const showInspector = tab === "3d" && mode !== "review" && (!!model || mode === "plot");
 
   return (
-    <div className="app" data-mode={mode} data-tab={tab} data-look={look}>
+    <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined}>
       <TopBar />
       <div className="narrow-note">Storey works best in a window at least 1180 px wide.</div>
 

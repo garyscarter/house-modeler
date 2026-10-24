@@ -13,7 +13,7 @@
   --shadow-pop: 0 2px 4px rgba(29,36,34,.08), 0 16px 40px rgba(29,36,34,.18);
   /* Floating cards (Glass overrides these) */
   --card-bg: var(--panel); --card-border: 1px solid var(--line); --card-blur: none; --card-radius: var(--radius-l);
-  --topbar-h: 48px; --float-gap: 12px; --float-top: var(--float-gap); --card-clear: 96px;
+  --topbar-h: 48px; --tabbar-h: 56px; --sheet-peek: 64px; --float-gap: 12px; --float-top: var(--float-gap); --card-clear: 96px;
   --z-float: 20; --z-pop: 30; --z-menu: 40; --z-review: 45; --z-top: 50; --z-modal: 80;
   font-family: var(--font-ui); font-size: 14px; color: var(--text);
 }

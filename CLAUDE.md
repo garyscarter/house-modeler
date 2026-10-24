@@ -4,6 +4,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 
 ## Standing rules
 
+- **Ask questions up front.** For anything bigger than a small change, first read what exists (and look at the running app when it is UI), then put every open scope or design decision to the owner in one round of questions, each with a recommendation. Then build without asking again; make the remaining calls yourself and list them in the report.
 - **Delegate only when it pays.** Make small or single-file changes yourself. Use subagents when a job splits into two or more independent pieces, or one piece is large; run those in parallel, each in its own git worktree, and merge, check and push the results yourself.
 - **Name every subagent after a famous pop star** (Madonna, Beyoncé, Adele, Prince, Kylie, Dua Lipa, ...), and use the name in the agent's description and in its prompt. Pick names that suit the job.
 - **Opus thinks, Sonnet types.** Sonnet with medium effort is the default for subagents: well-specified changes, refactors, wiring, data edits. Use Opus (medium effort; high only for hard geometry, roofs or photo matching) to plan or review: it reads the code and returns a tight spec (files, functions, type changes, acceptance checks) for a Sonnet subagent to implement, or it reviews a diff. Let Opus write code itself only when the work can't be specified up front. Use Haiku with low effort for lookups and mechanical edits.
