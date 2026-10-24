@@ -1,6 +1,6 @@
 # Editor core: one polygon editor under the plan and the site (Bruno Mars)
 
-Status: plan for the refactor proposed in docs/review-2026-10/tech-render.md §6 and docs/review-2026-10.md §4 "Plan editor". The 2D plan editor (`src/editor/PlanEditor.tsx`, 2,298 lines, 23 `useState`s plus 2 in `usePlanCamera`, one inline drag machine) and the site editor (`src/editor/SiteEditor.tsx`, 1,023 lines, its own camera and drag machine) both move onto one shared core under `src/editor/core/`, with the pure maths in `src/lib/`. After this, an editing feature is built once and works the same way in both editors. Privacy: the house is "listing 91770873" and nothing else.
+Status: landed (all four chunks merged; `scripts/editor-regression.mjs` is green on both editors). Plan for the refactor proposed in docs/review-2026-10/tech-render.md §6 and docs/review-2026-10.md §4 "Plan editor". The 2D plan editor (`src/editor/PlanEditor.tsx`, 2,298 lines, 23 `useState`s plus 2 in `usePlanCamera`, one inline drag machine) and the site editor (`src/editor/SiteEditor.tsx`, 1,023 lines, its own camera and drag machine) both move onto one shared core under `src/editor/core/`, with the pure maths in `src/lib/`. After this, an editing feature is built once and works the same way in both editors. Privacy: the house is "listing 91770873" and nothing else.
 
 The work splits into **Chunk 0 (Ariana Grande)**, which lands first, then **A1 (Harry Styles)** and **B (Ed Sheeran)** in parallel, then **A2 (Olivia Rodrigo)** after A1.
 

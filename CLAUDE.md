@@ -33,5 +33,5 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
   - built-in house: `houses/listing91770873.ts` (+ `listingAssets.ts`), loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
   - shared project sync with the server: `sync.ts`, `syncLogic.ts`; `migrate.ts` for old saves
 - `src/three/` 3D view: `Viewer.tsx`, `House.tsx`, `shell.ts` (wall and slab meshes), `Roof.tsx`, `Fixtures.tsx`, `Site.tsx`, `Lighting.tsx`, `textures.ts` (procedural finishes)
-- `src/editor/` 2D plan: `PlanEditor.tsx` (about 2,100 lines; search before reading), `Inspectors.tsx`, `SiteEditor.tsx`, symbols
+- `src/editor/` 2D editors on one shared core (see docs/editor-core-plan.md): `core/` (camera, drag machine, polygon edit, keys, handles; maths in `lib/polygonEdit.ts` and `lib/editorCore.ts`), `plan/` (`PlanEditor.tsx` composition, `use*.ts` hooks, `layers/`, `chrome/`), `site/` (`SiteEditor.tsx`, `useSiteDrag.ts`, `SiteLayers.tsx`), `Inspectors.tsx`, symbols. `npm run regress:editors -- --port <n>` runs the Playwright parity script against a dev server on that port.
 - `src/components/` side panels and dialogs; `server/` passcode-protected Node server; `scripts/build-hosted.mjs` the hosted single-file build
