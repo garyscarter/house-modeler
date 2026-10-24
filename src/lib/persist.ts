@@ -1,3 +1,4 @@
+import { create } from "zustand";
 import { del, delMany, get, getMany, keys, setMany } from "idb-keyval";
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import { uid } from "../types";
@@ -47,16 +48,76 @@ export function rehydrate(json: string, urlOf: (id: string) => string | undefine
   return JSON.parse(json, (_k, v) => (typeof v === "string" && v.startsWith(IMG_REF) ? urlOf(v.slice(IMG_REF.length)) ?? MISSING_IMAGE : v));
 }
 
-export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistStorage<S> {
+export type StorageStatus = { kind: "idle" | "ok" | "failed" | "readonly"; message?: string; persistent?: boolean };
+
+/** Whether the project is being saved on this device (shown in the House menu). */
+export const useStorageStatus = create<StorageStatus>(() => ({ kind: "idle" }));
+const setStatus = (s: StorageStatus) => useStorageStatus.setState(s, true);
+
+/** Set when loading the saved project failed (corrupt blob, migration threw, IndexedDB unavailable). */
+export const useHydration = create<{ error: unknown | null }>(() => ({ error: null }));
+
+/** A plain-English reason a save failed. */
+export function saveFailureMessage(e: unknown): string {
+  const name = e instanceof Error ? e.name : typeof e === "object" && e && "name" in e ? String((e as { name: unknown }).name) : "unknown error";
+  return `Couldn't save on this device: ${name === "QuotaExceededError" ? "storage is full" : name}`;
+}
+
+export interface StorageOptions {
+  /** Web Locks to use for the single-writer rule; null turns it off. Defaults to navigator.locks. */
+  locks?: Pick<LockManager, "request"> | null;
+  /**
+   * Also delete image keys that nothing in the saved project references, once at startup. Off by default: another
+   * tab (or an older build) may have written images this tab has never seen, and they are not ours to delete.
+   */
+  gcOnStart?: boolean;
+}
+
+export const WRITER_LOCK = "storey-writer";
+
+export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: StorageOptions = {}): PersistStorage<S> {
+  const locks = opts.locks === undefined ? (typeof navigator !== "undefined" ? navigator.locks : undefined) ?? null : opts.locks;
   const urlToId = new Map<string, string>();
   /** Ids known to be written to IndexedDB. */
   const written = new Set<string>();
+  /** Ids the last state this tab loaded or wrote referred to. Only ids that drop out of this set are deleted. */
+  let previouslyUsed = new Set<string>();
   let pending: { name: string; value: StorageValue<S> } | null = null;
+  /** The newest value offered, kept even when not writing, so it can be saved once this tab becomes the writer. */
+  let latest: { name: string; value: StorageValue<S> } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** When the oldest unsaved change was made, so a stream of updates (the sun animation) can't hold off saving for ever. */
   let since: number | null = null;
   let lastState: Record<string, unknown> | null = null; // the fields of the last value accepted, to skip unchanged saves
   let chain: Promise<void> = Promise.resolve();
+  let persistAsked = false;
+
+  // Only one tab may write; the others keep what they have in memory and say so.
+  let writer = !locks;
+  let asking = false;
+  const tryLock = () => {
+    if (!locks || writer || asking) return;
+    asking = true;
+    void Promise.resolve(
+      locks.request(WRITER_LOCK, { ifAvailable: true }, (lock) => {
+        asking = false;
+        if (!lock) {
+          setStatus({ kind: "readonly" });
+          return undefined;
+        }
+        writer = true;
+        if (useStorageStatus.getState().kind === "readonly") setStatus({ kind: "idle" });
+        if (latest && !useHydration.getState().error) {
+          pending = latest;
+          void flush();
+        }
+        return new Promise<void>(() => {}); // hold the lock until the page goes
+      }),
+    ).catch(() => {
+      asking = false;
+      writer = true; // locks unusable: behave as if there were none
+    });
+  };
 
   const idOf = (url: string) => {
     let id = urlToId.get(url);
@@ -75,7 +136,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
     const job = pending;
     pending = null;
     since = null;
-    if (!job) return chain;
+    if (!job || !writer) return chain;
     chain = chain
       .then(async () => {
         const { json, used } = dehydrate(job.value, idOf);
@@ -87,18 +148,30 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
           fresh.forEach((id) => written.add(id));
         }
         await setMany([[job.name, json]]);
-        // Drop images nothing refers to any more (removed photos, replaced plans).
-        const stale = (await keys()).filter(
-          (k): k is string => typeof k === "string" && k.startsWith(IMG_KEY_PREFIX) && !used.has(k.slice(IMG_KEY_PREFIX.length)),
-        );
+        // Drop images this tab stopped using (removed photos, replaced plans), never ones it hasn't seen.
+        const stale = [...previouslyUsed].filter((id) => !used.has(id));
+        previouslyUsed = used;
         if (stale.length) {
-          await delMany(stale);
-          const gone = new Set(stale.map((k) => k.slice(IMG_KEY_PREFIX.length)));
+          await delMany(stale.map((id) => IMG_KEY_PREFIX + id));
+          const gone = new Set(stale);
           gone.forEach((id) => written.delete(id));
           for (const [url, id] of urlToId) if (gone.has(id)) urlToId.delete(url);
         }
+        setStatus({ kind: "ok", persistent: useStorageStatus.getState().persistent });
+        if (!persistAsked) {
+          persistAsked = true;
+          void Promise.resolve(typeof navigator !== "undefined" ? navigator.storage?.persist?.() : undefined)
+            .then((persistent) => {
+              if (typeof persistent === "boolean") useStorageStatus.setState({ persistent });
+            })
+            .catch(() => undefined);
+        }
       })
-      .catch((e) => console.error("Saving the project failed", e));
+      .catch((e) => {
+        console.error("Saving the project failed", e);
+        lastState = null; // so the next change tries again even if it matches
+        setStatus({ kind: "failed", message: saveFailureMessage(e), persistent: useStorageStatus.getState().persistent });
+      });
     return chain;
   };
 
@@ -107,8 +180,11 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
     window.addEventListener("pagehide", () => void flush());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") void flush();
+      else tryLock();
     });
+    window.addEventListener("focus", tryLock);
   }
+  tryLock();
 
   return {
     getItem: async (name) => {
@@ -123,22 +199,32 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000): PersistSt
         byId.set(id, url);
         urlToId.set(url, id);
         written.add(id);
+        previouslyUsed.add(id);
       });
+      if (opts.gcOnStart) {
+        const stale = (await keys()).filter((k): k is string => typeof k === "string" && k.startsWith(IMG_KEY_PREFIX) && !ids.includes(k.slice(IMG_KEY_PREFIX.length)));
+        if (stale.length) await delMany(stale);
+      }
       return rehydrate(raw, (id) => byId.get(id)) as StorageValue<S>;
     },
     setItem: (name, value) => {
+      // A save that failed to load must not overwrite the data the recovery screen is offering.
+      if (useHydration.getState().error) return;
       // zustand calls this on every set, including hover and selection that change nothing we save.
       const state = value.state as Record<string, unknown>;
       const keys = Object.keys(state);
       if (lastState && keys.length === Object.keys(lastState).length && keys.every((k) => k in lastState! && state[k] === lastState![k])) return;
       lastState = state;
-      pending = { name, value };
+      latest = { name, value };
+      if (!writer) return tryLock();
+      pending = latest;
       if (timer) clearTimeout(timer);
       since ??= Date.now();
       timer = setTimeout(() => void flush(), Math.max(0, Math.min(delayMs, since + maxWaitMs - Date.now())));
     },
     removeItem: async (name) => {
       pending = null;
+      latest = null;
       lastState = null;
       await del(name);
     },
