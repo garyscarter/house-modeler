@@ -16,6 +16,8 @@ export function Popover({
   disabled,
   placement = "up",
   align = "center",
+  chevron = true,
+  ariaLabel,
   children,
 }: {
   label: ReactNode;
@@ -24,6 +26,9 @@ export function Popover({
   disabled?: boolean;
   placement?: "up" | "down";
   align?: "center" | "start" | "end";
+  /** Show the small chevron after the label. Off for icon-only buttons. */
+  chevron?: boolean;
+  ariaLabel?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -51,9 +56,9 @@ export function Popover({
   }, [disabled]);
   return (
     <div className={`popover-host ${className}`.trim()} ref={root}>
-      <button className={open ? "popover-btn active" : "popover-btn"} aria-expanded={open} aria-haspopup="true" title={title} disabled={disabled} onClick={() => setOpen((o) => !o)}>
+      <button className={open ? "popover-btn active" : "popover-btn"} aria-expanded={open} aria-haspopup="true" aria-label={ariaLabel} title={title} disabled={disabled} onClick={() => setOpen((o) => !o)}>
         {label}
-        <Icon name="chevronDown" size={14} />
+        {chevron && <Icon name="chevronDown" size={14} />}
       </button>
       {open && (
         <div className={`popover pop-${placement} pop-${align}`} onClick={(e) => (e.target as Element).closest("[data-pick]") && setOpen(false)}>

@@ -20,3 +20,18 @@
   padding: 6px 14px; border-radius: var(--pill); background: var(--text); color: #fff; font-size: 13px; font-weight: 500;
   box-shadow: var(--shadow-card); pointer-events: none;
 }
+
+/* Phone: the dock spans the canvas above the sheet's peek, and gives way when the sheet opens. */
+.app[data-chassis="phone"] .dock {
+  left: 12px; right: 12px; transform: none; bottom: calc(var(--sheet-peek) + 12px); height: 44px; padding: 4px;
+  justify-content: space-between; gap: 2px; transition: opacity .2s;
+}
+.app[data-chassis="phone"] .dock .seg button { padding: 6px 12px; }
+.app[data-chassis="phone"] .dock-sep { display: none; }
+.app[data-chassis="phone"] .dock .popover-btn { height: 36px; padding: 0 10px; }
+.app[data-chassis="phone"] .dock-compare .popover-btn, .app[data-chassis="phone"] .dock-view .popover-btn { width: 36px; padding: 0; justify-content: center; }
+.app[data-chassis="phone"] .dock .icon-btn { width: 36px; height: 36px; }
+.app[data-chassis="phone"][data-sheet="half"] .dock, .app[data-chassis="phone"][data-sheet="full"] .dock { opacity: 0; pointer-events: none; }
+.app[data-touch]:not([data-chassis="phone"]) .dock .popover-btn { height: 40px; }
+.app[data-touch]:not([data-chassis="phone"]) .dock .icon-btn { width: 40px; height: 40px; }
+@media (prefers-reduced-motion: reduce) { .app[data-chassis="phone"] .dock { transition: none; } }

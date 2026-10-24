@@ -7,6 +7,32 @@ import { ModeBar } from "./ModeBar";
 import { Icon } from "./icons";
 import { BrandMark } from "./BrandMark";
 import { Wordmark } from "./Wordmark";
+import { useChassis } from "./useChassis";
+
+/** The As listed / Proposed switch. In the top bar on desktop and tablet; on the phone it floats over the canvas as the layout pill. */
+export function LayoutSwitch({ className = "" }: { className?: string }) {
+  const variants = useStore((s) => s.variants);
+  const activeVariant = useStore((s) => s.activeVariant);
+  const setUi = useStore((s) => s.setUi);
+  return (
+    <div className={`seg ${className}`.trim()} role="group" aria-label="Layout">
+      {(["current", "proposed"] as VariantKey[]).map((k) => (
+        <button
+          key={k}
+          className={activeVariant === k ? "active" : ""}
+          aria-pressed={activeVariant === k}
+          disabled={!variants[k]}
+          onClick={() => setUi({ activeVariant: k, selectedRoomId: null, selectedEdge: null })}
+        >
+          <span className="lay-full">{VARIANT_LABEL[k]}</span>
+          <span className="lay-short" aria-hidden="true">
+            {k === "current" ? "Listed" : VARIANT_LABEL[k]}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** The top bar: the Storey wordmark, the house menu, the five modes, the layout switch, undo and redo, and the palette and shortcut buttons. */
 export function TopBar() {
@@ -16,7 +42,7 @@ export function TopBar() {
   const canRedo = useStore((s) => s.future.length > 0);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
-  const setUi = useStore((s) => s.setUi);
+  const phone = useChassis((s) => s.chassis) === "phone";
   const mac = isMacPlatform();
   const cmd = mac ? "⌘" : "Ctrl+";
   const hasLayout = !!(variants.current || variants.proposed);
@@ -27,7 +53,7 @@ export function TopBar() {
       <div className="topbar-left">
         <span className="brand" title="Storey">
           <BrandMark />
-          <Wordmark height={16} className="brand-name" />
+          {!phone && <Wordmark height={16} className="brand-name" />}
         </span>
         <HouseMenu
           name={houseName(
@@ -35,33 +61,12 @@ export function TopBar() {
           )}
         />
       </div>
-      <ModeBar />
+      {!phone && <ModeBar />}
       <div className="topbar-right">
         {hasLayout && (
           <>
-            <div className="seg" role="group" aria-label="Layout">
-              {(["current", "proposed"] as VariantKey[]).map((k) => (
-                <button
-                  key={k}
-                  className={activeVariant === k ? "active" : ""}
-                  aria-pressed={activeVariant === k}
-                  disabled={!variants[k]}
-                  onClick={() =>
-                    setUi({
-                      activeVariant: k,
-                      selectedRoomId: null,
-                      selectedEdge: null,
-                    })
-                  }
-                >
-                  <span className="lay-full">{VARIANT_LABEL[k]}</span>
-                  <span className="lay-short" aria-hidden="true">
-                    {k === "current" ? "Listed" : VARIANT_LABEL[k]}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <span className="topbar-sep" aria-hidden="true" />
+            {!phone && <LayoutSwitch />}
+            {!phone && <span className="topbar-sep" aria-hidden="true" />}
             <button
               className="icon-btn"
               onClick={undo}
@@ -89,14 +94,16 @@ export function TopBar() {
               <Icon name="search" />
               <kbd className="keycap">{mac ? "⌘K" : "Ctrl K"}</kbd>
             </button>
-            <button
-              className="icon-btn"
-              onClick={() => open(OPEN_SHORTCUTS)}
-              aria-label="Keyboard shortcuts"
-              title="Keyboard shortcuts (?)"
-            >
-              ?
-            </button>
+            {!phone && (
+              <button
+                className="icon-btn"
+                onClick={() => open(OPEN_SHORTCUTS)}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts (?)"
+              >
+                ?
+              </button>
+            )}
           </>
         )}
       </div>

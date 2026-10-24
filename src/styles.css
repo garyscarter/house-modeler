@@ -105,7 +105,6 @@ nav.mode-bar button:not(.active):hover { background: var(--surface-3); }
 .app[data-look="glass"] .topbar .palette-btn kbd.keycap { background: rgba(255, 255, 255, 0.6); }
 
 /* The top bar gives way in steps, so the sides can never run into the modes. */
-.narrow-note { display: none; }
 @media (max-width: 1359px) {
   .brand-name, .topbar .palette-btn kbd.keycap { display: none; }
   .brand { padding-right: 8px; margin-right: 4px; }
@@ -116,10 +115,6 @@ nav.mode-bar button:not(.active):hover { background: var(--surface-3); }
   .lay-full { display: none; }
   .lay-short { display: inline; }
   .seg button { padding: 6px 10px; }
-}
-@media (max-width: 1179px) {
-  .narrow-note { display: block; flex: none; padding: 5px 14px; background: var(--surface-3); color: var(--muted); font-size: 12px; text-align: center; z-index: var(--z-float); }
-  .app[data-look="glass"] .narrow-note { position: absolute; top: calc(var(--topbar-h) + 2 * var(--float-gap)); left: 50%; transform: translateX(-50%); border-radius: var(--pill); padding: 4px 14px; white-space: nowrap; }
 }
 
 /* ---- Canvas ---- */
@@ -252,3 +247,40 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
 .empty .brand-outline { color: var(--brand); margin: 0 auto 4px; display: block; }
 .about-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; }
 .about-line svg { color: var(--brand); }
+
+/* ---- Tablet and phone chassis (lib/chassis.ts). Everything below is scoped, so the desktop is untouched. ---- */
+.app[data-chassis="tablet"] .brand-name, .app[data-chassis="tablet"] .topbar .palette-btn kbd.keycap { display: none; }
+.app[data-chassis="tablet"] .brand { padding-right: 8px; margin-right: 4px; }
+.app[data-chassis="tablet"] .lay-full { display: none; }
+.app[data-chassis="tablet"] .lay-short { display: inline; }
+.app[data-chassis="tablet"] header.topbar { gap: 8px; }
+.app[data-chassis="tablet"] nav.mode-bar button { padding: 5px 12px; }
+.app[data-chassis="tablet"] .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
+.app[data-chassis="tablet"] .house-menu-btn span, .app[data-chassis="phone"] .house-menu-btn span { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.app[data-chassis="tablet"] .inspector-card { width: 300px; }
+/* The shortcuts button is in the house menu on tablets; the top bar has no room for it at the narrowest. */
+@media (max-width: 999px) { .app[data-chassis="tablet"] .topbar-right > .icon-btn[aria-label="Keyboard shortcuts"] { display: none; } }
+
+.app[data-chassis="phone"] header.topbar { grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 0 6px 0 8px; }
+.app[data-chassis="phone"] .brand { padding: 0 6px 0 0; margin-right: 0; border-right: 0; }
+.app[data-chassis="phone"] .house-menu-btn { min-width: 0; max-width: 100%; padding: 0 8px 0 10px; }
+.app[data-chassis="phone"] .house-menu-btn span { max-width: none; }
+.app[data-chassis="phone"] .topbar-right { gap: 0; overflow: visible; }
+.app[data-chassis="phone"] .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
+.app[data-chassis="phone"] .topbar .palette-btn kbd.keycap { display: none; }
+.app[data-chassis="phone"] .inspector-card-toggle { display: none; }
+.app[data-chassis="phone"] main[data-tab="3d"] { --card-clear: 0px; }
+
+/* ---- Touch: finger-sized targets ---- */
+.app[data-touch] .icon-btn { width: 40px; height: 40px; }
+.app[data-touch] .seg button { padding: 9px 14px; }
+.app[data-touch] label input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .app[data-touch] label select,
+.app[data-touch] .inspector input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .app[data-touch] .inspector select,
+.app[data-touch] .sheet input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .app[data-touch] .sheet select { min-height: 38px; font-size: 16px; }
+.app[data-touch] .info-btn { width: 24px; height: 24px; }
+.app[data-touch] .sect-head { min-height: 44px; }
+.app[data-touch] .inspector-card-toggle { width: 36px; height: 36px; }
+.app[data-touch] .check input { width: 18px; height: 18px; }
+.app[data-touch] .hm-item { min-height: 44px; }
+.app[data-touch] .compare-row, .app[data-touch] .view-toggles .check { min-height: 44px; }
+.app[data-touch] .inspector-card-body { -webkit-overflow-scrolling: touch; }
