@@ -2,6 +2,7 @@ import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, WPt } from
 import { uid } from "../types";
 import { EXT_WALL_T, areaOf, bbox, modelBounds, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
 import { exteriorOf, floorBase, planRoofs } from "./roof";
+import { exteriorFaces, type ExteriorFace } from "./siteWalls";
 
 /** Ground level below the ground floor's finished floor, metres (matches the 3D scene). */
 export const GROUND_DROP = 0.26;
@@ -109,13 +110,17 @@ export const SIDE_DIR: Record<HouseSide, V2> = { front: { x: 0, y: 1 }, rear: { 
 export interface LevelOutline {
   level: number;
   polys: V2[][];
+  /** Outer faces of the exterior walls (centre lines pushed out by half the thickness); clearances measure from these when present. */
+  faces?: ExteriorFace[];
 }
 
 export function houseOutlines(model: HouseModel): LevelOutline[] {
   const levels = [...new Set(model.floors.map((f) => f.level))].sort((a, b) => a - b);
+  const faces = exteriorFaces(model);
   return levels.map((level) => ({
     level,
     polys: model.floors.filter((f) => f.level === level).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
+    faces: faces.find((f) => f.level === level)?.segments,
   }));
 }
 
@@ -148,6 +153,7 @@ export interface SideClearance {
  */
 export function sideClearances(outlines: LevelOutline[], boundary: V2[]): SideClearance[] {
   if (boundary.length < 3) return [];
+  if (outlines.some((o) => o.faces)) return sideClearancesFromFaces(outlines.map((o) => ({ level: o.level, segments: o.faces ?? [] })), boundary);
   const out: SideClearance[] = [];
   const bEdges = boundary.map((a, i) => ({ a, b: boundary[(i + 1) % boundary.length], n: outwardNormal(boundary, i) }));
   for (const side of Object.keys(SIDE_DIR) as HouseSide[]) {
@@ -169,6 +175,41 @@ export function sideClearances(outlines: LevelOutline[], boundary: V2[]): SideCl
             const c = segmentSegmentClosest(a, b, t.a, t.b);
             if (!best || c.d < best.distance - 1e-9) best = { side, distance: c.d, from: c.a, to: c.b, level };
           }
+        }
+      }
+    }
+    if (best) out.push(best);
+  }
+  return out;
+}
+
+/**
+ * As sideClearances, but measured from the outer faces of the exterior walls
+ * rather than room edges (wall centre lines), so the figure is the real gap.
+ */
+export function sideClearancesFromFaces(faces: { level: number; segments: ExteriorFace[] }[], boundary: V2[]): SideClearance[] {
+  if (boundary.length < 3) return [];
+  const out: SideClearance[] = [];
+  const bEdges = boundary.map((a, i) => ({ a, b: boundary[(i + 1) % boundary.length], n: outwardNormal(boundary, i) }));
+  for (const side of Object.keys(SIDE_DIR) as HouseSide[]) {
+    const dir = SIDE_DIR[side];
+    const facing = (n: V2) => n.x * dir.x + n.y * dir.y > 0.64;
+    const targets = bEdges.filter((e) => facing(e.n));
+    if (!targets.length) continue;
+    let best: SideClearance | null = null;
+    for (const { level, segments } of faces) {
+      for (const seg of segments) {
+        if (!facing(seg.n)) continue;
+        // A face that pokes past the boundary (a party wall built on the line) has no clearance.
+        const mid = { x: (seg.a.x + seg.b.x) / 2, y: (seg.a.y + seg.b.y) / 2 };
+        const over = !pointInPolygon(mid, boundary) && targets.some((t) => pointSegmentDistance(mid, t.a, t.b) < 0.3 && t.n.x * seg.n.x + t.n.y * seg.n.y > 0.9) ? mid : null;
+        if (over) {
+          if (!best || best.distance > 0) best = { side, distance: 0, from: over, to: over, level };
+          continue;
+        }
+        for (const t of targets) {
+          const c = segmentSegmentClosest(seg.a, seg.b, t.a, t.b);
+          if (!best || c.d < best.distance - 1e-9) best = { side, distance: c.d, from: c.a, to: c.b, level };
         }
       }
     }

@@ -60,13 +60,21 @@ function union(iv: [number, number][]): [number, number][] {
   return out;
 }
 
-/** The solid stretches of every wall on a floor, as polygons in image px. */
-export function planWalls(floor: Floor): PlanWall[] {
+/** One solid stretch of wall in world metres (x right, y = plan y). */
+export interface WorldWallPoly {
+  wall: number;
+  poly: V2[];
+  /** Wall thickness, metres. */
+  thickness: number;
+  exterior: boolean;
+}
+
+/** The solid stretches of every wall on a floor, as polygons in world metres. */
+export function wallPolysWorld(floor: Floor): WorldWallPoly[] {
   const walls = buildWalls(floor);
   const thick = walls.map(wallThickness);
   const ends = wallEnds(walls, thick);
-  const ppm = floor.pxPerM;
-  const out: PlanWall[] = [];
+  const out: WorldWallPoly[] = [];
   walls.forEach((wall, i) => {
     const dx = wall.b.x - wall.a.x;
     const dy = wall.b.y - wall.a.y;
@@ -109,13 +117,23 @@ export function planWalls(floor: Floor): PlanWall[] {
       if (piece.length < 3) continue;
       out.push({
         wall: i,
-        poly: piece.map((p) => toPx(floor, { x: wall.a.x + dir.x * p.x + n.x * p.y, y: wall.a.y + dir.y * p.x + n.y * p.y })),
-        thickness: thick[i] * ppm,
+        poly: piece.map((p) => ({ x: wall.a.x + dir.x * p.x + n.x * p.y, y: wall.a.y + dir.y * p.x + n.y * p.y })),
+        thickness: thick[i],
         exterior: !!wall.exterior,
       });
     }
   });
   return out;
+}
+
+/** The solid stretches of every wall on a floor, as polygons in image px. */
+export function planWalls(floor: Floor): PlanWall[] {
+  return wallPolysWorld(floor).map((w) => ({
+    wall: w.wall,
+    poly: w.poly.map((p) => toPx(floor, p)),
+    thickness: w.thickness * floor.pxPerM,
+    exterior: w.exterior,
+  }));
 }
 
 /**
