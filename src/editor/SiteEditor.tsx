@@ -74,7 +74,7 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
   }, [site.boundary, site.neighbours, outlines, walls]);
   const touch = useChassis((s) => s.touch);
   const insets = useCameraInsets();
-  const camera = useCanvasCamera(svgRef as unknown as RefObject<HTMLElement | null>, { home, fitKey: `site:${insets.fitSuffix}`, insetRight: insets.insetRight, insetBottom: insets.insetBottom, unitsPerM: 1, limits: SITE_LIMITS, anchor: "centre", padFrac: 0 });
+  const camera = useCanvasCamera(svgRef as unknown as RefObject<HTMLElement | null>, { home, fitKey: `site:${insets.fitSuffix}`, insetRight: insets.insetRight, insetBottom: insets.insetBottom, insetLeft: insets.insetLeft, unitsPerM: 1, limits: SITE_LIMITS, anchor: "centre", padFrac: 0 });
   const { cam, size } = camera;
   const px = camera.px; // one screen pixel in metres
   const peeking = useStore((s) => s.peek);

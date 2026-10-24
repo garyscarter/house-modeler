@@ -41,7 +41,9 @@
 .coach-strip .icon-btn { width: 24px; height: 24px; flex: none; color: var(--muted); }
 
 
-.app[data-chassis="phone"] .welcome { padding: 16px 12px; }
+/* The card is taller than a phone: the canvas scrolls instead of clipping the second tile. */
+.app[data-chassis="phone"] main:has(> .welcome) { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.app[data-chassis="phone"] .welcome { margin: 0 auto; padding: 16px 12px 32px; }
 .app[data-chassis="phone"] .welcome-card { padding: 24px 16px 18px; }
 .app[data-chassis="phone"] .welcome h1 { font-size: 24px; }
 .app[data-touch] .welcome-tile { padding: 12px 12px 16px; min-height: 44px; }

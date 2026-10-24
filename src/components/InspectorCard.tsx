@@ -1,10 +1,12 @@
 import { useEffect, type ReactNode } from "react";
 import { useStore } from "../store";
 import { MODE_LABEL, MODE_SUBTITLE } from "../lib/modes";
+import { roomArea } from "../lib/report";
 import { usePanelPrefs } from "./panelPrefs";
 import { Icon } from "./icons";
 import { useChassis } from "./useChassis";
 import { BottomSheet } from "./mobile/BottomSheet";
+import { useSheet } from "./mobile/sheet";
 import "./Inspector.css";
 
 /**
@@ -17,7 +19,18 @@ export function InspectorCard({ title, className = "", children }: { title?: str
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const peek = useStore((s) => s.peek);
   const chassis = useChassis((s) => s.chassis);
+  const atPeek = useSheet((s) => s.detent === "peek");
   const selectedRoomId = useStore((s) => s.selectedRoomId);
+  // At peek the sheet is one line tall, so that line names what was tapped: the room and its area.
+  const roomLine = useStore((s) => {
+    const m = s.variants[s.activeVariant];
+    if (!m || !s.selectedRoomId) return null;
+    for (const f of m.floors) {
+      const r = f.rooms.find((r) => r.id === s.selectedRoomId);
+      if (r) return `${r.name} · ${roomArea(f, r).toFixed(1)} m²`;
+    }
+    return null;
+  });
   // A hover highlight from a row in this card must not outlive a change of selection.
   useEffect(() => {
     useStore.getState().setUi({ hoveredRoomId: null });
@@ -26,7 +39,7 @@ export function InspectorCard({ title, className = "", children }: { title?: str
   const heading = title ?? MODE_LABEL[mode];
   if (chassis === "phone")
     return (
-      <BottomSheet title={heading} subtitle={heading === MODE_LABEL[mode] ? MODE_SUBTITLE[mode] : undefined} className={className} peeking={peek} label={title ?? `${MODE_LABEL[mode]} inspector`}>
+      <BottomSheet title={heading} subtitle={heading === MODE_LABEL[mode] ? (atPeek && roomLine) || MODE_SUBTITLE[mode] : undefined} className={className} peeking={peek} label={title ?? `${MODE_LABEL[mode]} inspector`}>
         {children}
       </BottomSheet>
     );

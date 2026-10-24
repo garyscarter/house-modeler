@@ -25,6 +25,8 @@ export function HouseMenu({ name }: { name: string }) {
   const quiet = usePanelPrefs((s) => s.quiet);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const chassis = useChassis((s) => s.chassis);
+  // Under 1000 px the top bar drops its ? button (styles.css), so the item lives here instead.
+  const narrow = useChassis((s) => s.width < 1000);
   const syncOff = useSyncStatus((s) => s.status.kind === "off");
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export function HouseMenu({ name }: { name: string }) {
             <Icon name="image" />
             <span>Photos ({photos})…</span>
           </button>
-          {chassis !== "desktop" && (
+          {(chassis === "phone" || (chassis === "tablet" && narrow)) && (
             <button className="hm-item" role="menuitem" onClick={run(() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS)))}>
               <Icon name="keyboard" />
               <span>Keyboard shortcuts…</span>

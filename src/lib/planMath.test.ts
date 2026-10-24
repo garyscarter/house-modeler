@@ -437,6 +437,14 @@ describe("fitCamInset", () => {
     expect(c.s).toBeCloseTo(0.25);
     expect((100 - c.x) / c.s).toBeLessThan(656);
   });
+  it("centres the rect right of a left inset (the phone's tool rail)", () => {
+    const el = { w: 400, h: 800 };
+    const c = fitCamInset(r, el, 0, 0, 0, 80);
+    // 320 px visible across: the rect fills it, centred at 80 + 160.
+    expect(c.s).toBeCloseTo(100 / 320);
+    expect((50 - c.x) / c.s).toBeCloseTo(240);
+    expect((0 - c.x) / c.s).toBeCloseTo(80);
+  });
   it("centres the rect above a bottom inset (the phone's sheet and dock)", () => {
     const el = { w: 400, h: 800 };
     const c = fitCamInset(r, el, 0, 0, 200);

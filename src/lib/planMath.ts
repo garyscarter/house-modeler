@@ -450,14 +450,16 @@ export const INSPECTOR_INSET = 344;
  * Like fitCam, but fits rect r into the part of the element not covered by `rightInset` px on its right and
  * `bottomInset` px at its bottom (the phone's bottom sheet and dock).
  */
-export function fitCamInset(r: Rect, el: Size, rightInset = 0, padFrac = 0.06, bottomInset = 0): Cam {
+export function fitCamInset(r: Rect, el: Size, rightInset = 0, padFrac = 0.06, bottomInset = 0, leftInset = 0): Cam {
   // Keep at least a third of the element visible, so a narrow window still gets a sensible fit.
-  const inset = Math.max(0, Math.min(rightInset, el.w * (2 / 3)));
+  const left = Math.max(0, Math.min(leftInset, el.w / 3));
+  const inset = Math.max(0, Math.min(rightInset, el.w * (2 / 3) - left));
   const below = Math.max(0, Math.min(bottomInset, el.h * (2 / 3)));
-  if (inset === 0 && below === 0) return fitCam(r, el, padFrac);
-  const visible = { w: Math.max(el.w - inset, 1), h: Math.max(el.h - below, 1) };
+  if (inset === 0 && below === 0 && left === 0) return fitCam(r, el, padFrac);
+  const visible = { w: Math.max(el.w - left - inset, 1), h: Math.max(el.h - below, 1) };
   const c = fitCam(r, visible, padFrac);
-  return { x: (r.x0 + r.x1) / 2 - (visible.w * c.s) / 2, y: (r.y0 + r.y1) / 2 - (visible.h * c.s) / 2, s: c.s };
+  // The rect's centre lands in the centre of the visible part: left of the card, right of the rail, above the sheet.
+  return { x: (r.x0 + r.x1) / 2 - (left + visible.w / 2) * c.s, y: (r.y0 + r.y1) / 2 - (visible.h * c.s) / 2, s: c.s };
 }
 
 /** The rect the floorplan image is clipped to in its faint state: the rooms' bounds plus a margin in metres. */

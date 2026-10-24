@@ -75,6 +75,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     fitKey: `${floor.id}:${insets.fitSuffix}`,
     insetRight: insets.insetRight,
     insetBottom: insets.insetBottom,
+    insetLeft: insets.insetLeft,
     unitsPerM: ppm,
     limits: (s) => ({ minS: ppm / 2000, maxS: Math.max(floor.imageW / s.w, floor.imageH / s.h) * 3 }),
   });

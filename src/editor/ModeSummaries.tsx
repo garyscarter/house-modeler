@@ -8,6 +8,8 @@ import { FloorSettings, NumberField } from "./Inspectors";
 import { Section } from "../components/Section";
 import { useStore } from "../store";
 import { MyFurnitureList } from "./MyFurniture";
+import { useChassis } from "../components/useChassis";
+import { FEATURES } from "../lib/chassis";
 
 /** How many furniture items on the floor overlap another (the plan's red outlines). */
 export function useClashCount(floor: Floor): number {
@@ -20,17 +22,26 @@ export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: F
   const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
   const updateModel = useStore((s) => s.updateModel);
   const stats = buildStats(floor);
+  const touch = useChassis((s) => s.touch);
+  const draw = useChassis((s) => FEATURES[s.chassis].draw);
+  const verb = touch ? "Tap" : "Click";
   return (
     <div className="mode-summary">
       <p className="instruction">
         {floor.rooms.length ? (
-          <>
-            Click a room to check its size, or draw one with <kbd className="keycap">R</kbd>
-          </>
-        ) : (
+          draw ? (
+            <>
+              {verb} a room to check its size, or draw one with <kbd className="keycap">R</kbd>
+            </>
+          ) : (
+            <>{verb} a room to check its size</>
+          )
+        ) : draw ? (
           <>
             No rooms yet. Draw one with <kbd className="keycap">R</kbd>
           </>
+        ) : (
+          <>No rooms yet. Draw one on a tablet or desktop.</>
         )}
       </p>
       {stats.length > 0 && (
@@ -58,9 +69,10 @@ export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: F
 
 /** Decorate, nothing selected. */
 export function DecorateSummary({ floor }: { floor: Floor }) {
+  const touch = useChassis((s) => s.touch);
   return (
     <div className="mode-summary">
-      <p className="instruction">Click a floor, or a wall near its edge, to decorate it.</p>
+      <p className="instruction">{touch ? "Tap" : "Click"} a floor, or a wall near its edge, to decorate it.</p>
       <p className="muted small">{decorateSummary(floor)}</p>
     </div>
   );

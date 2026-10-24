@@ -23,7 +23,7 @@
 
 /* Phone: the dock spans the canvas above the sheet's peek, and gives way when the sheet opens. */
 .app[data-chassis="phone"] .dock {
-  left: 12px; right: 12px; transform: none; bottom: calc(var(--sheet-peek) + 12px); height: 44px; padding: 4px;
+  left: 50%; width: min(calc(100% - 24px), 560px); transform: translateX(-50%); bottom: calc(var(--sheet-peek) + 12px); height: 44px; padding: 4px;
   justify-content: space-between; gap: 2px; transition: opacity .2s;
 }
 .app[data-chassis="phone"] .dock .seg button { padding: 6px 12px; }
