@@ -330,9 +330,20 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     if (index === (s.edge + 1) % site.boundary.length) return "next";
     return undefined;
   };
+  // The pointer is captured by the SVG, so a handle never sees dblclick; spot a double press on the same corner here.
+  const lastVertexDown = useRef<{ key: string; index: number; at: number } | null>(null);
   const onVertexDown = (e: React.PointerEvent, s: NonNullable<Sel>, index: number) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.stopPropagation();
+    const key = s.type === "boundary" ? "boundary" : `${s.type}:${s.id}`;
+    const last = lastVertexDown.current;
+    lastVertexDown.current = { key, index, at: e.timeStamp };
+    if (last && last.key === key && last.index === index && e.timeStamp - last.at < 350) {
+      // Double-click removes the corner, as on the plan; a polygon keeps at least three.
+      lastVertexDown.current = null;
+      if (polyOf(s).length > 3) deleteVertex(s, index);
+      return;
+    }
     if (capture(e)) return;
     setSel({ ...s, vertex: index } as Sel);
     drag.current = { kind: "vertex", sel: s, index, slide: slideFor(s, index) };
