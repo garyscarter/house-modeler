@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HouseModel, Site } from "../types";
 import { listingSite } from "./houses/listing91770873";
-import { copySiteOf, hasOwnSite, setSiteOf, siteOf, sitesFromImport, sitesFromShared, siteSource, updateSiteOf, type Sites } from "./sites";
+import { copySiteOf, hasOwnSite, plotsDiffer, setSiteOf, siteOf, sitesFromImport, sitesFromShared, siteSource, updateSiteOf, type Sites } from "./sites";
 
 const model = {} as HouseModel;
 const plot = (frontBearing = 180): Site => ({ frontBearing, latitude: 51, longitude: -2, boundary: [], neighbours: [], surfaces: [] });
@@ -16,6 +16,14 @@ describe("each layout's plot", () => {
     expect(hasOwnSite(sites, "proposed")).toBe(false);
     // As listed never borrows Proposed's.
     expect(siteOf({ proposed: current }, "current")).toBeUndefined();
+  });
+
+  it("says the plots differ only when the two layouts show different ones", () => {
+    expect(plotsDiffer({ current: plot() })).toBe(false);
+    expect(plotsDiffer({ current: plot(), proposed: plot() })).toBe(false);
+    expect(plotsDiffer({ current: plot(), proposed: plot(90) })).toBe(true);
+    expect(plotsDiffer({ current: plot(), proposed: null })).toBe(true);
+    expect(plotsDiffer({})).toBe(false);
   });
 
   it("copies on the first edit to Proposed, leaving As listed's plot alone", () => {

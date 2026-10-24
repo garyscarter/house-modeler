@@ -6,6 +6,7 @@ import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from ".
 import { edgeLengthsM, formatLength } from "../lib/planMath";
 import { useSite, useStore } from "../store";
 import { Info } from "../components/Info";
+import { ColourWell } from "../components/inspector";
 
 /**
  * One edge's finish controls: the inside covering select, colour, accent and
@@ -64,22 +65,10 @@ export function WallFinishRow({
             ))}
           </select>
           {inside && (
-            <input
-              type="color"
-              aria-label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`}
-              title={BASE_LABEL[covering]}
-              value={wallBase(look)}
-              onChange={(e) => set(setWallOverride(room, i, { ...o, paint: e.target.value }))}
-            />
+            <ColourWell custom label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`} value={wallBase(look)} onChange={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))} />
           )}
           {inside && covering !== "paint" && hasAccent(covering) && (
-            <input
-              type="color"
-              aria-label={`Wall ${i + 1} ${ACCENT_LABEL[covering].toLowerCase()}`}
-              title={ACCENT_LABEL[covering]}
-              value={wallAccent(look) ?? wallBase(look)}
-              onChange={(e) => set(setWallOverride(room, i, { ...o, accent: e.target.value }))}
-            />
+            <ColourWell custom label={`Wall ${i + 1} ${ACCENT_LABEL[covering].toLowerCase()}`} value={wallAccent(look) ?? wallBase(look)} onChange={(hex) => set(setWallOverride(room, i, { ...o, accent: hex }))} />
           )}
         </div>
       )}
@@ -105,13 +94,7 @@ export function WallFinishRow({
             ))}
           </select>
           {out && (
-            <input
-              type="color"
-              aria-label={`Wall ${i + 1} outside colour`}
-              title="Outside colour"
-              value={outLook.color}
-              onChange={(e) => set(setOutsideOverride(room, i, { ...out, color: e.target.value }))}
-            />
+            <ColourWell custom label={`Wall ${i + 1} outside colour`} value={outLook.color} onChange={(hex) => set(setOutsideOverride(room, i, { ...out, color: hex }))} />
           )}
         </div>
       )}

@@ -50,3 +50,13 @@ label .site-unit input[type="number"] { width: 72px; display: inline-block; marg
 .site-stale-note { margin: 8px 0; }
 .site-stale-note p { margin: 0 0 6px; }
 .site-boundary-update { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 8px 0; }
+
+/* Bearing: degree sign inside the input, compass point as a chip beside it. */
+.site-bearing { display: flex; align-items: center; gap: var(--sp-2, 8px); }
+.site-bearing .pair-input { width: 84px; flex: none; }
+label .site-bearing .pair-input input[type="number"] { width: 100%; margin: 0; padding: 5px 20px 5px 8px; text-align: right; }
+.compass-chip { padding: 2px 10px; border-radius: var(--pill); background: var(--accent-soft); color: var(--accent); font: 600 12px var(--font-mono); }
+.site-gaps div { min-height: 58px; justify-content: center; }
+.gap-note { font-size: 10px; line-height: 1.2; white-space: nowrap; text-align: center; }
+.site-gaps b { font: 500 14px var(--font-mono); }
+.site-latlon label { margin-top: 0; }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Section } from "../components/Section";
-import { NumberField, DangerZone, PairField, StatHeader } from "../components/inspector";
+import { NumberField, DangerZone, PairField, StatHeader, SwatchField } from "../components/inspector";
 import type { Mode } from "../lib/modes";
 import { knockThroughNeighbours } from "../lib/mergeRooms";
 import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, printedChip, shapeSummary, stairsSummary } from "../lib/modeSummary";
@@ -307,19 +307,7 @@ export function CanopyInspector({
 
 /** A colour that falls back to a default when unset, with a button to go back to it. */
 function OptionalColour({ label, value, fallback, onChange }: { label: string; value: string | undefined; fallback: string; onChange: (v: string | undefined) => void }) {
-  return (
-    <label>
-      {label}
-      <span className="row">
-        <input type="color" value={value ?? fallback} onChange={(e) => onChange(e.target.value)} />
-        {value !== undefined && (
-          <button className="small" title="Back to the default" onClick={() => onChange(undefined)}>
-            Default
-          </button>
-        )}
-      </span>
-    </label>
-  );
+  return <SwatchField label={label} value={value ?? fallback} isSet={value !== undefined} onChange={onChange} onReset={() => onChange(undefined)} />;
 }
 
 /** Style, glazing, sill and trim colours of an opening, where its kind has them. */
@@ -332,10 +320,13 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
   return (
     <>
       {COLOUR_KINDS.includes(k) && (
-        <label>
-          Colour
-          <input type="color" value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")} onChange={(e) => onChange({ color: e.target.value })} />
-        </label>
+        <SwatchField
+          label="Colour"
+          value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")}
+          isSet={opening.color !== undefined}
+          onChange={(color) => onChange({ color })}
+          onReset={() => onChange({ color: undefined })}
+        />
       )}
       {styles.length > 0 && (
         <label>
@@ -587,10 +578,7 @@ export function WallInspector({
       </label>
       )}
       {mode === "decorate" && (
-        <label>
-          Colour
-          <input type="color" value={wall.color ?? "#f4f1ea"} onChange={(e) => onChange({ color: e.target.value })} />
-        </label>
+        <SwatchField label="Colour" value={wall.color ?? "#f4f1ea"} isSet={!!wall.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
       )}
       {mode !== "decorate" && (
         <>
@@ -690,30 +678,16 @@ export function FixtureInspector({
           )}
         </div>
       )}
-      <label>
-        Colour
-        <span className="colour-pick">
-          <input type="color" value={fixture.color ?? item.color} onChange={(e) => onChange({ color: e.target.value })} />
-          {fixture.color && (
-            <button className="link" onClick={() => onChange({ color: undefined })}>
-              Reset
-            </button>
-          )}
-        </span>
-      </label>
+      <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
       {isJoinery(item) && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
-        <label>
-          Worktop colour
-          <span className="colour-pick">
-            <input type="color" value={fixture.worktop ?? DEFAULT_WORKTOP} onChange={(e) => onChange({ worktop: e.target.value })} />
-            {fixture.worktop && (
-              <button className="link" onClick={() => onChange({ worktop: undefined })}>
-                Reset
-              </button>
-            )}
-          </span>
-        </label>
+        <SwatchField
+          label="Worktop colour"
+          value={fixture.worktop ?? DEFAULT_WORKTOP}
+          isSet={!!fixture.worktop}
+          onChange={(worktop) => onChange({ worktop })}
+          onReset={() => onChange({ worktop: undefined })}
+        />
       )}
       <label>
         Rotation {rot}°
@@ -770,17 +744,7 @@ function JoineryFields({
   const set = (p: Parameters<typeof patchJoinery>[1]) => onChange(patchJoinery(fixture, p));
   const sym = item.symbol;
   const colourField = (label: string, value: string, isSet: boolean, change: (c: string) => void, reset: () => void) => (
-    <label>
-      {label}
-      <span className="colour-pick">
-        <input type="color" value={value} onChange={(e) => change(e.target.value)} />
-        {isSet && (
-          <button className="link" onClick={reset}>
-            Reset
-          </button>
-        )}
-      </span>
-    </label>
+    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} />
   );
   const frontSelect = (label: string, value: JoineryFront, change: (v: JoineryFront) => void, openLabel?: string) => (
     <label>
@@ -970,12 +934,7 @@ export function MultiFixtureInspector({
           </li>
         ))}
       </ul>
-      <label>
-        Colour
-        <span className="colour-pick">
-          <input type="color" value={first?.color ?? firstItem?.color ?? "#cccccc"} onChange={(e) => onColour(e.target.value)} />
-        </span>
-      </label>
+      <SwatchField label="Colour" value={first?.color ?? firstItem?.color ?? "#cccccc"} isSet={!!first?.color} onChange={onColour} />
       <div className="row">
         {!isGroup && (
           <button onClick={onGroup} title="Ctrl+G or Cmd+G">

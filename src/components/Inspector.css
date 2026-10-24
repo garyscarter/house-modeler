@@ -99,9 +99,9 @@
 .finish-tile { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); min-width: 0; padding: 2px 0 0; border-radius: var(--radius-s); background: none; font-size: 11px; line-height: 1.2; color: var(--muted); }
 .finish-tile:hover:not(:disabled) { background: none; color: var(--text); }
 .finish-thumb { display: block; width: 56px; height: 56px; max-width: 100%; border-radius: var(--radius-s); border: 1px solid rgba(0, 0, 0, 0.14); background-color: var(--surface-3); }
-.finish-tile.selected { color: var(--text); font-weight: 600; }
+.finish-tile.selected { color: var(--text); }
 .finish-tile.selected .finish-thumb { box-shadow: var(--ring); border-color: transparent; }
-.finish-name { display: block; max-width: 100%; text-align: center; overflow-wrap: anywhere; }
+.finish-name { display: block; max-width: 100%; text-align: center; overflow-wrap: break-word; letter-spacing: -0.01em; }
 
 /* Danger zone */
 .danger-zone { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
@@ -130,3 +130,8 @@
 .advanced > summary:hover { color: var(--accent); }
 .advanced[open] > summary { margin-bottom: var(--sp-2); }
 .kit-chip { margin-bottom: 0; }
+
+.instruction { text-wrap: balance; }
+.instruction .keycap { white-space: nowrap; }
+.inspector-card .seg.small button { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.danger-zone button.danger-ghost { margin-left: -12px; }

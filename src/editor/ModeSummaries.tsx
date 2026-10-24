@@ -70,13 +70,15 @@ export function DecorateSummary({ floor }: { floor: Floor }) {
 export function FurnishSummary({ floor, clashes, onAdd, onPaste }: { floor: Floor; clashes: number; onAdd: () => void; onPaste?: () => void }) {
   return (
     <div className="mode-summary">
-      <p className="instruction">{furnishSummary(floor, clashes)}</p>
+      <p className="instruction with-info">
+        {furnishSummary(floor, clashes)}
+        <Info label="Selecting several pieces">Shift+click adds items to the selection; Ctrl/⌘+G groups them so they move together.</Info>
+      </p>
       <div className="row">
         <button className="primary big" onClick={onAdd}>
           Add furniture
         </button>
         {onPaste && <button onClick={onPaste}>Paste</button>}
-        <Info label="Selecting several pieces">Shift+click adds items to the selection; Ctrl/⌘+G groups them so they move together.</Info>
       </div>
       <MyFurnitureList />
     </div>

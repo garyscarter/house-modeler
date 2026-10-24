@@ -1,5 +1,5 @@
 import { useStore } from "../store";
-import { siteSource } from "../lib/sites";
+import { plotsDiffer, siteSource } from "../lib/sites";
 import { VARIANT_LABEL } from "../types";
 
 /**
@@ -11,7 +11,9 @@ export function SiteVariantNote() {
   const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
   const source = useStore((s) => siteSource(s.sites, s.activeVariant));
   const proposedBorrows = useStore((s) => siteSource(s.sites, "proposed") === "current");
-  if (!both || !source) return null;
+  const differ = useStore((s) => plotsDiffer(s.sites));
+  // Only worth saying when the two layouts really have different plots.
+  if (!both || !source || !differ) return null;
   const text =
     source !== active
       ? `Proposed is using the plot for ${VARIANT_LABEL[source]}. Your first change here gives Proposed its own copy; ${VARIANT_LABEL[source]} keeps its own.`
