@@ -285,3 +285,17 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
 .app[data-touch] .hm-item { min-height: 44px; }
 .app[data-touch] .compare-row, .app[data-touch] .view-toggles .check { min-height: 44px; }
 .app[data-touch] .inspector-card-body { -webkit-overflow-scrolling: touch; }
+
+/*
+ * No zoom on focus. iOS Safari zooms the page when a focused field's text is under 16px, which throws the
+ * one-screen layout off; on any touch screen every text field, select and textarea keeps 16px text, wherever
+ * it is rendered (sheet, dialogs, the plan's edge fields, the Dulux search). Checkboxes, sliders and colour
+ * wells have no text to zoom to.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
