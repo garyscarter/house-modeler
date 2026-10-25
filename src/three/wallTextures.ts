@@ -612,17 +612,561 @@ function drawLeaves(hex: string, accentHex: string): Drawn {
   return { color: cc, height: null };
 }
 
+/** Ink and colours of the tropical parrot paper (fixed by design). */
+const JG = {
+  ink: "#1c2a1e",
+  ground: "#e9bfc6",
+  sage: "#7ea06a",
+  mid: "#3f7a45",
+  deep: "#2f5a3a",
+  deeper: "#1f3f2a",
+  pink: "#c04c7e",
+  pinkLight: "#d47aa3",
+  pinkDark: "#9a3a68",
+  lilac: "#b89ad6",
+  orange: "#d9603f",
+  beak: "#d9d2c3",
+  pine: "#b9b43c",
+  crown: "#9fb04a",
+  bell: "#e07a8e",
+  bellEye: "#b3415e",
+};
+
+/** Paints a motif once on its own canvas, radius r about (x, y), and stamps it at every offset that reaches the tile. */
+function stamp(c: Ctx, W: number, H: number, x: number, y: number, r: number, paint: (s: Ctx) => void) {
+  r = Math.ceil(r);
+  const [sc, s] = canvas(2 * r, 2 * r);
+  s.translate(r, r);
+  s.lineCap = "round";
+  s.lineJoin = "round";
+  paint(s);
+  const x0 = Math.round(x) - r;
+  const y0 = Math.round(y) - r;
+  for (const dx of [-W, 0, W])
+    for (const dy of [-H, 0, H])
+      if (x0 + dx < W && y0 + dy < H && x0 + dx + 2 * r > 0 && y0 + dy + 2 * r > 0) c.drawImage(sc, x0 + dx, y0 + dy);
+}
+
+/** Inks the current path. */
+function ink(s: Ctx, w = 1.5) {
+  s.strokeStyle = JG.ink;
+  s.lineWidth = w;
+  s.stroke();
+}
+
+/** Lithograph mottling inside the current clip: small translucent dark and light flecks. */
+function mottle(s: Ctx, rnd: () => number, r: number, n: number, alpha: number) {
+  for (let i = 0; i < n; i++) {
+    s.fillStyle = rnd() < 0.6 ? `rgba(10,30,15,${alpha})` : `rgba(220,240,200,${alpha * 0.6})`;
+    s.beginPath();
+    s.ellipse((rnd() - 0.5) * 2 * r, (rnd() - 0.5) * 2 * r, 1.5 + rnd() * r * 0.03, 1 + rnd() * r * 0.015, rnd() * 3, 0, Math.PI * 2);
+    s.fill();
+  }
+}
+
+/** A lens from (x0, y0) to (x1, y1), w wide at its middle, bowed by bow (fraction of w); filled and inked. */
+function lens(s: Ctx, x0: number, y0: number, x1: number, y1: number, w: number, fill: string, bow = 0, lw = 1.1) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const L = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / L) * w;
+  const ny = (dx / L) * w;
+  const mx = x0 + dx * 0.5 + nx * bow;
+  const my = y0 + dy * 0.5 + ny * bow;
+  s.beginPath();
+  s.moveTo(x0, y0);
+  s.quadraticCurveTo(mx + nx, my + ny, x1, y1);
+  s.quadraticCurveTo(mx - nx, my - ny, x0, y0);
+  s.fillStyle = fill;
+  s.fill();
+  ink(s, lw);
+}
+
+/** White polka dots on a 12 px stagger (the grid divides the tile, so it wraps), and a few tiny stars. */
+function dots(c: Ctx, W: number, H: number, rnd: () => number) {
+  const step = 12;
+  c.fillStyle = "rgba(255,250,250,0.78)";
+  for (let j = 0; j < Math.round(H / step); j++)
+    for (let i = 0; i < Math.round(W / step); i++) {
+      c.beginPath();
+      c.ellipse(i * step + (j % 2) * step * 0.5, j * step, 3.2 + rnd() * 0.6, 2.5 + rnd() * 0.4, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+  c.fillStyle = "#fff";
+  for (let k = 0; k < 7; k++) {
+    const x = rnd() * W;
+    const y = rnd() * H;
+    for (const dx of [-W, 0, W])
+      for (const dy of [-H, 0, H]) {
+        c.beginPath();
+        for (let p = 0; p < 10; p++) {
+          const r = p % 2 ? 2.4 : 6;
+          c.lineTo(x + dx + r * Math.sin((p * Math.PI) / 5), y + dy - r * Math.cos((p * Math.PI) / 5));
+        }
+        c.fill();
+      }
+  }
+}
+
+/** A pinnate palm frond from its base along +x: curved stem, narrow leaflets either side. */
+function palmFrond(s: Ctx, a: number, l: number, bend: number, fill: string, fill2: string, rnd: () => number) {
+  s.rotate(a);
+  const at = (t: number): [number, number, number] => {
+    const x = l * t;
+    const y = bend * l * 4 * t * (1 - t) * 0.5;
+    return [x, y, Math.atan2(bend * l * 2 * (1 - 2 * t) * 0.5, l)];
+  };
+  for (const side of [-1, 1])
+    for (let t = 0.1; t < 0.97; t += 0.046) {
+      const [x, y, th] = at(t);
+      const ll = l * (0.3 * Math.pow(Math.sin(Math.PI * (0.12 + 0.88 * t)), 0.6) + 0.04) * (0.9 + rnd() * 0.2);
+      const ang = th + side * (0.95 - 0.45 * t + (rnd() - 0.5) * 0.12);
+      lens(s, x, y, x + Math.cos(ang) * ll, y + Math.sin(ang) * ll, ll * 0.09, rnd() < 0.5 ? fill : fill2, side * 0.6, 1);
+    }
+  s.beginPath();
+  s.moveTo(-l * 0.08, 0);
+  for (let t = 0; t <= 1; t += 0.05) {
+    const [x, y] = at(t);
+    s.lineTo(x, y);
+  }
+  ink(s, 2.2);
+}
+
+/** A monstera leaf from its stalk notch along +x: heart-shaped, deep curved splits from the edge, holes by the midrib. */
+function monstera(s: Ctx, a: number, l: number, fill: string, fill2: string, rnd: () => number) {
+  s.rotate(a);
+  s.beginPath();
+  s.moveTo(-l * 0.5, l * 0.06);
+  s.quadraticCurveTo(-l * 0.2, l * 0.04, 0, 0);
+  ink(s, 6);
+  s.strokeStyle = fill2;
+  s.lineWidth = 3.5;
+  s.stroke();
+  const blade = () => {
+    s.beginPath();
+    s.moveTo(0, 0);
+    s.bezierCurveTo(-l * 0.14, -l * 0.1, -l * 0.16, -l * 0.42, l * 0.14, -l * 0.47);
+    s.bezierCurveTo(l * 0.45, -l * 0.54, l * 0.86, -l * 0.34, l, 0);
+    s.bezierCurveTo(l * 0.86, l * 0.34, l * 0.45, l * 0.54, l * 0.14, l * 0.47);
+    s.bezierCurveTo(-l * 0.16, l * 0.42, -l * 0.14, l * 0.1, 0, 0);
+    s.closePath();
+  };
+  const dir = (t: number, side: number): [number, number] => {
+    const phi = 1.5 - 0.85 * t;
+    return [Math.cos(phi), side * Math.sin(phi)];
+  };
+  s.save();
+  blade();
+  s.fillStyle = fill;
+  s.fill();
+  s.clip();
+  s.fillStyle = fill2;
+  s.fillRect(-l, 0, 2 * l, l);
+  mottle(s, rnd, l, 140, 0.14);
+  // Pale veins down the middle of each lobe.
+  s.strokeStyle = "#8fb487";
+  s.lineWidth = 1.3;
+  for (let k = 0; k < 7; k++)
+    for (const side of [-1, 1]) {
+      const t = 0.05 + k * 0.13;
+      const [ux, uy] = dir(t, side);
+      s.beginPath();
+      s.moveTo(t * l, 0);
+      s.quadraticCurveTo(t * l + ux * l * 0.3 + l * 0.04, uy * l * 0.3, t * l + ux * l * 0.62 + l * 0.06, uy * l * 0.62);
+      s.stroke();
+    }
+  s.restore();
+  s.strokeStyle = "#a9c79a";
+  s.lineWidth = Math.max(2, l * 0.012);
+  s.beginPath();
+  s.moveTo(0, 0);
+  s.quadraticCurveTo(l * 0.5, l * 0.02, l * 0.95, 0);
+  s.stroke();
+  blade();
+  ink(s, 1.6);
+  // Splits (between the veins) and holes, cut out so whatever is underneath shows; then inked.
+  const cuts: (() => void)[] = [];
+  for (const side of [-1, 1])
+    for (let k = 0; k < 6; k++) {
+      const t = 0.115 + k * 0.13 + (rnd() - 0.5) * 0.03;
+      const [ux, uy] = dir(t, side);
+      const nx = -uy;
+      const ny = ux;
+      const d0 = l * (0.09 + rnd() * 0.08);
+      const w1 = l * (0.035 + rnd() * 0.025);
+      const p0 = [t * l + ux * d0, uy * d0];
+      const p1 = [t * l + ux * l * 0.75 + l * 0.08, uy * l * 0.75];
+      const pc = [(p0[0] + p1[0]) / 2 + l * 0.03, (p0[1] + p1[1]) / 2];
+      cuts.push(() => {
+        s.moveTo(p0[0], p0[1]);
+        s.quadraticCurveTo(pc[0] + nx * w1 * 0.4, pc[1] + ny * w1 * 0.4, p1[0] + nx * w1, p1[1] + ny * w1);
+        s.lineTo(p1[0] - nx * w1, p1[1] - ny * w1);
+        s.quadraticCurveTo(pc[0] - nx * w1 * 0.4, pc[1] - ny * w1 * 0.4, p0[0], p0[1]);
+        s.closePath();
+      });
+      if (k < 5 && rnd() < 0.8) {
+        const th = t + 0.065;
+        const [hx, hy] = dir(th, side);
+        const hd = l * 0.075;
+        const cx = th * l + hx * hd;
+        const cy = hy * hd;
+        const ang = Math.atan2(hy, hx);
+        cuts.push(() => {
+          s.moveTo(cx + Math.cos(ang) * l * 0.05, cy + Math.sin(ang) * l * 0.05);
+          s.ellipse(cx, cy, l * 0.05, l * 0.017, ang, 0, Math.PI * 2);
+        });
+      }
+    }
+  const cutPath = () => {
+    s.beginPath();
+    for (const f of cuts) f();
+  };
+  s.save();
+  s.globalCompositeOperation = "destination-out";
+  cutPath();
+  s.fill();
+  s.restore();
+  s.save();
+  blade();
+  s.clip();
+  cutPath();
+  ink(s, 1.4);
+  s.restore();
+}
+
+/** A long banana-type leaf from its base along +x: dark, dense parallel veins, a couple of tears. */
+function bananaLeaf(s: Ctx, a: number, l: number, wd: number, fill: string, fill2: string, rnd: () => number) {
+  s.rotate(a);
+  const blade = () => {
+    s.beginPath();
+    s.moveTo(0, 0);
+    s.bezierCurveTo(l * 0.12, -wd * 0.9, l * 0.55, -wd * 1.25, l, 0);
+    s.bezierCurveTo(l * 0.55, wd * 1.25, l * 0.12, wd * 0.9, 0, 0);
+    s.closePath();
+  };
+  s.save();
+  blade();
+  s.fillStyle = fill;
+  s.fill();
+  s.clip();
+  s.fillStyle = fill2;
+  s.fillRect(-10, 0, l + 20, wd * 2);
+  mottle(s, rnd, l * 0.6, 90, 0.14);
+  s.strokeStyle = "rgba(15,35,20,0.75)";
+  s.lineWidth = 1;
+  for (let x = l * 0.04; x < l; x += 5)
+    for (const side of [-1, 1]) {
+      s.beginPath();
+      s.moveTo(x, 0);
+      s.quadraticCurveTo(x + wd * 0.25, side * wd * 0.6, x + wd * 0.7, side * wd * 1.3);
+      s.stroke();
+    }
+  s.restore();
+  blade();
+  ink(s, 1.6);
+  s.strokeStyle = "#a9c79a";
+  s.lineWidth = 2.2;
+  s.beginPath();
+  s.moveTo(-l * 0.12, 0);
+  s.lineTo(l * 0.95, 0);
+  s.stroke();
+  s.save();
+  s.globalCompositeOperation = "destination-out";
+  for (let k = 0; k < 3; k++) {
+    const x = l * (0.3 + rnd() * 0.5);
+    const side = rnd() < 0.5 ? -1 : 1;
+    s.beginPath();
+    s.moveTo(x + wd * 0.1, side * wd * 0.25);
+    s.lineTo(x + wd * 0.9, side * wd * 1.5);
+    s.lineTo(x + wd * 0.98, side * wd * 1.5);
+    s.closePath();
+    s.fill();
+  }
+  s.restore();
+}
+
+/** A parrot u px long, facing +x (flip mirrors it): perched upright on a twig, or in flight with both wings up. */
+function parrot(s: Ctx, a: number, u: number, pose: "perched" | "flying", flip: boolean) {
+  s.rotate(a);
+  if (flip) s.scale(-1, 1);
+  const tail = (x0: number, y0: number, x1: number, y1: number) => {
+    lens(s, x0, y0, x1 + u * 0.04, y1, u * 0.035, JG.pinkDark, 0.2);
+    lens(s, x0, y0, x1, y1, u * 0.045, JG.pink, -0.2);
+    s.strokeStyle = JG.pinkDark;
+    s.lineWidth = 0.8;
+    for (let k = 1; k < 9; k++) {
+      const t = k / 10;
+      const x = x0 + (x1 - x0) * t;
+      const y = y0 + (y1 - y0) * t;
+      s.beginPath();
+      s.moveTo(x, y);
+      s.lineTo(x + (x0 - x1) * 0.05 + (y1 - y0) * 0.03, y + (y0 - y1) * 0.05 - (x1 - x0) * 0.03);
+      s.stroke();
+    }
+  };
+  // One row of wing feathers, rooted along the arm from the shoulder (sx, sy) at angle arm, pointing a0 by the body to a1 at the tip.
+  const wing = (sx: number, sy: number, arm: number, armL: number, a0: number, a1: number, n: number, len: [number, number], w: number, cols: string[]) => {
+    for (let k = 0; k < n; k++) {
+      const t = k / (n - 1);
+      const ang = a0 + (a1 - a0) * t;
+      const L = u * (len[0] + (len[1] - len[0]) * t);
+      const rx = sx + Math.cos(arm) * armL * u * t;
+      const ry = sy + Math.sin(arm) * armL * u * t;
+      const [ex, ey] = [Math.cos(ang) * L, Math.sin(ang) * L];
+      lens(s, rx, ry, rx + ex, ry + ey, u * w, cols[k % cols.length], 0.25);
+      s.strokeStyle = "rgba(28,42,30,0.55)";
+      s.lineWidth = 0.8;
+      s.beginPath();
+      s.moveTo(rx + ex * 0.3, ry + ey * 0.3);
+      s.lineTo(rx + ex * 0.92, ry + ey * 0.92);
+      s.stroke();
+    }
+  };
+  const head = (hx: number, hy: number, r: number, look: number) => {
+    s.beginPath();
+    s.arc(hx, hy, r, 0, Math.PI * 2);
+    s.fillStyle = "#c85a8a";
+    s.fill();
+    ink(s);
+    s.save();
+    s.translate(hx, hy);
+    s.rotate(look);
+    s.beginPath();
+    s.ellipse(r * 0.45, 0, r * 0.45, r * 0.35, 0, 0, Math.PI * 2);
+    s.fillStyle = "#f2e6ea";
+    s.fill();
+    s.beginPath();
+    s.arc(r * 0.4, -r * 0.05, r * 0.16, 0, Math.PI * 2);
+    s.fillStyle = JG.ink;
+    s.fill();
+    // Hooked upper beak over a dark lower one.
+    s.beginPath();
+    s.moveTo(r * 0.8, r * 0.35);
+    s.quadraticCurveTo(r * 1.1, r * 0.75, r * 1.05, r * 0.85);
+    s.lineTo(r * 0.75, r * 0.7);
+    s.closePath();
+    s.fillStyle = "#3a3436";
+    s.fill();
+    ink(s, 1);
+    s.beginPath();
+    s.moveTo(r * 0.75, -r * 0.4);
+    s.bezierCurveTo(r * 1.5, -r * 0.5, r * 1.75, r * 0.4, r * 1.3, r * 0.95);
+    s.quadraticCurveTo(r * 1.3, r * 0.45, r * 0.8, r * 0.4);
+    s.closePath();
+    s.fillStyle = JG.beak;
+    s.fill();
+    ink(s, 1.2);
+    s.restore();
+  };
+  if (pose === "perched") {
+    s.beginPath();
+    s.moveTo(-u * 0.35, u * 0.16);
+    s.lineTo(u * 0.35, u * 0.08);
+    ink(s, 5);
+    s.strokeStyle = "#5b4a33";
+    s.lineWidth = 3;
+    s.stroke();
+    tail(-u * 0.02, u * 0.05, -u * 0.14, u * 0.68);
+    s.beginPath();
+    s.moveTo(u * 0.08, -u * 0.33);
+    s.bezierCurveTo(u * 0.22, -u * 0.25, u * 0.18, 0, u * 0.04, u * 0.11);
+    s.bezierCurveTo(-u * 0.04, u * 0.13, -u * 0.13, -u * 0.1, -u * 0.04, -u * 0.3);
+    s.closePath();
+    const g = s.createLinearGradient(-u * 0.1, 0, u * 0.18, 0);
+    g.addColorStop(0, JG.pink);
+    g.addColorStop(1, JG.pinkLight);
+    s.fillStyle = g;
+    s.fill();
+    ink(s);
+    s.strokeStyle = JG.pinkDark;
+    s.lineWidth = 0.8;
+    for (let k = 0; k < 9; k++) {
+      s.beginPath();
+      s.arc(u * (0.07 + (k % 3) * 0.035), -u * (0.22 - Math.floor(k / 3) * 0.08), u * 0.02, 0.2, Math.PI - 0.2);
+      s.stroke();
+    }
+    // Folded wing: long magenta primaries to the tip, lilac and orange coverts over them.
+    wing(u * 0.05, -u * 0.26, 1.75, 0.16, 1.98, 1.78, 6, [0.3, 0.5], 0.045, [JG.pink, "#b23f72"]);
+    wing(u * 0.05, -u * 0.26, 1.75, 0.16, 2.0, 1.8, 5, [0.17, 0.24], 0.045, [JG.lilac, "#c9b0e0"]);
+    wing(u * 0.05, -u * 0.26, 1.75, 0.16, 2.0, 1.85, 5, [0.08, 0.12], 0.04, [JG.orange, JG.pinkLight]);
+    head(u * 0.1, -u * 0.38, u * 0.085, 0.15);
+    s.fillStyle = "#3a3436";
+    for (const fx of [0, 0.06]) {
+      s.beginPath();
+      s.ellipse(u * fx, u * (0.115 - fx * 0.1), u * 0.025, u * 0.012, 0, 0, Math.PI * 2);
+      s.fill();
+    }
+  } else {
+    wing(u * 0.03, -u * 0.04, -2.05, 0.22, -3.05, -2.3, 7, [0.16, 0.34], 0.06, [JG.pinkDark, "#86305a"]);
+    tail(-u * 0.1, u * 0.02, -u * 0.62, u * 0.12);
+    s.beginPath();
+    s.ellipse(u * 0.06, u * 0.02, u * 0.2, u * 0.075, 0.05, 0, Math.PI * 2);
+    const g = s.createLinearGradient(0, -u * 0.07, 0, u * 0.09);
+    g.addColorStop(0, JG.pink);
+    g.addColorStop(1, "#c98bc4");
+    s.fillStyle = g;
+    s.fill();
+    ink(s);
+    wing(u * 0.08, -u * 0.03, -1.75, 0.26, -3.0, -1.9, 8, [0.2, 0.42], 0.065, [JG.pink, JG.pinkLight, "#b23f72"]);
+    wing(u * 0.08, -u * 0.03, -1.75, 0.26, -2.9, -1.95, 7, [0.12, 0.2], 0.06, [JG.lilac, "#c9b0e0"]);
+    lens(s, u * 0.1, -u * 0.01, u * 0.08 + Math.cos(-1.75) * u * 0.27, -u * 0.03 + Math.sin(-1.75) * u * 0.27, u * 0.05, JG.pink, -0.4);
+    wing(u * 0.08, -u * 0.03, -1.75, 0.24, -2.8, -2.0, 6, [0.07, 0.1], 0.05, [JG.orange, JG.pinkLight]);
+    head(u * 0.27, u * 0.05, u * 0.07, 0.35);
+  }
+}
+
+/** A small pineapple standing at (0, 0): crosshatched body, spiky crown, lime leaves at its foot. */
+function pineapple(s: Ctx, a: number, z: number, rnd: () => number) {
+  s.rotate(a);
+  for (let k = 0; k < 5; k++) {
+    const ang = Math.PI / 2 + (k - 2) * 0.5 + (rnd() - 0.5) * 0.2;
+    lens(s, 0, -z * 0.05, Math.cos(ang) * z * 0.6, Math.sin(ang) * z * 0.55, z * 0.04, k % 2 ? "#a8d46a" : "#8fbf55", 0.3);
+  }
+  const body = () => {
+    s.beginPath();
+    s.ellipse(0, -z * 0.27, z * 0.2, z * 0.27, 0, 0, Math.PI * 2);
+  };
+  s.save();
+  body();
+  s.fillStyle = JG.pine;
+  s.fill();
+  s.clip();
+  s.strokeStyle = "#6f6a1f";
+  s.lineWidth = 1.1;
+  for (let k = -12; k <= 12; k++)
+    for (const d of [-1, 1]) {
+      s.beginPath();
+      s.moveTo(k * z * 0.07 - z * 0.4 * d, -z * 0.6);
+      s.lineTo(k * z * 0.07 + z * 0.4 * d, z * 0.05);
+      s.stroke();
+    }
+  s.fillStyle = "#e3da72";
+  for (let k = 0; k < 40; k++) {
+    s.beginPath();
+    s.arc((rnd() - 0.5) * z * 0.4, -z * 0.27 + (rnd() - 0.5) * z * 0.54, 1.3, 0, Math.PI * 2);
+    s.fill();
+  }
+  s.restore();
+  body();
+  ink(s);
+  for (const k of [0, 10, 1, 9, 2, 8, 3, 7, 4, 6, 5]) {
+    const ang = -Math.PI / 2 + (k - 5) * 0.2 + (rnd() - 0.5) * 0.1;
+    const L = z * (0.62 - Math.abs(k - 5) * 0.06);
+    lens(s, 0, -z * 0.48, Math.cos(ang) * L, -z * 0.48 + Math.sin(ang) * L, z * 0.04, [JG.crown, "#7a9a3e", "#b7d66a"][k % 3], 0.2);
+  }
+}
+
+/** A fan palm: n narrow leaflets radiating from (0, 0) around angle a, spread wide. */
+function fanPalm(s: Ctx, a: number, r: number, n: number, spread: number, fill: string, fill2: string, rnd: () => number) {
+  for (let k = 0; k < n; k++) {
+    const ang = a + (k / (n - 1) - 0.5) * spread + (rnd() - 0.5) * 0.06;
+    const L = r * (0.75 + rnd() * 0.25) * (1 - Math.abs(k / (n - 1) - 0.5) * 0.4);
+    lens(s, 0, 0, Math.cos(ang) * L, Math.sin(ang) * L, L * 0.07, k % 2 ? fill : fill2, (rnd() - 0.5) * 1.2, 1.2);
+    s.strokeStyle = "rgba(15,35,20,0.6)";
+    s.lineWidth = 0.9;
+    s.beginPath();
+    s.moveTo(Math.cos(ang) * L * 0.1, Math.sin(ang) * L * 0.1);
+    s.lineTo(Math.cos(ang) * L * 0.9, Math.sin(ang) * L * 0.9);
+    s.stroke();
+  }
+}
+
+/** Drooping pink bells hanging from an arching stem through (0, 0), a couple of open florets among them. */
+function bellFlowers(s: Ctx, a: number, z: number, rnd: () => number) {
+  s.rotate(a);
+  const stem = (t: number): [number, number] => [(t - 0.5) * z * 0.9, -z * 0.5 * t * (1 - t) * 1.2 - z * 0.05];
+  s.beginPath();
+  for (let t = 0; t <= 1.001; t += 0.1) s.lineTo(...stem(t));
+  ink(s, 1.6);
+  lens(s, ...stem(0.15), stem(0.15)[0] - z * 0.25, stem(0.15)[1] + z * 0.12, z * 0.06, JG.mid, 0.3);
+  lens(s, ...stem(0.85), stem(0.85)[0] + z * 0.22, stem(0.85)[1] - z * 0.18, z * 0.05, JG.mid, -0.3);
+  for (let k = 0; k < 6; k++) {
+    const [sx, sy] = stem(0.12 + k * 0.15);
+    const tx = sx + (rnd() - 0.5) * z * 0.08;
+    const ty = sy + z * (0.12 + rnd() * 0.12);
+    s.beginPath();
+    s.moveTo(sx, sy);
+    s.quadraticCurveTo(sx, sy - z * 0.04, tx, ty);
+    ink(s, 1);
+    if (k === 1 || k === 4) {
+      for (let p = 0; p < 5; p++) {
+        const pa = (p * Math.PI * 2) / 5;
+        lens(s, tx, ty, tx + Math.cos(pa) * z * 0.1, ty + Math.sin(pa) * z * 0.1, z * 0.04, JG.bell, 0, 1);
+      }
+      s.beginPath();
+      s.arc(tx, ty, z * 0.025, 0, Math.PI * 2);
+      s.fillStyle = JG.bellEye;
+      s.fill();
+      continue;
+    }
+    s.save();
+    s.translate(tx, ty);
+    s.rotate((rnd() - 0.5) * 0.5);
+    s.beginPath();
+    s.moveTo(-z * 0.03, 0);
+    s.quadraticCurveTo(-z * 0.05, z * 0.1, -z * 0.08, z * 0.15);
+    s.quadraticCurveTo(0, z * 0.19, z * 0.08, z * 0.15);
+    s.quadraticCurveTo(z * 0.05, z * 0.1, z * 0.03, 0);
+    s.closePath();
+    s.fillStyle = JG.bell;
+    s.fill();
+    ink(s, 1.1);
+    s.beginPath();
+    s.ellipse(0, z * 0.155, z * 0.045, z * 0.018, 0, 0, Math.PI * 2);
+    s.fillStyle = JG.bellEye;
+    s.fill();
+    s.restore();
+  }
+}
+
 /**
  * Tropical parrot paper: a pink dotted ground under dark monstera and palm leaves, pink parrots, pineapples and
- * flowers, in its own fixed colours (the room's choices are ignored; see hasBaseColour). Half-drop on one roll width.
+ * flowers, in its own fixed colours (the room's choices are ignored; see hasBaseColour). The canvas wraps both ways.
  */
 function drawJungle(): Drawn {
   const [tw, th] = modernTile("jungle");
   const W = Math.round(tw * PX.jungle);
   const H = Math.round(th * PX.jungle);
   const [cc, c] = canvas(W, H);
-  c.fillStyle = "#e9bfc6";
+  const rnd = rng(97);
+  const at = (x: number, y: number, r: number, paint: (s: Ctx) => void) => stamp(c, W, H, x * W, y * H, r, paint);
+  const j = (v: number) => v + (rnd() - 0.5) * 0.3;
+  c.fillStyle = JG.ground;
   c.fillRect(0, 0, W, H);
+  blotches(c, W, H, rnd, 14, 0.05, 40, 120);
+  dots(c, W, H, rnd);
+  // Back: sage and mid-green fronds.
+  const fronds: [number, number, number, number, number][] = [
+    [0.1, 0.28, -0.7, 470, 0.25], [0.85, 0.1, 2.5, 430, -0.2], [0.5, 0.62, -2.6, 440, 0.2], [0.95, 0.52, 0.6, 400, 0.25],
+    [0.15, 0.86, -0.15, 420, -0.25], [0.62, 0.95, -1.9, 420, 0.2], [0.4, 0.3, -0.3, 380, -0.2],
+  ];
+  fronds.forEach(([x, y, a, l, b], k) => at(x, y, l * 1.1, (s) => palmFrond(s, j(a), l, b, k % 2 ? JG.sage : "#97b47c", k % 2 ? "#6c9461" : JG.sage, rnd)));
+  // Middle: dark fan palms, banana and monstera leaves, with mid-green fronds among them.
+  at(0.98, 0.56, 200, (s) => fanPalm(s, j(-2.6), 190, 13, 2.4, JG.mid, JG.deep, rnd));
+  at(0.42, 0.0, 180, (s) => fanPalm(s, j(-0.9), 170, 11, 2.2, JG.deep, "#356b3f", rnd));
+  at(0.3, 0.1, 400, (s) => bananaLeaf(s, j(-0.2), 380, 62, JG.deeper, "#2a4d31", rnd));
+  at(0.9, 0.74, 380, (s) => bananaLeaf(s, j(-2.7), 360, 58, JG.deeper, "#2a4d31", rnd));
+  at(0.0, 0.42, 330, (s) => bananaLeaf(s, j(-0.5), 310, 50, "#24452c", JG.deeper, rnd));
+  at(1.0, 0.46, 320, (s) => bananaLeaf(s, j(-2.85), 300, 48, "#24452c", JG.deeper, rnd));
+  at(0.06, 0.95, 210, (s) => fanPalm(s, j(-1.0), 200, 13, 2.5, JG.mid, "#4e8a52", rnd));
+  at(0.62, 0.72, 420, (s) => palmFrond(s, j(2.75), 380, -0.2, JG.mid, "#4e8a52", rnd));
+  at(0.55, 0.45, 460, (s) => palmFrond(s, j(-1.0), 420, 0.2, JG.mid, "#4e8a52", rnd));
+  at(0.05, 0.62, 440, (s) => palmFrond(s, j(2.8), 400, -0.2, JG.mid, "#4e8a52", rnd));
+  const mons: [number, number, number, number][] = [
+    [0.2, 0.55, -1.2, 320], [0.78, 0.33, -2.0, 290], [0.6, 0.83, -0.5, 300], [0.05, 0.08, 0.6, 230], [0.85, 0.99, -2.4, 230],
+  ];
+  for (const [x, y, a, l] of mons) at(x, y, l * 1.1, (s) => monstera(s, j(a), l, JG.deep, JG.deeper, rnd));
+  // Front: parrots, pineapples, flowers.
+  at(0.28, 0.27, 250, (s) => parrot(s, 0.12, 330, "perched", false));
+  at(0.58, 0.6, 290, (s) => parrot(s, -0.6, 400, "flying", true));
+  at(0.75, 0.12, 225, (s) => pineapple(s, 0.1, 190, rnd));
+  at(0.18, 0.77, 215, (s) => pineapple(s, -0.15, 180, rnd));
+  at(0.5, 0.32, 100, (s) => bellFlowers(s, 0, 150, rnd));
+  at(0.9, 0.93, 100, (s) => bellFlowers(s, 0.2, 150, rnd));
+  at(0.06, 0.36, 90, (s) => bellFlowers(s, -0.2, 130, rnd));
+  at(0.4, 0.88, 100, (s) => bellFlowers(s, -0.1, 150, rnd));
+  at(0.93, 0.67, 90, (s) => bellFlowers(s, 0.3, 130, rnd));
+  grain(c, W, H, rnd, 6);
   return { color: cc, height: null };
 }
 
