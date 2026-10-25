@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, cornerArm, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
@@ -60,7 +60,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
     for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
-      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, 0, 0));
+      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
       const g = GEOMETRY[pt.g].clone().applyMatrix4(_part.premultiply(_place));
       const key = pt.c + pt.f;
@@ -136,6 +136,8 @@ interface Part {
   axis?: "x" | "z";
   /** Lean about the x axis, radians, after scaling; negative tips the top back and the front up. */
   tilt?: number;
+  /** Turn about the y axis, radians, applied with tilt as rotation [tilt, rotY, 0]. */
+  rotY?: number;
 }
 
 const WHITE = "#f5f5f5";
@@ -165,6 +167,9 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
   /** A box leaning back by `tilt` radians about its centre (see Part.tilt). */
   const lean = (x: number, y: number, z: number, sx: number, sy: number, sz: number, tilt: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [sx, sy, sz], c, f, tilt });
+  /** A box turned about the y axis by `rotY` radians (see Part.rotY). */
+  const turn = (x: number, y: number, z: number, sx: number, sy: number, sz: number, rotY: number, c = color, f: Finish = "matt") =>
+    out.push({ g: "box", p: [x, y, z], s: [sx, sy, sz], c, f, rotY });
   /** An upright elliptical drum filling w × d, from y0 to y1. */
   const drum = (y0: number, y1: number, sw: number, sd: number, c: string, f: Finish = "matt") =>
     out.push({ g: "cyl", p: [0, (y0 + y1) / 2, 0], s: [sw, Math.max(y1 - y0, 0.001), sd], c, f });
@@ -504,6 +509,75 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, (0.1 + h - 0.04) / 2, over / 2, w, h - 0.14, d - over, color, "satin");
       box(0, h - 0.02, 0, w + 0.04, 0.04, d, worktopColor, "satin");
       doors(0.12, h - 0.06, d / 2);
+      break;
+    }
+    case "corner-unit":
+    case "corner-unit-handleless":
+    case "corner-diagonal":
+    case "corner-diagonal-handleless": {
+      const hl = isHandleless(symbol);
+      const a = cornerArm(w, d);
+      const yb = 0.12;
+      const yt = h - 0.06;
+      const yc = (yb + yt) / 2;
+      // Back arm along the full width, left arm below it (the corner square belongs to the back arm).
+      const lz0 = -d / 2 + a;
+      const lz = d - a;
+      const lcz = lz0 + lz / 2;
+      box(0, 0.05, -d / 2 + a / 2 - 0.03, w - 0.02, 0.1, a - 0.08, PLINTH);
+      box(0, (0.1 + h - 0.04) / 2, -d / 2 + a / 2 - 0.01, w, h - 0.14, a - 0.02, color, "satin");
+      box(0, h - 0.02, -d / 2 + a / 2, w, 0.04, a, worktopColor, "satin");
+      box(-w / 2 + a / 2, 0.05, lcz - 0.03, a - 0.02, 0.1, lz - 0.08, PLINTH);
+      box(-w / 2 + a / 2 - 0.01, (0.1 + h - 0.04) / 2, lcz, a - 0.02, h - 0.14, lz, color, "satin");
+      box(-w / 2 + a / 2, h - 0.02, lcz, a, 0.04, lz, worktopColor, "satin");
+      const fz = lz0 - 0.01; // back arm front face, facing +z
+      const fx = -w / 2 + a - 0.01; // left arm right face, facing +x
+      const bx0 = -w / 2 + a;
+      const bw = w / 2 - bx0;
+      const bcx = (bx0 + w / 2) / 2;
+      if (symbol.startsWith("corner-unit")) {
+        // The corner post, then one door on each arm.
+        box(bx0 + 0.015, yc, lz0 - 0.005, 0.03, yt - yb, 0.03, DARK);
+        if (hl) {
+          box(bcx + 0.015, yt - 0.02, fz + 0.002, bw - 0.03, 0.035, 0.008, DARK, "satin");
+          box(fx + 0.002, yt - 0.02, lz0 + lz / 2 + 0.015, 0.008, 0.035, lz - 0.03, DARK, "satin");
+        } else {
+          box(bcx + 0.1, yt - 0.06, fz + 0.012, Math.min(0.16, bw - 0.1), 0.012, 0.02, CHROME, "metal");
+          box(fx + 0.012, yt - 0.06, lz0 + lz * 0.55, 0.02, 0.012, Math.min(0.16, lz - 0.1), CHROME, "metal");
+        }
+      } else {
+        const dx = w - a;
+        const dz = d - a;
+        const len = Math.hypot(dx, dz);
+        const ang = Math.atan2(dz, dx);
+        const mx = (w / 2 + bx0) / 2;
+        const mz = (lz0 + d / 2) / 2;
+        const nx = Math.sin(ang);
+        const nz = Math.cos(ang); // outward normal of the diagonal
+        // A carcass wedge, its plinth and worktop behind the angled door.
+        const th = Math.min(0.3, (dx * dz) / len);
+        const cx = mx - nx * (th / 2 + 0.01);
+        const cz = mz - nz * (th / 2 + 0.01);
+        turn(cx, 0.05, cz, len - 0.1, 0.1, th, ang, PLINTH);
+        turn(cx, (0.1 + h - 0.04) / 2, cz, len - 0.06, h - 0.14, th, ang, color, "satin");
+        turn(mx - nx * (th / 2 - 0.005), h - 0.02, mz - nz * (th / 2 - 0.005), len + 0.02, 0.04, th + 0.03, ang, worktopColor, "satin");
+        // The angled door, lying along the diagonal.
+        turn(mx - nx * 0.01, yc, mz - nz * 0.01, len - 0.04, yt - yb, 0.02, ang, color, "satin");
+        if (hl) turn(mx + nx * 0.004, yt - 0.02, mz + nz * 0.004, len - 0.06, 0.035, 0.008, ang, DARK, "satin");
+        else turn(mx + nx * 0.012, yt - 0.06, mz + nz * 0.012, Math.min(0.16, len - 0.1), 0.012, 0.02, ang, CHROME, "metal");
+      }
+      break;
+    }
+    case "peninsula":
+    case "peninsula-handleless": {
+      const over = peninsulaOverhang(d);
+      box(0, 0.05, over / 2 - 0.02, w - 0.04, 0.1, d - over - 0.08, PLINTH);
+      box(0, (0.1 + h - 0.04) / 2, over / 2, w, h - 0.14, d - over, color, "satin");
+      box(0, h - 0.02, 0, w + 0.04, 0.04, d, worktopColor, "satin");
+      if (isHandleless(symbol)) slabs(0.1, h - 0.06, d / 2 - 0.02);
+      else doors(0.12, h - 0.06, d / 2);
+      // Finished end panels.
+      for (const sx of [-1, 1]) box(sx * (w / 2 - 0.01), (0.1 + h - 0.04) / 2, over / 2, 0.02, h - 0.14, d - over, color, "satin");
       break;
     }
     case "sink": {
