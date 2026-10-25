@@ -143,3 +143,15 @@ describe("corner units and peninsulas", () => {
     expect(peninsulaOverhang(1.2)).toBe(0.3);
   });
 });
+
+describe("TVs", () => {
+  it("offers wall-mounted and stand TVs in 55 and 65 inch under Living", () => {
+    for (const id of ["tv-wall-55", "tv-wall-65", "tv-stand-55", "tv-stand-65"]) expect(byId(id)?.category, id).toBe("Living");
+    expect(byId("tv-wall-55")!.mount).toBeGreaterThanOrEqual(0.95);
+    expect(byId("tv-wall-65")!.mount).toBeGreaterThanOrEqual(0.95);
+    expect(byId("tv-stand-55")!.mount).toBe(0.5);
+    expect(byId("tv-stand-65")!.mount).toBe(0.5);
+    expect(byId("tv-wall-65")!.w).toBeGreaterThan(byId("tv-wall-55")!.w);
+    expect(byId("tv-stand-65")!.w).toBeGreaterThan(byId("tv-stand-55")!.w);
+  });
+});

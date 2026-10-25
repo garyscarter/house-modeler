@@ -238,6 +238,18 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         item.symbol === "pouf" && <ellipse key="s" cx={0} cy={0} rx={w * 0.38} ry={d * 0.38} {...thin} />,
         item.symbol === "floor-lamp" && <circle key="s" cx={0} cy={0} r={Math.min(w, d) * 0.08} {...line} />,
       );
+    case "tv-wall":
+      return g(
+        body(0),
+        front(0.02 * m),
+        <line key="br" x1={-0.1 * m} y1={y0} x2={0.1 * m} y2={y0} {...line} strokeWidth={sw * 1.6} />,
+      );
+    case "tv-stand":
+      return g(
+        body(0),
+        front(0.03 * m),
+        <rect key="ft" x={-0.15 * m} y={-d * 0.25} width={0.3 * m} height={d * 0.5} {...thin} />,
+      );
     case "media-unit":
       return g(body(0), ...dividers(0.6), front(Math.min(0.03 * m, d * 0.1)));
     case "rug": {

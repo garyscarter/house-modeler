@@ -27,6 +27,8 @@ export type Symbol =
   | "pouf"
   | "round-table"
   | "media-unit"
+  | "tv-wall"
+  | "tv-stand"
   | "floor-lamp"
   | "rug"
   | "table"
@@ -150,6 +152,10 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "armchair", name: "Armchair", category: "Living", w: 0.90, d: 0.90, h: 0.85, color: "#9ab0c8", symbol: "sofa" },
   { id: "coffee-table", name: "Coffee table", category: "Living", w: 1.00, d: 0.50, h: 0.45, color: WOOD, symbol: "table" },
   { id: "tv-unit", name: "TV unit", category: "Living", w: 1.20, d: 0.40, h: 0.5, color: WOOD, symbol: "box" },
+  { id: "tv-wall-55", name: "TV, wall-mounted (55 in)", category: "Living", w: 1.23, d: 0.08, h: 0.71, color: "#15171a", symbol: "tv-wall", mount: 1.0, note: "Screen bottom 1 m up, centre about 1.35 m; set the height to suit your seating" },
+  { id: "tv-wall-65", name: "TV, wall-mounted (65 in)", category: "Living", w: 1.45, d: 0.08, h: 0.83, color: "#15171a", symbol: "tv-wall", mount: 0.95, note: "Screen bottom 1 m up, centre about 1.35 m; set the height to suit your seating" },
+  { id: "tv-stand-55", name: "TV on a stand (55 in)", category: "Living", w: 1.23, d: 0.25, h: 0.76, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
+  { id: "tv-stand-65", name: "TV on a stand (65 in)", category: "Living", w: 1.45, d: 0.28, h: 0.88, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
   { id: "bookcase", name: "Bookcase", category: "Living", w: 0.80, d: 0.30, h: 1.8, color: WOOD, symbol: "shelves" },
   { id: "fireplace", name: "Fireplace (gas fire)", category: "Living", w: 1.40, d: 0.50, h: 1.15, color: "#5a2a1c", symbol: "fireplace", note: "Carved timber surround, marble hearth and back panel, brass gas fire" },
   { id: "sideboard", name: "Sideboard", category: "Living", w: 1.60, d: 0.45, h: 0.8, color: WOOD, symbol: "cabinet" },

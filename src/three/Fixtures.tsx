@@ -464,6 +464,20 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
       break;
     }
+    case "tv-wall": {
+      box(0, h / 2, -d / 2 + 0.015, 0.2, 0.3, 0.03, DARK, "metal");
+      box(0, h / 2, d / 2 - 0.015, w, h, 0.03, color, "gloss");
+      box(0, h / 2, d / 2 + 0.002, w - 0.02, h - 0.02, 0.004, "#2a3340", "gloss");
+      break;
+    }
+    case "tv-stand": {
+      box(0, 0.005, 0, w * 0.45, 0.01, d, DARK, "metal");
+      box(0, 0.055, 0, 0.06, 0.1, 0.06, DARK, "metal");
+      const sh = h - 0.1;
+      box(0, 0.1 + sh / 2, 0, w, sh, 0.03, color, "gloss");
+      box(0, 0.1 + sh / 2, 0.017, w - 0.02, sh - 0.02, 0.004, "#2a3340", "gloss");
+      break;
+    }
     case "media-unit": {
       // A wall-hung box with fluted, handleless fronts.
       box(0, h / 2, 0, w, h, d, color, "satin");
