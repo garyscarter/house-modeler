@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, cornerArm, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
@@ -377,6 +377,61 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <line key="o" x1={x0} y1={y0 + over} x2={x1} y2={y0 + over} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
         ...dividers(0.6, y1 - 0.03 * m, y1),
         front(0.03 * m),
+      );
+    }
+    case "corner-unit":
+    case "corner-unit-handleless": {
+      // L-shaped corner base unit: arms run along the back and down the left, the front-right notch is open.
+      const a = cornerArm(w / m, d / m) * m;
+      const hl = isHandleless(item.symbol);
+      const insets = hl ? [0.03 * m, 0.06 * m] : [0.03 * m];
+      return g(
+        <path key="b" d={`M${x0} ${y0} H${x1} V${y0 + a} H${x0 + a} V${y1} H${x0} Z`} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} strokeLinejoin="round" />,
+        ...insets.flatMap((i) => [
+          <line key={`bf${i}`} x1={x0 + a} y1={y0 + a - i} x2={x1} y2={y0 + a - i} {...thin} />,
+          <line key={`lf${i}`} x1={x0 + a - i} y1={y0 + a} x2={x0 + a - i} y2={y1} {...thin} />,
+        ]),
+        !hl && <line key="jb" x1={x0 + a} y1={y0 + a - 0.03 * m} x2={x0 + a} y2={y0 + a} {...thin} />,
+        !hl && <line key="jl" x1={x0 + a - 0.03 * m} y1={y0 + a} x2={x0 + a} y2={y0 + a} {...thin} />,
+      );
+    }
+    case "corner-diagonal":
+    case "corner-diagonal-handleless": {
+      // Corner base unit with an angled door cutting off the front-right.
+      const a = cornerArm(w / m, d / m) * m;
+      const hl = isHandleless(item.symbol);
+      const ax = x1;
+      const ay = y0 + a;
+      const bx = x0 + a;
+      const by = y1;
+      const len = Math.hypot(ax - bx, by - ay) || 1;
+      const ux = (bx - ax) / len;
+      const uy = (by - ay) / len;
+      // Unit normal pointing back-left, into the unit.
+      const nx = -(by - ay) / len;
+      const ny = -(ax - bx) / len;
+      const parallel = (inset: number, key: string, half = len / 2) => {
+        const cx = (ax + bx) / 2 + nx * inset;
+        const cy = (ay + by) / 2 + ny * inset;
+        return <line key={key} x1={cx - ux * half} y1={cy - uy * half} x2={cx + ux * half} y2={cy + uy * half} {...thin} />;
+      };
+      return g(
+        <path key="b" d={`M${x0} ${y0} H${x1} V${ay} L${bx} ${by} H${x0} Z`} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} strokeLinejoin="round" />,
+        parallel(0.03 * m, "d1"),
+        hl ? parallel(0.06 * m, "d2") : parallel(0.05 * m, "h", 0.08 * m),
+      );
+    }
+    case "peninsula":
+    case "peninsula-handleless": {
+      // Like an island, but fixed to the run at one end: stool overhang at the back, panelled ends.
+      const over = peninsulaOverhang(d / m) * m;
+      const hl = isHandleless(item.symbol);
+      const t = 0.02 * m;
+      return g(
+        body(r * 0.3),
+        over > 0 && <line key="o" x1={x0} y1={y0 + over} x2={x1} y2={y0 + over} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        ...(hl ? [front(0.03 * m), front(0.06 * m), ...dividers(0.6, y1 - 0.06 * m, y1)] : [...dividers(0.6, y1 - 0.03 * m, y1), front(0.03 * m)]),
+        ...[x0, x1 - t].map((x) => <rect key={`e${x}`} x={x} y={y0} width={t} height={d} fill={outline} fillOpacity={0.5} stroke="none" />),
       );
     }
     case "shelves":
