@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { duluxName } from "../../lib/dulux";
+import { DuluxPicker } from "./DuluxPicker";
 import { PAINT_PALETTE, type PaintSwatch } from "../../lib/paintPalette";
 import { Icon } from "../icons";
 
@@ -114,6 +116,7 @@ export function SwatchField({
   resetLabel = "Back to default",
   palette = PAINT_PALETTE,
   info,
+  dulux,
 }: {
   label: string;
   value: string;
@@ -124,8 +127,13 @@ export function SwatchField({
   resetLabel?: string;
   palette?: readonly PaintSwatch[];
   info?: React.ReactNode;
+  /** Offer the Dulux range (searchable) behind the well instead of the bare native picker. */
+  dulux?: boolean;
 }) {
+  const [picking, setPicking] = useState(false);
+  const close = useCallback(() => setPicking(false), []);
   const v = value.toLowerCase();
+  const dName = dulux ? duluxName(v) : undefined;
   const inPalette = palette.some((s) => s.hex === v);
   return (
     <div className="swatch-field" role="group" aria-label={label}>
@@ -146,13 +154,31 @@ export function SwatchField({
             onClick={() => onChange(s.hex)}
           />
         ))}
-        <ColourWell value={value} onChange={onChange} label={label} custom={isSet && !inPalette} />
+        {dulux ? (
+          <span className="colour-well" style={{ width: 24, height: 24 }}>
+            <button
+              type="button"
+              className={`well-btn${isSet && !inPalette ? " custom" : ""}`}
+              style={isSet && !inPalette ? { background: value } : undefined}
+              title={dName ? `${label}: Dulux ${dName}` : `${label}: choose another colour`}
+              aria-label={`${label}: choose a Dulux colour`}
+              aria-expanded={picking}
+              onClick={() => setPicking((p) => !p)}
+            >
+              {!(isSet && !inPalette) && <Icon name="plus" size={12} />}
+            </button>
+          </span>
+        ) : (
+          <ColourWell value={value} onChange={onChange} label={label} custom={isSet && !inPalette} />
+        )}
         {onReset && (
           <button type="button" className="icon-btn reset-btn" title={resetLabel} aria-label={`${label}: ${resetLabel.toLowerCase()}`} disabled={!isSet} onClick={onReset}>
             <Icon name="undo" size={14} />
           </button>
         )}
       </div>
+      {dName && <span className="dulux-line">{dName.startsWith("near ") ? `near Dulux ${dName.slice(5)}` : `Dulux ${dName}`}</span>}
+      {picking && <DuluxPicker label={label} value={value} onPick={onChange} onClose={close} />}
     </div>
   );
 }

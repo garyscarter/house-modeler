@@ -119,7 +119,7 @@ describe("room summaries", () => {
 describe("other summaries", () => {
   it("openingLookSummary", () => {
     expect(openingLookSummary(door("a"))).toBe("Standard look");
-    expect(openingLookSummary({ ...door("a"), color: "#27364f", style: "glazed", frameColor: "#ffffff" })).toBe("Navy · Fully glazed · frame #ffffff");
+    expect(openingLookSummary({ ...door("a"), color: "#27364f", style: "glazed", frameColor: "#ffffff" })).toBe("Navy · Fully glazed · frame near Snow Scene");
     expect(openingLookSummary({ ...door("a"), kind: "garage", style: "up-over" })).toContain("Up-and-over");
   });
 

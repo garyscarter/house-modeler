@@ -140,6 +140,7 @@ export function DecoratePanel({
         {hasBaseColour(covering) && (
           <SwatchField
             label={short(BASE_LABEL[covering])}
+            dulux
             value={wallBase(room)}
             isSet={!!room.wallPaint}
             onChange={(wallPaint) => onChange({ wallPaint })}
@@ -149,6 +150,7 @@ export function DecoratePanel({
         {accented && (
           <SwatchField
             label={short(ACCENT_LABEL[covering])}
+            dulux={covering === "panelling" || covering === "tongue"}
             value={wallAccent(room) ?? wallBase(room)}
             isSet={!!room.wallAccent}
             onChange={(wallAccent) => onChange({ wallAccent })}
@@ -180,6 +182,7 @@ export function DecoratePanel({
         )}
         <SwatchField
           label="Skirting"
+          dulux
           value={skirtingColour(room)}
           isSet={!!room.skirtingColor}
           onChange={(skirtingColor) => onChange({ skirtingColor })}
@@ -206,6 +209,7 @@ export function DecoratePanel({
           </label>
           <SwatchField
             label="Outside wall colour"
+            dulux
             value={room.exteriorColor ?? "#efe9d8"}
             isSet={!!room.exteriorColor}
             onChange={(exteriorColor) => onChange({ exteriorColor })}
