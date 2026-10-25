@@ -38,3 +38,9 @@ describe("dulux", () => {
     for (const n of POPULAR_DULUX) expect(named(n), n).toBeDefined();
   });
 });
+
+describe("shared values", () => {
+  it("names a value shared by two colours after the well-known one", () => {
+    expect(duluxByHex("#d8d8d7")?.name).toBe("Polished Pebble");
+  });
+});

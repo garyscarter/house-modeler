@@ -111,7 +111,10 @@
 .dulux-family { display: flex; justify-content: space-between; width: 100%; margin-top: 2px; padding: 6px 4px; background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; font-size: 12px; color: var(--text); }
 .dulux-custom { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-top: 1px solid var(--line); font-size: 12px; }
 .app[data-touch] .dulux-item, .app[data-touch] .dulux-family { min-height: 44px; }
-.app[data-touch] .dulux-picker { max-height: 50vh; }
+/* On a phone the picker sits in the flow of the sheet (which scrolls), not floating over it, so every row is reachable. */
+.app[data-touch] .dulux-picker { position: static; max-height: 50vh; margin-top: var(--sp-2); box-shadow: none; }
+.app[data-touch] .dulux-item { gap: 8px; }
+.app[data-touch] .dulux-chip { margin-right: 8px; }
 
 /* Finish picker */
 .finish-tabs { display: flex; width: 100%; margin-bottom: var(--sp-2); }

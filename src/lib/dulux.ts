@@ -83,6 +83,9 @@ export function duluxColours(): readonly DuluxColour[] {
     labs = all.map((c) => hexToLab(c.hex));
     byHex = new Map();
     for (const c of all) if (!byHex.has(c.hex)) byHex.set(c.hex, c);
+    // Some colours share a value (Polished Pebble and Goose White): the well-known name wins.
+    const popular = new Set(POPULAR_DULUX);
+    for (const c of all) if (popular.has(c.name)) byHex.set(c.hex, c);
   }
   return all;
 }
