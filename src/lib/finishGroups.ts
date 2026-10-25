@@ -18,7 +18,7 @@ export const FLOOR_GROUPS: readonly FinishGroup<FloorFinish>[] = [
 
 export const WALL_GROUPS: readonly FinishGroup<WallCovering>[] = [
   { id: "paint", label: "Paint", items: ["paint"] },
-  { id: "paper", label: "Paper", items: ["stripe", "floral", "rose", "trail", "sprig", "deco", "leaves"] },
+  { id: "paper", label: "Paper", items: ["stripe", "floral", "rose", "trail", "sprig", "deco", "leaves", "jungle"] },
   { id: "tile", label: "Tile", items: ["tiles", "squares", "metro", "metroSplash", "zellige"] },
   { id: "panelling", label: "Panelling", items: ["panelling", "panellingFull", "batten", "tongue"] },
   { id: "other", label: "Other", items: ["brick", "limewash", "microcement"] },
@@ -66,6 +66,7 @@ export const WALL_TILE_NAME: Record<WallCovering, string> = {
   limewash: "Limewash",
   deco: "Deco",
   leaves: "Botanical",
+  jungle: "Parrots",
   microcement: "Microcement",
 };
 

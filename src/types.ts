@@ -78,6 +78,7 @@ export type WallCovering =
   | "limewash"
   | "deco"
   | "leaves"
+  | "jungle"
   | "microcement";
 export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   paint: "Paint",
@@ -99,6 +100,7 @@ export const WALL_COVERING_LABEL: Record<WallCovering, string> = {
   limewash: "Limewash plaster",
   deco: "Geometric deco wallpaper",
   leaves: "Botanical leaf wallpaper",
+  jungle: "Tropical parrot wallpaper",
   microcement: "Microcement",
 };
 

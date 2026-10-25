@@ -13,9 +13,9 @@ import { blotches, canvas, css, grain, rng, tint, vary, type Ctx } from "./textu
  * files import each other), never anything at module level.
  */
 
-export type ModernCover = "panelling" | "panellingFull" | "batten" | "tongue" | "metro" | "metroSplash" | "zellige" | "limewash" | "deco" | "leaves" | "microcement";
+export type ModernCover = "panelling" | "panellingFull" | "batten" | "tongue" | "metro" | "metroSplash" | "zellige" | "limewash" | "deco" | "leaves" | "jungle" | "microcement";
 
-const MODERN: ReadonlySet<string> = new Set<ModernCover>(["panelling", "panellingFull", "batten", "tongue", "metro", "metroSplash", "zellige", "limewash", "deco", "leaves", "microcement"]);
+const MODERN: ReadonlySet<string> = new Set<ModernCover>(["panelling", "panellingFull", "batten", "tongue", "metro", "metroSplash", "zellige", "limewash", "deco", "leaves", "jungle", "microcement"]);
 export const isModern = (p: Pattern): p is ModernCover => MODERN.has(p);
 
 /** Width of a wallpaper roll, metres. */
@@ -44,6 +44,8 @@ export function modernTile(p: ModernCover): [number, number] {
       return [ROLL, ROLL];
     case "leaves":
       return [2 * ROLL, 1.2];
+    case "jungle":
+      return [ROLL, 0.8];
   }
 }
 
@@ -60,6 +62,7 @@ const PX: Record<ModernCover, number> = {
   microcement: 200,
   deco: 800,
   leaves: 320,
+  jungle: 1200,
 };
 
 const ROUGHNESS: Record<ModernCover, number> = {
@@ -73,6 +76,7 @@ const ROUGHNESS: Record<ModernCover, number> = {
   limewash: 0.95,
   deco: 0.85,
   leaves: 0.85,
+  jungle: 0.85,
   microcement: 0.5,
 };
 export const modernRoughness = (p: ModernCover) => ROUGHNESS[p];
@@ -89,6 +93,7 @@ const BUMP: Record<ModernCover, number> = {
   limewash: 0.35,
   deco: 1,
   leaves: 1,
+  jungle: 1,
   microcement: 0.25,
 };
 export const modernBump = (p: ModernCover) => BUMP[p];
@@ -608,6 +613,20 @@ function drawLeaves(hex: string, accentHex: string): Drawn {
 }
 
 /**
+ * Tropical parrot paper: a pink dotted ground under dark monstera and palm leaves, pink parrots, pineapples and
+ * flowers, in its own fixed colours (the room's choices are ignored; see hasBaseColour). Half-drop on one roll width.
+ */
+function drawJungle(): Drawn {
+  const [tw, th] = modernTile("jungle");
+  const W = Math.round(tw * PX.jungle);
+  const H = Math.round(th * PX.jungle);
+  const [cc, c] = canvas(W, H);
+  c.fillStyle = "#e9bfc6";
+  c.fillRect(0, 0, W, H);
+  return { color: cc, height: null };
+}
+
+/**
  * The colour (and height) canvas of a modern covering. `hex` is the main colour
  * (panelling and boards: the wood-paint colour; tiles: the tile colour) and
  * `accentHex` the second one (grout, pattern) where the covering has one.
@@ -634,5 +653,7 @@ export function drawModern(p: ModernCover, hex: string, accentHex: string | null
       return drawDeco(hex, second);
     case "leaves":
       return drawLeaves(hex, second);
+    case "jungle":
+      return drawJungle();
   }
 }

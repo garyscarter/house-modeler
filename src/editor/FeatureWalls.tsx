@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
-import { ACCENT_LABEL, BASE_LABEL, hasAccent, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
+import { ACCENT_LABEL, BASE_LABEL, hasAccent, hasBaseColour, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
 import { ColourSwatches } from "./ColourSwatches";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
@@ -64,7 +64,7 @@ export function WallFinishRow({
               </option>
             ))}
           </select>
-          {inside && (
+          {inside && hasBaseColour(covering) && (
             <ColourWell custom label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`} value={wallBase(look)} onChange={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))} />
           )}
           {inside && covering !== "paint" && hasAccent(covering) && (
@@ -72,7 +72,7 @@ export function WallFinishRow({
           )}
         </div>
       )}
-      {showInside && (inside || alwaysSwatches) && (
+      {showInside && (inside || alwaysSwatches) && hasBaseColour(covering) && (
         <ColourSwatches
           label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`}
           value={wallBase(look)}

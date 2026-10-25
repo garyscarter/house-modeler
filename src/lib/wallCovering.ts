@@ -30,6 +30,7 @@ const DEFAULT_BASE: Record<WallCovering, string> = {
   limewash: "#dcd2c0",
   deco: "#e8e2d4",
   leaves: "#e6e9df",
+  jungle: "#e9bfc6",
   microcement: "#b9b4aa",
 };
 
@@ -53,6 +54,7 @@ const DEFAULT_ACCENT: Record<Pattern, string | null> = {
   limewash: null,
   deco: "#cdbf9d",
   leaves: "#9fb59c",
+  jungle: "#2f5a3a",
   microcement: null,
 };
 
@@ -77,6 +79,7 @@ export const BASE_LABEL: Record<WallCovering, string> = {
   limewash: "Limewash colour",
   deco: "Paper colour",
   leaves: "Paper colour",
+  jungle: "Paper colour",
   microcement: "Microcement colour",
 };
 
@@ -100,15 +103,24 @@ export const ACCENT_LABEL: Record<Pattern, string> = {
   limewash: "Wash colour",
   deco: "Pattern colour",
   leaves: "Leaf colour",
+  jungle: "Leaf colour",
   microcement: "Trowel colour",
 };
 
 /** Coverings whose second colour does nothing: they are one colour (full-height panelling, limewash, microcement). */
-const NO_ACCENT: ReadonlySet<WallCovering> = new Set(["paint", "panellingFull", "batten", "limewash", "microcement"]);
+const NO_ACCENT: ReadonlySet<WallCovering> = new Set(["paint", "panellingFull", "batten", "limewash", "microcement", "jungle"]);
 
 /** Whether the covering has a pattern colour to pick (tiles have an optional one). */
 export function hasAccent(c: WallCovering): boolean {
   return !NO_ACCENT.has(c);
+}
+
+/** Printed designs whose colours are fixed (the parrot paper): neither colour is offered, and the texture ignores both. */
+const FIXED: ReadonlySet<WallCovering> = new Set(["jungle"]);
+
+/** Whether the covering's base colour can be chosen. */
+export function hasBaseColour(c: WallCovering): boolean {
+  return !FIXED.has(c);
 }
 
 export type InteriorFinish = { covering: "paint"; color: string } | { covering: Pattern; color: string; accent: string | null };

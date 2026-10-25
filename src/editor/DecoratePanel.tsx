@@ -4,7 +4,7 @@ import type { EdgePick } from "../lib/decorPick";
 import { eachWallSummary, outsideSummary } from "../lib/modeSummary";
 import { edgeLabel, isOutsideEdge } from "../lib/featureWalls";
 import { areaM2, edgeLengthsM, formatLength } from "../lib/planMath";
-import { ACCENT_LABEL, BASE_LABEL, hasAccent, wallAccent, wallBase } from "../lib/wallCovering";
+import { ACCENT_LABEL, BASE_LABEL, hasAccent, hasBaseColour, wallAccent, wallBase } from "../lib/wallCovering";
 import { skirtingColour } from "../lib/skirting";
 import { finishColour, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
 import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
@@ -135,13 +135,15 @@ export function DecoratePanel({
           fallbackColour={wallBase(room)}
           onPick={(c) => onChange({ wallCovering: c === "paint" ? undefined : c })}
         />
-        <SwatchField
-          label={short(BASE_LABEL[covering])}
-          value={wallBase(room)}
-          isSet={!!room.wallPaint}
-          onChange={(wallPaint) => onChange({ wallPaint })}
-          onReset={() => onChange({ wallPaint: undefined })}
-        />
+        {hasBaseColour(covering) && (
+          <SwatchField
+            label={short(BASE_LABEL[covering])}
+            value={wallBase(room)}
+            isSet={!!room.wallPaint}
+            onChange={(wallPaint) => onChange({ wallPaint })}
+            onReset={() => onChange({ wallPaint: undefined })}
+          />
+        )}
         {accented && (
           <SwatchField
             label={short(ACCENT_LABEL[covering])}

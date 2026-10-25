@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WARM_WHITE, interiorFinish, outsideLook, wallAccent, wallBase } from "./wallCovering";
+import { WARM_WHITE, interiorFinish, outsideLook, wallAccent, wallBase, hasAccent, hasBaseColour } from "./wallCovering";
 import { rect } from "./testing";
 
 const room = (extra: Parameters<typeof rect>[5] = {}) => rect("A", 0, 0, 300, 300, extra);
@@ -64,5 +64,16 @@ describe("outsideLook", () => {
   it("ignores an inside-only override, and overrides on edges the room does not have", () => {
     expect(outsideLook(brickRoom({ wallFinishes: { 0: { covering: "tiles" } } }), 0, house)).toEqual({ finish: "brick", color: "#a8553a" });
     expect(outsideLook(brickRoom({ wallFinishes: { 9: { outside: { finish: "render" } } } }), 9, house)).toEqual({ finish: "brick", color: "#a8553a" });
+  });
+});
+
+describe("fixed-colour coverings", () => {
+  it("offers neither colour for the parrot paper and both for an ordinary wallpaper", () => {
+    expect(hasBaseColour("jungle")).toBe(false);
+    expect(hasAccent("jungle")).toBe(false);
+    expect(wallAccent({ wallCovering: "jungle", wallAccent: "#123456" })).toBeNull();
+    expect(hasBaseColour("floral")).toBe(true);
+    expect(hasAccent("floral")).toBe(true);
+    expect(hasBaseColour("paint")).toBe(true);
   });
 });
