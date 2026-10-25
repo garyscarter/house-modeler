@@ -426,6 +426,27 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       }
       break;
     }
+    case "stool": {
+      // Round seat on a slim stem over a weighted disc, with a footrest ring part-way up.
+      const seatT = 0.05;
+      drum(0, 0.02, w * 0.95, d * 0.95, DARK, "metal");
+      cyl(0, (0.02 + h - seatT) / 2, 0, 0.035, h - seatT - 0.02, DARK, "metal");
+      drum(h * 0.36, h * 0.36 + 0.015, w * 0.85, d * 0.85, DARK, "metal");
+      drum(h - seatT, h, w, d, color, "satin");
+      break;
+    }
+    case "stool-back": {
+      // Counter stool: round seat at 0.65 on four splayed-looking legs, a low curved back and a footrest bar.
+      const seat = Math.min(0.65, h - 0.2);
+      const seatT = 0.05;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.03), seat / 2, sz * (d / 2 - 0.04), 0.025, seat, 0.025, DARK, "metal");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - 0.03), seat * 0.35, 0, 0.02, 0.02, d - 0.08, DARK, "metal");
+      box(0, seat * 0.35, d / 2 - 0.04, w - 0.06, 0.02, 0.02, DARK, "metal");
+      drum(seat - seatT, seat, w, d * 0.9, color, "satin");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - 0.05), (seat + h) / 2, -d / 2 + 0.05, 0.02, h - seat, 0.02, DARK, "metal");
+      lean(0, h - 0.08, -d / 2 + 0.05, w - 0.06, 0.16, 0.03, -0.12, color, "satin");
+      break;
+    }
     case "pouf":
       drum(0, h, w, d, color);
       drum(h - 0.012, h + 0.002, w * 0.98, d * 0.98, shade(color, 0.9));
