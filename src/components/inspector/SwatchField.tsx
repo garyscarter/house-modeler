@@ -36,10 +36,13 @@ export function useThrottledChange(onChange: (v: string) => void, ms = 100) {
 }
 
 /**
- * A round well that opens the browser's colour picker. The native input is
- * kept (invisible, inside the well so the picker opens beside it) and driven
- * by a click, so nobody sees a 250 px colour bar. Changes while the picker is
- * dragged are throttled; the final colour is written when it closes.
+ * A round well that opens the browser's colour picker. The native input lies
+ * invisibly over the well, so a tap or click lands on it and the picker opens
+ * natively (a scripted click on a hidden colour input does nothing on iOS, and
+ * showPicker is refused inside a cross-origin frame such as the hosted page).
+ * The button beneath draws the well and serves the keyboard, when it falls
+ * back to showPicker then a click. Changes while the picker is dragged are
+ * throttled; the final colour is written when it closes.
  */
 export function ColourWell({
   value,
@@ -85,7 +88,15 @@ export function ColourWell({
       >
         {!custom && <Icon name="plus" size={12} />}
       </button>
-      <input ref={input} type="color" tabIndex={-1} aria-hidden="true" value={value} onChange={(e) => push(e.target.value)} />
+      <input
+        ref={input}
+        type="color"
+        tabIndex={-1}
+        aria-hidden="true"
+        title={custom ? `${label}: ${value}` : `${label}: choose another colour`}
+        value={value}
+        onChange={(e) => push(e.target.value)}
+      />
     </span>
   );
 }
