@@ -4,6 +4,7 @@ import type { Floor, HouseModel, MyPiece, Photo, Room, SavedView, Site, VariantK
 import { applyPiece, unlinkPiece } from "./lib/myFurniture";
 import { imageAwareStorage, useHydration } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
+import { setLink, syncLinks } from "./lib/roomLinks";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
@@ -373,9 +374,13 @@ export const useStore = create<State>()(
             if (!m) return {};
             const floor = m.floors.find((f) => f.id === floorId);
             const old = floor?.rooms.find((r) => r.id === roomId);
-            const floors = m.floors.map((f) =>
-              f.id === floorId ? { ...f, rooms: f.rooms.map((r) => (r.id === roomId ? { ...r, ...patch } : r)) } : f,
+            const { floorFrom, wallsFrom, ...rest } = patch;
+            let floors = m.floors.map((f) =>
+              f.id === floorId ? { ...f, rooms: f.rooms.map((r) => (r.id === roomId ? { ...r, ...rest } : r)) } : f,
             );
+            if ("floorFrom" in patch) floors = setLink(floors, floorId, roomId, "floor", floorFrom);
+            if ("wallsFrom" in patch) floors = setLink(floors, floorId, roomId, "walls", wallsFrom);
+            floors = syncLinks(floors, roomId);
             let photos = st.photos;
             if (
               floor &&

@@ -140,3 +140,12 @@
 /* Touch: the Inspector kit's own small controls. */
 .app[data-touch] .inspector .icon-btn { width: 36px; height: 36px; }
 .app[data-touch] .inspector .pair-input input { min-height: 38px; }
+
+/* Rooms that follow another room's floor or wall style. */
+.deco-link { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 8px; }
+.deco-link select { max-width: 100%; }
+.deco-link .muted { flex-basis: 100%; margin: 0; }
+.deco-chip { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2, rgba(0, 0, 0, 0.06)); font-size: 12px; }
+.deco-block fieldset.linked, .deco-block fieldset.link-free { border: 0; margin: 0; padding: 0; min-width: 0; }
+.deco-block fieldset.linked { opacity: 0.55; pointer-events: none; }
+.app[data-touch] .deco-link select { min-height: 38px; }

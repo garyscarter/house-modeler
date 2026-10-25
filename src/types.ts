@@ -51,6 +51,10 @@ export interface Room {
   unheated?: boolean;
   /** Colour of the skirting boards in this room (dark stained wood, quarry tile…). Undefined = white-painted. */
   skirtingColor?: string;
+  /** Floor style follows this room (id, any floor of the same variant): finish, direction, grout, colour and floor photo are copied from it whenever it changes. */
+  floorFrom?: string;
+  /** Wall style follows this room: covering, colours, the paper above a band and skirting. Feature walls stay the room's own. */
+  wallsFrom?: string;
 }
 
 export type WallFinish = "render" | "brick" | "pebbledash" | "stone" | "cladding";

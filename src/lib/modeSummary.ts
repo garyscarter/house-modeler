@@ -13,6 +13,7 @@ import {
   type Room,
   type Site,
 } from "../types";
+import { findRoom } from "./roomLinks";
 import { areaM2, axisRect, formatArea } from "./planMath";
 import { bbox } from "./geometry";
 import { isUnheated } from "./report";
@@ -97,22 +98,28 @@ export function detailsSummary(room: Room, photoCount: number): string {
 /** "into 2 rooms" */
 export const knockSummary = (n: number) => `into ${plural(n, "room", "rooms")}`;
 
+/** "Same as Kitchen · " when a style is linked and the room list is known. */
+function linkPrefix(id: string | undefined, floors?: Floor[]): string {
+  const src = id && floors ? findRoom(floors, id) : undefined;
+  return src ? `Same as ${src.room.name} · ` : "";
+}
+
 /** "Herringbone wood or LVT · 45° · #c8a97e" */
-export function floorSummary(room: Room): string {
+export function floorSummary(room: Room, floors?: Floor[]): string {
   const parts: string[] = [FLOOR_FINISH_LABEL[room.floorFinish ?? "plain"]];
   if (room.floorAngle) parts.push(`${Math.round(room.floorAngle)}°`);
   if (room.color) parts.push(room.color);
-  return parts.join(" · ");
+  return linkPrefix(room.floorFrom, floors) + parts.join(" · ");
 }
 
 /** "Paint · Warm white · skirting white" */
-export function wallsSummary(room: Room): string {
+export function wallsSummary(room: Room, floors?: Floor[]): string {
   const parts: string[] = [WALL_COVERING_LABEL[room.wallCovering ?? "paint"]];
   const above = room.upperCovering && upperCovering(room) !== "paint" && coverLayout(room.wallCovering ?? "paint")?.paintAbove;
   if (above) parts.push(`${WALL_COVERING_LABEL[room.upperCovering!].toLowerCase()} above`);
   if (room.wallPaint) parts.push(colourName(room.wallPaint));
   parts.push(`skirting ${room.skirtingColor ? colourName(room.skirtingColor) : "white"}`);
-  return parts.join(" · ");
+  return linkPrefix(room.wallsFrom, floors) + parts.join(" · ");
 }
 
 /** "4 walls, 1 feature" */

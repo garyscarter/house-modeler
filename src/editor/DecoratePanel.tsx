@@ -1,3 +1,4 @@
+import { RoomLinkControl } from "./RoomLinkControl";
 import { Section } from "../components/Section";
 import { WALL_COVERING_LABEL, WALL_FINISH_LABEL, FLOOR_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallFinish } from "../types";
 import type { EdgePick } from "../lib/decorPick";
@@ -76,6 +77,8 @@ export function DecoratePanel({
           <h4>Floor</h4>
           <span className="deco-value">{FLOOR_FINISH_LABEL[floorFinishNow]}</span>
         </div>
+        <RoomLinkControl kind="floor" variant={variant} floor={floor} room={room} onChange={onChange} />
+        <fieldset className={room.floorFrom ? "linked" : "link-free"} disabled={!!room.floorFrom}>
         <FinishPicker
           kind="floor"
           label="Floor finish"
@@ -119,6 +122,7 @@ export function DecoratePanel({
             </select>
           )}
         </Section>
+        </fieldset>
       </div>
 
       <div className="deco-block">
@@ -126,6 +130,8 @@ export function DecoratePanel({
           <h4>Walls</h4>
           <span className="deco-value">{WALL_COVERING_LABEL[covering] + (aboveKind && aboveKind !== "paint" ? ` · ${WALL_COVERING_LABEL[aboveKind]} above` : "")}</span>
         </div>
+        <RoomLinkControl kind="walls" variant={variant} floor={floor} room={room} onChange={onChange} />
+        <fieldset className={room.wallsFrom ? "linked" : "link-free"} disabled={!!room.wallsFrom}>
         <FinishPicker
           kind="wall"
           label="Wall covering"
@@ -185,6 +191,7 @@ export function DecoratePanel({
           onChange={(skirtingColor) => onChange({ skirtingColor })}
           onReset={() => onChange({ skirtingColor: undefined })}
         />
+        </fieldset>
       </div>
 
       <Section id="decorate.eachWall" title="Each wall" summary={eachWallSummary(room)}>
