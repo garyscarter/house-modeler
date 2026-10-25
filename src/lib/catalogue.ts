@@ -61,6 +61,12 @@ export type Symbol =
   | "oven-pair"
   | "wine-cooler"
   | "waterfall"
+  | "corner-unit"
+  | "corner-unit-handleless"
+  | "corner-diagonal"
+  | "corner-diagonal-handleless"
+  | "peninsula"
+  | "peninsula-handleless"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -188,6 +194,9 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "range-cooker", name: "Range cooker", category: "Kitchen", w: 1.00, d: 0.60, h: 0.92, color: "#2f3a45", symbol: "range" },
   { id: "island-1200", name: "Island (1.2 × 0.9)", category: "Kitchen", w: 1.20, d: 0.90, h: 0.9, color: UNIT, symbol: "island" },
   { id: "island-1800", name: "Island (1.8 × 0.9)", category: "Kitchen", w: 1.80, d: 0.90, h: 0.9, color: UNIT, symbol: "island" },
+  { id: "corner-unit", name: "Corner base unit, L (900)", category: "Kitchen", w: 0.90, d: 0.90, h: 0.9, color: UNIT, symbol: "corner-unit", note: "Two 600 arms meeting in the corner under an L-shaped worktop; turn it to suit the corner" },
+  { id: "corner-diagonal", name: "Corner base unit, diagonal (900)", category: "Kitchen", w: 0.90, d: 0.90, h: 0.9, color: UNIT, symbol: "corner-diagonal", note: "One angled door across the corner between the two runs" },
+  { id: "peninsula", name: "Peninsula (1.8 × 0.9)", category: "Kitchen", w: 1.80, d: 0.90, h: 0.9, color: UNIT, symbol: "peninsula", note: "Turn it end-on to a wall or corner unit; doors at the front, a stool overhang at the back when deeper than 0.75 m, end panels both ends" },
   { id: "fridge-freezer", name: "Fridge freezer", category: "Kitchen", w: 0.60, d: 0.65, h: 1.85, color: "#e8e8e8", symbol: "appliance" },
   { id: "cooker", name: "Cooker", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: "#e8e8e8", symbol: "range", note: "Free-standing, oven under a hob" },
   { id: "dishwasher", name: "Dishwasher", category: "Kitchen", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "appliance" },
@@ -204,6 +213,9 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "fridge-integrated", name: "Integrated fridge freezer (tall)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "tall", note: "Built in behind two cabinet doors" },
   { id: "island-waterfall", name: "Island, waterfall (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.92, color: UNIT, symbol: "waterfall", note: "Worktop runs down both ends; overhang at the back for stools" },
   { id: "island-2400", name: "Island (2.4 × 1.0)", category: "Kitchen", w: 2.40, d: 1.00, h: 0.9, color: UNIT, symbol: "island" },
+  { id: "corner-unit-handleless", name: "Handleless corner unit, L (900)", category: "Kitchen", w: 0.90, d: 0.90, h: 0.9, color: UNIT, symbol: "corner-unit-handleless", note: "Two 600 arms meeting in the corner under an L-shaped worktop; turn it to suit the corner" },
+  { id: "corner-diagonal-handleless", name: "Handleless corner unit, diagonal (900)", category: "Kitchen", w: 0.90, d: 0.90, h: 0.9, color: UNIT, symbol: "corner-diagonal-handleless", note: "One angled slab door across the corner between the two runs" },
+  { id: "peninsula-handleless", name: "Handleless peninsula (1.8 × 0.9)", category: "Kitchen", w: 1.80, d: 0.90, h: 0.9, color: UNIT, symbol: "peninsula-handleless", note: "Turn it end-on to a wall or corner unit; slab doors at the front, a stool overhang at the back when deeper than 0.75 m, end panels both ends" },
   { id: "floating-shelf", name: "Floating shelf (1 m)", category: "Kitchen", w: 1.00, d: 0.25, h: 0.04, color: WOOD, symbol: "shelf", mount: 1.5, note: "Open shelf in place of wall cabinets; set any width, or a stack in the inspector" },
 
   // Utility
@@ -267,7 +279,44 @@ export function radiatorPanels(d: number): 1 | 2 {
   return d > 0.085 ? 2 : 1;
 }
 
-const WORKTOP_SYMBOLS: Symbol[] = ["worktop", "sink", "island", "cabinet", "handleless", "drawers", "wine-cooler", "waterfall"];
+const WORKTOP_SYMBOLS: Symbol[] = [
+  "worktop",
+  "sink",
+  "island",
+  "cabinet",
+  "handleless",
+  "drawers",
+  "wine-cooler",
+  "waterfall",
+  "corner-unit",
+  "corner-unit-handleless",
+  "corner-diagonal",
+  "corner-diagonal-handleless",
+  "peninsula",
+  "peninsula-handleless",
+];
+
+/** Whether a kitchen symbol has handleless slab fronts rather than framed doors. */
+export function isHandleless(symbol: Symbol): boolean {
+  return symbol === "handleless" || symbol === "waterfall" || symbol.endsWith("-handleless");
+}
+
+/**
+ * Depth of the two arms of a corner unit (L or diagonal) with footprint w × d metres: 600 mm like the runs
+ * either side, shallower on a small unit so the corner keeps a notch (L) or a face (diagonal) of at least 0.2 m.
+ * The arms run along the back and down the left; the plan symbol and the 3D model both cut the corner this way.
+ */
+export function cornerArm(w: number, d: number): number {
+  return Math.max(0.2, Math.min(0.6, Math.min(w, d) - 0.2));
+}
+
+/**
+ * Breakfast-bar overhang at the back of a peninsula of depth d metres: none on a 600 run, up to 300 mm once the
+ * depth passes 0.75 m so the units in front stay at least 600 deep.
+ */
+export function peninsulaOverhang(d: number): number {
+  return d > 0.75 ? Math.min(0.3, d - 0.6) : 0;
+}
 
 /** Whether an item is drawn with a worktop on top (kitchen base units, sinks, runs, islands), whose colour can be set. */
 export function hasWorktop(item: CatalogueItem): boolean {

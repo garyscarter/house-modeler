@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, byId, chaiseSizes, filterCatalogue, hasWorktop, isFloorCovering, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, byId, chaiseSizes, cornerArm, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -112,5 +112,34 @@ describe("joinery", () => {
     expect(CATEGORIES.indexOf("Joinery")).toBe(CATEGORIES.indexOf("Living") + 1);
     for (const id of ["built-in-alcove", "built-in-cupboard", "built-in-shelves"]) expect(byId(id)!.toCeiling, id).toBe(true);
     expect(byId("wall-cube")!.mount).toBeGreaterThan(1);
+  });
+});
+
+describe("corner units and peninsulas", () => {
+  it("lists L and diagonal corner units and a peninsula in both front styles, all with worktops", () => {
+    const ids = ["corner-unit", "corner-unit-handleless", "corner-diagonal", "corner-diagonal-handleless", "peninsula", "peninsula-handleless"];
+    for (const id of ids) {
+      const item = byId(id);
+      expect(item?.category).toBe("Kitchen");
+      expect(item && hasWorktop(item)).toBe(true);
+      expect(item && isHandleless(item.symbol)).toBe(id.endsWith("-handleless"));
+    }
+    expect(isHandleless("cabinet")).toBe(false);
+    expect(isHandleless("waterfall")).toBe(true);
+  });
+
+  it("gives a corner unit 600 arms, shallower when the unit is small", () => {
+    expect(cornerArm(0.9, 0.9)).toBe(0.6);
+    expect(cornerArm(1.2, 1.0)).toBe(0.6);
+    expect(cornerArm(0.7, 0.7)).toBeCloseTo(0.5);
+    expect(cornerArm(0.3, 0.3)).toBe(0.2);
+  });
+
+  it("gives a peninsula a stool overhang only when it is deeper than a run", () => {
+    expect(peninsulaOverhang(0.6)).toBe(0);
+    expect(peninsulaOverhang(0.75)).toBe(0);
+    expect(peninsulaOverhang(0.8)).toBeCloseTo(0.2);
+    expect(peninsulaOverhang(0.9)).toBeCloseTo(0.3);
+    expect(peninsulaOverhang(1.2)).toBe(0.3);
   });
 });
