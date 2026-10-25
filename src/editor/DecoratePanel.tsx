@@ -4,7 +4,7 @@ import type { EdgePick } from "../lib/decorPick";
 import { eachWallSummary, outsideSummary } from "../lib/modeSummary";
 import { edgeLabel, isOutsideEdge } from "../lib/featureWalls";
 import { areaM2, edgeLengthsM, formatLength } from "../lib/planMath";
-import { ACCENT_LABEL, BASE_LABEL, hasAccent, hasBaseColour, wallAccent, wallBase } from "../lib/wallCovering";
+import { ACCENT_LABEL, BASE_LABEL, UPPER_GROUPS, coverLayout, hasAccent, hasBaseColour, upperCovering, upperLook, wallAccent, wallBase } from "../lib/wallCovering";
 import { skirtingColour } from "../lib/skirting";
 import { finishColour, groutColour, takesAngle, takesGrout } from "../lib/floorFinish";
 import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
@@ -60,6 +60,8 @@ export function DecoratePanel({
   }
 
   const covering = room.wallCovering ?? "paint";
+  const aboveKind = coverLayout(covering)?.paintAbove ? upperCovering(room) : undefined;
+  const aboveLabel = covering === "tongue" ? "Above the boards" : covering === "metroSplash" ? "Above the splashback" : "Above the panelling";
   const accented = covering !== "paint" && hasAccent(covering);
   const hasOutside = room.polygon.some((_, i) => isOutsideEdge(floor, room, i));
   const floorFinishNow = room.floorFinish ?? "plain";
@@ -122,7 +124,7 @@ export function DecoratePanel({
       <div className="deco-block">
         <div className="deco-head">
           <h4>Walls</h4>
-          <span className="deco-value">{WALL_COVERING_LABEL[covering]}</span>
+          <span className="deco-value">{WALL_COVERING_LABEL[covering] + (aboveKind && aboveKind !== "paint" ? ` · ${WALL_COVERING_LABEL[aboveKind]} above` : "")}</span>
         </div>
         <FinishPicker
           kind="wall"
@@ -152,6 +154,28 @@ export function DecoratePanel({
             onChange={(wallAccent) => onChange({ wallAccent })}
             onReset={() => onChange({ wallAccent: undefined })}
             resetLabel={covering === "tiles" ? "No feature strip" : "Back to default"}
+          />
+        )}
+        {aboveKind !== undefined && (
+          <FinishPicker
+            kind="wall"
+            label={aboveLabel}
+            value={aboveKind}
+            groups={UPPER_GROUPS}
+            names={WALL_TILE_NAME}
+            titles={WALL_COVERING_LABEL}
+            selectedColour={room.wallPaint}
+            fallbackColour={wallBase(room)}
+            onPick={(c) => onChange({ upperCovering: c === "paint" ? undefined : c, upperAccent: undefined })}
+          />
+        )}
+        {aboveKind !== undefined && aboveKind !== "paint" && hasAccent(aboveKind) && (
+          <SwatchField
+            label={short(ACCENT_LABEL[aboveKind])}
+            value={wallAccent(upperLook(room)) ?? wallBase(room)}
+            isSet={!!room.upperAccent}
+            onChange={(upperAccent) => onChange({ upperAccent })}
+            onReset={() => onChange({ upperAccent: undefined })}
           />
         )}
         <SwatchField

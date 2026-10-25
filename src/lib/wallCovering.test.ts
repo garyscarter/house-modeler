@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WARM_WHITE, interiorFinish, outsideLook, wallAccent, wallBase, hasAccent, hasBaseColour } from "./wallCovering";
+import { WARM_WHITE, interiorFinish, outsideLook, wallAccent, wallBase, hasAccent, hasBaseColour, splitFinish } from "./wallCovering";
 import { rect } from "./testing";
 
 const room = (extra: Parameters<typeof rect>[5] = {}) => rect("A", 0, 0, 300, 300, extra);
@@ -75,5 +75,43 @@ describe("fixed-colour coverings", () => {
     expect(hasBaseColour("floral")).toBe(true);
     expect(hasAccent("floral")).toBe(true);
     expect(hasBaseColour("paint")).toBe(true);
+  });
+});
+
+describe("wall above a half-height covering", () => {
+  const base = { wallCovering: "panelling", wallPaint: "#f1ece2", wallAccent: "#6f8071" } as const;
+  const clean = (f: ReturnType<typeof splitFinish>) => {
+    for (const x of [f.lower, f.upper]) if (x) expect("upper" in x).toBe(false);
+  };
+
+  it("papers above panelling", () => {
+    const s = splitFinish(interiorFinish(room({ ...base, upperCovering: "floral" }), undefined));
+    expect(s.lower).toEqual({ covering: "panelling", color: "#6f8071", accent: null });
+    expect(s.upper).toEqual({ covering: "floral", color: "#f1ece2", accent: "#c8364a" });
+    clean(s);
+    const c = splitFinish(interiorFinish(room({ ...base, upperCovering: "floral", upperAccent: "#112233" }), undefined));
+    expect(c.upper).toEqual({ covering: "floral", color: "#f1ece2", accent: "#112233" });
+  });
+
+  it("paints above when no upper covering is set", () => {
+    const s = splitFinish(interiorFinish(room(base), undefined));
+    expect(s.upper).toEqual({ covering: "paint", color: "#f1ece2" });
+    clean(s);
+  });
+
+  it("ignores the upper covering on a feature wall with another covering", () => {
+    const r = room({ ...base, upperCovering: "floral", wallFinishes: { 0: { covering: "floral" } } });
+    const f = interiorFinish(r, undefined, 0);
+    expect(f.covering).toBe("floral");
+    expect("upper" in f).toBe(false);
+  });
+
+  it("returns no upper for a full-height covering", () => {
+    expect(splitFinish(interiorFinish(room({ wallCovering: "panellingFull", upperCovering: "floral" }), undefined)).upper).toBeNull();
+  });
+
+  it("falls back to paint for a covering not allowed above", () => {
+    const s = splitFinish(interiorFinish(room({ ...base, upperCovering: "metro" }), undefined));
+    expect(s.upper).toEqual({ covering: "paint", color: "#f1ece2" });
   });
 });

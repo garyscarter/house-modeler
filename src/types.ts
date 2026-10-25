@@ -34,6 +34,10 @@ export interface Room {
   wallCovering?: WallCovering;
   /** Pattern colour of the covering (stripes, flowers, motif, tile feature strip, mortar). Undefined = the covering's default. */
   wallAccent?: string;
+  /** Covering of the wall above a half-height one (panelling, boards, splashback): paint or a wallpaper. Undefined = paint. Its ground colour is wallPaint. */
+  upperCovering?: WallCovering;
+  /** Pattern colour of the paper above the band. Undefined = the paper's default. */
+  upperAccent?: string;
   /**
    * Feature walls: a finish of their own for some walls, keyed by polygon edge
    * (edge i runs from polygon[i] to the next corner). Adding or removing a
