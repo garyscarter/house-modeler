@@ -8,7 +8,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
-import { DEFAULT_WORKTOP, byId, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, MIN_SEAT, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -667,6 +667,23 @@ export function FixtureInspector({
           </button>
         )}
       </div>
+      {hasSeatDepth(item) && (
+        <div className="field">
+          <span className="field-label">Seat depth (m)</span>
+          <NumberField
+            value={(item.symbol === "corner-sofa" ? cornerSofaSizes : chaiseSizes)(fixture.w ?? item.w, fixture.d ?? item.d, fixture.seat).s}
+            label="Seat depth"
+            min={MIN_SEAT}
+            disabled={locked}
+            onCommit={(seat) => onChange({ seat })}
+          />
+          {fixture.seat !== undefined && (
+            <button className="link" disabled={locked} onClick={() => onChange({ seat: undefined })}>
+              Reset to the size's own
+            </button>
+          )}
+        </div>
+      )}
       {item.mount !== undefined && (
         <div className="field">
           <span className="field-label">Height above floor (m)</span>

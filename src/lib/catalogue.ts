@@ -257,9 +257,33 @@ export const CATALOGUE: CatalogueItem[] = [
  * seat depth `s` of the run along the back, width `c` of the chaise on the right
  * (which runs the full depth), and back and arm thicknesses.
  */
-export function chaiseSizes(w: number, d: number): { s: number; c: number; back: number; arm: number } {
-  const s = Math.min(1.0, d * 0.62);
+export function chaiseSizes(w: number, d: number, seat?: number): { s: number; c: number; back: number; arm: number } {
+  const s = seatDepth(seat, Math.min(1.0, d * 0.62), w, d);
   return { s, c: Math.min(0.95, w * 0.38), back: Math.min(0.2, s * 0.25), arm: Math.min(0.14, w * 0.06) };
+}
+
+/** Shallowest seat an L-shaped sofa can have, metres. */
+export const MIN_SEAT = 0.5;
+
+/** A chosen seat depth, kept sensible: at least MIN_SEAT and leaving 0.3 m of the sofa beyond it; the default when none is set. */
+function seatDepth(seat: number | undefined, fallback: number, w: number, d: number): number {
+  const max = Math.max(MIN_SEAT, Math.min(w, d) - 0.3);
+  return seat === undefined || !Number.isFinite(seat) ? Math.min(fallback, max) : Math.min(max, Math.max(MIN_SEAT, seat));
+}
+
+/**
+ * Parts of a corner sofa of footprint w × d metres: the depth `s` of both runs
+ * (the seat depth, set on the fixture or taken from the size), the back
+ * thickness and the arm width. The plan symbol and the 3D model share it.
+ */
+export function cornerSofaSizes(w: number, d: number, seat?: number): { s: number; back: number; arm: number } {
+  const s = seatDepth(seat, Math.min(0.95, w * 0.45, d * 0.5), w, d);
+  return { s, back: Math.min(0.22, s * 0.3), arm: Math.min(0.2, s * 0.25) };
+}
+
+/** Whether an item's seat depth can be set (L-shaped sofas). */
+export function hasSeatDepth(item: Pick<CatalogueItem, "symbol">): boolean {
+  return item.symbol === "corner-sofa" || item.symbol === "chaise-sofa";
 }
 
 /**

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, cornerArm, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
@@ -58,7 +58,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j)) {
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -158,7 +158,7 @@ const GLOW = "#fff1d6";
  * footprint on its base, y up, back towards -z (the top of the plan).
  * `mount` is the height of that base above the floor, for parts that reach down to it.
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery): Part[] {
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery, seat?: number): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -371,9 +371,7 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     }
     case "corner-sofa": {
       // A run along the back and a return down the left, as on the plan.
-      const s = Math.min(0.95, w * 0.45, d * 0.5);
-      const back = Math.min(0.22, s * 0.3);
-      const arm = Math.min(0.2, s * 0.25);
+      const { s, back, arm } = cornerSofaSizes(w, d, seat);
       const base = shade(color, 0.8);
       box(0, 0.1, -d / 2 + s / 2, w, 0.2, s, base);
       box(-w / 2 + s / 2, 0.1, s / 2, s, 0.2, d - s, base);
@@ -397,7 +395,7 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       break;
     }
     case "chaise-sofa": {
-      const { s, c, back, arm } = chaiseSizes(w, d);
+      const { s, c, back, arm } = chaiseSizes(w, d, seat);
       const frame = shade(color, 0.85);
       legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, -d / 2 + s - 0.06], [w / 2 - 0.06, d / 2 - 0.06], [w / 2 - c + 0.06, d / 2 - 0.06]]);
       box(0, 0.18, -d / 2 + s / 2, w, 0.16, s, frame);

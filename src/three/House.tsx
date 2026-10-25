@@ -82,7 +82,8 @@ export function House({
   showExterior,
 }: HouseProps) {
   const ext = exteriorOf(model);
-  const floors = model.floors.filter((f) => !visibleLevels || visibleLevels.includes(f.level));
+  const shown = (level: number) => !visibleLevels || visibleLevels.includes(level);
+  const floors = model.floors.filter((f) => shown(f.level));
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
   const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
@@ -113,6 +114,7 @@ export function House({
           onPickWall={onPickWall}
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
+          aboveShown={shown(floor.level + 1)}
         />
       ))}
     </group>
@@ -146,6 +148,7 @@ function FloorGroupInner({
   onPickWall,
   otherFloor,
   wells,
+  aboveShown,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -164,6 +167,8 @@ function FloorGroupInner({
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   otherFloor?: Floor | null;
   wells: Stairwell[];
+  /** The storey above is drawn too, so this floor's outer walls carry up through the slab to meet it. */
+  aboveShown: boolean;
 }) {
   const y0 = floorBaseY(model, floor);
   const modelSig = modelStructure(model);
@@ -208,7 +213,20 @@ function FloorGroupInner({
 
   return (
     <group position={[0, y0, 0]}>
-      <FloorShell model={model} floor={floor} walls={allWalls} photos={photos} selectedRoomId={selectedRoomId} onSelectRoom={onSelectRoom} onContextRoom={onContextRoom} onPickWall={onPickWall} holes={holes} doorsOpen={doorsOpen} flight={flight} />
+      <FloorShell
+        model={model}
+        floor={floor}
+        walls={allWalls}
+        photos={photos}
+        selectedRoomId={selectedRoomId}
+        onSelectRoom={onSelectRoom}
+        onContextRoom={onContextRoom}
+        onPickWall={onPickWall}
+        holes={holes}
+        doorsOpen={doorsOpen}
+        flight={flight}
+        aboveShown={aboveShown}
+      />
       {showCeilings && (
         <group onClick={onPickWall ? block : undefined}>
           {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
@@ -256,6 +274,7 @@ function FloorShell({
   holes,
   doorsOpen,
   flight,
+  aboveShown,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -270,21 +289,29 @@ function FloorShell({
   /** Stairwell openings to leave out of the floor and slab. */
   holes: Rect[];
   doorsOpen: boolean;
+  /**
+   * Whether the storey above is drawn. Only then do the outer walls run up
+   * through the slab to meet it; with the storey above hidden every wall stops
+   * at the ceiling, so a single-storey extension's walls are no lower than the
+   * main house's.
+   */
+  aboveShown: boolean;
 }) {
   const ext = exteriorOf(model);
   const H = model.ceilingHeight;
   const slab = model.slabThickness;
   const lowest = Math.min(...model.floors.map((f) => f.level));
   const baseY = floorBaseY(model, floor);
-  // The floor above, keyed on its structure so recolouring a room does not rebuild every floor's shell.
-  const upperSig = floorsStructure(model.floors.filter((f) => f.level === floor.level + 1), false);
+  // The floor above (when drawn), keyed on its structure so recolouring a room does not rebuild every floor's shell.
+  const above = aboveShown ? model.floors.filter((f) => f.level === floor.level + 1) : [];
+  const upperSig = floorsStructure(above, false);
   const upperPolys = useMemo(
-    () => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
+    () => above.flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [upperSig],
   );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const upperWalls = useMemo(() => model.floors.filter((f) => f.level === floor.level + 1).flatMap((f) => buildWalls(f)), [upperSig]);
+  const upperWalls = useMemo(() => above.flatMap((f) => buildWalls(f)), [upperSig]);
   const finish = ext.wallFinish ?? "render";
   const shell = useMemo(
     () =>

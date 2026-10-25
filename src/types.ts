@@ -360,6 +360,8 @@ export interface Fixture {
   h?: number;
   /** Height of the base above the floor in metres, for wall-hung items (default from the catalogue). */
   mount?: number;
+  /** Seat depth in metres of an L-shaped sofa (corner and chaise sofas): how deep the seating runs are. Default from the sofa's size. */
+  seat?: number;
   color?: string;
   /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
   worktop?: string;

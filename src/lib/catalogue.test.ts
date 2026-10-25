@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, byId, chaiseSizes, cornerArm, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -153,5 +153,19 @@ describe("TVs", () => {
     expect(byId("tv-stand-65")!.mount).toBe(0.5);
     expect(byId("tv-wall-65")!.w).toBeGreaterThan(byId("tv-wall-55")!.w);
     expect(byId("tv-stand-65")!.w).toBeGreaterThan(byId("tv-stand-55")!.w);
+  });
+});
+
+describe("seat depth of L-shaped sofas", () => {
+  it("follows the size by default and the fixture's own seat depth when set", () => {
+    expect(cornerSofaSizes(2.5, 1.9).s).toBeCloseTo(0.95);
+    expect(cornerSofaSizes(2.5, 1.9, 0.7).s).toBeCloseTo(0.7);
+    expect(chaiseSizes(2.7, 1.65).s).toBeCloseTo(1.0);
+    expect(chaiseSizes(2.7, 1.65, 0.8).s).toBeCloseTo(0.8);
+  });
+  it("keeps a chosen depth within the sofa", () => {
+    expect(cornerSofaSizes(2.5, 1.9, 0.2).s).toBeCloseTo(0.5);
+    expect(cornerSofaSizes(2.5, 1.9, 5).s).toBeCloseTo(1.6);
+    expect(chaiseSizes(2.0, 1.0, 0.95).s).toBeCloseTo(0.7);
   });
 });

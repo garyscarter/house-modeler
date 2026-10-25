@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, cornerArm, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
@@ -32,7 +32,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   clash?: boolean;
   ghost?: boolean;
   /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
-  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h">;
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);
@@ -156,9 +156,8 @@ export const FixtureSymbol = memo(function FixtureSymbol({
     }
     case "corner-sofa": {
       // L shape: a full-width run along the back and a return down the left side.
-      const s = Math.min(0.95 * m, w * 0.45, d * 0.5);
-      const back = Math.min(0.22 * m, s * 0.3);
-      const arm = Math.min(0.2 * m, s * 0.25);
+      const sz = cornerSofaSizes(w / m, d / m, fixture?.seat);
+      const [s, back, arm] = [sz.s * m, sz.back * m, sz.arm * m];
       const pts = [
         [x0, y0],
         [x1, y0],
@@ -191,7 +190,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
     }
     case "chaise-sofa": {
       // A low sofa along the back with a chaise running forward on the right.
-      const { s, c, back, arm } = chaiseSizes(w / m, d / m);
+      const { s, c, back, arm } = chaiseSizes(w / m, d / m, fixture?.seat);
       const [sp, cp, bp, ap] = [s * m, c * m, back * m, arm * m];
       const pts = [
         [x0, y0],
