@@ -93,6 +93,26 @@
 .colour-well input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 50%; opacity: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .swatch-row .reset-btn { margin-left: 2px; }
 
+/* Dulux picker: a popover under the swatch row */
+.swatch-field { position: relative; }
+.dulux-line { display: block; margin-top: var(--sp-1); font-size: 12px; color: var(--muted); }
+.dulux-picker { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin-top: var(--sp-1); display: flex; flex-direction: column; max-height: 320px; background: var(--surface-2, var(--surface-3)); border: 1px solid var(--line); border-radius: var(--radius-s); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); }
+.dulux-top { display: flex; gap: var(--sp-1); align-items: center; padding: var(--sp-2); border-bottom: 1px solid var(--line); }
+.dulux-top input { flex: 1 1 auto; min-width: 0; }
+.dulux-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--sp-1) var(--sp-2); }
+.dulux-h { margin: var(--sp-1) 0; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.dulux-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px var(--sp-2); }
+.dulux-item { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: 2px 4px; background: none; border: 0; border-radius: var(--radius-s); text-align: left; font-size: 12px; color: var(--text); }
+.dulux-item:hover:not(:disabled) { background: var(--surface-3); }
+.dulux-item[aria-pressed="true"] .dulux-chip { box-shadow: var(--ring); }
+.dulux-chip { flex: none; margin-right: var(--sp-2); width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.22); }
+.dulux-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
+.dulux-current { grid-template-columns: 1fr; margin-bottom: var(--sp-1); }
+.dulux-family { display: flex; justify-content: space-between; width: 100%; margin-top: 2px; padding: 6px 4px; background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; font-size: 12px; color: var(--text); }
+.dulux-custom { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-top: 1px solid var(--line); font-size: 12px; }
+.app[data-touch] .dulux-item, .app[data-touch] .dulux-family { min-height: 44px; }
+.app[data-touch] .dulux-picker { max-height: 50vh; }
+
 /* Finish picker */
 .finish-tabs { display: flex; width: 100%; margin-bottom: var(--sp-2); }
 .finish-tabs button { flex: 1 1 0; padding: 4px 4px; font-size: 12px; }
@@ -149,3 +169,4 @@
 .deco-block fieldset.linked, .deco-block fieldset.link-free { border: 0; margin: 0; padding: 0; min-width: 0; }
 .deco-block fieldset.linked { opacity: 0.55; pointer-events: none; }
 .app[data-touch] .deco-link select { min-height: 38px; }
+.dulux-picker .dulux-item .dulux-chip { margin: 0 var(--sp-2) 0 0; }

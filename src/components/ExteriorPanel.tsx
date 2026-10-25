@@ -261,8 +261,8 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
               ))}
             </select>
           </Field>
-          <SwatchField label="Wall colour" value={ext.wallColor} isSet onChange={(wallColor) => set({ wallColor })} />
-          <SwatchField label="Window frames" value={ext.trimColor} isSet onChange={(trimColor) => set({ trimColor })} />
+          <SwatchField dulux label="Wall colour" value={ext.wallColor} isSet onChange={(wallColor) => set({ wallColor })} />
+          <SwatchField dulux label="Window frames" value={ext.trimColor} isSet onChange={(trimColor) => set({ trimColor })} />
         </div>
         <p className="muted small">Rooms can have their own outside finish and colour in Plan.</p>
       </section>

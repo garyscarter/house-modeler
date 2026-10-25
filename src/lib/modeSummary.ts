@@ -18,12 +18,13 @@ import { areaM2, axisRect, formatArea } from "./planMath";
 import { bbox } from "./geometry";
 import { isUnheated } from "./report";
 import { swatchName } from "./paintPalette";
+import { duluxName } from "./dulux";
 import { exteriorOf } from "./roof";
 import { floorDisplayName } from "./studio";
 import { coverLayout, upperCovering } from "./wallCovering";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const colourName = (hex: string) => swatchName(hex) ?? hex;
+const colourName = (hex: string) => swatchName(hex) ?? duluxName(hex) ?? hex;
 const dirWord = (d: string) => d[0].toUpperCase() + d.slice(1);
 
 export interface Stat {
