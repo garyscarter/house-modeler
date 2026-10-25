@@ -152,6 +152,9 @@ class Batcher {
   }
 }
 
+/** Height of a room's floor surface above the storey base, metres: finishes sit on the slab, and anything lying on the floor (rugs) starts here. */
+export const FLOOR_SURFACE = 0.012;
+
 export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: BayFloor[] } {
   const { floor, walls, ceiling: H, trimColor } = inp;
   const rooms: RoomPoly[] = floor.rooms.map((r) => ({ id: r.id, poly: roomWorldPolygon(floor, r) }));

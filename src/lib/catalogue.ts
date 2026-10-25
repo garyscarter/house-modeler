@@ -185,11 +185,13 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bar-stool-back", name: "Bar stool with back", category: "Dining", w: 0.42, d: 0.45, h: 0.95, color: "#3a3634", symbol: "stool-back", note: "Counter-height seat (650) with a low back, on four legs with a footrest" },
 
   // Kitchen (600 mm module; base units include the worktop, wall units hang from 1.45 m)
+  { id: "base-unit-300", name: "Base unit (300)", category: "Kitchen", w: 0.30, d: 0.60, h: 0.9, color: UNIT, symbol: "cabinet", note: "Half-width filler with one door; a pull-out larder or tray space" },
   { id: "base-unit", name: "Base unit (600)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "cabinet" },
   { id: "base-unit-1000", name: "Base unit (1000)", category: "Kitchen", w: 1.00, d: 0.60, h: 0.9, color: UNIT, symbol: "cabinet" },
   { id: "sink-unit", name: "Sink base unit", category: "Kitchen", w: 1.00, d: 0.60, h: 0.9, color: UNIT, symbol: "sink", note: "Bowl and drainer on a 1000 unit" },
   { id: "worktop-run", name: "Worktop run (3 m)", category: "Kitchen", w: 3.00, d: 0.60, h: 0.9, color: UNIT, symbol: "worktop", note: "Base units under a worktop; set any length" },
   { id: "hob", name: "Hob", category: "Kitchen", w: 0.60, d: 0.52, h: 0.03, color: "#2b2d31", symbol: "hob", mount: 0.9, note: "Sits on a worktop or base unit" },
+  { id: "wall-unit-300", name: "Wall cabinet (300)", category: "Kitchen", w: 0.30, d: 0.33, h: 0.72, color: UNIT, symbol: "wall-cabinet", mount: 1.45 },
   { id: "wall-unit", name: "Wall cabinet (600)", category: "Kitchen", w: 0.60, d: 0.33, h: 0.72, color: UNIT, symbol: "wall-cabinet", mount: 1.45 },
   { id: "wall-unit-1000", name: "Wall cabinet (1000)", category: "Kitchen", w: 1.00, d: 0.33, h: 0.72, color: UNIT, symbol: "wall-cabinet", mount: 1.45 },
   { id: "cooker-hood", name: "Cooker hood (under a short cabinet)", category: "Kitchen", w: 0.60, d: 0.45, h: 0.72, color: UNIT, symbol: "hood", mount: 1.45, note: "Canopy hood with a short wall cabinet above, in line with the wall cabinets" },
@@ -206,6 +208,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "dishwasher", name: "Dishwasher", category: "Kitchen", w: 0.60, d: 0.60, h: 0.85, color: "#e8e8e8", symbol: "appliance" },
   // Modern kitchen: handleless runs, drawers, appliance stacks and a side-by-side fridge
   { id: "american-fridge", name: "American fridge freezer", category: "Kitchen", w: 0.91, d: 0.72, h: 1.78, color: STAINLESS, symbol: "american-fridge", note: "Side-by-side doors with a water and ice dispenser; allow about 50 mm each side and behind" },
+  { id: "handleless-unit-300", name: "Handleless base unit (300)", category: "Kitchen", w: 0.30, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Half-width filler with one slab door" },
   { id: "handleless-unit", name: "Handleless base unit (600)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Slab doors with a J-pull rail under the worktop" },
   { id: "handleless-unit-1000", name: "Handleless base unit (1000)", category: "Kitchen", w: 1.00, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Slab doors with a J-pull rail under the worktop" },
   { id: "handleless-run", name: "Handleless run (3 m)", category: "Kitchen", w: 3.00, d: 0.60, h: 0.9, color: UNIT, symbol: "handleless", note: "Handleless units under a worktop; set any length" },

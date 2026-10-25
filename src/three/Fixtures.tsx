@@ -8,7 +8,7 @@ import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
-import { shade } from "./shell";
+import { FLOOR_SURFACE, shade } from "./shell";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
@@ -473,10 +473,13 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       for (let i = 0; i < flutes; i++) box(-w / 2 + ((i + 0.5) * w) / flutes, h / 2, d / 2 + 0.004, 0.022, h - 0.04, 0.008, shade(color, 1.08), "satin");
       break;
     }
-    case "rug":
-      box(0, h / 2, 0, w, h, d, color);
-      box(0, h + 0.001, 0, w - Math.min(0.24, w * 0.16), 0.002, d - Math.min(0.24, d * 0.16), shade(color, 0.88));
+    case "rug": {
+      // Lies on the room's floor surface (not the storey base, which the floor finish covers), with a border.
+      const y = FLOOR_SURFACE;
+      box(0, y + h / 2, 0, w, h, d, color);
+      box(0, y + h + 0.001, 0, w - Math.min(0.24, w * 0.16), 0.002, d - Math.min(0.24, d * 0.16), shade(color, 0.88));
       break;
+    }
     case "table":
       box(0, h - 0.02, 0, w, 0.04, d, color, "satin");
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.05), (h - 0.04) / 2, sz * (d / 2 - 0.05), 0.06, h - 0.04, 0.06, color);

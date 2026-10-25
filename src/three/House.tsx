@@ -18,7 +18,7 @@ import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairw
 import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightShape } from "../lib/stairs";
 import { flightStructure, floorStructure, floorsStructure, modelStructure, shellLooks } from "../lib/structure";
 import { GROUND_Y } from "./Site";
-import { buildShell } from "./shell";
+import { buildShell, FLOOR_SURFACE } from "./shell";
 import { getMaterial, type MatSpec } from "./textures";
 import { floorBaseY } from "./floorBase";
 import { finishColour, floorAngle, groutColour } from "../lib/floorFinish";
@@ -428,7 +428,7 @@ function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { roo
     <mesh
       geometry={geom}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.012, 0]}
+      position={[0, FLOOR_SURFACE, 0]}
       receiveShadow
       material={photo ? undefined : material}
       onClick={(e) => {
