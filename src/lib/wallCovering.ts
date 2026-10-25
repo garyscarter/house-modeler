@@ -1,5 +1,6 @@
 import type { Room, WallCovering, WallFinish } from "../types";
 import type { FaceQuad } from "./walls";
+import { WALL_GROUPS, type FinishGroup } from "./finishGroups";
 
 /** Default colour of interior paint (warm white). */
 export const WARM_WHITE = "#f4f1ea";
@@ -123,7 +124,38 @@ export function hasBaseColour(c: WallCovering): boolean {
   return !FIXED.has(c);
 }
 
-export type InteriorFinish = { covering: "paint"; color: string } | { covering: Pattern; color: string; accent: string | null };
+export type InteriorFinish =
+  | { covering: "paint"; color: string }
+  | {
+      covering: Pattern;
+      color: string;
+      accent: string | null;
+      /** Finish of the wall above a half-height covering, when the room chose a wallpaper for it. Stripped by splitFinish. */
+      upper?: InteriorFinish;
+    };
+
+/** What can cover the wall above a half-height covering: paint or a wallpaper. */
+export const UPPER_GROUPS: readonly FinishGroup<WallCovering>[] = WALL_GROUPS.filter((g) => g.id === "paint" || g.id === "paper");
+const UPPER_OK: ReadonlySet<WallCovering> = new Set(UPPER_GROUPS.flatMap((g) => g.items));
+
+/** The covering above a half-height one, falling back to paint for anything not allowed there. */
+export function upperCovering(room: Pick<Room, "upperCovering">): WallCovering {
+  const c = room.upperCovering ?? "paint";
+  return UPPER_OK.has(c) ? c : "paint";
+}
+
+/** The room's look for the wall above its half-height covering: the same ground colour, its own covering and pattern colour. */
+export function upperLook(room: Room): WallLook {
+  return { wallCovering: upperCovering(room), wallPaint: room.wallPaint, wallAccent: room.upperAccent };
+}
+
+/** Finish of the wall above a half-height covering. The ground is the room's wall colour (wallPaint). */
+export function upperFinish(room: Room): InteriorFinish {
+  const covering = upperCovering(room);
+  const color = wallBase(room);
+  if (covering === "paint") return { covering, color };
+  return { covering, color, accent: wallAccent(upperLook(room)) };
+}
 
 /** Base colour of a covering (paint, wallpaper ground, tile or brick). */
 export function wallBase(look: WallLook): string {
@@ -165,7 +197,10 @@ export function interiorFinish(room: Room | undefined, wallColor: string | undef
   const look = wallLook(room, edge);
   const covering = look.wallCovering ?? "paint";
   if (covering === "paint") return { covering, color: wallBase(look) };
-  return { covering, color: wallBase(look), accent: wallAccent(look) };
+  const f: InteriorFinish = { covering, color: wallBase(look), accent: wallAccent(look) };
+  // The wall above a half-height covering has its own paper, unless a feature wall swapped the covering.
+  if (coverLayout(covering)?.paintAbove && covering === (room.wallCovering ?? "paint") && upperCovering(room) !== "paint") f.upper = upperFinish(room);
+  return f;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,9 +268,9 @@ export function coverV(layout: CoverLayout, y: number, top: number): number {
  */
 export function splitFinish(f: InteriorFinish): { lower: InteriorFinish; upper: InteriorFinish | null } {
   if (f.covering === "paint" || !coverLayout(f.covering)?.paintAbove) return { lower: f, upper: null };
-  const upper: InteriorFinish = { covering: "paint", color: f.color };
+  const upper: InteriorFinish = f.upper ?? { covering: "paint", color: f.color };
   if (f.covering === "panelling" || f.covering === "tongue") return { lower: { covering: f.covering, color: f.accent ?? f.color, accent: null }, upper };
-  return { lower: f, upper };
+  return { lower: { covering: f.covering, color: f.color, accent: f.accent }, upper };
 }
 
 const EPS = 1e-6;

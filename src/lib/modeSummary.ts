@@ -19,6 +19,7 @@ import { isUnheated } from "./report";
 import { swatchName } from "./paintPalette";
 import { exteriorOf } from "./roof";
 import { floorDisplayName } from "./studio";
+import { coverLayout, upperCovering } from "./wallCovering";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const colourName = (hex: string) => swatchName(hex) ?? hex;
@@ -107,6 +108,8 @@ export function floorSummary(room: Room): string {
 /** "Paint · Warm white · skirting white" */
 export function wallsSummary(room: Room): string {
   const parts: string[] = [WALL_COVERING_LABEL[room.wallCovering ?? "paint"]];
+  const above = room.upperCovering && upperCovering(room) !== "paint" && coverLayout(room.wallCovering ?? "paint")?.paintAbove;
+  if (above) parts.push(`${WALL_COVERING_LABEL[room.upperCovering!].toLowerCase()} above`);
   if (room.wallPaint) parts.push(colourName(room.wallPaint));
   parts.push(`skirting ${room.skirtingColor ? colourName(room.skirtingColor) : "white"}`);
   return parts.join(" · ");
