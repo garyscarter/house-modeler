@@ -67,6 +67,8 @@ export type Symbol =
   | "corner-diagonal-handleless"
   | "peninsula"
   | "peninsula-handleless"
+  | "stool"
+  | "stool-back"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -179,6 +181,8 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "table-4", name: "Dining table (4)", category: "Dining", w: 1.20, d: 0.80, h: 0.75, color: WOOD, symbol: "table" },
   { id: "table-6", name: "Dining table (6)", category: "Dining", w: 1.80, d: 0.90, h: 0.75, color: WOOD, symbol: "table" },
   { id: "chair", name: "Dining chair", category: "Dining", w: 0.45, d: 0.45, h: 0.9, color: WOOD, symbol: "chair" },
+  { id: "bar-stool", name: "Bar stool (counter height)", category: "Dining", w: 0.38, d: 0.38, h: 0.65, color: "#3a3634", symbol: "stool", note: "Round seat on a slim stem with a footrest, 650 seat for a 900 worktop; tuck under an island or peninsula overhang" },
+  { id: "bar-stool-back", name: "Bar stool with back", category: "Dining", w: 0.42, d: 0.45, h: 0.95, color: "#3a3634", symbol: "stool-back", note: "Counter-height seat (650) with a low back, on four legs with a footrest" },
 
   // Kitchen (600 mm module; base units include the worktop, wall units hang from 1.45 m)
   { id: "base-unit", name: "Base unit (600)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "cabinet" },

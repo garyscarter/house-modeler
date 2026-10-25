@@ -218,6 +218,18 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <line key="r" x1={x1 - arm} y1={y0 + d * 0.15} x2={x1 - arm} y2={y1 - d * 0.12} {...line} />,
       );
     }
+    case "stool":
+      // Round seat with the stem at its centre.
+      return g(
+        <ellipse key="o" cx={0} cy={0} rx={w / 2} ry={d / 2} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <circle key="s" cx={0} cy={0} r={Math.min(w, d) * 0.1} {...thin} />,
+      );
+    case "stool-back":
+      // Round seat with a back drawn as an arc along the back edge.
+      return g(
+        <ellipse key="o" cx={0} cy={d * 0.06} rx={w / 2} ry={d * 0.44} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <path key="b" d={`M${x0} ${y0 + d * 0.2} A${w / 2} ${d * 0.3} 0 0 1 ${x1} ${y0 + d * 0.2}`} {...line} />,
+      );
     case "pouf":
     case "round-table":
     case "floor-lamp":
