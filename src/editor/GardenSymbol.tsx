@@ -426,10 +426,11 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
     case "lavender":
     case "hydrangea":
     case "perennials":
+    case "flowers":
       return group(
         <>
           {leafy(shapeLobes(def.shape))}
-          {dots(def.shape === "hydrangea" ? 6 : 9, r * 0.65, Math.max(0.04, r * 0.07))}
+          {dots(def.shape === "hydrangea" ? 6 : def.shape === "flowers" ? 7 : 9, r * 0.65, Math.max(0.04, r * (def.shape === "flowers" ? 0.12 : 0.07)))}
         </>,
         at,
       );

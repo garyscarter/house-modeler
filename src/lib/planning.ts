@@ -283,7 +283,7 @@ function boundaryEdgesOf(site: Site): BEdge[] {
 }
 
 /** Whether a point is on a road or pavement of the plot plan. */
-const onHighway = (site: Site, p: V2) => site.surfaces.some((s) => (s.kind === "road" || s.kind === "pavement") && pointInPolygon(p, surfaceOutline(s)));
+const onHighway = (site: Site, p: V2) => site.surfaces.some((s) => (s.kind === "road" || s.kind === "pavement") && pointInPolygon(p, surfaceOutline(s, site.surfaces)));
 const hasHighway = (site: Site) => site.surfaces.some((s) => s.kind === "road" || s.kind === "pavement");
 
 /**
@@ -1087,7 +1087,7 @@ function hardSurfaceRule(before: Site | undefined, after: Site | undefined, g: G
   const key = (site: Site, p: V2) => {
     for (let s = site.surfaces.length - 1; s >= 0; s--) {
       const sf = site.surfaces[s];
-      if (pointInPolygon(p, surfaceOutline(sf))) return HARD.has(sf.kind) ? `${sf.kind}:${surfaceLook(sf)}` : null;
+      if (pointInPolygon(p, surfaceOutline(sf, site.surfaces))) return HARD.has(sf.kind) ? `${sf.kind}:${surfaceLook(sf)}` : null;
     }
     return null;
   };

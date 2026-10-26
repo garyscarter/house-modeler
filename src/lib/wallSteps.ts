@@ -55,11 +55,11 @@ export interface WallSegment {
  * where there is none. Planting beds are left out: a raised bed is a planter
  * built against a wall, not the ground the wall stands on.
  */
-export function groundAt(surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope" | "smooth">[], p: V2): number {
+export function groundAt(surfaces: (Pick<SiteSurface, "kind" | "polygon" | "slope" | "smooth"> & Partial<Pick<SiteSurface, "id" | "curves" | "links">>)[], p: V2): number {
   let h = 0;
   let found = false;
   for (const s of surfaces) {
-    if (s.kind === "bed" || s.polygon.length < 3 || !pointInPolygon(p, surfaceOutline(s))) continue;
+    if (s.kind === "bed" || s.polygon.length < 3 || !pointInPolygon(p, surfaceOutline(s, surfaces))) continue;
     const z = surfaceHeightAt(s, p);
     if (!found || z > h) h = z;
     found = true;

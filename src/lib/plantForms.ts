@@ -213,6 +213,23 @@ function perennials(c: Ctx) {
   if (c.accent) speckle(c, 12, c.h * 0.55, c.h, c.w * 0.45, Math.min(0.045, c.w * 0.05), c.accent);
 }
 
+/** A low leafy clump with five to nine upright stems, each topped by a flower head in the accent colour: tulips to sunflowers by size. */
+function flowers(c: Ctx) {
+  mound(c, 3, 0.4);
+  const n = Math.round(between(c.r, 5, 9));
+  const base = c.h * 0.28;
+  for (let i = 0; i < n; i++) {
+    const a = c.r() * Math.PI * 2;
+    const len = Math.max(0.02, c.h * between(c.r, 0.6, 0.95) - base);
+    const hr = Math.min(0.075, c.w * 0.13) * between(c.r, 0.8, 1.2);
+    // Tall stems lean less, and every stem starts far enough in for its head to stay inside the spread.
+    const lean = between(c.r, 0, 0.14) * Math.min(1, c.w / c.h);
+    const d = Math.sqrt(c.r()) * Math.max(0, c.w / 2 - hr * 1.15 - Math.sin(lean) * len);
+    const top = stem(c, Math.cos(a) * d, Math.sin(a) * d, base, len, Math.min(0.015, c.w * 0.03), lean, c.r() * Math.PI * 2, shadeColor(c.leaf, 0.85));
+    if (c.accent) blob(c, top[0], top[1] - hr * 0.3, top[2], hr, hr * 0.7, hr, shadeColor(c.accent, between(c.r, 0.9, 1.1)), "sphere");
+  }
+}
+
 /** A fan of thin tilted blades from the middle (grasses, fern fronds). */
 function grassFan(c: Ctx, n: number, color: string, maxLean = 0.7, width = 0.035) {
   const { w, h, r } = c;
@@ -263,6 +280,7 @@ const PLANTS: Partial<Record<GardenDef["shape"], (c: Ctx) => void>> = {
   grass,
   buddleia,
   perennials,
+  flowers,
 };
 
 function ctx(def: GardenDef, item: GardenItem, w: number, h: number): Ctx {

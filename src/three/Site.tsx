@@ -64,7 +64,7 @@ function SiteContent({ site, house, centre: houseCentre, quiet }: { quiet: boole
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre.x, GROUND_Y, centre.y]} geometry={farGround()} material={quiet ? quietGround() : surfaceMaterial("ground")} receiveShadow />
       {surfaces.map((s) => (
-        <Surface key={s.id} surface={s} />
+        <Surface key={s.id} surface={s} surfaces={site.surfaces} />
       ))}
       <Boundary site={site} buildings={buildings} />
       <SiteItems site={site} quiet={quiet} buildings={buildings} />
@@ -162,10 +162,10 @@ const useDispose = (g: THREE.BufferGeometry | null) => useEffect(() => () => g?.
  * stands proud of the ground its sides take the kerb's material (brick round a raised bed by default), and a
  * lawn or bed kerb that stands up adds a band round the edge; a flush kerb shows as a strip.
  */
-function Surface({ surface }: { surface: SiteSurface }) {
+function Surface({ surface, surfaces }: { surface: SiteSurface; surfaces: SiteSurface[] }) {
   const layer = LAYER[surface.kind];
   const slope = effectiveSlope(surface.slope);
-  const outline = useMemo(() => surfaceOutline(surface), [surface.polygon, surface.smooth]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outline = useMemo(() => surfaceOutline(surface, surfaces), [surface, surfaces]);
   const kerb = kerbOf(surface);
   // A surface lifted clear of the ground needs no depth offset against the layers below, which would only
   // let its edge show through the face of its kerb.

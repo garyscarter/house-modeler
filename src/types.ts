@@ -754,6 +754,14 @@ export interface SurfaceSlope {
 }
 
 /** The edging round a lawn or bed (see lib/gardenCatalogue.ts KERBS for sizes, colours and labels). */
+/** One edge of a garden surface drawn as another surface's edge (SiteSurface.links). */
+export interface EdgeLink {
+  edge: number;
+  surface: string;
+  theirEdge: number;
+  reversed: boolean;
+}
+
 /** A lawn's or bed's edging; "paving" is reclaimed block pavers (the patio's) laid in courses like bricks. */
 export type KerbStyle = "brick" | "paving" | "sleeper" | "corten" | "render" | "none";
 
@@ -789,6 +797,13 @@ export interface SiteSurface {
    * with the polygon by lib/surfaceCurve.ts when corners are added or removed. Absent: none.
    */
   curves?: number[];
+  /**
+   * Edges that follow another surface's edge, so two surfaces that meet along a curve share one drawing of
+   * it: edge `edge` of this surface is drawn as edge `theirEdge` of surface `surface` (reversed when the two
+   * run opposite ways, as neighbours wound the same way do). The corners at its ends come from the other
+   * surface too. See lib/surfaceCurve.ts.
+   */
+  links?: EdgeLink[];
   /**
    * Lawns and beds: the edging. Absent: "brick" round a raised bed (slope.base > 0), as before, otherwise
    * "none" (lib/gardenCatalogue.ts kerbOf).

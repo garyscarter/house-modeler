@@ -24,6 +24,7 @@ export type GardenCategory =
   | "Trees"
   | "Shrubs"
   | "Grasses and perennials"
+  | "Flowers"
   | "Hedges and climbers";
 
 export const GARDEN_CATEGORIES: GardenCategory[] = [
@@ -38,6 +39,7 @@ export const GARDEN_CATEGORIES: GardenCategory[] = [
   "Trees",
   "Shrubs",
   "Grasses and perennials",
+  "Flowers",
   "Hedges and climbers",
 ];
 
@@ -90,7 +92,8 @@ export type GardenShape =
   | "climber"
   | "hedge"
   | "bamboo"
-  | "perennials";
+  | "perennials"
+  | "flowers";
 
 /** Entries placed by two points rather than a centre and rotation (GardenItem.to). */
 export type RunKind = "festoon" | "stones" | "hedge" | "climber";
@@ -202,6 +205,18 @@ export const GARDEN_ITEMS: GardenDef[] = [
   { id: "ornamental-grass", name: "Ornamental grass", category: "Grasses and perennials", kind: "plant", shape: "grass", w: 0.8, d: 0.8, h: 1.0, color: "#b6a873", round: true, costLine: "gardenPlanting" },
   { id: "perennials", name: "Fern and perennial mix", category: "Grasses and perennials", kind: "plant", shape: "perennials", w: 1.0, d: 1.0, h: 0.6, color: "#4d7a3e", accent: "#e0b0c8", round: true, costLine: "gardenPlanting" },
   // Hedges and climbers
+  // Flowers for beds and borders: a low leafy clump with stems and flower heads in the accent colour.
+  { id: "tulips", name: "Tulips", category: "Flowers", kind: "plant", shape: "flowers", w: 0.4, d: 0.4, h: 0.45, color: "#5a8a4a", accent: "#d9342b", round: true, costLine: "gardenPlanting" },
+  { id: "daffodils", name: "Daffodils", category: "Flowers", kind: "plant", shape: "flowers", w: 0.4, d: 0.4, h: 0.4, color: "#5f9a4b", accent: "#f2c23a", round: true, costLine: "gardenPlanting" },
+  { id: "alliums", name: "Alliums", category: "Flowers", kind: "plant", shape: "flowers", w: 0.5, d: 0.5, h: 0.9, color: "#6a8f55", accent: "#8b5fbf", round: true, costLine: "gardenPlanting" },
+  { id: "dahlias", name: "Dahlias", category: "Flowers", kind: "plant", shape: "flowers", w: 0.7, d: 0.7, h: 1.0, color: "#3f6b35", accent: "#d1456f", round: true, costLine: "gardenPlanting" },
+  { id: "cosmos", name: "Cosmos", category: "Flowers", kind: "plant", shape: "flowers", w: 0.6, d: 0.6, h: 0.9, color: "#5c8a44", accent: "#f0a6c4", round: true, costLine: "gardenPlanting" },
+  { id: "foxgloves", name: "Foxgloves", category: "Flowers", kind: "plant", shape: "flowers", w: 0.5, d: 0.5, h: 1.3, color: "#4d7a3e", accent: "#c67ab0", round: true, costLine: "gardenPlanting" },
+  { id: "sunflowers", name: "Sunflowers", category: "Flowers", kind: "plant", shape: "flowers", w: 0.5, d: 0.5, h: 2.0, color: "#5b8a3c", accent: "#f2c020", round: true, costLine: "gardenPlanting" },
+  { id: "geraniums", name: "Geraniums (bedding)", category: "Flowers", kind: "plant", shape: "flowers", w: 0.35, d: 0.35, h: 0.35, color: "#4f7a3d", accent: "#e03a3a", round: true, costLine: "gardenPlanting" },
+  { id: "marigolds", name: "Marigolds", category: "Flowers", kind: "plant", shape: "flowers", w: 0.3, d: 0.3, h: 0.3, color: "#4f7a3d", accent: "#f0921e", round: true, costLine: "gardenPlanting" },
+  { id: "peonies", name: "Peonies", category: "Flowers", kind: "plant", shape: "hydrangea", w: 0.8, d: 0.8, h: 0.8, color: "#45703a", accent: "#f3a7c0", round: true, costLine: "gardenPlanting" },
+  { id: "bedding-mix", name: "Bedding mix, white and pink", category: "Flowers", kind: "plant", shape: "perennials", w: 0.8, d: 0.8, h: 0.35, color: "#527f41", accent: "#f6e6ee", round: true, costLine: "gardenPlanting" },
   { id: "hedge", name: "Hedge", category: "Hedges and climbers", kind: "plant", shape: "hedge", w: 0.6, d: 0.6, h: 1.5, color: "#3c5f30", run: "hedge", pitch: 0.4, shade: true, costLine: "hedging" },
   { id: "bamboo", name: "Bamboo screen", category: "Hedges and climbers", kind: "plant", shape: "bamboo", w: 0.5, d: 0.5, h: 2.5, color: "#6f8f45", run: "hedge", pitch: 0.3, shade: true, costLine: "hedging" },
   { id: "climber", name: "Climber on a wall", category: "Hedges and climbers", kind: "plant", shape: "climber", w: 0.3, d: 0.3, h: 2.2, color: "#4a6e36", accent: "#e6e6f0", run: "climber", pitch: 0.5, wall: true, costLine: "hedging" },

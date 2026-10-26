@@ -208,7 +208,10 @@ function jitter(a: number, b: number): number {
  * outline worked out once, since a hedge or bamboo screen asks for every part.
  */
 function groundSampler(site: Site): (x: number, y: number) => number {
-  const surfaces = site.surfaces.filter((s) => s.polygon.length >= 3).map((s) => ({ s, outline: surfaceOutline(s), box: bbox(surfaceOutline(s)) }));
+  const surfaces = site.surfaces.filter((s) => s.polygon.length >= 3).map((s) => {
+    const outline = surfaceOutline(s, site.surfaces);
+    return { s, outline, box: bbox(outline) };
+  });
   return (x, y) => {
     let h = 0;
     for (const { s, outline, box } of surfaces) {

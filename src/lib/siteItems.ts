@@ -30,7 +30,7 @@ export interface P3 {
 export function groundHeightAt(site: Pick<Site, "surfaces">, p: WPt): number {
   let h = 0;
   for (const s of site.surfaces) {
-    if (s.polygon.length < 3 || !pointInPolygon(p, surfaceOutline(s))) continue;
+    if (s.polygon.length < 3 || !pointInPolygon(p, surfaceOutline(s, site.surfaces))) continue;
     h = Math.max(h, surfaceHeightAt(s, p));
   }
   return h;

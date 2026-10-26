@@ -57,6 +57,7 @@
 .site-clear td + td { text-align: right; font-weight: 600; }
 .site-edge-hit, .site-edge-sel { cursor: move; }
 .site-surface-edge-sel { stroke: var(--accent); stroke-opacity: 0.85; stroke-linecap: round; fill: none; }
+.site-handle-linked { fill: var(--panel, #fff); stroke: var(--accent); stroke-opacity: 0.5; stroke-dasharray: 2 2; }
 
 /* ---- Touch and the phone chassis ---- */
 .app[data-touch] .site-canvas > svg { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }

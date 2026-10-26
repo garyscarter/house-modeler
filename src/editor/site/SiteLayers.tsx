@@ -45,7 +45,7 @@ export function SiteWorld({ site, mode, sel, tool, px, outlines, walls, clearanc
         <path
           key={s.id}
           data-surface-id={s.id}
-          d={outlinePath(s, (p) => p)}
+          d={outlinePath(s, (p) => p, site.surfaces)}
           fill={SURFACE_FILL[s.kind]}
           fillOpacity={garden ? 0.75 : 0.4}
           stroke={garden && selected({ type: "surface", id: s.id, vertex: null }) ? "#2563eb" : "rgba(0,0,0,0.15)"}
@@ -139,13 +139,19 @@ interface SelectionProps {
   px: number;
   /** Smooth surfaces: the control polygon is drawn faintly between its handles. */
   smooth?: boolean;
+  /** Edges that follow another surface's edge: no midpoint, and their end corners can't be dragged here. */
+  linked?: number[];
   onEdgeDown: (e: React.PointerEvent, s: Item, i: number) => void;
   onMidDown: (e: React.PointerEvent, s: Item, i: number) => void;
   onVertexDown: (e: React.PointerEvent, s: Item, i: number) => void;
 }
 
 /** Edge hits (surfaces and buildings), midpoint plusses and corner handles of the selected polygon. */
-export function SelectionLayer({ sel, poly, px, smooth, onEdgeDown, onMidDown, onVertexDown }: SelectionProps) {
+export function SelectionLayer({ sel, poly, px, smooth, linked, onEdgeDown, onMidDown, onVertexDown }: SelectionProps) {
+  const n = poly.length;
+  const linkedEdge = (i: number) => !!linked?.includes(i);
+  // The corners at the ends of a linked edge belong to the surface it follows.
+  const linkedVertex = (i: number) => linkedEdge(i) || linkedEdge((i - 1 + n) % n);
   return (
     <g>
       {smooth && <polygon points={svgPoints(poly as { x: number; y: number }[])} className="site-control-poly" strokeWidth={px} strokeDasharray={`${3 * px} ${3 * px}`} pointerEvents="none" />}
@@ -157,12 +163,16 @@ export function SelectionLayer({ sel, poly, px, smooth, onEdgeDown, onMidDown, o
       {sel.type !== "boundary" && sel.edge !== null && sel.edge !== undefined && poly[sel.edge] && (
         <line x1={poly[sel.edge].x} y1={poly[sel.edge].y} x2={poly[(sel.edge + 1) % poly.length].x} y2={poly[(sel.edge + 1) % poly.length].y} className="site-surface-edge-sel" strokeWidth={4 * px} pointerEvents="none" />
       )}
-      {poly.map((a, i) => (
-        <MidpointHandle key={"m" + i} a={a} b={poly[(i + 1) % poly.length]} px={px} r={5} hit={9} plus className="site-mid" onPointerDown={(e) => onMidDown(e, sel, i)} />
-      ))}
-      {poly.map((p, i) => (
-        <Handle key={"v" + i} at={p} px={px} r={6} hit={12} className={`site-handle${sel.vertex === i ? " active" : ""}`} onPointerDown={(e) => onVertexDown(e, sel, i)} />
-      ))}
+      {poly.map((a, i) =>
+        linkedEdge(i) ? null : <MidpointHandle key={"m" + i} a={a} b={poly[(i + 1) % poly.length]} px={px} r={5} hit={9} plus className="site-mid" onPointerDown={(e) => onMidDown(e, sel, i)} />,
+      )}
+      {poly.map((p, i) =>
+        linkedVertex(i) ? (
+          <circle key={"v" + i} cx={p.x} cy={p.y} r={4 * px} className="site-handle-linked" pointerEvents="none" />
+        ) : (
+          <Handle key={"v" + i} at={p} px={px} r={6} hit={12} className={`site-handle${sel.vertex === i ? " active" : ""}`} onPointerDown={(e) => onVertexDown(e, sel, i)} />
+        ),
+      )}
     </g>
   );
 }

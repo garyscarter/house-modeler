@@ -83,7 +83,7 @@ export function SurfaceFields({ surface, edge }: { surface: SiteSurface; edge?: 
       <label className="check">
         <input type="checkbox" checked={!!surface.smooth} onChange={(e) => set({ smooth: e.target.checked, curves: undefined })} /> Curved edges (all of them)
       </label>
-      {edge !== null && edge !== undefined && edge < surface.polygon.length ? (
+      {edge !== null && edge !== undefined && edge < surface.polygon.length && !surface.links?.some((l) => l.edge === edge) ? (
         <label className="check" data-garden-edge={edge}>
           <input type="checkbox" checked={edgeCurved(surface, edge)} onChange={(e) => set(setEdgeCurved(surface, edge, e.target.checked))} /> Curve edge {edge + 1} of {surface.polygon.length}
         </label>

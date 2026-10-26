@@ -248,7 +248,7 @@ function boundaryChanges(before: Site, after: Site): Change[] {
 const HARD = new Set<SurfaceKind>(["drive", "patio", "path"]);
 const centroid = (poly: WPt[]) => poly.reduce((s, p) => ({ x: s.x + p.x / poly.length, y: s.y + p.y / poly.length }), { x: 0, y: 0 });
 /** A surface as JSON without what is reported on its own (id, smoothing, edging). */
-const plain = ({ id: _id, smooth: _s, curves: _c, kerb: _k, kerbHeight: _h, ...rest }: SiteSurface) => JSON.stringify(rest);
+const plain = ({ id: _id, smooth: _s, curves: _c, links: _l, kerb: _k, kerbHeight: _h, ...rest }: SiteSurface) => JSON.stringify(rest);
 const significant = (a: number, b: number) => Math.abs(b - a) >= AREA_TOL && Math.abs(b - a) >= AREA_FRAC * Math.max(a, b);
 
 function pairSurfaces(a: SiteSurface[], b: SiteSurface[]): { a?: SiteSurface; b?: SiteSurface }[] {
@@ -290,19 +290,20 @@ function surfaceChanges(before: Site, after: Site): Change[] {
     const [ka, kb] = [a ? kerbOf(a) : { style: "none" as const, height: 0 }, kerbOf(b)];
     if (ka.style === kb.style || (!a && !b.kerb)) return; // new surfaces count only an edging chosen on purpose
     if (kb.style === "none") {
-      push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[ka.style].label.toLowerCase()} edging removed`, quantity: r1(surfacePerimeter(b)), unit: "m" });
+      push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[ka.style].label.toLowerCase()} edging removed`, quantity: r1(surfacePerimeter(b, after.surfaces)), unit: "m" });
       return;
     }
-    push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[kb.style].label.toLowerCase()} edging`, quantity: r1(surfacePerimeter(b)), unit: "m", costLine: "gardenEdging" });
+    push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[kb.style].label.toLowerCase()} edging`, quantity: r1(surfacePerimeter(b, after.surfaces)), unit: "m", costLine: "gardenEdging" });
   };
 
   for (const { a, b } of pairSurfaces(before.surfaces, after.surfaces)) {
     if (a && !b) {
-      push(a.id, { description: `${name(a)} removed (${m2(surfaceArea(a))})`, quantity: r1(surfaceArea(a)), unit: "m²" });
+      const area = surfaceArea(a, before.surfaces);
+      push(a.id, { description: `${name(a)} removed (${m2(area)})`, quantity: r1(area), unit: "m²" });
       continue;
     }
     if (b && !a) {
-      const area = surfaceArea(b);
+      const area = surfaceArea(b, after.surfaces);
       const line = lineOf(b.kind);
       push(b.id, { description: `New ${name(b).toLowerCase()} (${m2(area)})`, quantity: r1(area), unit: "m²", ...(line ? { costLine: line } : {}) });
       edging(undefined, b);
@@ -313,7 +314,7 @@ function surfaceChanges(before: Site, after: Site): Change[] {
       edging(a, b); // smoothing and edging only: smooth alone is not a change
       continue;
     }
-    const [aa, ab] = [surfaceArea(a), surfaceArea(b)];
+    const [aa, ab] = [surfaceArea(a, before.surfaces), surfaceArea(b, after.surfaces)];
     if (a.kind !== b.kind) {
       const line = lineOf(b.kind);
       push(b.id, {

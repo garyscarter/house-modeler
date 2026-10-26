@@ -95,12 +95,13 @@ function ItemRow({ item, selected, onPick }: { item: GardenItem; selected: boole
 }
 
 function SurfaceRow({ surface }: { surface: SiteSurface }) {
+  const site = useSite();
   const updateSite = useStore((s) => s.updateSite);
   return (
     <details className="garden-surface" data-surface-row={surface.id}>
       <summary>
         <span>{SURFACE_LABEL[surface.kind]}</span>
-        <span className="muted small site-area">{fmtArea(surfaceArea(surface))}</span>
+        <span className="muted small site-area">{fmtArea(surfaceArea(surface, site?.surfaces))}</span>
       </summary>
       <div className="garden-surface-body">
         <SurfaceFields surface={surface} />

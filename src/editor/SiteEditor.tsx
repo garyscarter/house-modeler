@@ -29,7 +29,7 @@ import { slideFor, useSiteDrag, type GardenActions } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
 import { GardenItems, ItemHandles, PlacementGhost, PolyDraftView, RunDraftView } from "./site/GardenLayers";
 import { ItemInspector, SurfaceFields } from "./site/GardenInspectors";
-import { curvesAfterRemove } from "../lib/surfaceCurve";
+import { curvesAfterRemove, linkCandidate, linkEdge, linksAfterRemove, relinkAfterRemove, unlinkEdge } from "../lib/surfaceCurve";
 import { addItem, closesPolygon, gardenClipboard, newItem, pasteItems, removeItems, rotateItems } from "./site/gardenEdit";
 import type { Draft, Item, Sel, SiteMode, Tool } from "./site/types";
 import "./PlanEditor.css"; // the rail, popover and zoom styles are shared with the plan
@@ -135,10 +135,14 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
   const deleteVertex = (s: Item, i: number) => {
     if (s.type === "boundary") updateSite((st) => removeBoundaryVertex(st, i));
     else if (s.type === "surface")
-      updateSite((st) => ({
-        ...st,
-        surfaces: st.surfaces.map((x) => (x.id === s.id && x.polygon.length > 3 ? { ...x, polygon: x.polygon.filter((_, j) => j !== i), curves: curvesAfterRemove(x.curves, i, x.polygon.length) } : x)),
-      }));
+      updateSite((st) => {
+        const n = st.surfaces.find((x) => x.id === s.id)?.polygon.length ?? 0;
+        if (n <= 3) return st;
+        return {
+          ...st,
+          surfaces: relinkAfterRemove(st.surfaces, s.id, i, n).map((x) => (x.id === s.id ? { ...x, polygon: x.polygon.filter((_, j) => j !== i), curves: curvesAfterRemove(x.curves, i, n), links: linksAfterRemove(x.links, i, n) } : x)),
+        };
+      });
     else editPoly(s, (poly) => (poly.length > 3 ? poly.filter((_, j) => j !== i) : poly));
     setSel({ ...s, vertex: null, edge: null } as Sel);
   };
@@ -402,7 +406,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
                 <rect x={vb.x - vb.w} y={vb.y - vb.h} width={3 * vb.w} height={3 * vb.h} fill="url(#site-grid)" />
                 <SiteWorld site={site} mode={mode} sel={psel} tool={tool} px={px} outlines={outlines} walls={walls} clearances={clearances} onItemDown={itemDown} />
                 <GardenItems site={site} selected={selectedIds} px={px} interactive={garden} onDown={gardenItemDown} />
-                {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!(selSurface?.smooth || selSurface?.curves?.length)} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
+                {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!(selSurface?.smooth || selSurface?.curves?.length)} linked={selSurface?.links?.map((l) => l.edge)} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
                 {garden && tool === "select" && oneItem && !peeking && <ItemHandles item={oneItem} px={px} touch={touch} onRotateDown={(e) => rotateDown(e, oneItem.id)} onResizeDown={(e, h) => resizeDown(e, oneItem.id, h)} onEndDown={(e, end) => endDown(e, oneItem.id, end)} />}
                 {armedItem && armed && <PlacementGhost def={armed} item={armedItem} px={px} />}
                 {armed?.run && runStart && <RunDraftView from={runStart} to={hover ? grid(hover) : null} px={px} />}
@@ -610,6 +614,31 @@ function Inspector({
       <div className="inspector" data-garden-inspector="surface">
         <h4>Garden surface</h4>
         <SurfaceFields surface={s} edge={sel.edge} />
+        {sel.edge !== null && sel.edge !== undefined && sel.edge < s.polygon.length && (() => {
+          const i = sel.edge;
+          const link = s.links?.find((l) => l.edge === i);
+          const other = (id: string) => site.surfaces.find((x) => x.id === id);
+          if (link) {
+            const t = other(link.surface);
+            return (
+              <div className="row" data-garden-link="linked">
+                <p className="muted small">Edge {i + 1} follows the {t ? SURFACE_LABEL[t.kind].toLowerCase() : "surface"} beside it, so the two meet exactly; move or curve that one.</p>
+                <button onClick={() => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? unlinkEdge(x, i, st.surfaces) : x)) }))}>Unlink</button>
+              </div>
+            );
+          }
+          const cand = linkCandidate(s, i, site.surfaces);
+          const t = cand && other(cand.surface);
+          if (!cand || !t) return null;
+          return (
+            <div className="row" data-garden-link="candidate">
+              <button onClick={() => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? linkEdge(x, i, cand, st.surfaces) : x)) }))}>
+                Follow the {SURFACE_LABEL[t.kind].toLowerCase()}'s edge beside it
+              </button>
+              <p className="muted small">Draw the curve once on the {SURFACE_LABEL[t.kind].toLowerCase()}; this edge will match it.</p>
+            </div>
+          );
+        })()}
         <p className="muted small">{surfaceArea(s).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">
           {vertexButton}
