@@ -41,7 +41,7 @@ export function partBounds(pt: GPart): { min: [number, number, number]; max: [nu
   for (let i = 0; i < 8; i++) {
     const x = (i & 1 ? 0.5 : -0.5) * pt.s[0];
     const y = (i & 2 ? 0.5 : -0.5) * pt.s[1];
-    const z = (i & 4 ? 0.5 : -0.5) * pt.s[2];
+    const z = (i & 4 ? 0.5 : -0.5) * pt.s[2] * (pt.g === "blade" ? 0.2 : 1);
     // Rx(t) then Ry(r).
     const y1 = y * ct - z * st;
     const z1 = y * st + z * ct;
@@ -85,6 +85,16 @@ class Parts {
   blob(x: number, y: number, z: number, sx: number, sy: number, sz: number, mat: GMat, g: "ico" | "sphere" = "ico") {
     this.out.push({ g, p: [x, y, z], s: [sx, sy, sz], mat });
   }
+  /** A soft cushion (rounded box) from y0 to y1, centred at (x, z). */
+  soft(x: number, y0: number, y1: number, z: number, sx: number, sz: number, mat: GMat, rotY?: number, tilt?: number) {
+    this.out.push({ g: "pillow", p: [x, (y0 + y1) / 2, z], s: [Math.max(sx, 0.002), Math.max(y1 - y0, 0.002), Math.max(sz, 0.002)], mat, ...(rotY ? { rotY } : {}), ...(tilt ? { tilt } : {}) });
+  }
+  /** A square-section bar of side `t` from point a to point b (ribs, struts, spouts, handles). */
+  bar(a: [number, number, number], b: [number, number, number], t: number, mat: GMat) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const hl = Math.hypot(dx, dz);
+    this.out.push({ g: "box", p: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], s: [t, t, Math.hypot(hl, dy)], mat, rotY: Math.atan2(dx, dz), tilt: -Math.atan2(dy, hl) });
+  }
   prism(x: number, y0: number, y1: number, z: number, sx: number, sz: number, mat: GMat) {
     this.out.push({ g: "prism", p: [x, (y0 + y1) / 2, z], s: [sx, y1 - y0, sz], mat });
   }
@@ -92,20 +102,47 @@ class Parts {
 
 const m = (color: string, finish: GFinish, glow?: string): GMat => (glow ? { color, finish, glow } : { color, finish });
 
-/** A chair facing +z at (x, z) turned `rotY`, seat at `seat`, back up to `top`. */
-function chair(P: Parts, x: number, z: number, rotY: number, seat: number, top: number, frame: GMat, cushion: GMat) {
+/** A chair facing +z at (x, z) turned `rotY`, seat at `seat`, back up to `top`: legs, rails, an open slatted (or woven) back, optional arms. */
+function chair(P: Parts, x: number, z: number, rotY: number, seat: number, top: number, frame: GMat, cushion: GMat, arms = false) {
   const c = Math.cos(rotY), s = Math.sin(rotY);
   // Local (lx, lz) in the chair's frame to the item's frame (rotation about y by rotY).
   const at = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
   const w = 0.46;
-  for (const lx of [-w / 2 + 0.02, w / 2 - 0.02]) {
-    const [ax, az] = at(lx, 0);
-    P.box(ax, 0, seat, az, 0.03, w, frame, rotY);
+  const t = 0.035;
+  const e = w / 2 - t / 2;
+  const rails = seat - 0.085;
+  // Legs at the corners; the back legs run up to the top of the back.
+  for (const lx of [-e, e]) {
+    const [fx, fz] = at(lx, e);
+    P.box(fx, 0, seat - 0.04, fz, t, t, frame, rotY);
+    const [bx, bz] = at(lx, -e);
+    P.box(bx, 0, top, bz, t, t, frame, rotY);
+  }
+  // Seat frame: four rails just under the seat.
+  for (const lx of [-e, e]) {
+    const [rx, rz] = at(lx, 0);
+    P.box(rx, rails, seat - 0.045, rz, t, w - 2 * t, frame, rotY);
+  }
+  for (const lz of [-e, e]) {
+    const [rx, rz] = at(0, lz);
+    P.box(rx, rails, seat - 0.045, rz, w - 2 * t, t, frame, rotY);
   }
   const [sx, sz] = at(0, 0);
-  P.box(sx, seat - 0.04, seat, sz, w, w, cushion, rotY);
-  const [bx, bz] = at(0, -w / 2 + 0.03);
-  P.box(bx, seat, top, bz, w, 0.04, frame, rotY);
+  P.soft(sx, seat - 0.04, seat + 0.02, sz, w - 0.04, w - 0.04, cushion, rotY);
+  // Back: three slats, or a woven panel for a dark frame.
+  const [bx, bz] = at(0, -e);
+  const dark = parseInt(frame.color.replace("#", "").slice(0, 2), 16) < 0x40;
+  if (dark) P.box(bx, seat + 0.1, top - 0.05, bz, w - 2 * t - 0.06, 0.02, m(shadeColor(frame.color, 1.7), "fabric"), rotY);
+  else for (let i = 0; i < 3; i++) {
+    const y0 = seat + 0.1 + ((top - seat - 0.14) * i) / 2;
+    P.box(bx, y0, y0 + 0.04, bz, w - 2 * t, 0.025, frame, rotY);
+  }
+  if (arms) {
+    for (const lx of [-e, e]) {
+      const [ax, az] = at(lx, 0);
+      P.box(ax, seat + 0.2, seat + 0.24, az, 0.04, w - 0.04, frame, rotY);
+    }
+  }
 }
 
 function diningSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
@@ -124,7 +161,7 @@ function diningSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
     for (let i = 0; i < seats; i++) {
       const a = (i / seats) * Math.PI * 2 + Math.PI / 4;
       // A chair at angle a faces the table: its +z points to the centre.
-      chair(P, Math.cos(a) * r, Math.sin(a) * r, Math.atan2(-Math.cos(a), -Math.sin(a)), seat, h, frame, seatMat);
+      chair(P, Math.cos(a) * r, Math.sin(a) * r, Math.atan2(-Math.cos(a), -Math.sin(a)), seat, h, frame, seatMat, seats >= 6);
     }
     return;
   }
@@ -147,28 +184,41 @@ function diningSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
       const u = t * (tl - 0.4);
       const sgn = side === 0 ? -1 : 1;
       // Chairs face the table: their +z points across it.
-      if (along === "z") chair(P, sgn * off, u, sgn < 0 ? Math.PI / 2 : -Math.PI / 2, seat, h, frame, seatMat);
-      else chair(P, u, sgn * off, sgn < 0 ? 0 : Math.PI, seat, h, frame, seatMat);
+      if (along === "z") chair(P, sgn * off, u, sgn < 0 ? Math.PI / 2 : -Math.PI / 2, seat, h, frame, seatMat, seats >= 6);
+      else chair(P, u, sgn * off, sgn < 0 ? 0 : Math.PI, seat, h, frame, seatMat, seats >= 6);
     }
   }
 }
 
 function loungeSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
-  const frame = m(item.color ?? def.color, "plastic");
+  const base0 = item.color ?? def.color;
+  const frame = m(shadeColor(base0, 0.8), "plastic");
   const cushion = m(item.accent ?? def.accent ?? "#d8d3c8", "fabric");
   const sd = Math.min(0.8, d * 0.45, w * 0.4);
   const base = Math.min(0.32, h * 0.5);
   const seatTop = Math.min(base + 0.1, h * 0.65);
+  const armTop = Math.max(seatTop + 0.06, h - 0.1);
   // Long run across the back, short run down the left side.
   P.box(0, 0, base, -d / 2 + sd / 2, w, sd, frame);
   P.box(-w / 2 + sd / 2, 0, base, (sd + 0) / 2, sd, d - sd, frame);
-  P.box(0.05, base, seatTop, -d / 2 + sd / 2 + 0.06, w - 0.1, sd - 0.16, cushion);
-  P.box(-w / 2 + sd / 2 + 0.06, base, seatTop, sd / 2, sd - 0.16, d - sd - 0.05, cushion);
-  P.box(0, base, h, -d / 2 + 0.08, w, 0.16, frame);
-  P.box(-w / 2 + 0.08, base, h, sd / 2 - 0.08, 0.16, d - sd + 0.16, frame);
-  // Back cushions.
+  P.box(0, base, armTop, -d / 2 + 0.08, w, 0.16, frame);
+  P.box(-w / 2 + 0.08, base, armTop, sd / 2 - 0.08, 0.16, d - sd + 0.16, frame);
+  // Seat cushions, split about every 0.7 m with a 2 cm gap.
+  const longLen = w - 0.1 - 0.16;
+  const nl = Math.max(1, Math.round(longLen / 0.7));
+  for (let i = 0; i < nl; i++) {
+    const x0 = -w / 2 + 0.1 + 0.16 + (longLen * i) / nl;
+    P.soft(x0 + longLen / nl / 2, base, seatTop, -d / 2 + sd / 2 + 0.08, longLen / nl - 0.02, sd - 0.16, cushion);
+  }
+  const shortLen = d - sd - 0.05;
+  const ns = Math.max(1, Math.round(shortLen / 0.7));
+  for (let i = 0; i < ns; i++) {
+    const z0 = -d / 2 + sd + (shortLen * i) / ns;
+    P.soft(-w / 2 + sd / 2 + 0.08, base, seatTop, z0 + shortLen / ns / 2, sd - 0.16, shortLen / ns - 0.02, cushion);
+  }
+  // Back cushions, leaning, standing 3 cm proud of the arm.
   const n = Math.max(2, Math.round(w / 0.7));
-  for (let i = 0; i < n; i++) P.box(-w / 2 + sd + ((w - sd) * (i + 0.5)) / n, seatTop, h - 0.04, -d / 2 + 0.22, (w - sd) / n - 0.04, 0.14, cushion, 0, -0.15);
+  for (let i = 0; i < n; i++) P.soft(-w / 2 + sd + ((w - sd) * (i + 0.5)) / n, seatTop, armTop + 0.03, -d / 2 + 0.22, (w - sd) / n - 0.04, 0.14, cushion, 0, -0.15);
   // Coffee table in the corner of the L.
   const ct = Math.min(0.9, w - sd - 0.3);
   if (ct > 0.3) P.box(sd / 2 + 0.1, 0, Math.min(0.35, h * 0.5), sd / 2 + 0.15, ct, Math.min(0.55, d - sd - 0.3), m(TIMBER, "timber"));
@@ -194,8 +244,16 @@ function parasol(P: Parts, def: GardenDef, item: GardenItem, w: number, _d: numb
   P.cyl(0, 0, 0.08, 0, Math.min(0.5, w * 0.25), m(DARK, "stone"));
   P.cyl(0, 0, h, 0, 0.045, pole);
   const ch = Math.min(0.55, h * 0.25);
-  P.cone(0, h - ch - 0.02, h - 0.02, 0, w, canopy);
-  P.cyl(0, h - 0.04, h, 0, 0.06, pole);
+  const top = h - 0.02;
+  const rim = top - ch;
+  P.out.push({ g: "cone8", p: [0, (top + rim) / 2, 0], s: [w, ch, w], mat: canopy });
+  // Eight ribs under the canopy, hub to rim (the cone's corners).
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4;
+    P.bar([0, top - 0.03, 0], [Math.sin(a) * (w / 2 - 0.02), rim + 0.01, Math.cos(a) * (w / 2 - 0.02)], 0.012, pole);
+  }
+  P.cyl(0, h * 0.6 - 0.05, h * 0.6 + 0.05, 0, 0.07, pole);
+  P.blob(0, h - 0.03, 0, 0.06, 0.06, 0.06, pole, "sphere");
 }
 
 function bbq(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
@@ -387,14 +445,36 @@ function pergola(P: Parts, def: GardenDef, item: GardenItem, w: number, d: numbe
 
 function mudKitchen(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
   const wood = m(item.color ?? def.color, "timber");
+  const steel = m("#b9bdc2", "metal");
   const top = Math.min(0.6, h * 0.65);
   for (const x of [-1, 1]) for (const z of [-1, 1]) P.box((x * w) / 2 - x * 0.03, 0, top, (z * d) / 2 - z * 0.03, 0.05, 0.05, wood);
   P.box(0, top - 0.03, top, 0, w, d, wood);
   P.box(0, 0.12, 0.15, 0, w - 0.06, d - 0.06, wood);
   P.box(0, top, h, -d / 2 + 0.02, w, 0.03, wood);
-  P.box(0, h * 0.82, h * 0.84, -d / 2 + 0.1, w - 0.1, 0.15, wood);
-  P.cyl(-w * 0.2, top - 0.08, top + 0.01, 0.02, Math.min(0.3, d * 0.6), m("#b9bdc2", "metal"));
-  P.cyl(w * 0.22, top, top + 0.08, 0.05, 0.16, m("#c45a3a", "plastic"));
+  P.box(0, h * 0.88, h * 0.9, -d / 2 + 0.1, w - 0.1, 0.15, wood);
+  // Sink: a bowl set into the top, a darker basin inside its rim, and a tap over it.
+  const sx = -w * 0.2;
+  const bowl = Math.min(0.28, d * 0.6);
+  P.cyl(sx, top - 0.09, top + 0.02, 0.02, bowl, steel);
+  P.cyl(sx, top - 0.09, top + 0.022, 0.02, bowl * 0.82, m("#7d8288", "metal"));
+  const tz = 0.02 - bowl / 2 - 0.03;
+  P.cyl(sx, top, top + 0.18, tz, 0.02, steel);
+  P.bar([sx, top + 0.17, tz], [sx, top + 0.17, tz + 0.1], 0.02, steel);
+  // Two hob rings, a pot with a handle on the right one.
+  const ring = m("#2a2a2a", "plastic");
+  P.cyl(w * 0.16, top, top + 0.012, 0.05, 0.14, ring);
+  P.cyl(w * 0.34, top, top + 0.012, 0.05, 0.14, ring);
+  P.cyl(w * 0.34, top + 0.012, top + 0.09, 0.05, 0.12, m("#c45a3a", "plastic"));
+  P.bar([w * 0.34 + 0.06, top + 0.07, 0.05], [w * 0.34 + 0.16, top + 0.07, 0.05], 0.015, m("#2a2a2a", "plastic"));
+  // Three hooks on the back board with utensils hanging under the shelf.
+  const hz = -d / 2 + 0.045;
+  const cols = ["#b9bdc2", "#c45a3a", "#5a7d3a"];
+  cols.forEach((col, i) => {
+    const ux = -w * 0.1 + i * 0.16;
+    P.box(ux, h * 0.88 - 0.03, h * 0.88 - 0.015, hz, 0.02, 0.02, wood);
+    P.out.push({ g: "cyl", p: [ux, h * 0.88 - 0.12, hz + 0.012], s: [0.012, 0.18, 0.012], mat: m(col, "metal") });
+    P.box(ux, h * 0.88 - 0.29, h * 0.88 - 0.22, hz + 0.012, 0.05, 0.01, m(col, "metal"));
+  });
 }
 
 function trampoline(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
@@ -446,18 +526,22 @@ function waterButt(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
 
 function washingLine(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
   const metal = m(item.color ?? def.color, "metal");
-  const line = m("#e9ecef", "plastic");
+  const line = m("#d4d8dc", "plastic");
   const R = Math.min(w, d) / 2;
   P.cyl(0, 0, h, 0, 0.04, metal);
   const armY = h - 0.12;
   // Four arms: two crossing bars along the diagonals of the square of lines, and their struts.
   for (const a of [Math.PI / 4, -Math.PI / 4]) P.box(0, armY - 0.012, armY + 0.012, 0, 2 * R * 0.98, 0.025, metal, a);
-  for (const a of [Math.PI / 4, -Math.PI / 4]) P.box(0, h - 0.5, h - 0.48, 0, 0.9, 0.02, metal, a, 0);
+  // Four struts from the pole up to the arms.
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2;
+    P.bar([0, h - 0.5, 0], [Math.sin(a) * R * 0.6, armY - 0.012, Math.cos(a) * R * 0.6], 0.015, metal);
+  }
   // Square rings of line, three sizes.
   for (const k of [0.4, 0.62, 0.85]) {
     const s = R * Math.SQRT1_2 * k * 2;
     for (const [x, z, ax] of [[0, s / 2, true], [0, -s / 2, true], [s / 2, 0, false], [-s / 2, 0, false]] as [number, number, boolean][]) {
-      P.box(x, armY - 0.005, armY + 0.003, z, ax ? s : 0.008, ax ? 0.008 : s, line);
+      P.box(x, armY - 0.007, armY + 0.005, z, ax ? s : 0.012, ax ? 0.012 : s, line);
     }
   }
 }

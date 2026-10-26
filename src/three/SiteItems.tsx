@@ -103,7 +103,7 @@ function blade(): THREE.BufferGeometry {
   const row = (i: number) => {
     const t = i / (rows - 1);
     const hw = 0.5 * (1 - 0.9 * t);
-    const z = 0.15 * t * t;
+    const z = 0.15 * t * t - 0.05;
     return [[-hw, t - 0.5, z], [hw, t - 0.5, z]];
   };
   const pos: number[] = [];
