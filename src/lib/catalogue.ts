@@ -80,6 +80,8 @@ export type Symbol =
   | "beanbag"
   | "beanbag-chair"
   | "wood-armchair"
+  | "corner-tv"
+  | "cube-shelves"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -161,6 +163,11 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "armchair", name: "Armchair", category: "Living", w: 0.90, d: 0.90, h: 0.85, color: "#9ab0c8", symbol: "sofa" },
   { id: "coffee-table", name: "Coffee table", category: "Living", w: 1.00, d: 0.50, h: 0.45, color: WOOD, symbol: "table" },
   { id: "tv-unit", name: "TV unit", category: "Living", w: 1.20, d: 0.40, h: 0.5, color: WOOD, symbol: "box" },
+  { id: "tv-unit-corner", name: "Corner TV unit", category: "Living", w: 1.2, d: 1.2, h: 0.5, color: WOOD, symbol: "corner-tv", note: "Fits into a room corner with a flat or curved front (set in the inspector); width and depth are the legs along the two walls. Put a TV on a stand on top, turned 45°" },
+  { id: "cube-2x2", name: "Cube shelving 2 × 2 (Kallax-style)", category: "Living", w: 0.77, d: 0.39, h: 0.77, color: PAINTED, symbol: "cube-shelves", note: "Open cubes 0.385 m square, no back; resize for more cubes" },
+  { id: "cube-2x4", name: "Cube shelving 2 × 4, wide (Kallax-style)", category: "Living", w: 1.47, d: 0.39, h: 0.77, color: PAINTED, symbol: "cube-shelves", note: "A low run of eight cubes; a TV or plants on top" },
+  { id: "cube-4x4", name: "Cube shelving 4 × 4 (Kallax-style)", category: "Living", w: 1.47, d: 0.39, h: 1.47, color: PAINTED, symbol: "cube-shelves", note: "Sixteen open cubes; works as a room divider" },
+  { id: "cube-1x4", name: "Cube shelving 1 × 4, tall (Kallax-style)", category: "Living", w: 0.42, d: 0.39, h: 1.47, color: PAINTED, symbol: "cube-shelves", note: "A single column of four cubes" },
   { id: "tv-wall", name: "TV, wall-mounted", category: "Living", w: 1.23, d: 0.08, h: 0.71, color: "#15171a", symbol: "tv-wall", mount: 1.0, note: "55 inch to start; pick the screen size in the inspector. Screen bottom 1 m up; set the height to suit your seating" },
   { id: "tv-stand", name: "TV on a stand", category: "Living", w: 1.23, d: 0.25, h: 0.76, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "55 inch to start; pick the screen size in the inspector. Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
   { id: "bookcase", name: "Bookcase", category: "Living", w: 0.80, d: 0.30, h: 1.8, color: WOOD, symbol: "shelves" },
@@ -308,6 +315,21 @@ export function hasSeatDepth(item: Pick<CatalogueItem, "symbol">): boolean {
  * Burner positions on a cooker or range top as fractions of its width and
  * depth from the centre: four on a 600 mm cooker, five on a range.
  */
+/** Pitch of the cubes in cube shelving, metres (a 385 mm cube plus a board). */
+export const CUBE = 0.385;
+/** Board thickness of cube shelving, metres. */
+export const CUBE_BOARD = 0.035;
+
+/** How many cubes across and up a cube-shelving unit of w × h metres has: one per 0.385 m, at least one each way. */
+export function cubeGrid(w: number, h: number): { cols: number; rows: number } {
+  return { cols: Math.max(1, Math.round(w / CUBE)), rows: Math.max(1, Math.round(h / CUBE)) };
+}
+
+/** Whether an item is a corner unit with a flat-or-curved front. */
+export function isCornerUnit(item: Pick<CatalogueItem, "symbol">): boolean {
+  return item.symbol === "corner-tv";
+}
+
 /** Screen sizes offered for a TV, inches across the diagonal. */
 export const TV_SIZES: readonly number[] = [32, 40, 43, 50, 55, 65, 75, 85];
 /** Height of the pedestal under a TV on a stand, metres (part of the item's height). */

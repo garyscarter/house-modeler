@@ -8,7 +8,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
-import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -688,6 +688,15 @@ export function FixtureInspector({
           </button>
         )}
       </div>
+      {isCornerUnit(item) && (
+        <label>
+          Front
+          <select value={fixture.front ?? "flat"} disabled={locked} onChange={(e) => onChange({ front: e.target.value === "curved" ? "curved" : undefined })}>
+            <option value="flat">Flat diagonal</option>
+            <option value="curved">Curved</option>
+          </select>
+        </label>
+      )}
       {hasSeatDepth(item) && (
         <div className="field">
           <span className="field-label">Seat depth (m)</span>

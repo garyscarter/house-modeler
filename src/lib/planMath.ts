@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import { isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
+import { isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
 import { EXT_WALL_T, WALL_T, polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -291,15 +291,35 @@ export function abutNeighbours(p: Placement, w: number, d: number, z0: number, z
 
 /** Corners of a w × d rectangle centred on c and rotated clockwise on the plan by rotDeg. */
 export function rectCorners(c: Pt, w: number, d: number, rotDeg: number): Pt[] {
+  return placeCorners(
+    c,
+    [
+      [-w / 2, -d / 2],
+      [w / 2, -d / 2],
+      [w / 2, d / 2],
+      [-w / 2, d / 2],
+    ],
+    rotDeg,
+  );
+}
+
+/** Local footprint points (x right, y down the plan, centred) turned by rotDeg and moved to c. */
+function placeCorners(c: Pt, pts: [number, number][], rotDeg: number): Pt[] {
   const r = (rotDeg * Math.PI) / 180;
   const cos = Math.cos(r);
   const sin = Math.sin(r);
-  return [
-    [-w / 2, -d / 2],
-    [w / 2, -d / 2],
-    [w / 2, d / 2],
-    [-w / 2, d / 2],
-  ].map(([x, y]) => ({ x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos }));
+  return pts.map(([x, y]) => ({ x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos }));
+}
+
+/**
+ * Footprint of a corner unit: the right angle at the back-left corner with legs along the back and the left side, and
+ * the front across the corner, a straight diagonal or (curved) an arc traced in a few steps. Convex either way.
+ */
+export function cornerCorners(c: Pt, w: number, d: number, rotDeg: number, front: "flat" | "curved" = "flat"): Pt[] {
+  const pts: [number, number][] = [[-w / 2, -d / 2]];
+  if (front === "curved") for (let i = 0; i <= 6; i++) pts.push([-w / 2 + w * Math.cos((i / 6) * (Math.PI / 2)), -d / 2 + d * Math.sin((i / 6) * (Math.PI / 2))]);
+  else pts.push([w / 2, -d / 2], [-w / 2, d / 2]);
+  return placeCorners(c, pts, rotDeg);
 }
 
 /** Whether two convex polygons overlap by more than eps (touching does not count). */
@@ -545,7 +565,8 @@ export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: 
     const item = lookup(fx.type);
     if (!item || isFloorCovering(item)) continue;
     const b = fixtureBox(fx, item);
-    out.push({ id: fx.id, corners: rectCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot), z0: b.z0, z1: b.z0 + b.h });
+    const corners = isCornerUnit(item) ? cornerCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot, fx.front) : rectCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot);
+    out.push({ id: fx.id, corners, z0: b.z0, z1: b.z0 + b.h });
   }
   return out;
 }

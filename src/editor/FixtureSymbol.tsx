@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, cornerArm, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
@@ -32,7 +32,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   clash?: boolean;
   ghost?: boolean;
   /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
-  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat">;
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);
@@ -519,6 +519,34 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         ...(hl ? [front(0.03 * m), front(0.06 * m), ...dividers(0.6, y1 - 0.06 * m, y1)] : [...dividers(0.6, y1 - 0.03 * m, y1), front(0.03 * m)]),
         ...[x0, x1 - t].map((x) => <rect key={`e${x}`} x={x} y={y0} width={t} height={d} fill={outline} fillOpacity={0.5} stroke="none" />),
       );
+    }
+    case "corner-tv": {
+      // Right angle at the back-left corner, legs along the back and the left wall, the front across the corner.
+      const curved = fixture?.front === "curved";
+      const path = curved ? `M${x0} ${y0} L${x1} ${y0} A${w} ${d} 0 0 1 ${x0} ${y1} Z` : `M${x0} ${y0} L${x1} ${y0} L${x0} ${y1} Z`;
+      const L = Math.hypot(w, d);
+      const ux = -w / L;
+      const uy = d / L;
+      // Door line inset from the front, and the joint between the two doors at its middle.
+      const ins = 0.03 * m;
+      const nx = d / L;
+      const ny = w / L;
+      const inset = curved ? 0.05 * m : ins;
+      const [mx, my] = [0 - nx * inset, 0 - ny * inset];
+      return g(
+        <path key="o" d={path} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} strokeLinejoin="round" />,
+        curved ? (
+          <path key="f" d={`M${x1 - inset} ${y0} A${w - inset} ${d - inset} 0 0 1 ${x0} ${y1 - inset}`} {...thin} />
+        ) : (
+          <line key="f" x1={mx - (ux * (L - 2 * ins)) / 2} y1={my - (uy * (L - 2 * ins)) / 2} x2={mx + (ux * (L - 2 * ins)) / 2} y2={my + (uy * (L - 2 * ins)) / 2} {...thin} />
+        ),
+        <line key="j" x1={mx} y1={my} x2={mx + nx * inset} y2={my + ny * inset} {...thin} />,
+      );
+    }
+    case "cube-shelves": {
+      // Open cubes: the vertical boards show from above, one per cube across.
+      const { cols } = cubeGrid(w / m, (fixture?.h ?? item.h));
+      return g(body(0), ...Array.from({ length: cols - 1 }, (_, i) => <line key={i} x1={x0 + ((i + 1) * w) / cols} y1={y0} x2={x0 + ((i + 1) * w) / cols} y2={y1} {...line} />), <line key="b" x1={x0} y1={y0 + 0.02 * m} x2={x1} y2={y0 + 0.02 * m} {...thin} />);
     }
     case "shelves":
       return g(body(0), front(0.02 * m), ...dividers(0.4, y0, y1));

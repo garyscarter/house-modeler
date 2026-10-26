@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
@@ -58,7 +58,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat)) {
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -86,7 +86,16 @@ const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
 /** Quarter of a unit-radius cylinder in the +x/+z quadrant, from the axis at its corner. */
 const QUARTER = new THREE.CylinderGeometry(1, 1, 1, 16, 1, false, 0, Math.PI / 2);
 const QUARTER_SHELL = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true, 0, Math.PI / 2);
-const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL };
+/** A right-triangle prism, the right angle on its axis at the corner, legs along +x and +z of unit length, unit height centred on y. */
+const WEDGE = (() => {
+  const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)]);
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
+  g.rotateX(Math.PI / 2);
+  g.translate(0, 0.5, 0);
+  // Indexed like the box and cylinder, so parts of one colour merge into a single geometry.
+  return mergeVertices(g);
+})();
+const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL, wedge: WEDGE };
 const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
@@ -158,7 +167,7 @@ const GLOW = "#fff1d6";
  * footprint on its base, y up, back towards -z (the top of the plan).
  * `mount` is the height of that base above the floor, for parts that reach down to it.
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery, seat?: number): Part[] {
+function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery, seat?: number, front?: "flat" | "curved"): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -517,6 +526,43 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       box(0, 0.42, 0, w - 0.1, 0.03, d - 0.1, oak, "satin");
       box(0, 0.49, 0.03, w - 0.12, 0.1, d - 0.16, color);
       lean(0, 0.72, -d / 2 + 0.12, w - 0.14, 0.4, 0.1, -0.15, color);
+      break;
+    }
+    case "corner-tv": {
+      // A low unit in the corner: right angle at the back-left, legs along the two walls, doors across the corner.
+      const curved = front === "curved";
+      const corner = (y0: number, y1: number, inset: number, c: string, f: Finish = "satin") =>
+        out.push({ g: curved ? "quarter" : "wedge", p: [-w / 2, (y0 + y1) / 2, -d / 2], s: [w - inset, y1 - y0, d - inset], c, f });
+      corner(0, 0.1, 0.06, PLINTH, "matt");
+      corner(0.1, h - 0.03, 0.01, color);
+      corner(h - 0.03, h, -0.02, shade(color, 1.05));
+      const L = Math.hypot(w, d);
+      const ang = Math.atan2(d, w);
+      const nx = d / L;
+      const nz = w / L;
+      const yc = (0.12 + h - 0.05) / 2;
+      const dh = h - 0.17;
+      if (curved) {
+        // One joint line down the middle of the curved front.
+        const t = Math.PI / 4;
+        turn(-w / 2 + (w - 0.005) * Math.cos(t), yc, -d / 2 + (d - 0.005) * Math.sin(t), 0.006, dh, 0.012, ang, DARK);
+      } else {
+        // Two doors across the diagonal, a joint between them and a handle on each.
+        turn(nx * 0.01, yc, nz * 0.01, L - 0.04, dh, 0.02, ang, color, "satin");
+        turn(nx * 0.021, yc, nz * 0.021, 0.006, dh - 0.02, 0.012, ang, DARK);
+        for (const s of [-1, 1]) turn(nx * 0.032 + s * (w / L) * 0.08, h - 0.1, nz * 0.032 - s * (d / L) * 0.08, 0.12, 0.012, 0.02, ang, CHROME, "metal");
+      }
+      break;
+    }
+    case "cube-shelves": {
+      // Open cubes with no back: outer frame, vertical boards between columns, shelves between rows.
+      const { cols, rows } = cubeGrid(w, h);
+      const t = CUBE_BOARD;
+      box(0, t / 2, 0, w, t, d, color, "satin");
+      box(0, h - t / 2, 0, w, t, d, color, "satin");
+      for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), h / 2, 0, t, h - 2 * t, d, color, "satin");
+      for (let i = 1; i < cols; i++) box(-w / 2 + (i * w) / cols, h / 2, 0, t, h - 2 * t, d - 0.01, color, "satin");
+      for (let i = 1; i < rows; i++) box(0, (i * h) / rows, 0, w - 2 * t, t, d - 0.01, color, "satin");
       break;
     }
     case "pouf":

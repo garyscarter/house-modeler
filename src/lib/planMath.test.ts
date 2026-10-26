@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  svgPoints,
+import { svgPoints,
   fixtureBox,
   areaM2,
   axisRect,
@@ -39,6 +38,7 @@ import {
   zoomCam,
   type Seg,
   type WallLine,
+  cornerCorners,
 } from "./planMath";
 import { floor, rect } from "./testing";
 import type { CatalogueItem } from "./catalogue";
@@ -499,5 +499,25 @@ describe("openings on an edge", () => {
     const f = floor([rect("R", 0, 0, 300, 400)], [door, far]);
     expect(openingsOnEdge(f, "R", 0, 13).map((o) => o.id)).toEqual(["d"]);
     expect(openingsOnEdge(f, "R", 2, 13)).toEqual([]);
+  });
+});
+
+describe("cornerCorners", () => {
+  it("is a triangle with the right angle at the back-left corner, turned with the unit", () => {
+    const c = cornerCorners({ x: 0, y: 0 }, 100, 100, 0);
+    expect(c).toHaveLength(3);
+    expect(c[0]).toEqual({ x: -50, y: -50 });
+    expect(c[1].x).toBeCloseTo(50);
+    expect(c[2].y).toBeCloseTo(50);
+    const turned = cornerCorners({ x: 0, y: 0 }, 100, 100, 90);
+    expect(turned[0].x).toBeCloseTo(50);
+    expect(turned[0].y).toBeCloseTo(-50);
+  });
+  it("traces a curved front with a few steps, ending on the two walls", () => {
+    const c = cornerCorners({ x: 0, y: 0 }, 100, 100, 0, "curved");
+    expect(c.length).toBeGreaterThan(5);
+    expect(c[1].x).toBeCloseTo(50);
+    expect(c[c.length - 1].x).toBeCloseTo(-50);
+    expect(c[c.length - 1].y).toBeCloseTo(50);
   });
 });

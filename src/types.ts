@@ -362,6 +362,8 @@ export interface Fixture {
   mount?: number;
   /** Seat depth in metres of an L-shaped sofa (corner and chaise sofas): how deep the seating runs are. Default from the sofa's size. */
   seat?: number;
+  /** Corner units: the face across the corner, a flat diagonal (default) or a curve. */
+  front?: "flat" | "curved";
   color?: string;
   /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
   worktop?: string;

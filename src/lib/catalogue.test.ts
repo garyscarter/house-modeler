@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, cubeGrid, isCornerUnit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -181,5 +181,18 @@ describe("hobs, hoods and bean bags", () => {
     expect(byId("glass-hood")?.mount).toBeGreaterThan(1.4);
     expect(SIX_RINGS).toHaveLength(6);
     expect(VENTED_ZONES).toHaveLength(4);
+  });
+});
+
+describe("corner TV unit and cube shelving", () => {
+  it("lists them under Living and counts cubes from the size", () => {
+    expect(byId("tv-unit-corner")?.symbol).toBe("corner-tv");
+    expect(isCornerUnit(byId("tv-unit-corner")!)).toBe(true);
+    expect(isCornerUnit(byId("tv-unit")!)).toBe(false);
+    for (const id of ["cube-2x2", "cube-2x4", "cube-4x4", "cube-1x4"]) expect(byId(id)?.category, id).toBe("Living");
+    expect(cubeGrid(0.77, 0.77)).toEqual({ cols: 2, rows: 2 });
+    expect(cubeGrid(1.47, 0.77)).toEqual({ cols: 4, rows: 2 });
+    expect(cubeGrid(0.42, 1.47)).toEqual({ cols: 1, rows: 4 });
+    expect(cubeGrid(0.1, 0.1)).toEqual({ cols: 1, rows: 1 });
   });
 });
