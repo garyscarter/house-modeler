@@ -88,6 +88,32 @@ export function houseDoorColour(op: Pick<Opening, "kind" | "color">, ext: { fron
   return undefined;
 }
 
+/** Painted internal woodwork (linings, architraves, window boards) unless an opening says otherwise. */
+export const DEFAULT_LINING = "#f3f1ea";
+
+/**
+ * The opening with each side's leaf and lining coloured like the room it faces,
+ * where matchFront / matchBack ask for it and there is a room (`front`, `back`
+ * are the rooms' wall colours). A lining colour set by hand is kept; an
+ * unmatched back lining keeps the front's own lining colour, not the match.
+ */
+export function withRoomWallColours<T extends Pick<Opening, "color" | "backColor" | "liningColor" | "backLiningColor" | "matchFront" | "matchBack">>(op: T, front?: string, back?: string): T {
+  const f = op.matchFront && front ? front : undefined;
+  const b = op.matchBack && back ? back : undefined;
+  if (!f && !b) return op;
+  const o = { ...op };
+  if (f) {
+    o.color = f;
+    o.liningColor = op.liningColor ?? f;
+    if (!b) o.backLiningColor = op.backLiningColor ?? op.liningColor ?? DEFAULT_LINING;
+  }
+  if (b) {
+    o.backColor = b;
+    o.backLiningColor = op.backLiningColor ?? b;
+  }
+  return o;
+}
+
 /** The opening with the house's door colour filled in where it applies (see houseDoorColour). */
 export function withHouseDoorColour<T extends Pick<Opening, "kind" | "color">>(op: T, ext: { frontDoorColor?: string; backDoorColor?: string }, external: boolean): T {
   const color = houseDoorColour(op, ext, external);
