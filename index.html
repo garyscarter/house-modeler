@@ -14,10 +14,26 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <style>html,body{margin:0;height:100%;background:#eef0ec}.splash{height:100vh;height:100dvh;display:grid;place-content:center;justify-items:center;gap:14px;color:#6a736f;font:14px system-ui,sans-serif}</style>
+    <!-- The splash before the app's script runs: the Storey mark drawn as a blueprint, the same animation
+         as components/Loader.tsx "blueprint" (keep the two in step). scripts/build-hosted.mjs copies this style and the
+         root div into the hosted page. -->
+    <style>
+      html,body{margin:0;height:100%;background:#eef0ec}
+      .splash{height:100vh;height:100dvh;display:grid;place-content:center;justify-items:center;gap:14px;color:#5f6864;font:14px system-ui,sans-serif}
+      .splash svg{color:#0f6e66;overflow:visible}
+      .splash .sp-part{fill:currentColor;fill-opacity:0;stroke:currentColor;stroke-width:2.4;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:sp-blueprint 2.2s ease-in-out infinite both}
+      .splash .sp-first{animation-delay:.12s}
+      .splash .sp-roof{animation-delay:.24s}
+      @keyframes sp-blueprint{0%{stroke-dashoffset:1;fill-opacity:0;opacity:1}45%{stroke-dashoffset:0;fill-opacity:0}62%,82%{stroke-dashoffset:0;fill-opacity:1;opacity:1}96%,100%{stroke-dashoffset:0;fill-opacity:1;opacity:0}}
+      @media (prefers-reduced-motion:reduce){
+        .splash .sp-part{animation:none;opacity:1;stroke-dashoffset:0;fill-opacity:1}
+        .splash svg{animation:sp-pulse 2.4s ease-in-out infinite}
+        @keyframes sp-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+      }
+    </style>
   </head>
   <body>
-    <div id="root"><div class="splash"><svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true" style="color:#0f6e66" fill="currentColor"><path d="M14 45H50Q52 45 52 47V53Q52 55 50 55H14Q12 55 12 53V47Q12 45 14 45Z"/><path d="M14 31H50Q52 31 52 33V39Q52 41 50 41H14Q12 41 12 39V33Q12 31 14 31Z"/><path d="M10 27L32 9L54 27Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>Opening your project</div></div>
+    <div id="root"><div class="splash"><svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><path class="sp-part sp-ground" pathLength="1" d="M14 45H50Q52 45 52 47V53Q52 55 50 55H14Q12 55 12 53V47Q12 45 14 45Z"/><path class="sp-part sp-first" pathLength="1" d="M14 31H50Q52 31 52 33V39Q52 41 50 41H14Q12 41 12 39V33Q12 31 14 31Z"/><path class="sp-part sp-roof" pathLength="1" d="M10 27L32 9L54 27Z"/></svg>Opening your project</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
