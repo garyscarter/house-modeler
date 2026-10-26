@@ -49,10 +49,12 @@ interface HandlesProps {
   onRotateDown: Down;
   onResizeDown: (e: React.PointerEvent<SVGElement>, handle: "spread" | "w" | "d") => void;
   onEndDown: (e: React.PointerEvent<SVGElement>, end: "from" | "to") => void;
+  /** A finger: bigger hit areas, so small items drop their resize handles sooner. */
+  touch?: boolean;
 }
 
 /** The handles of one selected item: a run's two ends; otherwise a rotate knob and the resize handles. */
-export function ItemHandles({ item, px, onRotateDown, onResizeDown, onEndDown }: HandlesProps) {
+export function ItemHandles({ item, px, onRotateDown, onResizeDown, onEndDown, touch }: HandlesProps) {
   if (item.to) {
     return (
       <g>
@@ -62,7 +64,10 @@ export function ItemHandles({ item, px, onRotateDown, onResizeDown, onEndDown }:
     );
   }
   const { w, d } = itemSize(item);
-  const kind = resizeKind(item);
+  // Resize handles sit just outside the edge so the body stays grabbable, and are left out while the item is too small
+  // on screen for them not to cover it (zoom in, or type the size in the inspector).
+  const off = 10 * px;
+  const kind = Math.min(w, d) / px < (touch ? 56 : 24) ? "none" : resizeKind(item);
   const back: WPt = fromLocal(item, { x: 0, y: -d / 2 });
   const knob: WPt = fromLocal(item, { x: 0, y: -d / 2 - 30 * px });
   return (
@@ -73,11 +78,11 @@ export function ItemHandles({ item, px, onRotateDown, onResizeDown, onEndDown }:
           <Handle at={knob} px={px} r={6} hit={13} className="site-handle site-rot" title="Rotate (Shift: free)" onPointerDown={onRotateDown} />
         </>
       )}
-      {kind === "spread" && <Handle at={fromLocal(item, { x: w / 2, y: 0 })} px={px} r={5} hit={11} className="site-handle" title="Spread" onPointerDown={(e) => onResizeDown(e, "spread")} />}
+      {kind === "spread" && <Handle at={fromLocal(item, { x: w / 2 + off, y: 0 })} px={px} r={5} hit={11} className="site-handle" title="Spread" onPointerDown={(e) => onResizeDown(e, "spread")} />}
       {kind === "rect" && (
         <>
-          <Handle at={fromLocal(item, { x: w / 2, y: 0 })} px={px} r={5} hit={11} className="site-handle" title="Width" onPointerDown={(e) => onResizeDown(e, "w")} />
-          <Handle at={fromLocal(item, { x: 0, y: d / 2 })} px={px} r={5} hit={11} className="site-handle" title="Depth" onPointerDown={(e) => onResizeDown(e, "d")} />
+          <Handle at={fromLocal(item, { x: w / 2 + off, y: 0 })} px={px} r={5} hit={11} className="site-handle" title="Width" onPointerDown={(e) => onResizeDown(e, "w")} />
+          <Handle at={fromLocal(item, { x: 0, y: d / 2 + off })} px={px} r={5} hit={11} className="site-handle" title="Depth" onPointerDown={(e) => onResizeDown(e, "d")} />
         </>
       )}
     </g>

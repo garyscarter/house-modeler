@@ -310,7 +310,10 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
       else if (garden && k === "r") pick("surface");
       else if (garden && k === "c") pick("circle");
       else if (garden && k === "p") pick("polygon");
-      else if (garden && k === "a") setAddOpen((v) => !v);
+      else if (garden && k === "a") {
+        e.preventDefault(); // or the search box would take the letter
+        setAddOpen((v) => !v);
+      }
       else if (!garden && k === "b") pick("neighbour");
       else if (garden && (k === "q" || k === "e") && itemIds.length) updateSite((st) => rotateItems(st, itemIds, k === "e" ? 15 : -15));
       else if (k === "f") camera.fit();
@@ -353,7 +356,10 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
             label: "Add to the garden",
             shortcut: "A",
             active: addOpen || tool === "place" || tool === "run",
-            onClick: () => setAddOpen(!addOpen),
+            onClick: () => {
+              if (!addOpen && chassis === "phone") lowerSheet(); // the picker sits above the sheet's peek, so the sheet must be down
+              setAddOpen(!addOpen);
+            },
             extra: (
               <AddPopover open={addOpen} onOpenChange={setAddOpen}>
                 <GardenPicker activeId={armed?.id} onPick={pickGarden} />
@@ -391,7 +397,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
                 <SiteWorld site={site} mode={mode} sel={psel} tool={tool} px={px} outlines={outlines} walls={walls} clearances={clearances} onItemDown={itemDown} />
                 <GardenItems site={site} selected={selectedIds} px={px} interactive={garden} onDown={gardenItemDown} />
                 {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!selSurface?.smooth} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
-                {garden && tool === "select" && oneItem && !peeking && <ItemHandles item={oneItem} px={px} onRotateDown={(e) => rotateDown(e, oneItem.id)} onResizeDown={(e, h) => resizeDown(e, oneItem.id, h)} onEndDown={(e, end) => endDown(e, oneItem.id, end)} />}
+                {garden && tool === "select" && oneItem && !peeking && <ItemHandles item={oneItem} px={px} touch={touch} onRotateDown={(e) => rotateDown(e, oneItem.id)} onResizeDown={(e, h) => resizeDown(e, oneItem.id, h)} onEndDown={(e, end) => endDown(e, oneItem.id, end)} />}
                 {armedItem && armed && <PlacementGhost def={armed} item={armedItem} px={px} />}
                 {armed?.run && runStart && <RunDraftView from={runStart} to={hover ? grid(hover) : null} px={px} />}
                 {runGhost && armed && <PlacementGhost def={armed} item={runGhost} px={px} />}
