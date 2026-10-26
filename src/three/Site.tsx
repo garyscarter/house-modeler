@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { BoundaryEdge, HouseModel, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
+import type { BoundaryEdge, HouseModel, KerbStyle, Neighbour, Site, SiteSurface, SurfaceKind } from "../types";
 import { useStore } from "../store";
 import { usePanelPrefs } from "../components/panelPrefs";
 import { useViewedSite } from "./viewedVariant";
@@ -12,6 +12,8 @@ import { clipSegmentOutside, edgesOf } from "../lib/site";
 import { metricUvs } from "../lib/neighbourUv";
 import { effectiveSlope, slopeHeight } from "../lib/surfaceSlope";
 import { surfaceLook } from "../lib/surfaceFinish";
+import { surfaceOutline } from "../lib/surfaceCurve";
+import { KERBS, kerbOf } from "../lib/gardenCatalogue";
 import { boundaryWallSegments, wallAt, type WallSegment } from "../lib/wallSteps";
 import { triangles } from "./geometryUtil";
 import { membraneTexture, tileTextures } from "./roofTextures";
@@ -155,35 +157,140 @@ function useDisposeAll(list: (THREE.BufferGeometry | null | undefined)[]) {
 }
 const useDispose = (g: THREE.BufferGeometry | null) => useEffect(() => () => g?.dispose(), [g]);
 
-/** A flat surface, or one lifted and ramped by its slope, with a kerb-coloured edge where it stands proud of the ground. */
+/**
+ * A flat surface, or one lifted and ramped by its slope, drawn to its outline (smooth or straight). Where it
+ * stands proud of the ground its sides take the kerb's material (brick round a raised bed by default), and a
+ * lawn or bed kerb that stands up adds a band round the edge; a flush kerb shows as a strip.
+ */
 function Surface({ surface }: { surface: SiteSurface }) {
   const layer = LAYER[surface.kind];
   const slope = effectiveSlope(surface.slope);
+  const outline = useMemo(() => surfaceOutline(surface), [surface.polygon, surface.smooth]); // eslint-disable-line react-hooks/exhaustive-deps
+  const kerb = kerbOf(surface);
+  // A surface lifted clear of the ground needs no depth offset against the layers below, which would only
+  // let its edge show through the face of its kerb.
+  const raised = (slope?.base ?? 0) > 0.02;
+  // Under a kerb the surface stops at the kerb's inner edge (so it can't show through the kerb's face).
+  const inset = kerb.style === "none" ? 0 : KERBS[kerb.style].width;
   const geom = useMemo(() => {
-    const g = new THREE.ShapeGeometry(flatShape(surface.polygon));
+    const g = new THREE.ShapeGeometry(flatShape(inset > 0 && outline.length >= 3 ? insetOutline(outline, inset, area2(outline) >= 0 ? 1 : -1).inner : outline));
     if (!slope) return g;
     // Shape space is (x, -z, 0) and the mesh is turned flat, so a vertex's local z becomes its height.
     const pos = g.getAttribute("position");
-    for (let i = 0; i < pos.count; i++) pos.setZ(i, slopeHeight(surface.polygon, slope, { x: pos.getX(i), y: -pos.getY(i) }));
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, slopeHeight(outline, slope, { x: pos.getX(i), y: -pos.getY(i) }));
     pos.needsUpdate = true;
     g.computeVertexNormals();
     return g;
-  }, [surface.polygon, slope?.toward, slope?.rise, slope?.base]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [outline, inset, slope?.toward, slope?.rise, slope?.base]); // eslint-disable-line react-hooks/exhaustive-deps
   const edge = useMemo(
-    () => (slope ? surfaceEdge(surface.polygon, (p) => slopeHeight(surface.polygon, slope, p), 0.01 * layer + 0.02) : null),
-    [surface.polygon, slope?.toward, slope?.rise, slope?.base, layer], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (slope ? surfaceEdge(outline, (p) => slopeHeight(outline, slope, p), 0.01 * layer + 0.02) : null),
+    [outline, slope?.toward, slope?.rise, slope?.base, layer], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const line = useMemo(() => (surface.kind === "road" ? centreLine(surface.polygon) : null), [surface.polygon, surface.kind]);
+  const band = useMemo(
+    () => (kerb.style === "none" ? null : kerbBand(outline, (p) => (slope ? slopeHeight(outline, slope, p) : 0), KERBS[kerb.style].width, kerb.height)),
+    [outline, slope?.toward, slope?.rise, slope?.base, kerb.style, kerb.height], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const line = useMemo(() => (surface.kind === "road" ? centreLine(outline) : null), [outline, surface.kind]);
   useDispose(geom);
   useDispose(edge);
+  useDispose(band);
   useDispose(line);
+  const sides = kerb.style !== "none" ? kerbMaterial(kerb.style) : surface.kind === "bed" && !surface.kerb ? surfaceMaterial("brick") : plainMaterial("#a19e96");
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
-      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surfaceLook(surface), layer)} receiveShadow />
-      {edge && <mesh geometry={edge} material={surface.kind === "bed" ? surfaceMaterial("brick") : plainMaterial("#a19e96")} castShadow receiveShadow />}
+      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surfaceLook(surface), raised ? 0 : layer)} receiveShadow />
+      {edge && <mesh geometry={edge} material={sides} castShadow receiveShadow />}
+      {band && <mesh geometry={band} material={kerbMaterial(kerb.style)} castShadow receiveShadow />}
       {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );
+}
+
+/** The material of a kerb style's band and of the raised sides it edges. */
+function kerbMaterial(style: KerbStyle): THREE.Material {
+  if (style === "brick" || style === "sleeper" || style === "corten" || style === "render") return surfaceMaterial(style);
+  return plainMaterial("#a19e96");
+}
+
+/**
+ * An outline moved `width` inwards: each edge's inward unit normal and a mitred inner point at each corner
+ * (capped at sharp ones). `sgn` is 1 for an anticlockwise outline, -1 for clockwise.
+ */
+function insetOutline(poly: V2[], width: number, sgn: number): { inward: V2[]; inner: V2[] } {
+  const n = poly.length;
+  // Inward unit normal of each edge (i → i+1), then a mitred inner point at each corner (capped on sharp ones).
+  const inward = poly.map((a, i) => {
+    const b = poly[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: (-(b.y - a.y) / len) * sgn, y: ((b.x - a.x) / len) * sgn };
+  });
+  const inner = poly.map((p, i) => {
+    const n0 = inward[(i - 1 + n) % n];
+    const n1 = inward[i];
+    let mx = n0.x + n1.x;
+    let my = n0.y + n1.y;
+    const ml = Math.hypot(mx, my) || 1;
+    mx /= ml;
+    my /= ml;
+    const k = width / Math.max(0.35, mx * n1.x + my * n1.y);
+    return { x: p.x + mx * k, y: p.y + my * k };
+  });
+  return { inward, inner };
+}
+
+/** Signed area (anticlockwise positive) of a plan polygon, twice over. */
+function area2(poly: V2[]): number {
+  let a = 0;
+  poly.forEach((p, i) => {
+    const q = poly[(i + 1) % poly.length];
+    a += p.x * q.y - q.x * p.y;
+  });
+  return a;
+}
+
+/**
+ * A kerb band round a surface's edge, in the surface's local frame: `width` wide inside the outline, its
+ * outer face flush with the edge, standing `up` metres above the surface top there (`height(p)`); a flush kerb
+ * (`up` 0) is a strip a few millimetres proud. Outer face, top and (when it stands up) inner face, UVs in
+ * metres with v following height so courses stay level.
+ */
+function kerbBand(poly: V2[], height: (p: V2) => number, width: number, up: number): THREE.BufferGeometry | null {
+  const n = poly.length;
+  if (n < 3 || width <= 0) return null;
+  const { inward, inner } = insetOutline(poly, width, area2(poly) >= 0 ? 1 : -1);
+  const lift = up > 0 ? up : 0.006;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  /** A quad (four corners, world-local x, y, z) wound to face along `want`. */
+  const quad = (q: number[][], t: number[][], want: number[]) => {
+    const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]];
+    const e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
+    const nn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const ok = nn[0] * want[0] + nn[1] * want[1] + nn[2] * want[2] >= 0;
+    for (const k of ok ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2]) {
+      pos.push(...q[k]);
+      uv.push(...t[k]);
+    }
+  };
+  let run = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const a = poly[i], b = poly[j], ai = inner[i], bi = inner[j];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const ha = height(a), hb = height(b), hai = height(ai), hbi = height(bi);
+    const ta = ha + lift, tb = hb + lift;
+    const u0 = run, u1 = run + len;
+    const nin = inward[i];
+    const out = [-nin.x, 0, -nin.y];
+    // Outer face, down a little into the ground (or onto the raised side below it).
+    quad([[a.x, ha - 0.03, a.y], [b.x, hb - 0.03, b.y], [b.x, tb, b.y], [a.x, ta, a.y]], [[u0, ha - 0.03], [u1, hb - 0.03], [u1, tb], [u0, ta]], out);
+    // Top.
+    quad([[a.x, ta, a.y], [b.x, tb, b.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[u0, 0], [u1, 0], [u1, width], [u0, width]], [0, 1, 0]);
+    // Inner face, from the surface up to the top.
+    if (up > 0) quad([[ai.x, hai, ai.y], [bi.x, hbi, bi.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[u0, hai], [u1, hbi], [u1, hbi + lift], [u0, hai + lift]], [nin.x, 0, nin.y]);
+    run = u1;
+  }
+  return pos.length ? triangles(pos, uv) : null;
 }
 
 /**

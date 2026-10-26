@@ -7,7 +7,7 @@ import { rng } from "./textures";
  * a canvas and shared by every viewer. Each covers `metres` of ground, so a
  * geometry with UVs in metres sets repeat to 1 / metres.
  */
-export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen";
+export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen" | "sleeper" | "corten" | "render";
 
 export interface SiteTexture {
   map: THREE.Texture;
@@ -285,6 +285,66 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
         g.restore();
       }
       metres = 0.29;
+      break;
+    }
+    case "sleeper": {
+      // Railway-style timber sleepers laid on edge, 200 mm courses, joints staggered every 1.2 m.
+      const rows = 6;
+      const h = SIZE / rows;
+      for (let j = 0; j < rows; j++) {
+        const l = 26 + r() * 8;
+        g.fillStyle = hsl(26, 28, l);
+        g.fillRect(0, j * h, SIZE, h);
+        // Grain and cracks along the sleeper.
+        for (let k = 0; k < 26; k++) {
+          g.strokeStyle = r() < 0.7 ? `rgba(30,18,8,${0.1 + r() * 0.2})` : `rgba(255,235,210,${0.05 + r() * 0.06})`;
+          g.lineWidth = 1 + r() * 1.5;
+          g.beginPath();
+          const y = j * h + 4 + r() * (h - 8);
+          const x0 = r() * SIZE;
+          g.moveTo(x0, y);
+          g.lineTo(x0 + 60 + r() * 200, y + (r() - 0.5) * 3);
+          g.stroke();
+        }
+        // Gap between courses and a butt joint, alternate rows offset.
+        g.fillStyle = "rgba(15,10,6,0.75)";
+        g.fillRect(0, j * h, SIZE, 3);
+        g.fillRect(((j % 2) * SIZE) / 2, j * h, 4, h);
+      }
+      speckle(g, r, 2500, 0.06, 0.15);
+      metres = 1.2;
+      break;
+    }
+    case "corten": {
+      // Weathering steel: rust orange-brown in soft blotches and streaks.
+      g.fillStyle = hsl(20, 58, 30);
+      g.fillRect(0, 0, SIZE, SIZE);
+      for (let i = 0; i < 400; i++) {
+        g.fillStyle = hsl(14 + r() * 16, 50 + r() * 25, 22 + r() * 18, 0.25);
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 10 + r() * 40, 6 + r() * 24, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let i = 0; i < 60; i++) {
+        g.fillStyle = `rgba(40,18,8,${0.08 + r() * 0.1})`;
+        g.fillRect(r() * SIZE, r() * SIZE, 2 + r() * 3, 30 + r() * 120);
+      }
+      speckle(g, r, 6000, 0.08, 0.2);
+      metres = 1;
+      break;
+    }
+    case "render": {
+      // Pale rendered blockwork: off-white with a fine sand texture and faint patches.
+      g.fillStyle = hsl(42, 18, 86);
+      g.fillRect(0, 0, SIZE, SIZE);
+      for (let i = 0; i < 90; i++) {
+        g.fillStyle = `rgba(120,110,90,${0.02 + r() * 0.04})`;
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 20 + r() * 70, 15 + r() * 50, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      speckle(g, r, 9000, 0.12, 0.1);
+      metres = 2;
       break;
     }
     case "hedge": {
