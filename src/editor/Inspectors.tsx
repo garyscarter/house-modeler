@@ -8,6 +8,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
+import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../lib/art";
 import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
@@ -302,6 +303,67 @@ export function CanopyInspector({
         Delete canopy
       </button>
     </div>
+  );
+}
+
+/** Print, size, orientation and frame of a framed picture. */
+function PictureFields({ fixture, item, locked, onChange }: { fixture: Fixture; item: CatalogueItem; locked?: boolean; onChange: (p: Partial<Fixture>) => void }) {
+  const w = fixture.w ?? item.w;
+  const h = fixture.h ?? item.h;
+  const std = pictureSizeOf(w, h);
+  const orientation: Orientation = std?.orientation ?? (h >= w ? "portrait" : "landscape");
+  const turn = (o: Orientation) => {
+    if (o === orientation) return;
+    onChange({ w: h, h: w });
+  };
+  return (
+    <>
+      <label>
+        Print
+        <select value={fixture.print ?? PRINTS[0].id} disabled={locked} onChange={(e) => onChange({ print: e.target.value })}>
+          {PRINTS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Size
+        <select
+          value={std?.id ?? "custom"}
+          disabled={locked}
+          onChange={(e) => {
+            const size = pictureSize(e.target.value, orientation);
+            if (size) onChange(size);
+          }}
+        >
+          {PICTURE_SIZES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+          {!std && <option value="custom">Custom ({(w * 100).toFixed(0)} × {(h * 100).toFixed(0)} cm)</option>}
+        </select>
+      </label>
+      <label>
+        Hung
+        <select value={orientation} disabled={locked} onChange={(e) => turn(e.target.value as Orientation)}>
+          <option value="portrait">Portrait (tall)</option>
+          <option value="landscape">Landscape (wide)</option>
+        </select>
+      </label>
+      <label>
+        Frame
+        <select value={fixture.frame ?? "black"} disabled={locked} onChange={(e) => onChange({ frame: e.target.value as PictureFrame })}>
+          {(Object.keys(FRAME_LABEL) as PictureFrame[]).map((k) => (
+            <option key={k} value={k}>
+              {FRAME_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }
 
@@ -688,6 +750,7 @@ export function FixtureInspector({
           </button>
         )}
       </div>
+      {isPicture(item) && <PictureFields fixture={fixture} item={item} locked={locked} onChange={onChange} />}
       {isCornerUnit(item) && (
         <label>
           Front

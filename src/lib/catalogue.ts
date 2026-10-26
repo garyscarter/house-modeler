@@ -84,6 +84,7 @@ export type Symbol =
   | "cube-shelves"
   | "table-lamp"
   | "desk-lamp"
+  | "picture"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -189,6 +190,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "coffee-table-round", name: "Coffee table (round)", category: "Living", w: 0.90, d: 0.90, h: 0.38, color: "#d9cfc0", symbol: "round-table", note: "Stone top on a drum pedestal" },
   { id: "side-table-round", name: "Side table (round)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: "#2b2b2b", symbol: "round-table" },
   { id: "media-unit", name: "Media unit (floating)", category: "Living", w: 1.80, d: 0.40, h: 0.40, color: WALNUT, symbol: "media-unit", mount: 0.25, note: "Wall-hung, fluted handleless fronts" },
+  { id: "picture", name: "Picture (framed print)", category: "Living", w: 0.42, d: 0.03, h: 0.594, color: "#1b1b1b", symbol: "picture", mount: 1.2, note: "Hang it on a wall: pick the print, a standard size, portrait or landscape and the frame in the inspector; the height above the floor is the bottom edge" },
   { id: "table-lamp", name: "Table lamp (drum shade)", category: "Living", w: 0.35, d: 0.35, h: 0.55, color: "#f1ece2", symbol: "table-lamp", mount: 0.55, note: "Sits on a side table or sideboard: set the height above the floor to the top of whatever it stands on (0.55 m side table, 0.8 m sideboard)" },
   { id: "floor-lamp", name: "Floor lamp", category: "Living", w: 0.40, d: 0.40, h: 1.60, color: "#f1ece2", symbol: "floor-lamp", note: "Linen drum shade on a slim black stem" },
   { id: "rug-large", name: "Rug (200 × 300)", category: "Living", w: 3.00, d: 2.00, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },

@@ -229,6 +229,9 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <ellipse key="o" cx={0} cy={d * 0.06} rx={w / 2} ry={d * 0.44} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
         <path key="b" d={`M${x0} ${y0 + d * 0.2} A${w / 2} ${d * 0.3} 0 0 1 ${x1} ${y0 + d * 0.2}`} {...line} />,
       );
+    case "picture":
+      // Hung on the wall: the frame as a thin dashed rectangle with a cross for the glass.
+      return g(body(0), <line key="a" x1={x0 + 0.03 * m} y1={y0} x2={x1 - 0.03 * m} y2={y1} {...thin} />);
     case "desk-lamp":
       // Base at the back, the head reaching forward over the desk.
       return g(

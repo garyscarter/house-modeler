@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { Floor } from "../types";
+import type { Fixture, Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, type CatalogueItem, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
+import { FRAME_COLOUR, FRAME_W, isPicture, type PictureFrame } from "../lib/art";
+import { artTexture } from "./artTextures";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
@@ -28,6 +30,30 @@ export function Fixtures({ floor, ceiling }: { floor: Floor; ceiling: number }) 
       {meshes.map((m) => (
         <mesh key={m.key} geometry={m.geometry} material={m.material} castShadow={m.castShadow} receiveShadow />
       ))}
+      {(floor.fixtures ?? []).map((f) => {
+        const item = byId(f.type);
+        return item && isPicture(item) ? <PrintFace key={f.id} floor={floor} fixture={f} item={item} ceiling={ceiling} /> : null;
+      })}
+    </group>
+  );
+}
+
+/** The printed face of a picture: a textured plane just in front of the frame's backing, inside the moulding. */
+function PrintFace({ floor, fixture: f, item, ceiling }: { floor: Floor; fixture: Fixture; item: CatalogueItem; ceiling: number }) {
+  const b = fixtureBox(f, item, ceiling);
+  const p = toWorld(floor, { x: f.x, y: f.y });
+  const frame: PictureFrame = f.frame ?? "black";
+  const fw = FRAME_W[frame];
+  const w = Math.max(0.02, b.w - 2 * fw);
+  const h = Math.max(0.02, b.h - 2 * fw);
+  const texture = useMemo(() => artTexture(f.print, w, h), [f.print, w, h]);
+  const geometry = useMemo(() => new THREE.PlaneGeometry(w, h), [w, h]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 }), [texture]);
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <group position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
+      <mesh geometry={geometry} material={material} position={[0, b.h / 2, b.d / 2 + 0.001]} />
     </group>
   );
 }
@@ -58,7 +84,8 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f))) {
+    const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : (f.color ?? item.color);
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -179,6 +206,7 @@ function fixtureParts(
   seat?: number,
   front?: "flat" | "curved",
   ends = { endBack: 0, endSide: 0 },
+  frame?: PictureFrame,
 ): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
@@ -604,6 +632,18 @@ function fixtureParts(
       cyl(0, (h - 0.3) / 2, 0, 0.022, h - 0.3, DARK, "metal");
       drum(h - 0.33, h, shadeD, shadeD, color);
       drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      break;
+    }
+    case "picture": {
+      // A backing board against the wall and the moulding around it (a canvas: a deep stretcher wrapped by the print);
+      // the print itself is a textured plane drawn by PrintFace.
+      const fw = FRAME_W[frame ?? "black"];
+      if (fw > 0) {
+        box(0, h / 2, 0, w - 2 * fw, h - 2 * fw, d - 0.006, "#e8e4da", "matt");
+        box(0, h - fw / 2, 0, w, fw, d, color, "satin");
+        box(0, fw / 2, 0, w, fw, d, color, "satin");
+        for (const sx of [-1, 1]) box(sx * (w / 2 - fw / 2), h / 2, 0, fw, h - 2 * fw, d, color, "satin");
+      } else box(0, h / 2, 0, w, h, d, "#e8e4da", "matt");
       break;
     }
     case "table-lamp": {

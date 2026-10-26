@@ -371,6 +371,10 @@ export interface Fixture {
    */
   endBack?: number;
   endSide?: number;
+  /** Pictures: which sample print is in the frame (see lib/art.ts). */
+  print?: string;
+  /** Pictures: the frame style. */
+  frame?: "black" | "oak" | "white" | "none";
   color?: string;
   /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
   worktop?: string;
