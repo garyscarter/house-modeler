@@ -122,7 +122,18 @@ const WEDGE = (() => {
   // Indexed like the box and cylinder, so parts of one colour merge into a single geometry.
   return mergeVertices(g);
 })();
-const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL, wedge: WEDGE };
+/** A slumped bean bag body: unit size, centred on y like the cylinder, widest low down, flat on the floor, dished on top. */
+const BLOB = (() => {
+  const prof: [number, number][] = [
+    [0, 0], [0.2, 0], [0.34, 0.015], [0.44, 0.07], [0.495, 0.17], [0.5, 0.3], [0.475, 0.45], [0.42, 0.62],
+    [0.35, 0.77], [0.29, 0.88], [0.21, 0.95], [0.14, 0.94], [0.07, 0.87], [0, 0.82],
+  ];
+  const g = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y - 0.5)), 24);
+  g.computeVertexNormals();
+  return g;
+})();
+const BALL = new THREE.SphereGeometry(0.5, 20, 14);
+const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL, wedge: WEDGE, blob: BLOB, ball: BALL };
 const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
@@ -545,14 +556,14 @@ function fixtureParts(
       break;
     }
     case "beanbag":
-      drum(0, h * 0.55, w, d, color);
-      drum(h * 0.55, h * 0.85, w * 0.85, d * 0.85, shade(color, 1.06));
-      drum(h * 0.85, h, w * 0.55, d * 0.55, shade(color, 0.92));
+      out.push({ g: "blob", p: [0, h / 2, 0], s: [w, h, d], c: color, f: "matt" });
+      // The seat: a slightly darker, flattened pad pressed into the dimple.
+      out.push({ g: "ball", p: [0, h * 0.84, 0], s: [w * 0.4, h * 0.12, d * 0.4], c: shade(color, 0.92), f: "matt" });
       break;
     case "beanbag-chair": {
-      drum(0, h * 0.45, w, d, color);
-      lean(0, h * 0.45 + (h * 0.55) / 2, -d / 2 + d * 0.22, w * 0.9, h * 0.55, d * 0.38, -0.25, color);
-      drum(h * 0.45, h * 0.52, w * 0.6, d * 0.5, shade(color, 1.06));
+      out.push({ g: "blob", p: [0, h * 0.25, 0], s: [w, h * 0.5, d], c: color, f: "matt" });
+      out.push({ g: "ball", p: [0, h * 0.52, -d * 0.25], s: [w * 0.88, h * 0.95, d * 0.42], c: shade(color, 1.05), f: "matt", tilt: -0.3 });
+      out.push({ g: "ball", p: [0, h * 0.44, d * 0.08], s: [w * 0.5, h * 0.09, d * 0.4], c: shade(color, 0.92), f: "matt" });
       break;
     }
     case "wood-armchair": {

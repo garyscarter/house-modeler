@@ -168,7 +168,7 @@ function mapPoint(from: Floor, to: Floor, p: Pt): Pt {
   return { x: (w.x - to.offset.x) * to.pxPerM + to.origin.x, y: (w.y - to.offset.y) * to.pxPerM + to.origin.y };
 }
 const distM = (a: V2, b: V2) => Math.hypot(a.x - b.x, a.y - b.y);
-const roomAt = (floor: Floor, p: Pt): Room | undefined => floor.rooms.find((r) => pointInPolygon(p, r.polygon));
+export const roomAt = (floor: Floor, p: Pt): Room | undefined => floor.rooms.find((r) => pointInPolygon(p, r.polygon));
 /** The room a fixture is in, or, for one standing just outside every room (in a bay, say), the room just behind or in front of it. */
 function roomOfFixture(floor: Floor, fx: Fixture): Room | undefined {
   const r = (fx.rot * Math.PI) / 180;
@@ -399,7 +399,7 @@ function stairChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
  * Appearance and size fields of an opening that follow the listing. Hinge side, swing, how far it is drawn
  * open and a front door's side lights are the owner's, and so is the width of a front door given side lights.
  */
-const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "frameColor"] as const;
+const OPENING_FIELDS = ["widthM", "style", "glazing", "sillStyle", "sill", "head", "depth", "color", "boardColor", "liningColor", "backColor", "backLiningColor", "frameColor"] as const;
 type OpeningField = (typeof OPENING_FIELDS)[number];
 const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   widthM: "width",
@@ -412,6 +412,8 @@ const OPENING_FIELD_WORD: Record<OpeningField, string> = {
   color: "colour",
   boardColor: "window board colour",
   liningColor: "lining colour",
+  backColor: "back colour",
+  backLiningColor: "back lining colour",
   frameColor: "frame colour",
 };
 

@@ -15,6 +15,7 @@ import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
 import { DEFAULT_CUSHION, isJoinery, joineryOf, patchJoinery, shelfStack, shelfStackPatch } from "../lib/joinery";
 import { JOINERY_FRONT_LABEL, SEAT_FRONT_LABEL, type JoineryFront, type SeatFront } from "../types";
+import { openingSides } from "../lib/openingSides";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
@@ -379,16 +380,43 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
   const glazed = k === "window" || k === "bay";
   const framed = k !== "gap" && k !== "archway";
   const trim = useModel()?.exterior?.trimColor ?? DEFAULT_EXTERIOR.trimColor;
+  const twoSided = k === "door" || k === "front" || k === "bifold" || k === "archway";
+  const split = twoSided && (opening.backColor !== undefined || opening.backLiningColor !== undefined);
+  const sides = split ? openingSides(floor, opening) : null;
+  const sideName = (n: string) => (n === "outside" || n === "one side" || n === "other side" ? n : `${n} side`);
+  const front = sides ? sideName(sides.front) : "";
+  const back = sides ? sideName(sides.back) : "";
+  const leafColour = opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e");
   return (
     <>
       {COLOUR_KINDS.includes(k) && (
         <SwatchField
           dulux={k !== "archway"}
-          label="Colour"
-          value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")}
+          label={split ? `Colour (${front})` : "Colour"}
+          value={leafColour}
           isSet={opening.color !== undefined}
           onChange={(color) => onChange({ color })}
           onReset={() => onChange({ color: undefined })}
+        />
+      )}
+      {twoSided && (
+        <label className="check" title="Paint the two faces of the door, or the two sides of the archway, different colours">
+          <input
+            type="checkbox"
+            checked={split}
+            onChange={(e) => onChange(e.target.checked ? { backColor: leafColour } : { backColor: undefined, backLiningColor: undefined })}
+          />{" "}
+          Different colour each side
+        </label>
+      )}
+      {split && COLOUR_KINDS.includes(k) && (
+        <SwatchField
+          dulux={k !== "archway"}
+          label={`Colour (${back})`}
+          value={opening.backColor ?? leafColour}
+          isSet={opening.backColor !== undefined}
+          onChange={(backColor) => onChange({ backColor })}
+          onReset={() => onChange({ backColor: undefined })}
         />
       )}
       {styles.length > 0 && (
@@ -468,7 +496,12 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
       )}
       <div className="size-row">
         {k === "window" && <OptionalColour label="Window board" value={opening.boardColor} fallback="#f3f1ea" onChange={(boardColor) => onChange({ boardColor })} />}
-        {(k === "door" || k === "bifold") && <OptionalColour label="Lining (inside)" value={opening.liningColor} fallback="#f3f1ea" onChange={(liningColor) => onChange({ liningColor })} />}
+        {(k === "door" || k === "bifold") && (
+          <OptionalColour label={split ? `Lining (${front})` : "Lining (inside)"} value={opening.liningColor} fallback="#f3f1ea" onChange={(liningColor) => onChange({ liningColor })} />
+        )}
+        {split && (k === "door" || k === "bifold") && (
+          <OptionalColour label={`Lining (${back})`} value={opening.backLiningColor} fallback={opening.liningColor ?? "#f3f1ea"} onChange={(backLiningColor) => onChange({ backLiningColor })} />
+        )}
         {framed && <OptionalColour label="Frame" value={opening.frameColor} fallback={trim} onChange={(frameColor) => onChange({ frameColor })} />}
       </div>
     </>

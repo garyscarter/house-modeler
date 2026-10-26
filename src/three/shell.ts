@@ -84,15 +84,17 @@ function leafColour(op: Opening): string {
 const JOINERY_WHITE = "#f3f1ea";
 
 /** Material of a joinery part of an opening. */
-function partSpec(mat: PartMat, op: Opening | null, trim: string): MatSpec {
+function partSpec(mat: PartMat, op: Opening | null, trim: string, side?: 1 | -1): MatSpec {
   const frame = op?.frameColor ?? trim;
+  /** The leaf colour on this side: the back side may have its own. */
+  const leafBase = (): string => (side === -1 && op?.backColor ? op.backColor : op ? leafColour(op) : trim);
   switch (mat) {
     case "frame":
       return { kind: "plain", color: frame, roughness: 0.5 };
     case "joinery":
       return { kind: "plain", color: JOINERY_WHITE, roughness: 0.6 };
     case "lining":
-      return { kind: "plain", color: op?.liningColor ?? JOINERY_WHITE, roughness: 0.6 };
+      return { kind: "plain", color: (side === -1 ? op?.backLiningColor : undefined) ?? op?.liningColor ?? JOINERY_WHITE, roughness: 0.6 };
     case "board":
       return { kind: "plain", color: op?.boardColor ?? JOINERY_WHITE, roughness: 0.6 };
     case "glass":
@@ -104,14 +106,14 @@ function partSpec(mat: PartMat, op: Opening | null, trim: string): MatSpec {
       // Stone or concrete sills are pale; uPVC sills match the frame.
       return op?.sillStyle === "upvc" ? { kind: "plain", color: frame, roughness: 0.5 } : { kind: "plain", color: "#d6d2c8", roughness: 0.85 };
     case "leaf":
-      return { kind: "plain", color: op ? leafColour(op) : trim, roughness: 0.55 };
+      return { kind: "plain", color: leafBase(), roughness: 0.55 };
     case "panel": {
       // Raised panels catch the light: a lighter shade, or a slightly darker one on white doors.
-      const c = op ? leafColour(op) : trim;
+      const c = leafBase();
       return { kind: "plain", color: shade(c, new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l > 0.8 ? 0.95 : 1.14), roughness: 0.5 };
     }
     case "groove":
-      return { kind: "plain", color: shade(op ? leafColour(op) : trim, 0.55), roughness: 0.8 };
+      return { kind: "plain", color: shade(leafBase(), 0.55), roughness: 0.8 };
     case "metal":
       return op?.kind === "front" ? { kind: "plain", color: "#c8a24a", roughness: 0.35, metalness: 0.7 } : { kind: "plain", color: "#c9c6bf", roughness: 0.35, metalness: 0.7 };
     case "lead":
@@ -206,7 +208,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       case "top":
         return { kind: "plain", color: "#cfcac0", roughness: 0.9 };
       case "part":
-        return partSpec(slot.mat, op, trimColor);
+        return partSpec(slot.mat, op, trimColor, slot.side);
     }
   };
 

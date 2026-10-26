@@ -44,6 +44,10 @@ export interface Box {
   s: V3;
   /** Rotation about y (three.js convention: +x turns towards -z). */
   ry?: number;
+  /** The whole box belongs to this side of the wall (+1 front, -1 back; see Opening.backColor). */
+  side?: 1 | -1;
+  /** The box's own +z / -z faces belong to side +faces / -faces; its four edges to neither. */
+  faces?: 1 | -1;
 }
 
 export interface OpeningParts {
@@ -380,15 +384,23 @@ function sills(x0: number, x1: number, y: number, wallT: number, out: number, st
 function leaf(hx: number, hz: number, len: number, toward: number, swing: number, ang: number, body: (len: number) => Box[]): Box[] {
   const dx = toward * Math.cos(ang);
   const dz = swing * Math.sin(ang);
-  return place(body(len), [hx, 0, hz], rotTo(dx, dz));
+  const t = toward < 0 ? -1 : 1;
+  // The body frame is turned by pi when toward is -1, so its +z is the wall's -z.
+  return place(body(len), [hx, 0, hz], rotTo(dx, dz)).map((b) => ({
+    ...b,
+    ...(b.side ? { side: (b.side * t) as 1 | -1 } : {}),
+    ...(b.faces ? { faces: (b.faces * t) as 1 | -1 } : {}),
+  }));
 }
+
+const sgn = (v: number): 1 | -1 => (v < 0 ? -1 : 1);
 
 /** Lever handles on both faces of a leaf `len` long and `t` thick, near its far edge. */
 function levers(len: number, t: number, y = 1.0): Box[] {
   const b: Box[] = [];
   for (const side of [1, -1]) {
-    b.push({ mat: "metal", p: [len - 0.07, y, side * (t / 2 + 0.03)], s: [0.025, 0.025, 0.06] });
-    b.push({ mat: "metal", p: [len - 0.12, y, side * (t / 2 + 0.06)], s: [0.12, 0.022, 0.022] });
+    b.push({ mat: "metal", p: [len - 0.07, y, side * (t / 2 + 0.03)], s: [0.025, 0.025, 0.06], side: sgn(side) });
+    b.push({ mat: "metal", p: [len - 0.12, y, side * (t / 2 + 0.06)], s: [0.12, 0.022, 0.022], side: sgn(side) });
   }
   return b;
 }
@@ -398,21 +410,21 @@ function raised(rects: [number, number, number, number][], t: number, faces: num
   const b: Box[] = [];
   for (const side of faces)
     for (const [x0, x1, y0, y1] of rects)
-      if (x1 - x0 > 0.04 && y1 - y0 > 0.04) b.push({ mat: "panel", p: [(x0 + x1) / 2, (y0 + y1) / 2, (side * (t + d)) / 2], s: [x1 - x0, y1 - y0, d] });
+      if (x1 - x0 > 0.04 && y1 - y0 > 0.04) b.push({ mat: "panel", p: [(x0 + x1) / 2, (y0 + y1) / 2, (side * (t + d)) / 2], s: [x1 - x0, y1 - y0, d], side: sgn(side) });
   return b;
 }
 
 /** A flush or panelled leaf with lever handles on both faces near its far edge. */
 function plainLeaf(height: number, t = 0.04, handle = true) {
   return (len: number): Box[] => {
-    const b: Box[] = [{ mat: "leaf", p: [len / 2, 0.012 + height / 2, 0], s: [len, height, t] }];
+    const b: Box[] = [{ mat: "leaf", p: [len / 2, 0.012 + height / 2, 0], s: [len, height, t], faces: 1 }];
     // Two shallow panels on each face give it a cottage-door look.
     for (const side of [1, -1])
       for (const [y0, y1] of [
         [0.15, 0.85],
         [1.05, height - 0.15],
       ])
-        if (len > 0.45) b.push({ mat: "panel", p: [len / 2, (y0 + y1) / 2, (side * t) / 2], s: [len - 0.24, y1 - y0, 0.008] });
+        if (len > 0.45) b.push({ mat: "panel", p: [len / 2, (y0 + y1) / 2, (side * t) / 2], s: [len - 0.24, y1 - y0, 0.008], side: sgn(side) });
     if (handle) b.push(...levers(len, t));
     return b;
   };
@@ -432,7 +444,7 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
   const h = height;
   return (len: number): Box[] => {
     const b: Box[] = [];
-    const lb = (x: number, y: number, w: number, hh: number, mat: PartMat = "leaf", d = t) => b.push({ mat, p: [x, y, 0], s: [w, hh, d] });
+    const lb = (x: number, y: number, w: number, hh: number, mat: PartMat = "leaf", d = t) => b.push({ mat, p: [x, y, 0], s: [w, hh, d], ...(mat === "leaf" ? { faces: 1 as const } : {}) });
     /** Glass from x0 to x1 and y0 to y1 at the leaf's centre plane. */
     const pane = (x0: number, x1: number, y0: number, y1: number, mat: PartMat = "glass") =>
       b.push({ mat, p: [(x0 + x1) / 2, (y0 + y1) / 2, 0], s: [x1 - x0, y1 - y0, 0.012] });
@@ -517,8 +529,8 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
         lb(len / 2, 0.012 + h / 2, len, h);
         const k = Math.max(3, Math.round(len / 0.11));
         for (let j = 1; j < k; j++)
-          for (const side of [1, -1]) b.push({ mat: "groove", p: [(j * len) / k, 0.012 + h / 2, side * (t / 2 + 0.001)], s: [0.008, h - 0.01, 0.003] });
-        for (const y of [0.25, h / 2, h - 0.25]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024] });
+          for (const side of [1, -1]) b.push({ mat: "groove", p: [(j * len) / k, 0.012 + h / 2, side * (t / 2 + 0.001)], s: [0.008, h - 0.01, 0.003], side: sgn(side) });
+        for (const y of [0.25, h / 2, h - 0.25]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024], side: sgn(-show) });
         break;
       }
       case "strip": {
@@ -544,7 +556,7 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
         lb(len / 2, 0.012 + h / 2, len, h);
         const k = Math.max(4, Math.round((h - 0.5) / 0.2));
         for (let j = 0; j <= k; j++)
-          for (const side of [1, -1]) b.push({ mat: "groove", p: [len / 2, 0.27 + (j * (h - 0.5)) / k, side * (t / 2 + 0.001)], s: [len - 0.16, 0.012, 0.003] });
+          for (const side of [1, -1]) b.push({ mat: "groove", p: [len / 2, 0.27 + (j * (h - 0.5)) / k, side * (t / 2 + 0.001)], s: [len - 0.16, 0.012, 0.003], side: sgn(side) });
         letterY = 0.27 + (h - 0.5) / k / 2;
         bar = true;
         break;
@@ -562,13 +574,13 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
             const x = (j * len) / k;
             const through = x > gx0 && x < gx1;
             for (const [y0, y1] of through ? [[0.017, gy0], [gy1, h + 0.007]] : [[0.017, h + 0.007]])
-              b.push({ mat: "groove", p: [x, (y0 + y1) / 2, side * (t / 2 + 0.001)], s: [0.008, y1 - y0, 0.003] });
+              b.push({ mat: "groove", p: [x, (y0 + y1) / 2, side * (t / 2 + 0.001)], s: [0.008, y1 - y0, 0.003], side: sgn(side) });
           }
         b.push({ mat: "glass", p: [len / 2, (gy0 + gy1) / 2, 0], s: [gx1 - gx0, gy1 - gy0, t + 0.01] });
         const gb = 0.03;
         lb(len / 2, (gy0 + gy1) / 2, gb, gy1 - gy0, "leaf", t + 0.014);
         lb(len / 2, (gy0 + gy1) / 2, gx1 - gx0, gb, "leaf", t + 0.014);
-        for (const y of [0.25, gy0 - 0.2]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024] });
+        for (const y of [0.25, gy0 - 0.2]) b.push({ mat: "leaf", p: [len / 2, 0.012 + y, -show * (t / 2 + 0.012)], s: [len - 0.06, 0.15, 0.024], side: sgn(-show) });
         break;
       }
       case "front": {
@@ -578,7 +590,7 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
           [0.2, 0.7],
           [0.85, h - 0.62],
         ])
-          for (const x of [len / 4, (3 * len) / 4]) b.push({ mat: "panel", p: [x, (a + c) / 2, show * 0.028], s: [len / 2 - 0.1, c - a, 0.012] });
+          for (const x of [len / 4, (3 * len) / 4]) b.push({ mat: "panel", p: [x, (a + c) / 2, show * 0.028], s: [len / 2 - 0.1, c - a, 0.012], side: sgn(show) });
         b.push({ mat: "glass", p: [len / 2, h - 0.33, 0], s: [len - 0.16, 0.42, t + 0.01] });
         break;
       }
@@ -590,13 +602,13 @@ export function doorLeaf(style: DoorStyle, height: number, t: number, show: numb
 
 /** Letter plate on the face `show` at height y, and a knob on each face near the far edge (or, with `bar`, a long pull bar outside). */
 function frontFurniture(len: number, t: number, show: number, y: number, bar = false): Box[] {
-  const b: Box[] = [{ mat: "metal", p: [len / 2, y, show * (t / 2 + 0.007)], s: [0.28, 0.05, 0.012] }];
+  const b: Box[] = [{ mat: "metal", p: [len / 2, y, show * (t / 2 + 0.007)], s: [0.28, 0.05, 0.012], side: sgn(show) }];
   if (bar) {
     const z = show * (t / 2 + 0.05);
-    b.push({ mat: "metal", p: [len - 0.1, 1.05, z], s: [0.03, 0.9, 0.03] });
-    for (const dy of [-0.35, 0.35]) b.push({ mat: "metal", p: [len - 0.1, 1.05 + dy, show * (t / 2 + 0.02)], s: [0.02, 0.02, 0.04] });
-  } else b.push({ mat: "metal", p: [len - 0.1, 1.0, show * (t / 2 + 0.02)], s: [0.05, 0.05, 0.05] });
-  b.push({ mat: "metal", p: [len - 0.1, 1.0, -show * (t / 2 + 0.02)], s: [0.03, 0.03, 0.05] });
+    b.push({ mat: "metal", p: [len - 0.1, 1.05, z], s: [0.03, 0.9, 0.03], side: sgn(show) });
+    for (const dy of [-0.35, 0.35]) b.push({ mat: "metal", p: [len - 0.1, 1.05 + dy, show * (t / 2 + 0.02)], s: [0.02, 0.02, 0.04], side: sgn(show) });
+  } else b.push({ mat: "metal", p: [len - 0.1, 1.0, show * (t / 2 + 0.02)], s: [0.05, 0.05, 0.05], side: sgn(show) });
+  b.push({ mat: "metal", p: [len - 0.1, 1.0, -show * (t / 2 + 0.02)], s: [0.03, 0.03, 0.05], side: sgn(-show) });
   return b;
 }
 
@@ -643,9 +655,9 @@ function doorLining(w: number, h: number, wallT: number, mat: PartMat = "lining"
   for (const side of [1, -1]) {
     const z = side * (wallT / 2 + 0.008);
     b.push(
-      { mat, p: [-w / 2 - aw / 2 + lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
-      { mat, p: [w / 2 + aw / 2 - lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016] },
-      { mat, p: [0, h + aw / 2, z], s: [w + 2 * aw - 2 * lt, aw, 0.016] },
+      { mat, p: [-w / 2 - aw / 2 + lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016], side: sgn(side) },
+      { mat, p: [w / 2 + aw / 2 - lt, (h + aw) / 2, z], s: [aw, h + aw, 0.016], side: sgn(side) },
+      { mat, p: [0, h + aw / 2, z], s: [w + 2 * aw - 2 * lt, aw, 0.016], side: sgn(side) },
     );
   }
   return b;
@@ -792,6 +804,11 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       boxes.push(...bifoldStack(layout, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true), !doorsOpen));
       break;
     }
+  }
+  // Side +1 is always the front side: the outside of an external wall, the local +z side inside.
+  if (out === -1) for (const b of boxes) {
+    if (b.side) b.side = -b.side as 1 | -1;
+    if (b.faces) b.faces = -b.faces as 1 | -1;
   }
   return { boxes, quads: [] };
 }
@@ -1051,7 +1068,8 @@ export function boxQuads(boxes: Box[], f: LocalFrame): FaceQuad[] {
       const n = dirToWorld(f, rot(face.n));
       const du = face.n[0] ? b.s[2] : b.s[0];
       const dv = face.n[1] ? b.s[2] : b.s[1];
-      out.push({ v, n, uv: [[0, 0], [du, 0], [du, dv], [0, dv]], slot: { kind: "part", mat: b.mat } });
+      const side = b.faces && face.n[2] ? ((face.n[2] * b.faces) as 1 | -1) : b.side;
+      out.push({ v, n, uv: [[0, 0], [du, 0], [du, dv], [0, dv]], slot: side ? { kind: "part", mat: b.mat, side } : { kind: "part", mat: b.mat } });
     }
   }
   return out;
