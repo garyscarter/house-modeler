@@ -290,7 +290,8 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
  * No zoom on focus. iOS Safari zooms the page when a focused field's text is under 16px, which throws the
  * one-screen layout off; on any touch screen every text field, select and textarea keeps 16px text, wherever
  * it is rendered (sheet, dialogs, the plan's edge fields, the Dulux search). Checkboxes, sliders and colour
- * wells have no text to zoom to.
+ * wells have no text to zoom to. This is the whole fix: the viewport is left alone (a maximum-scale cap would
+ * also stop pinch zoom in the app's web view, which people use to get in close).
  */
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
