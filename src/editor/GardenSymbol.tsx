@@ -272,19 +272,26 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
         at,
       );
     case "playhouse-kitchen": {
-      // The house on the right with its ridge and door, the kitchen counter on the left with a grill and sink.
-      const wing = Math.min(0.5, w * 0.22);
-      const hw = w - wing;
-      const hx = wing / 2;
-      const kd = Math.min(0.7, d * 0.45);
+      // Picnic table on the left, the gable-fronted house in the middle (ridge front to back, stable door
+      // on the front), the lean-to kitchen on the right with its trellis along the front edge.
+      const tw = w * 0.23;
+      const kw = w * 0.23;
+      const hw = w - tw - kw;
+      const cx = x0 + tw + hw / 2;
+      const hd = d * 0.87;
+      const roofColor = item.accent ?? def.accent ?? "#55585b";
+      const dw = Math.min(0.42, hw * 0.36);
       return group(
         <>
-          <rect x={x0 + wing} y={y0} width={hw} height={d} rx={0.03} {...fill} />
-          <line x1={x0 + wing} y1={0} x2={-x0} y2={0} {...line} />
-          <rect x={hx - hw * 0.2 - Math.min(0.75, hw * 0.4) / 2} y={-y0 - 0.1} width={Math.min(0.75, hw * 0.4)} height={0.1} fill="#7fb04e" stroke={outline} strokeWidth={sw * 0.5} />
-          <rect x={x0 + 0.02} y={-kd / 2} width={wing - 0.04} height={kd} rx={0.02} fill="#8a9aa6" fillOpacity={0.85} stroke={outline} strokeWidth={sw * 0.6} />
-          <circle cx={x0 + wing / 2} cy={-kd * 0.22} r={Math.min(0.16, wing * 0.35)} {...line} />
-          <circle cx={x0 + wing / 2} cy={kd * 0.25} r={Math.min(0.13, wing * 0.28)} {...thin} />
+          <rect x={cx - hw / 2 - 0.06} y={-hd / 2 - 0.1} width={hw + 0.12} height={hd + 0.2} rx={0.02} fill={roofColor} fillOpacity={0.8} stroke={outline} strokeWidth={sw} strokeOpacity={selected ? 1 : 0.7} />
+          <line x1={cx} y1={-hd / 2 - 0.1} x2={cx} y2={hd / 2 + 0.1} {...line} />
+          <rect x={cx + hw * 0.08 - dw / 2} y={hd / 2 + 0.02} width={dw} height={0.1} fill="#b7cf7a" stroke={outline} strokeWidth={sw * 0.5} />
+          <rect x={cx + hw / 2} y={-hd * 0.33} width={kw * 0.95} height={hd * 0.45} rx={0.02} fill="#8a9aa6" fillOpacity={0.9} stroke={outline} strokeWidth={sw * 0.6} />
+          <rect x={cx + hw / 2 + kw * 0.3} y={-hd * 0.28} width={kw * 0.4} height={hd * 0.14} fill="#26282b" fillOpacity={0.8} />
+          <circle cx={cx + hw / 2 + kw * 0.5} cy={hd * 0.1} r={Math.min(0.1, kw * 0.2)} {...thin} />
+          <line x1={cx + hw / 2} y1={hd / 4 + 0.02} x2={cx + hw / 2 + kw} y2={hd / 4 + 0.02} stroke="#b7cf7a" strokeWidth={sw * 2.5} />
+          <rect x={cx - hw / 2 - tw * 0.7} y={hd * 0.05 - hd * 0.33} width={tw * 0.6} height={hd * 0.66} rx={0.02} fill="#6b6e70" fillOpacity={0.85} stroke={outline} strokeWidth={sw * 0.5} />
+          <rect x={cx - hw / 2 - tw * 0.99} y={hd * 0.05 - hd * 0.33} width={tw * 0.42} height={hd * 0.66} rx={0.02} fill="#6b6e70" fillOpacity={0.7} stroke={outline} strokeWidth={sw * 0.5} />
         </>,
         at,
       );

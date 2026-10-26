@@ -285,41 +285,95 @@ function playhouse(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
 }
 
 /**
- * A playhouse with a summer kitchen wing on its left (the Smoby Life Friends
- * house): the house itself as a hut set to the right, and on its left a
- * counter at child height with a grill and a sink, under the house's eaves.
+ * The Smoby Life Friends playhouse with its summer kitchen, from the product
+ * photos: a gable-fronted house (ridge front to back) in off-white planked
+ * plastic under a dark grey tiled roof with a pale blue chimney; coral
+ * shutters either side of the gable window under a green "Smoby" arch; a big
+ * square window with a coral lattice and a blue window box on the front left;
+ * a stable door, coral over green, with a doorbell beside it; on the right a
+ * lean-to summer kitchen (grey worktop with a hob and sink on a tan brick
+ * base, a green trellis at its front edge, a coral hatch in the house wall);
+ * on the left a picnic table and bench in grey on green legs against a green
+ * brick-effect lower wall. Proportions follow the 217 x 155 x 172 cm box.
  */
 function playhouseKitchen(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
-  const walls = m(item.color ?? def.color, "plastic");
-  const roof = m(item.accent ?? def.accent ?? "#c2412f", "plastic");
-  const door = m("#7fb04e", "plastic");
-  const wing = Math.min(0.5, w * 0.22);
-  const hw = w - wing;
-  const hx = wing / 2;
-  const house = new Parts();
-  hut(house, hw, d * 0.9, h, walls, roof, door, 0.62, true);
-  for (const pt of house.out) {
-    pt.p[0] += hx;
-    pt.p[2] -= d * 0.05;
-  }
-  P.out.push(...house.out);
-  // Shutters either side of the window and a doorbell beside the door.
-  const e = h * 0.62;
-  const wy = Math.min(e * 0.55, 1.1);
-  const wh = Math.min(0.45, e * 0.35);
-  const ww = Math.min(0.5, hw * 0.3);
-  for (const s of [-1, 1]) P.box(hx + hw * 0.22 + (s * (ww / 2 + 0.06)), wy - 0.03, wy + wh + 0.03, d * 0.4 - 0.005, 0.1, 0.02, door);
-  P.box(hx - hw * 0.2 + Math.min(0.75, hw * 0.4) / 2 + 0.07, e * 0.5, e * 0.5 + 0.06, d * 0.4 - 0.005, 0.05, 0.02, m("#f2b23c", "plastic"));
-  // The kitchen wing: a counter against the house's left wall, worktop at child height, splashback up the wall.
-  const kx = -w / 2 + wing / 2;
-  const kd = Math.min(0.7, d * 0.45);
-  const top = Math.min(0.6, h * 0.35);
-  P.box(kx, 0.02, top - 0.04, 0, wing - 0.04, kd, m(shadeColor(item.color ?? def.color, 0.92), "plastic"));
-  P.box(kx, top - 0.04, top, 0, wing, kd + 0.04, m("#8a9aa6", "plastic"));
-  P.box(hx - hw / 2 + 0.03, top, Math.min(h * 0.58, top + 0.45), 0, 0.03, kd, door);
-  P.cyl(kx, top, top + 0.1, -kd * 0.22, Math.min(0.32, wing * 0.7), m(DARK, "metal"));
-  P.box(kx, top + 0.1, top + 0.115, -kd * 0.22, Math.min(0.26, wing * 0.55), Math.min(0.26, wing * 0.55), m("#55595e", "metal"));
-  P.cyl(kx, top, top + 0.015, kd * 0.25, Math.min(0.26, wing * 0.55), m("#7fb4d8", "plastic"));
+  const wall = m(item.color ?? def.color, "plastic");
+  const roof = m(item.accent ?? def.accent ?? "#55585b", "plastic");
+  const coral = m("#d2694f", "plastic");
+  const green = m("#b7cf7a", "plastic");
+  const grey = m("#6b6e70", "plastic");
+  const tan = m("#d6c19e", "plastic");
+  const blue = m("#9cc7d6", "plastic");
+  const white = m(shadeColor(item.color ?? def.color, 1.03), "plastic");
+  // Left to right: picnic table, the house, the kitchen wing.
+  const tw = w * 0.23;
+  const kw = w * 0.23;
+  const hw = w - tw - kw;
+  const cx = -w / 2 + tw + hw / 2;
+  const hd = d * 0.87;
+  const e = h * 0.65;
+  const rise = h - e - 0.03;
+  const x0 = cx - hw / 2;
+  const x1 = cx + hw / 2;
+  const zf = hd / 2;
+  // Skid, walls and the gable prism (ridge along z).
+  P.box(cx, 0, 0.04, 0, hw + 0.06, hd + 0.02, m(DARK, "plastic"));
+  P.box(cx, 0.04, e, 0, hw, hd, wall);
+  P.out.push({ g: "prism", p: [cx, e + rise / 2, 0], s: [hd, rise, hw], mat: wall, rotY: Math.PI / 2 });
+  // Roof slopes either side of the ridge, overhanging the gables, and a ridge cap.
+  const run = hw / 2 + 0.06;
+  const L = Math.hypot(run, rise) + 0.02;
+  const a = Math.atan2(rise, run);
+  for (const sgn of [1, -1]) P.out.push({ g: "box", p: [cx + (sgn * run) / 2, e + rise / 2 + 0.03, 0], s: [hd + 0.2, 0.035, L], mat: roof, tilt: sgn * a, rotY: Math.PI / 2 });
+  P.box(cx, e + rise, e + rise + 0.03, 0, 0.08, hd + 0.2, roof);
+  P.box(cx, e + rise - 0.12, e + rise + 0.06, -hd * 0.25, 0.12, 0.12, blue); // chimney
+  // Front gable: small window with coral shutters under the green arch.
+  const gy = e + rise * 0.3;
+  P.box(cx, gy - 0.1, gy + 0.1, zf + 0.01, 0.22, 0.03, grey);
+  P.box(cx, gy - 0.08, gy + 0.08, zf + 0.03, 0.16, 0.01, m("#cfe0ea", "plastic"));
+  for (const sgn of [-1, 1]) P.box(cx + sgn * 0.21, gy - 0.1, gy + 0.1, zf + 0.01, 0.12, 0.025, coral);
+  P.box(cx, gy + 0.16, gy + 0.21, zf + 0.012, 0.4, 0.02, green);
+  // Front left: the big window (grey frame, coral lattice) with its blue window box.
+  const wx = cx - hw * 0.26;
+  P.box(wx, e * 0.5, e * 0.86, zf + 0.012, hw * 0.34, 0.03, grey);
+  P.box(wx, e * 0.52, e * 0.84, zf + 0.034, hw * 0.3, 0.01, coral);
+  P.box(wx, e * 0.38, e * 0.47, zf + 0.07, hw * 0.24, 0.13, blue);
+  // Stable door, coral above green, white frame, grey threshold, doorbell beside it.
+  const dx = cx + hw * 0.08;
+  const dw = Math.min(0.42, hw * 0.36);
+  P.box(dx, 0.04, e * 0.93, zf + 0.008, dw + 0.06, 0.012, white);
+  P.box(dx, 0.04, e * 0.5, zf + 0.018, dw, 0.012, green);
+  P.box(dx, e * 0.5, e * 0.9, zf + 0.018, dw, 0.012, coral);
+  P.box(dx, 0.02, 0.07, zf + 0.06, dw + 0.1, 0.12, grey);
+  P.box(dx + dw / 2 + 0.07, e * 0.68, e * 0.76, zf + 0.012, 0.045, 0.02, white);
+  // Right: the lean-to kitchen. Roof from under the eaves down to the wing's edge; coral hatch in the wall;
+  // tan brick base with a grey worktop, hob and sink; green trellis across the front edge.
+  const kx0 = x1;
+  const kd = hd * 0.5;
+  const lt = e * 0.98;
+  const lb = e * 0.78;
+  const lrun = kw * 0.9;
+  const lL = Math.hypot(lrun, lt - lb) + 0.02;
+  const la = Math.atan2(lt - lb, lrun);
+  P.out.push({ g: "box", p: [kx0 + lrun / 2, (lt + lb) / 2 + 0.02, 0.02], s: [kd + 0.12, 0.03, lL], mat: roof, tilt: la, rotY: Math.PI / 2 });
+  P.box(kx0 + 0.012, e * 0.45, e * 0.78, 0, 0.02, kd * 0.85, coral);
+  P.box(kx0 + kw * 0.5, 0.02, h * 0.28, 0.04, kw * 0.8, kd * 0.75, tan);
+  P.box(kx0 + kw * 0.5, h * 0.28, h * 0.305, 0.04, kw * 0.92, kd * 0.85, grey);
+  P.box(kx0 + kw * 0.5, h * 0.305, h * 0.315, -kd * 0.2, kw * 0.45, kd * 0.3, m(DARK, "metal"));
+  P.cyl(kx0 + kw * 0.5, h * 0.3, h * 0.312, kd * 0.22, kw * 0.4, m("#c9ccd0", "metal"));
+  P.box(kx0 + kw * 0.5, h * 0.315, h * 0.68, kd / 2 + 0.02, kw, 0.025, green); // trellis
+  // Left: green brick lower wall, the side windows, and the picnic table with its bench.
+  P.box(x0 - 0.012, 0.04, e * 0.62, 0, 0.02, hd * 0.75, green);
+  P.box(x0 - 0.012, e * 0.42, e * 0.74, -hd * 0.08, 0.03, hd * 0.36, grey);
+  P.box(x0 - 0.034, e * 0.44, e * 0.72, -hd * 0.08, 0.01, hd * 0.32, m("#cfe0ea", "plastic"));
+  P.box(x0 - 0.012, e * 0.8, e * 0.98, 0, 0.03, hd * 0.26, green); // shuttered window under the eave
+  const tx = x0 - tw * 0.4;
+  const bx = x0 - tw * 0.78;
+  const tl = hd * 0.66;
+  P.box(tx, h * 0.27, h * 0.3, hd * 0.05, tw * 0.6, tl, grey); // table top
+  for (const z of [-tl / 2 + 0.06, tl / 2 - 0.06]) P.box(tx, 0.02, h * 0.27, hd * 0.05 + z, tw * 0.5, 0.06, green);
+  P.box(bx, h * 0.16, h * 0.18, hd * 0.05, tw * 0.42, tl, grey); // bench
+  for (const z of [-tl / 2 + 0.08, tl / 2 - 0.08]) P.box(bx, 0.02, h * 0.16, hd * 0.05 + z, tw * 0.32, 0.05, green);
 }
 
 function pergola(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
