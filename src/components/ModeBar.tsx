@@ -1,7 +1,7 @@
 import { useStore } from "../store";
 import { MODES, MODE_LABEL } from "../lib/modes";
 
-/** The five modes, as a pill in the middle of the top bar. */
+/** The six modes, as a pill in the middle of the top bar. */
 export function ModeBar() {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);

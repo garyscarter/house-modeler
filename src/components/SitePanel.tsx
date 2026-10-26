@@ -6,13 +6,11 @@ import { freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite } from "../lib/s
 import { siteSource } from "../lib/sites";
 import { updateSitePreset } from "../lib/presetActions";
 import { confirmBoundaryUpdates } from "./startupDialog";
-import { SURFACE_LABEL, type HouseModel, type Neighbour, type Site, type SurfaceKind, type VariantKey } from "../types";
+import type { HouseModel, Neighbour, Site, VariantKey } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { compassPoint } from "../lib/sun";
 import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpleSite, type PlotDepths } from "../lib/site";
 import { useSiteView } from "../three/siteView";
-import { SlopeFields } from "./SlopeFields";
-import { SurfaceFinishField } from "./SurfaceFinishField";
 import { Info } from "./Info";
 import { Section } from "./Section";
 import "./SitePanel.css";
@@ -124,34 +122,7 @@ export function SitePanel() {
             <NeighbourRow key={n.id} n={n} onChange={(p) => updateSite((s) => ({ ...s, neighbours: s.neighbours.map((x) => (x.id === n.id ? { ...x, ...p } : x)) }))} onRemove={() => updateSite((s) => ({ ...s, neighbours: s.neighbours.filter((x) => x.id !== n.id) }))} />
           ))}
 
-          <h4>Garden surfaces</h4>
-          {site.surfaces.length === 0 && <p className="muted small">None yet. Draw them in the site plan.</p>}
-          {site.surfaces.map((s) => (
-            <div key={s.id} className="site-surface">
-            <div className="site-item">
-              <select
-                value={s.kind}
-                onChange={(e) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, kind: e.target.value as SurfaceKind } : x)) }))}
-                aria-label="Surface"
-              >
-                {(Object.keys(SURFACE_LABEL) as SurfaceKind[]).map((k) => (
-                  <option key={k} value={k}>
-                    {SURFACE_LABEL[k]}
-                  </option>
-                ))}
-              </select>
-              <span className="muted small site-area">{fmtArea(areaOf(s.polygon))}</span>
-              <button className="site-remove" onClick={() => updateSite((st) => ({ ...st, surfaces: st.surfaces.filter((x) => x.id !== s.id) }))} aria-label="Remove surface">
-                ✕
-              </button>
-            </div>
-            <SurfaceFinishField surface={s} onChange={(finish) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, finish } : x)) }))} />
-            <details className="site-slope">
-              <summary className="muted small">{s.slope ? "Slopes up" : "Flat"}</summary>
-              <SlopeFields surface={s} onChange={(slope) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, slope } : x)) }))} />
-            </details>
-            </div>
-          ))}
+          <p className="muted small">Garden surfaces, planting and furniture are in Garden mode.</p>
 
           <h4>Start again</h4>
           <div className="row">

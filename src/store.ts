@@ -65,12 +65,14 @@ interface State {
   redo: () => void;
 
   // UI (not persisted, except `mode`)
-  /** What the person is doing: Build, Decorate, Furnish, Plot or Review. Persisted per browser, not synced, no undo. */
+  /** What the person is doing: Build, Decorate, Furnish, Garden, Plot or Review. Persisted per browser, not synced, no undo. */
   mode: Mode;
   /** Decorate: the wall face picked on the selected room (null = the room's floor). */
   selectedEdge: EdgePick | null;
   /** The floor the plan showed before Plot opened the site editor, so leaving Plot goes back to it. */
   floorBeforeSite: string | null;
+  /** Garden mode: the selected garden items, shared by the site editor and the Garden panel. Not persisted; cleared by a mode switch. */
+  gardenSel: string[];
   setMode: (m: Mode) => void;
   /** The mode Review was opened from, so closing it goes back there. Persisted. */
   modeBeforeReview: Mode | null;
@@ -146,6 +148,7 @@ interface State {
         | "hoveredRoomId"
         | "selectedEdge"
         | "floorBeforeSite"
+        | "gardenSel"
         | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
@@ -269,6 +272,7 @@ export const useStore = create<State>()(
         },
 
         mode: "build",
+        gardenSel: [],
         selectedEdge: null,
         floorBeforeSite: null,
         setMode: (m) =>
@@ -434,7 +438,7 @@ export const useStore = create<State>()(
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
           ),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [] }),
       };
     },
     {

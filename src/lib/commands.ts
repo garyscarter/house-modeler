@@ -125,7 +125,11 @@ export function buildCommands(c: CommandContext): Command[] {
   add("plan:site", "Site plan (Plot)", "Plan", () => {
     c.setMode("plot");
     c.setUi({ tab: "plan" });
-  }, { keywords: ["plot", "garden", "site"] });
+  }, { keywords: ["plot", "boundary", "neighbours", "site", "orientation"] });
+  add("plan:garden", "Garden", "Plan", () => {
+    c.setMode("garden");
+    c.setUi({ tab: "plan" });
+  }, { keywords: ["garden", "plants", "lawn", "patio", "furniture", "lights", "trees", "hedge"] });
 
   for (const k of ["current", "proposed"] as VariantKey[]) {
     if (c.variants[k] && k !== c.activeVariant) add(`layout:${k}`, `Switch to ${VARIANT_LABEL[k]}`, "Layout", () => c.setUi({ activeVariant: k }), { keywords: ["layout", "variant"] });

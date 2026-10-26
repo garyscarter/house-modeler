@@ -85,6 +85,8 @@ export interface ModeUi {
   floorBeforeSite: string | null;
   selectedRoomId: string | null;
   selectedEdge: EdgePick | null;
+  /** Garden: the ids of the selected garden items (cleared on every mode switch). */
+  gardenSel?: string[];
 }
 
 /** Tapping a room's floor selects it in these modes. */
@@ -100,7 +102,7 @@ export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> 
 
 /** The UI fields that change when the mode does. Selections the new mode cannot hold are cleared. */
 export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
-  const patch: Partial<ModeUi> = { mode: next };
+  const patch: Partial<ModeUi> = { mode: next, gardenSel: [] };
   if (!roomTapSelects(next)) patch.selectedRoomId = null;
   if (next !== "decorate") patch.selectedEdge = null;
   if (editsSite(next)) {

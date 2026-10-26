@@ -1,5 +1,6 @@
 import { useStore, type ViewMode } from "../store";
 import { siteOf } from "../lib/sites";
+import { editsSite } from "../lib/modes";
 import { dockFloorActive, dockFloorPick, floorDisplayName, floorsByLevel, tabSwitchPatch } from "../lib/studio";
 import { usePanelPrefs } from "./panelPrefs";
 import { Popover, ViewToggles } from "./ViewMenu";
@@ -38,7 +39,7 @@ export function Dock() {
   const ui = { tab, maxLevel, editFloorId };
   const sorted = floorsByLevel(floors);
   const active = dockFloorActive(ui, floors);
-  const showFloors = tab === "3d" ? sorted.length > 0 : mode !== "plot" && sorted.length > 1;
+  const showFloors = tab === "3d" ? sorted.length > 0 : !editsSite(mode) && sorted.length > 1;
   const keyOf = (i: number) => (i < 9 ? ` (${i + 1})` : "");
   // Side by side is off where two views don't fit: the app shows wipe instead, and so does this menu.
   const shownMode = effectiveCompare<ViewMode>(viewMode, chassis, both, "single", "wipe", "side-by-side");

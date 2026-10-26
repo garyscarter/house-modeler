@@ -16,6 +16,8 @@ import {
 import { findRoom } from "./roomLinks";
 import { areaM2, axisRect, formatArea } from "./planMath";
 import { bbox } from "./geometry";
+import { gardenDef, isPlant } from "./gardenCatalogue";
+import { itemsOf } from "./siteItems";
 import { isUnheated } from "./report";
 import { swatchName } from "./paintPalette";
 import { duluxName } from "./dulux";
@@ -160,6 +162,18 @@ export function stairsSummary(floor: Floor): string {
 export function siteSummary(site: Site | undefined): string {
   if (!site) return "No plot yet";
   return `Front faces ${Math.round(site.frontBearing)}°`;
+}
+
+/** "3 surfaces · 7 items · 2 plants" (a plant is counted in items too); "Nothing in the garden yet" when empty. */
+export function gardenSummary(site: Site | undefined): string {
+  if (!site) return "No plot yet";
+  const items = itemsOf(site);
+  const plants = items.filter((it) => {
+    const def = gardenDef(it.type);
+    return !!def && isPlant(def);
+  }).length;
+  if (!site.surfaces.length && !items.length) return "Nothing in the garden yet";
+  return [plural(site.surfaces.length, "surface", "surfaces"), plural(items.length, "item", "items"), plural(plants, "plant", "plants")].join(" · ");
 }
 
 /** "Gable roof · Smooth render" */
