@@ -11,7 +11,7 @@ import type { Floor, HouseModel } from "../types";
  * a new field that affects geometry is picked up by default.
  */
 const ROOM_COSMETIC = new Set(["color", "notes", "floorPhotoId", "floorFinish", "floorAngle", "floorGrout", "wallPaint", "wallCovering", "wallAccent", "wallFinishes", "skirtingColor", "unheated"]);
-const OPENING_COSMETIC = new Set(["color", "boardColor", "liningColor", "backColor", "backLiningColor", "frameColor"]);
+const OPENING_COSMETIC = new Set(["color", "boardColor", "liningColor", "backColor", "backLiningColor", "matchFront", "matchBack", "frameColor"]);
 // The plan image is a large data URL and only the numbers read from it matter.
 const FLOOR_SKIPPED = new Set(["image", "name", "rooms", "openings", "fixtures"]);
 

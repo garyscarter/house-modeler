@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour, withRoomWallColours, DEFAULT_LINING } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -417,5 +417,28 @@ describe("door sides", () => {
     expect(sides.filter((s) => s === 1)).toHaveLength(1);
     expect(sides.filter((s) => s === -1)).toHaveLength(1);
     expect(sides.filter((s) => s === undefined)).toHaveLength(4);
+  });
+});
+
+describe("withRoomWallColours", () => {
+  const op = { color: "#111111", liningColor: undefined, backColor: undefined, backLiningColor: undefined } as const;
+  it("leaves an opening alone unless a side asks to match and has a room", () => {
+    expect(withRoomWallColours(op, "#aaaaaa", "#bbbbbb")).toBe(op);
+    expect(withRoomWallColours({ ...op, matchFront: true }, undefined, "#bbbbbb")).toEqual({ ...op, matchFront: true });
+  });
+  it("colours a matched side's leaf and lining like its room, keeping the other side's lining white", () => {
+    const o = withRoomWallColours({ ...op, matchFront: true }, "#aaaaaa", "#bbbbbb");
+    expect(o.color).toBe("#aaaaaa");
+    expect(o.liningColor).toBe("#aaaaaa");
+    expect(o.backColor).toBeUndefined();
+    expect(o.backLiningColor).toBe(DEFAULT_LINING);
+    const b = withRoomWallColours({ ...op, matchBack: true }, "#aaaaaa", "#bbbbbb");
+    expect(b.color).toBe("#111111");
+    expect(b.backColor).toBe("#bbbbbb");
+    expect(b.backLiningColor).toBe("#bbbbbb");
+  });
+  it("keeps a lining colour set by hand", () => {
+    const o = withRoomWallColours({ ...op, liningColor: "#ffffff", backLiningColor: "#eeeeee", matchFront: true, matchBack: true }, "#aaaaaa", "#bbbbbb");
+    expect(o).toMatchObject({ color: "#aaaaaa", liningColor: "#ffffff", backColor: "#bbbbbb", backLiningColor: "#eeeeee" });
   });
 });

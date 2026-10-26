@@ -9,7 +9,7 @@ import {
   type WallSeg,
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
-import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, type Box, type PartMat } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_LINING, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, withRoomWallColours, type Box, type PartMat } from "../lib/openings";
 import { coverLayout, coverTop, coverV, interiorFinish, outsideLook, splitFinish, splitQuadAtY, type InteriorFinish } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { skirtingColour } from "../lib/skirting";
@@ -81,7 +81,7 @@ function leafColour(op: Opening): string {
 }
 
 /** Painted internal woodwork: linings, architraves and window boards unless an opening says otherwise. */
-const JOINERY_WHITE = "#f3f1ea";
+const JOINERY_WHITE = DEFAULT_LINING;
 
 /** Material of a joinery part of an opening. */
 function partSpec(mat: PartMat, op: Opening | null, trim: string, side?: 1 | -1): MatSpec {
@@ -258,12 +258,21 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
 
   function addOpening(pl: OpeningPlacement, wall: WallSeg, wallT: number, spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>]) {
     const out = outwardSign(pl, polys);
-    const op = withHouseDoorColour(pl.opening, inp.doorColours, out !== 0);
+    const along = (pl.centre.x - wall.a.x) * pl.dir.x + (pl.centre.y - wall.a.y) * pl.dir.y;
+    // Wall colour of the room on a side of the wall (spans[0] is the +z side), for doors that match their rooms.
+    const wallColour = (s: 0 | 1): string | undefined => {
+      const id = spanAt(spans[s], along);
+      return id ? interiorFinish(roomsById.get(id), wall.color).color : undefined;
+    };
+    const op = withRoomWallColours(
+      withHouseDoorColour(pl.opening, inp.doorColours, out !== 0),
+      out ? undefined : wallColour(0),
+      out ? wallColour(out === 1 ? 1 : 0) : wallColour(1),
+    );
     const frame = { centre: pl.centre, dir: pl.dir };
     let parts;
     if (op.kind === "bay" && out) {
       // The room is on the side away from outside.
-      const along = (pl.centre.x - wall.a.x) * pl.dir.x + (pl.centre.y - wall.a.y) * pl.dir.y;
       const roomId = spanAt(spans[out === 1 ? 1 : 0], along);
       parts = bayParts(pl, wallT, out, roomId, { sill: windowSill(op), plinth: inp.plinthY ?? 0, depth: op.depth });
       if (parts.bayFloor) bayFloors.push({ roomId, poly: parts.bayFloor.map((p) => toPlan(frame, p.x, p.z)) });

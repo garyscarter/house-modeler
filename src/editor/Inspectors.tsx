@@ -381,15 +381,23 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
   const framed = k !== "gap" && k !== "archway";
   const trim = useModel()?.exterior?.trimColor ?? DEFAULT_EXTERIOR.trimColor;
   const twoSided = k === "door" || k === "front" || k === "bifold" || k === "archway";
-  const split = twoSided && (opening.backColor !== undefined || opening.backLiningColor !== undefined);
+  const split = twoSided && (opening.backColor !== undefined || opening.backLiningColor !== undefined || !!opening.matchFront || !!opening.matchBack);
   const sides = split ? openingSides(floor, opening) : null;
-  const sideName = (n: string) => (n === "outside" || n === "one side" || n === "other side" ? n : `${n} side`);
+  const isRoom = (n: string) => n !== "outside" && n !== "one side" && n !== "other side";
+  const sideName = (n: string) => (isRoom(n) ? `${n} side` : n);
+  /** A side's "match the room's walls" tick, where there is a room to match. */
+  const matchRow = (key: "matchFront" | "matchBack", room: string | undefined) =>
+    room !== undefined && isRoom(room) ? (
+      <label className="check" title="This side of the door, and its lining unless you set one, follow the room's wall colour">
+        <input type="checkbox" checked={!!opening[key]} onChange={(e) => onChange({ [key]: e.target.checked || undefined })} /> Match {room} walls
+      </label>
+    ) : null;
   const front = sides ? sideName(sides.front) : "";
   const back = sides ? sideName(sides.back) : "";
   const leafColour = opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e");
   return (
     <>
-      {COLOUR_KINDS.includes(k) && (
+      {COLOUR_KINDS.includes(k) && !(split && opening.matchFront) && (
         <SwatchField
           dulux={k !== "archway"}
           label={split ? `Colour (${front})` : "Colour"}
@@ -399,17 +407,20 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
           onReset={() => onChange({ color: undefined })}
         />
       )}
+      {split && matchRow("matchFront", sides?.front)}
       {twoSided && (
         <label className="check" title="Paint the two faces of the door, or the two sides of the archway, different colours">
           <input
             type="checkbox"
             checked={split}
-            onChange={(e) => onChange(e.target.checked ? { backColor: leafColour } : { backColor: undefined, backLiningColor: undefined })}
+            onChange={(e) =>
+              onChange(e.target.checked ? { backColor: leafColour } : { backColor: undefined, backLiningColor: undefined, matchFront: undefined, matchBack: undefined })
+            }
           />{" "}
           Different colour each side
         </label>
       )}
-      {split && COLOUR_KINDS.includes(k) && (
+      {split && COLOUR_KINDS.includes(k) && !opening.matchBack && (
         <SwatchField
           dulux={k !== "archway"}
           label={`Colour (${back})`}
@@ -419,6 +430,7 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
           onReset={() => onChange({ backColor: undefined })}
         />
       )}
+      {split && matchRow("matchBack", sides?.back)}
       {styles.length > 0 && (
         <label>
           Style
