@@ -306,6 +306,8 @@ export function SkyBackdrop() {
   const sky = useMemo(() => {
     const k = makeSky(SKY_BRIGHTNESS);
     k.scale.setScalar(400);
+    // Not something to zoom towards (Viewer's wheel handler raycasts the scene).
+    k.raycast = () => {};
     return k;
   }, []);
   useEffect(
@@ -342,7 +344,7 @@ export function SkyBackdrop() {
       {physical ? (
         <primitive object={sky} />
       ) : (
-        <mesh ref={dome} material={backdrop} renderOrder={-1000} frustumCulled={false}>
+        <mesh ref={dome} material={backdrop} renderOrder={-1000} frustumCulled={false} raycast={() => null}>
           <sphereGeometry args={[300, 32, 16]} />
         </mesh>
       )}

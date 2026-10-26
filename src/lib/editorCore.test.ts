@@ -15,7 +15,6 @@ import {
   liveTransform,
   pastSlop,
   resizeCam,
-  wheelZoomFactor,
 } from "./editorCore";
 
 describe("pastSlop", () => {
@@ -167,13 +166,5 @@ describe("reduceDrag", () => {
     const r = run([press, { type: "move", pointerId: 2, client: { x: 300, y: 300 } }, { type: "up", pointerId: 2 }, press]);
     expect(r.all).toEqual([[], [], [], []]);
     expect(r.phase.tag).toBe("pressed");
-  });
-});
-
-describe("wheelZoomFactor", () => {
-  it("zooms in on negative dy, harder for a pinch", () => {
-    expect(wheelZoomFactor(-100, false)).toBeGreaterThan(1);
-    expect(wheelZoomFactor(-10, true)).toBeGreaterThan(wheelZoomFactor(-10, false));
-    expect(wheelZoomFactor(0, false)).toBe(1);
   });
 });

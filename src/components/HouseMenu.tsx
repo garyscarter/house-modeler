@@ -12,7 +12,15 @@ import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
 import { openPhotos } from "./PhotosDialog";
 import { ProjectActions, AboutLine, RenderQuality, StorageStatus, SyncStatus } from "./SettingsPanel";
+import type { WheelMode } from "../lib/wheelGesture";
 import "./HouseMenu.css";
+
+/** What a plain scroll does. No event says whether a mouse or a trackpad sent it, so Auto can only guess from the deltas. */
+const WHEEL_OPTIONS: [WheelMode, string, string][] = [
+  ["auto", "Auto", "Guess from each scroll: a mouse wheel zooms, a trackpad swipe pans (a pinch or Ctrl/⌘ + scroll always zooms)"],
+  ["zoom", "Zooms", "A mouse: every scroll zooms"],
+  ["pan", "Pans", "A trackpad: every swipe pans (pinch or Ctrl/⌘ + scroll to zoom)"],
+];
 
 /** The house name in the top bar; opens everything that is about the project rather than the view. */
 export function HouseMenu({ name }: { name: string }) {
@@ -23,8 +31,10 @@ export function HouseMenu({ name }: { name: string }) {
   const updates = useListingUpdateCount("proposed");
   const look = usePanelPrefs((s) => s.look);
   const quiet = usePanelPrefs((s) => s.quiet);
+  const wheel = usePanelPrefs((s) => s.wheel);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const chassis = useChassis((s) => s.chassis);
+  const touch = useChassis((s) => s.touch);
   // Under 1000 px the top bar drops its ? button (styles.css), so the item lives here instead.
   const narrow = useChassis((s) => s.width < 1000);
   const syncOff = useSyncStatus((s) => s.status.kind === "off");
@@ -99,6 +109,18 @@ export function HouseMenu({ name }: { name: string }) {
                 <button className={look === "glass" ? "active" : ""} onClick={() => setPrefs({ look: "glass" })}>
                   Glass
                 </button>
+              </div>
+            </div>
+            )}
+            {!touch && (
+            <div className="hm-row">
+              <span>Scroll wheel</span>
+              <div className="seg" role="group" aria-label="Scroll wheel">
+                {WHEEL_OPTIONS.map(([k, label, hint]) => (
+                  <button key={k} className={wheel === k ? "active" : ""} title={hint} onClick={() => setPrefs({ wheel: k })}>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
             )}

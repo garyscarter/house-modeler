@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { clampScale, frameOf, liveTransform, resizeCam, WHEEL_COMMIT_MS, wheelZoomFactor, type Frame } from "../../lib/editorCore";
+import { clampScale, frameOf, liveTransform, resizeCam, WHEEL_COMMIT_MS, type Frame } from "../../lib/editorCore";
 import { fitCamInset, INSPECTOR_INSET, panCam, zoomCam, type Cam, type Rect, type Size } from "../../lib/planMath";
-import { wheelClassifier, wheelPixels } from "../../lib/wheelGesture";
+import { wheelClassifier, wheelPixels, wheelZoomFactor } from "../../lib/wheelGesture";
+import { usePanelPrefs } from "../../components/panelPrefs";
 import type { Pt } from "../../types";
 
 export interface CameraOptions {
@@ -197,7 +198,7 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   useEffect(() => {
     const node = el.current;
     if (!node) return;
-    const intentOf = wheelClassifier();
+    const intentOf = wheelClassifier(() => usePanelPrefs.getState().wheel);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const base = liveRef.current ?? camRef.current;

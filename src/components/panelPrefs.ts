@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { isLook, type Look } from "../lib/studio";
+import { isWheelMode, type WheelMode } from "../lib/wheelGesture";
 
 /**
  * Per-browser panel layout: which sections are open, the furniture category,
@@ -25,7 +26,9 @@ interface PanelPrefs {
   showPins: boolean;
   /** The one-time three-step coach strip after the first load has been dismissed. */
   coachDone: boolean;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "showPins" | "coachDone">>) => void;
+  /** What a plain scroll wheel does on the plan and in 3D: "auto" tells a mouse from a trackpad by the event, else always zoom or always pan. */
+  wheel: WheelMode;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "showPins" | "coachDone" | "wheel">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -40,15 +43,17 @@ export const usePanelPrefs = create<PanelPrefs>()(
       quiet: true,
       showPins: false,
       coachDone: false,
+      wheel: "auto",
       setPrefs: (p) => set(p),
     }),
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, showPins: s.showPins, coachDone: s.coachDone }),
+      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, showPins: s.showPins, coachDone: s.coachDone, wheel: s.wheel }),
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<PanelPrefs>) };
         if (!isLook(merged.look)) merged.look = "studio";
+        if (!isWheelMode(merged.wheel)) merged.wheel = "auto";
         return merged;
       },
     },

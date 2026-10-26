@@ -7,7 +7,9 @@ import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
-import { wheelClassifier, wheelPixels } from "../lib/wheelGesture";
+import { STICKY_MS, wheelClassifier, wheelPixels, wheelZoomFactor } from "../lib/wheelGesture";
+import { depthOf, dollyStep } from "../lib/wheelDolly";
+import { usePanelPrefs } from "../components/panelPrefs";
 import { easeInOut, frameFor, homeView, INSPECTOR_INSET_PX, isValidPose, poseFits, presetView, type CameraPose, type FrameBox, type ViewRequest, type ViewSide } from "../lib/cameraViews";
 import { houseHeight } from "../lib/viewFraming";
 import { ViewCube } from "./ViewCube";
@@ -267,6 +269,7 @@ function Orbit({
 }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const invalidate = useThree((s) => s.invalidate);
   const canvasSize = useThree((s) => s.size);
   const controls = useRef<OrbitControlsImpl>(null);
@@ -433,34 +436,76 @@ function Orbit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
 
-  // A trackpad two-finger swipe pans the view across the screen; a pinch or a mouse wheel still reaches
-  // OrbitControls and zooms. Listen on the canvas's parent in the capture phase so a pan never reaches it.
+  // A trackpad two-finger swipe pans the view across the screen; a pinch or a mouse wheel zooms towards what is
+  // under the cursor. Both are handled here, in the capture phase on the canvas's parent, so OrbitControls never
+  // sees a wheel: its own zoom moves a fixed 5 % an event whatever the event's size (a Windows mouse sends one
+  // event a notch, a Mac or a trackpad many), towards its target wherever that is (so how close it could get
+  // depended on where the last pan or preset had left the target).
   useEffect(() => {
     const host = gl.domElement.parentElement;
     if (!host) return;
-    const intentOf = wheelClassifier();
+    const intentOf = wheelClassifier(() => usePanelPrefs.getState().wheel);
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const ndc = new THREE.Vector2();
+    const ray = new THREE.Raycaster();
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+    /** The zoom gesture in progress: when its last event came, and the world point it zooms towards (null: the sky). */
+    let zoom: { at: number; anchor: THREE.Vector3 | null } | null = null;
+    const shown = (o: THREE.Object3D | null) => {
+      for (; o; o = o.parent) if (!o.visible) return false;
+      return true;
+    };
+    /** What is under the cursor: the nearest shown object, else the ground plane, else nothing (the sky). */
+    const under = (): THREE.Vector3 | null => {
+      const hit = ray.intersectObjects(scene.children, true).find((h) => h.distance > camera.near && shown(h.object));
+      if (hit) return hit.point.clone();
+      return ray.ray.intersectPlane(ground, hitPoint) ? hitPoint.clone() : null;
+    };
     const onWheel = (e: WheelEvent) => {
       const c = controls.current;
-      if (!c || intentOf(e, e.timeStamp) !== "pan") return;
+      if (!c) return;
+      const intent = intentOf(e, e.timeStamp);
       e.preventDefault();
       e.stopPropagation();
       glide.current = null;
       const { dx, dy } = wheelPixels(e);
-      // The same scale as OrbitControls' own pan: a swipe the height of the canvas moves one view height at the target.
-      const h = gl.domElement.clientHeight || 1;
-      const reach = (2 * camera.position.distanceTo(c.target) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / h;
-      right.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(dx * reach);
-      up.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(-dy * reach);
-      right.add(up);
-      camera.position.add(right);
-      c.target.add(right);
+      if (intent === "pan") {
+        zoom = null;
+        // The same scale as OrbitControls' own pan: a swipe the height of the canvas moves one view height at the target.
+        const h = gl.domElement.clientHeight || 1;
+        const reach = (2 * camera.position.distanceTo(c.target) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / h;
+        right.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(dx * reach);
+        up.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(-dy * reach);
+        right.add(up);
+        camera.position.add(right);
+        c.target.add(right);
+        c.update();
+        return;
+      }
+      const rect = gl.domElement.getBoundingClientRect();
+      ndc.set(((e.clientX - rect.left) / (rect.width || 1)) * 2 - 1, -((e.clientY - rect.top) / (rect.height || 1)) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      // A gesture finds what is under the cursor once, on its first event, and every event of it zooms towards that.
+      if (!zoom || e.timeStamp - zoom.at >= STICKY_MS) zoom = { at: 0, anchor: under() };
+      zoom.at = e.timeStamp;
+      camera.getWorldDirection(forward);
+      const depth = zoom.anchor ? depthOf(camera.position, forward, zoom.anchor) : camera.position.distanceTo(c.target);
+      const next = dollyStep(camera.position, forward, ray.ray.direction, depth, wheelZoomFactor(dy, e.ctrlKey), c.minDistance, c.maxDistance);
+      camera.position.set(next.position.x, next.position.y, next.position.z);
+      c.target.set(next.target.x, next.target.y, next.target.z);
       c.update();
     };
     host.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => host.removeEventListener("wheel", onWheel, { capture: true });
-  }, [gl, camera]);
+  }, [gl, camera, scene]);
+
+  // Dev builds expose the camera and controls (like window.__houseStore) for the Playwright checks.
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(window, { __houseCamera: { camera, controls: controls.current } });
+  }, [camera]);
 
   const tmp = useMemo(() => ({ off: new THREE.Spherical(), v: new THREE.Vector3(), t: new THREE.Vector3() }), []);
   const viewer = useRef<HTMLElement | null>(null);

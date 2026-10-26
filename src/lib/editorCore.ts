@@ -14,8 +14,12 @@ export const LONG_PRESS_SLOP_PX = 8;
 /** Two presses on the same key within this many ms and DOUBLE_PRESS_PX make a double press. */
 export const DOUBLE_PRESS_MS = 400;
 export const DOUBLE_PRESS_PX = 6;
-/** A wheel burst commits its camera after this much quiet (equal to wheelGesture's STICKY_MS). */
-export const WHEEL_COMMIT_MS = 150;
+/**
+ * A wheel burst commits its camera (a full re-render of the canvas) after this much quiet. Longer than
+ * wheelGesture's STICKY_MS so that a mouse wheel turned notch by notch (200-300 ms apart) commits once at the end
+ * rather than after every notch.
+ */
+export const WHEEL_COMMIT_MS = 400;
 /** Zoom step for buttons and keys. */
 export const ZOOM_STEP = 1.4;
 
@@ -84,9 +88,6 @@ export function resizeCam(c: Cam, from: Size, to: Size, anchor: "topLeft" | "cen
   const cy = c.y + (from.h * c.s) / 2;
   return { x: cx - (to.w * c.s) / 2, y: cy - (to.h * c.s) / 2, s: c.s };
 }
-
-/** Wheel delta to a zoom factor (> 1 zooms in). Trackpad pinches arrive as ctrl+wheel with small deltas, so they get more punch. */
-export const wheelZoomFactor = (dy: number, ctrl: boolean) => Math.exp(-dy * (ctrl ? 0.01 : 0.0015));
 
 /** A Frame for a camera on an element whose top-left is at `rect` (client px). */
 export function frameOf(cam: Cam, rect: { left: number; top: number }, unitsPerM: number): Frame {
