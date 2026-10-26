@@ -781,6 +781,11 @@ export interface SiteSurface {
    */
   smooth?: boolean;
   /**
+   * Edges drawn as curves when `smooth` is off: edge i runs from polygon[i] to polygon[i + 1]. Kept in step
+   * with the polygon by lib/surfaceCurve.ts when corners are added or removed. Absent: none.
+   */
+  curves?: number[];
+  /**
    * Lawns and beds: the edging. Absent: "brick" round a raised bed (slope.base > 0), as before, otherwise
    * "none" (lib/gardenCatalogue.ts kerbOf).
    */

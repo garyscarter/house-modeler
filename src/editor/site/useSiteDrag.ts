@@ -2,6 +2,7 @@ import { useEffect, type RefObject } from "react";
 import { useStore } from "../../store";
 import { siteOf } from "../../lib/sites";
 import { edgesOf, insertBoundaryVertex, rectPoly,type LevelOutline } from "../../lib/site";
+import { curvesAfterInsert } from "../../lib/surfaceCurve";
 import { moveBoundaryCorner, slideCorner, type SlideAlong } from "../../lib/boundaryOpening";
 import { lockToAxis, snapPoint, SNAP_PX } from "../../lib/polygonEdit";
 import { uid, type Neighbour, type Site, type SurfaceKind, type WPt } from "../../types";
@@ -120,10 +121,12 @@ export function useSiteDrag(a: Args) {
       },
       insertVertex: (i, p) => {
         if (s.type === "boundary") updateSite((st) => insertBoundaryVertex(st, i, p));
+        else if (s.type === "surface")
+          updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, polygon: [...x.polygon.slice(0, i + 1), p, ...x.polygon.slice(i + 1)], curves: curvesAfterInsert(x.curves, i) } : x)) }));
         else editPoly(s, (pl) => [...pl.slice(0, i + 1), p, ...pl.slice(i + 1)]);
       },
       removeVertex: (i) => deleteVertex(s, i),
-      pickVertex: (i) => setSel({ ...s, vertex: i } as Sel),
+      pickVertex: (i) => setSel({ ...s, vertex: i, edge: null } as Sel),
     };
   };
 
@@ -340,7 +343,11 @@ export function useSiteDrag(a: Args) {
     endDown,
     itemDown,
     vertexDown: (e: React.PointerEvent, s: Item, i: number) => edit.vertexDown(e, targetOf(s), i),
-    edgeDown: (e: React.PointerEvent, s: Item, i: number) => edit.edgeDown(e, targetOf(s), i),
+    edgeDown: (e: React.PointerEvent, s: Item, i: number) => {
+      // A surface's edge is selected by pressing it (so it can be curved), and slides when dragged.
+      if (s.type === "surface") setSel({ ...s, vertex: null, edge: i } as Sel);
+      edit.edgeDown(e, targetOf(s), i);
+    },
     midDown: (e: React.PointerEvent, s: Item, i: number) => edit.midDown(e, targetOf(s), i),
   };
 }

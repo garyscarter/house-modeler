@@ -248,7 +248,7 @@ function boundaryChanges(before: Site, after: Site): Change[] {
 const HARD = new Set<SurfaceKind>(["drive", "patio", "path"]);
 const centroid = (poly: WPt[]) => poly.reduce((s, p) => ({ x: s.x + p.x / poly.length, y: s.y + p.y / poly.length }), { x: 0, y: 0 });
 /** A surface as JSON without what is reported on its own (id, smoothing, edging). */
-const plain = ({ id: _id, smooth: _s, kerb: _k, kerbHeight: _h, ...rest }: SiteSurface) => JSON.stringify(rest);
+const plain = ({ id: _id, smooth: _s, curves: _c, kerb: _k, kerbHeight: _h, ...rest }: SiteSurface) => JSON.stringify(rest);
 const significant = (a: number, b: number) => Math.abs(b - a) >= AREA_TOL && Math.abs(b - a) >= AREA_FRAC * Math.max(a, b);
 
 function pairSurfaces(a: SiteSurface[], b: SiteSurface[]): { a?: SiteSurface; b?: SiteSurface }[] {

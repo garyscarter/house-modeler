@@ -154,6 +154,9 @@ export function SelectionLayer({ sel, poly, px, smooth, onEdgeDown, onMidDown, o
           const b = poly[(i + 1) % poly.length];
           return <EdgeHit key={"e" + i} a={a} b={b} px={px} width={10} className="site-edge-hit" onPointerDown={(ev) => onEdgeDown(ev, sel, i)} />;
         })}
+      {sel.type !== "boundary" && sel.edge !== null && sel.edge !== undefined && poly[sel.edge] && (
+        <line x1={poly[sel.edge].x} y1={poly[sel.edge].y} x2={poly[(sel.edge + 1) % poly.length].x} y2={poly[(sel.edge + 1) % poly.length].y} className="site-surface-edge-sel" strokeWidth={4 * px} pointerEvents="none" />
+      )}
       {poly.map((a, i) => (
         <MidpointHandle key={"m" + i} a={a} b={poly[(i + 1) % poly.length]} px={px} r={5} hit={9} plus className="site-mid" onPointerDown={(e) => onMidDown(e, sel, i)} />
       ))}

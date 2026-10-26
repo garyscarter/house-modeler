@@ -71,7 +71,7 @@ export function hasPlotEdits(site: Site, fresh: Site): boolean {
     JSON.stringify([
       s.boundary,
       s.neighbours.map(({ id: _id, ...rest }) => rest),
-      s.surfaces.map((x) => [x.kind, x.polygon, !!x.smooth, x.kerb ?? null, x.kerbHeight ?? null]),
+      s.surfaces.map((x) => [x.kind, x.polygon, !!x.smooth, x.curves ?? null, x.kerb ?? null, x.kerbHeight ?? null]),
       s.frontBearing,
       s.latitude,
       s.longitude,

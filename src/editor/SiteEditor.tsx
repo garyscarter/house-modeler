@@ -29,6 +29,7 @@ import { slideFor, useSiteDrag, type GardenActions } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
 import { GardenItems, ItemHandles, PlacementGhost, PolyDraftView, RunDraftView } from "./site/GardenLayers";
 import { ItemInspector, SurfaceFields } from "./site/GardenInspectors";
+import { curvesAfterRemove, edgeCurved, setEdgeCurved } from "../lib/surfaceCurve";
 import { addItem, closesPolygon, gardenClipboard, newItem, pasteItems, removeItems, rotateItems } from "./site/gardenEdit";
 import type { Draft, Item, Sel, SiteMode, Tool } from "./site/types";
 import "./PlanEditor.css"; // the rail, popover and zoom styles are shared with the plan
@@ -133,8 +134,13 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
 
   const deleteVertex = (s: Item, i: number) => {
     if (s.type === "boundary") updateSite((st) => removeBoundaryVertex(st, i));
+    else if (s.type === "surface")
+      updateSite((st) => ({
+        ...st,
+        surfaces: st.surfaces.map((x) => (x.id === s.id && x.polygon.length > 3 ? { ...x, polygon: x.polygon.filter((_, j) => j !== i), curves: curvesAfterRemove(x.curves, i, x.polygon.length) } : x)),
+      }));
     else editPoly(s, (poly) => (poly.length > 3 ? poly.filter((_, j) => j !== i) : poly));
-    setSel({ ...s, vertex: null } as Sel);
+    setSel({ ...s, vertex: null, edge: null } as Sel);
   };
   const deleteSelectedItems = () => {
     if (!itemIds.length) return;
@@ -396,7 +402,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
                 <rect x={vb.x - vb.w} y={vb.y - vb.h} width={3 * vb.w} height={3 * vb.h} fill="url(#site-grid)" />
                 <SiteWorld site={site} mode={mode} sel={psel} tool={tool} px={px} outlines={outlines} walls={walls} clearances={clearances} onItemDown={itemDown} />
                 <GardenItems site={site} selected={selectedIds} px={px} interactive={garden} onDown={gardenItemDown} />
-                {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!selSurface?.smooth} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
+                {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!(selSurface?.smooth || selSurface?.curves?.length)} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
                 {garden && tool === "select" && oneItem && !peeking && <ItemHandles item={oneItem} px={px} touch={touch} onRotateDown={(e) => rotateDown(e, oneItem.id)} onResizeDown={(e, h) => resizeDown(e, oneItem.id, h)} onEndDown={(e, end) => endDown(e, oneItem.id, end)} />}
                 {armedItem && armed && <PlacementGhost def={armed} item={armedItem} px={px} />}
                 {armed?.run && runStart && <RunDraftView from={runStart} to={hover ? grid(hover) : null} px={px} />}
@@ -604,6 +610,16 @@ function Inspector({
       <div className="inspector" data-garden-inspector="surface">
         <h4>Garden surface</h4>
         <SurfaceFields surface={s} />
+        {sel.edge !== null && sel.edge !== undefined && sel.edge < s.polygon.length && (
+          <label className="check" data-garden-edge={sel.edge}>
+            <input
+              type="checkbox"
+              checked={edgeCurved(s, sel.edge)}
+              onChange={(e) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, ...setEdgeCurved(x, sel.edge!, e.target.checked) } : x)) }))}
+            />{" "}
+            Curve edge {sel.edge + 1} of {s.polygon.length}
+          </label>
+        )}
         <p className="muted small">{surfaceArea(s).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">
           {vertexButton}

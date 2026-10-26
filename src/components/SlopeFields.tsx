@@ -9,18 +9,26 @@ const num = (v: string, fallback: number) => {
 
 /**
  * Controls for a surface's ramp: "Slopes up" with the way it climbs and how far
- * (metres above the ground at its highest edge), plus an optional start height.
- * `onChange(undefined)` makes the surface flat at ground level again.
+ * (metres above the ground at its highest edge). The height of a flat, raised
+ * surface is `slope.base`, set by `RaisedField`; it is kept when the ramp is
+ * turned off, so `onChange` gets a flat slope with only `base` then, or
+ * undefined when the surface sits on the ground.
  */
 export function SlopeFields({ surface, onChange }: { surface: SiteSurface; onChange: (slope: SurfaceSlope | undefined) => void }) {
   const slope = surface.slope;
+  const ramp = !!slope && slope.rise !== 0;
   const gradient = slopeGradient(surface.polygon, slope);
   return (
     <>
       <label className="check">
-        <input type="checkbox" checked={!!slope} onChange={(e) => onChange(e.target.checked ? { toward: "back", rise: 0.2 } : undefined)} /> Slopes up (a ramp, with no step)
+        <input
+          type="checkbox"
+          checked={ramp}
+          onChange={(e) => onChange(e.target.checked ? { toward: slope?.toward ?? "back", rise: 0.2, ...(slope?.base ? { base: slope.base } : {}) } : slope?.base ? { toward: "back", rise: 0, base: slope.base } : undefined)}
+        />{" "}
+        Slopes up (a ramp, with no step)
       </label>
-      {slope && (
+      {ramp && slope && (
         <>
           <label>
             Climbs towards
@@ -36,15 +44,38 @@ export function SlopeFields({ surface, onChange }: { surface: SiteSurface; onCha
             Rise (m)
             <input type="number" step={0.01} min={-1} max={2} value={slope.rise} onChange={(e) => onChange({ ...slope, rise: num(e.target.value, slope.rise) })} />
           </label>
-          <label>
-            Height at the low edge (m)
-            <input type="number" step={0.01} min={0} max={2} value={slope.base ?? 0} onChange={(e) => onChange({ ...slope, base: Math.max(0, num(e.target.value, slope.base ?? 0)) })} />
-          </label>
           <p className="muted small">
-            {gradient > 0 ? `About 1 in ${Math.round(1 / gradient)} (${(gradient * 100).toFixed(1)}%). ` : ""}Heights are above the ground. The floor of the ground floor is 0.26 m up.
+            {gradient > 0 ? `About 1 in ${Math.round(1 / gradient)} (${(gradient * 100).toFixed(1)}%). ` : ""}The rise is on top of the raised height below. The floor of the ground floor is 0.26 m up.
           </p>
         </>
       )}
     </>
+  );
+}
+
+/**
+ * How far a surface's top stands above the ground, cm: a raised bed's soil
+ * level, a terrace, a step up. Stored as `slope.base`; a ramp's rise climbs
+ * from there. Zero with no ramp clears the slope.
+ */
+export function RaisedField({ surface, onChange }: { surface: SiteSurface; onChange: (slope: SurfaceSlope | undefined) => void }) {
+  const slope = surface.slope;
+  const cm = Math.round((slope?.base ?? 0) * 100);
+  return (
+    <label>
+      Raised above the ground (cm)
+      <input
+        type="number"
+        step={1}
+        min={0}
+        max={200}
+        value={cm}
+        onChange={(e) => {
+          const base = Math.max(0, Math.min(2, num(e.target.value, cm) / 100));
+          if (!base && !(slope && slope.rise !== 0)) onChange(undefined);
+          else onChange({ toward: slope?.toward ?? "back", rise: slope?.rise ?? 0, ...(base ? { base } : {}) });
+        }}
+      />
+    </label>
   );
 }

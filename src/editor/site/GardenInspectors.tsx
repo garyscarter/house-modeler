@@ -1,6 +1,6 @@
 import { useStore, useSite } from "../../store";
 import { SURFACE_LABEL, type GardenItem, type SiteSurface, type SurfaceKind } from "../../types";
-import { SlopeFields } from "../../components/SlopeFields";
+import { RaisedField, SlopeFields } from "../../components/SlopeFields";
 import { SurfaceFinishField } from "../../components/SurfaceFinishField";
 import { KerbFields } from "../../components/KerbFields";
 import { gardenDef, isPlant, itemSize } from "../../lib/gardenCatalogue";
@@ -77,11 +77,16 @@ export function SurfaceFields({ surface }: { surface: SiteSurface }) {
         </select>
       </label>
       <SurfaceFinishField surface={surface} onChange={(finish) => set({ finish })} />
+      <RaisedField surface={surface} onChange={(slope) => set({ slope })} />
       <SlopeFields surface={surface} onChange={(slope) => set({ slope })} />
       <label className="check">
-        <input type="checkbox" checked={!!surface.smooth} onChange={(e) => set({ smooth: e.target.checked })} /> Curved edges
+        <input type="checkbox" checked={!!surface.smooth} onChange={(e) => set({ smooth: e.target.checked, curves: undefined })} /> Curved edges
+        {!surface.smooth && !!surface.curves?.length && <span className="muted small"> ({surface.curves.length} of {surface.polygon.length} curved: press an edge to change one)</span>}
       </label>
       <KerbFields surface={surface} onChange={(p) => set(p)} />
+      {(surface.kind === "lawn" || surface.kind === "bed") && (surface.slope?.base ?? 0) > 0 && (
+        <p className="muted small">The kerb stands on top of the raised surface; set its height to 0 for one flush with the soil.</p>
+      )}
     </>
   );
 }

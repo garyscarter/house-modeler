@@ -9,7 +9,7 @@ export type SiteMode = "plot" | "garden";
 /** A selected polygon: the boundary, a surface or a neighbouring building. */
 export type Item =
   | { type: "boundary"; edge: number | null; vertex: number | null }
-  | { type: "surface" | "neighbour"; id: string; vertex: number | null };
+  | { type: "surface" | "neighbour"; id: string; vertex: number | null; edge?: number | null };
 /** What is selected: a polygon, or garden items (ids; kept in the store as `gardenSel`). */
 export type Sel = Item | { type: "item"; ids: string[] } | null;
 

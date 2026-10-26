@@ -59,9 +59,83 @@ export function closedSpline(poly: readonly WPt[], samples: number = CURVE_SAMPL
   return out;
 }
 
-/** The outline a surface is drawn with: the spline when `smooth`, else its polygon as is. */
-export function surfaceOutline(surface: Pick<SiteSurface, "polygon" | "smooth">, samples: number = CURVE_SAMPLES): WPt[] {
-  return surface.smooth ? closedSpline(surface.polygon, samples) : surface.polygon;
+type Curvable = Pick<SiteSurface, "polygon" | "smooth" | "curves">;
+
+/**
+ * The outline with only the edges in `curves` drawn as spline spans (edge i runs
+ * from poly[i] to poly[i + 1]; each curved span is the same Catmull-Rom span the
+ * whole-surface spline would give it, so a curved edge beside a straight one
+ * still bulges smoothly). No curved edges: a copy of `poly`.
+ */
+export function mixedOutline(poly: readonly WPt[], curves: readonly number[], samples: number = CURVE_SAMPLES): WPt[] {
+  const n = poly.length;
+  if (n < 3 || !curves.length) return poly.map((p) => ({ x: p.x, y: p.y }));
+  const s = Math.max(1, Math.round(samples));
+  const set = new Set(curves);
+  const out: WPt[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ x: poly[i].x, y: poly[i].y });
+    if (!set.has(i)) continue;
+    const p0 = poly[(i - 1 + n) % n];
+    const p2 = poly[(i + 1) % n];
+    const p3 = poly[(i + 2) % n];
+    for (let j = 1; j < s; j++) out.push(crPoint(p0, poly[i], p2, p3, j / s));
+  }
+  return out;
+}
+
+/** The outline a surface is drawn with: the spline when `smooth`, its curved edges when some are, else its polygon as is. */
+export function surfaceOutline(surface: Curvable, samples: number = CURVE_SAMPLES): WPt[] {
+  if (surface.smooth) return closedSpline(surface.polygon, samples);
+  if (surface.curves?.length) return mixedOutline(surface.polygon, surface.curves, samples);
+  return surface.polygon;
+}
+
+/** Whether edge i (polygon[i] to polygon[i + 1]) of a surface is drawn curved. */
+export const edgeCurved = (surface: Curvable, i: number): boolean => !!surface.smooth || !!surface.curves?.includes(i);
+
+/**
+ * The surface's `smooth` and `curves` with edge i curved or straight: every edge
+ * curved folds into `smooth`, none leaves both unset.
+ */
+export function setEdgeCurved(surface: Curvable, i: number, on: boolean): Pick<SiteSurface, "smooth" | "curves"> {
+  const n = surface.polygon.length;
+  const all = Array.from({ length: n }, (_, k) => k);
+  const now = new Set(surface.smooth ? all : surface.curves ?? []);
+  if (on) now.add(i);
+  else now.delete(i);
+  const list = all.filter((k) => now.has(k));
+  if (list.length === n && n > 0) return { smooth: true, curves: undefined };
+  return { smooth: false, curves: list.length ? list : undefined };
+}
+
+/** The curved-edge list after a corner is inserted after polygon[i] (the old edge i splits into edges i and i + 1, both curved if it was). */
+export function curvesAfterInsert(curves: readonly number[] | undefined, i: number): number[] | undefined {
+  if (!curves?.length) return undefined;
+  const out = new Set<number>();
+  for (const k of curves) {
+    if (k < i) out.add(k);
+    else if (k === i) out.add(i), out.add(i + 1);
+    else out.add(k + 1);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/**
+ * The curved-edge list after corner i of an n-corner polygon is removed: the
+ * two edges that met it merge into one, curved if either was.
+ */
+export function curvesAfterRemove(curves: readonly number[] | undefined, i: number, n: number): number[] | undefined {
+  if (!curves?.length || n < 4) return undefined;
+  const before = (i - 1 + n) % n;
+  const merged = i === 0 ? n - 2 : i - 1;
+  const out = new Set<number>();
+  for (const k of curves) {
+    if (k === before || k === i) out.add(merged);
+    else if (i === 0 || k > i) out.add(k - 1);
+    else out.add(k);
+  }
+  return [...out].sort((a, b) => a - b);
 }
 
 /** Control points for a circle (or ellipse) of radii rx, ry about `c`, for the circle draw tool; drawn with smooth: true. */
@@ -76,16 +150,16 @@ export function circleControls(c: WPt, rx: number, ry: number = rx, n = 8): WPt[
 export const rectControls = (a: WPt, b: WPt): WPt[] => rectPoly(a.x, a.y, b.x, b.y);
 
 /** Area of the drawn outline, m² (smooth surfaces: the spline's, not the control polygon's). */
-export const surfaceArea = (surface: Pick<SiteSurface, "polygon" | "smooth">): number => Math.abs(polygonArea(surfaceOutline(surface)));
+export const surfaceArea = (surface: Curvable): number => Math.abs(polygonArea(surfaceOutline(surface)));
 
 /** Length of the drawn outline, metres: the kerb run of a lawn or bed. */
-export function surfacePerimeter(surface: Pick<SiteSurface, "polygon" | "smooth">): number {
+export function surfacePerimeter(surface: Curvable): number {
   const o = surfaceOutline(surface);
   return o.length < 2 ? 0 : o.reduce((s, p, i) => s + dist(p, o[(i + 1) % o.length]), 0);
 }
 
 /** SVG path data ("M … Z") of the drawn outline, given a point mapper (world metres to SVG units). */
-export function outlinePath(surface: Pick<SiteSurface, "polygon" | "smooth">, toSvg: (p: WPt) => { x: number; y: number }): string {
+export function outlinePath(surface: Curvable, toSvg: (p: WPt) => { x: number; y: number }): string {
   const o = surfaceOutline(surface);
   if (!o.length) return "";
   return o.map((p, i) => {
