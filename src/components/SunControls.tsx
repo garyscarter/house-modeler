@@ -8,6 +8,7 @@ import { useViewedSite, useViewedVariant } from "../three/viewedVariant";
 import { useSiteView } from "../three/siteView";
 import { SUN_HOURS_GRADIENT, SUN_HOURS_MAX, useSunHours } from "../three/SunHours";
 import { shareWithSun } from "../three/sunShare";
+import { duskHour } from "../lib/dusk";
 import "./SunControls.css";
 
 const QUICK_DATES: [string, number][] = [
@@ -73,6 +74,9 @@ export function SunControls() {
   };
   const { altitude, azimuth } = info.position;
   const zone = ukZone(SUN_YEAR, sun.dayOfYear);
+  // Dusk on the chosen day: the sun just above the horizon, low, warm and dim, so garden lights glow.
+  const dusk = duskHour(site, SUN_YEAR, sun.dayOfYear);
+  const atDusk = Math.abs(sun.hour - dusk) <= 10 / 60;
 
   return (
     <>
@@ -115,6 +119,16 @@ export function SunControls() {
                   {label}
                 </button>
               ))}
+              <button
+                className={`sun-dusk${atDusk ? " active" : ""}`}
+                onClick={() => {
+                  setPlaying(false);
+                  setSun({ enabled: true, hour: dusk });
+                }}
+                title={`Dusk on this day, ${formatClock(dusk)}: the sun on the horizon and the garden lights on`}
+              >
+                Dusk
+              </button>
             </div>
             <div className="sun-row">
               <button className="sun-play" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause" : "Play through the day"}>

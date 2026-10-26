@@ -1,8 +1,10 @@
 import { useMemo } from "react";
-import type { VariantKey } from "../types";
+import type { GardenItem, Site, VariantKey } from "../types";
 import { useSite, useStore } from "../store";
 import { changedPieces, type BoundaryPiece } from "../lib/siteDiff";
 import { GROUND_Y } from "./Site";
+import { groundHeightAt, itemBounds, itemsOf } from "../lib/siteItems";
+import { gardenDef, itemSize } from "../lib/gardenCatalogue";
 
 /** Overlay colours, as for the house: green is in the solid layout only, red in the other only. */
 const NEW = "#16a34a";
@@ -21,13 +23,42 @@ export function SiteDiff({ variant, other }: { variant: VariantKey; other: Varia
   const theirs = useSite(other);
   const showSite = useStore((s) => s.showSite);
   const pieces = useMemo(() => (mine && theirs ? changedPieces(theirs, mine) : []), [mine, theirs]);
-  if (!showSite || !pieces.length) return null;
+  const items = useMemo(() => (mine && theirs ? changedItems(theirs, mine) : []), [mine, theirs]);
+  if (!showSite || (!pieces.length && !items.length)) return null;
   return (
     <group>
       {pieces.map((p, i) => (
         <Piece key={i} p={p} />
       ))}
+      {items.map(({ item, site, added }) => (
+        <ItemBox key={`${added ? "+" : "-"}${item.id}`} item={item} site={site} added={added} />
+      ))}
     </group>
+  );
+}
+
+/** Garden items in one layout and not the other (or moved, turned, resized or swapped since). */
+function changedItems(before: Site, after: Site): { item: GardenItem; site: Site; added: boolean }[] {
+  const key = (it: GardenItem) => JSON.stringify([it.type, it.x, it.y, it.rot, it.w, it.d, it.h, it.to, it.toH, it.mount]);
+  const was = new Map(itemsOf(before).map((it) => [it.id, key(it)]));
+  const now = new Map(itemsOf(after).map((it) => [it.id, key(it)]));
+  return [
+    ...itemsOf(after).filter((it) => was.get(it.id) !== key(it)).map((item) => ({ item, site: after, added: true })),
+    ...itemsOf(before).filter((it) => now.get(it.id) !== key(it)).map((item) => ({ item, site: before, added: false })),
+  ];
+}
+
+/** A see-through box round a garden item's footprint and height: green if it is new here, red if gone. */
+function ItemBox({ item, site, added }: { item: GardenItem; site: Site; added: boolean }) {
+  const b = itemBounds(item);
+  const { h } = itemSize(item);
+  const base = GROUND_Y + groundHeightAt(site, { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }) + (item.mount ?? gardenDef(item.type)?.mount ?? 0);
+  const top = Math.max(h, 0.1) + 0.05;
+  return (
+    <mesh position={[(b.x0 + b.x1) / 2, base + top / 2, (b.y0 + b.y1) / 2]} renderOrder={2}>
+      <boxGeometry args={[b.x1 - b.x0 + 0.1, top, b.y1 - b.y0 + 0.1]} />
+      <meshStandardMaterial color={added ? NEW : GONE} transparent opacity={added ? 0.35 : 0.25} depthWrite={false} />
+    </mesh>
   );
 }
 
