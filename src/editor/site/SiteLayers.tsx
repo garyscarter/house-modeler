@@ -1,10 +1,11 @@
 import { svgPoints } from "../../lib/planMath";
+import { outlinePath } from "../../lib/surfaceCurve";
 import { polygonCentroid } from "../../lib/geometry";
 import { rectPoly, edgesOf, type LevelOutline, type sideClearances } from "../../lib/site";
 import type { LevelWalls } from "../../lib/siteWalls";
 import { edgeLength } from "../../lib/boundaryOpening";
 import { type Site, type SurfaceKind } from "../../types";
-import { sameItem, type Draft, type Item, type Sel, type Tool } from "./types";
+import { sameItem, type Draft, type Item, type SiteMode, type Tool } from "./types";
 import { EdgeHit, Handle, MidpointHandle } from "../core/components";
 
 type Down = (e: React.PointerEvent, s: Item) => void;
@@ -21,7 +22,9 @@ export const SURFACE_FILL: Record<SurfaceKind, string> = {
 
 interface WorldProps {
   site: Site;
-  sel: Sel;
+  mode: SiteMode;
+  /** The selected polygon (a surface, building or the boundary), not garden items. */
+  sel: Item | null;
   tool: Tool;
   px: number;
   outlines: LevelOutline[];
@@ -31,21 +34,24 @@ interface WorldProps {
 }
 
 /** Surfaces, neighbours, the house, the boundary edges and the clearance dimensions, all in world metres. */
-export function SiteWorld({ site, sel, tool, px, outlines, walls, clearances, onItemDown }: WorldProps) {
+export function SiteWorld({ site, mode, sel, tool, px, outlines, walls, clearances, onItemDown }: WorldProps) {
+  const garden = mode === "garden";
   const edges = edgesOf(site);
   const selected = (t: Item) => !!sel && sameItem(sel, t);
   const fs = 12 * px;
   return (
     <>
       {site.surfaces.map((s) => (
-        <polygon
+        <path
           key={s.id}
-          points={svgPoints(s.polygon)}
+          data-surface-id={s.id}
+          d={outlinePath(s, (p) => p)}
           fill={SURFACE_FILL[s.kind]}
-          fillOpacity={0.75}
-          stroke={selected({ type: "surface", id: s.id, vertex: null }) ? "#2563eb" : "rgba(0,0,0,0.15)"}
-          strokeWidth={(selected({ type: "surface", id: s.id, vertex: null }) ? 2 : 1) * px}
-          onPointerDown={(e) => onItemDown(e, { type: "surface", id: s.id, vertex: null })}
+          fillOpacity={garden ? 0.75 : 0.4}
+          stroke={garden && selected({ type: "surface", id: s.id, vertex: null }) ? "#2563eb" : "rgba(0,0,0,0.15)"}
+          strokeWidth={(garden && selected({ type: "surface", id: s.id, vertex: null }) ? 2 : 1) * px}
+          pointerEvents={garden ? undefined : "none"}
+          onPointerDown={garden ? (e) => onItemDown(e, { type: "surface", id: s.id, vertex: null }) : undefined}
         />
       ))}
 
@@ -53,7 +59,7 @@ export function SiteWorld({ site, sel, tool, px, outlines, walls, clearances, on
         const c = polygonCentroid(n.polygon);
         const isSel = selected({ type: "neighbour", id: n.id, vertex: null });
         return (
-          <g key={n.id} onPointerDown={(e) => onItemDown(e, { type: "neighbour", id: n.id, vertex: null })}>
+          <g key={n.id} pointerEvents={garden ? "none" : undefined} onPointerDown={garden ? undefined : (e) => onItemDown(e, { type: "neighbour", id: n.id, vertex: null })}>
             <polygon points={svgPoints(n.polygon)} fill="#d6d8dc" stroke={isSel ? "#2563eb" : "#8b9099"} strokeWidth={(isSel ? 2 : 1) * px} />
             <text x={c.x} y={c.y} fontSize={fs} textAnchor="middle" dominantBaseline="central" className="site-label">
               {n.name}
@@ -76,7 +82,7 @@ export function SiteWorld({ site, sel, tool, px, outlines, walls, clearances, on
         const e = edges[i];
         const isSel = sel?.type === "boundary" && sel.edge === i;
         return (
-          <g key={i} className={isSel && tool === "select" ? "site-edge-sel" : undefined} onPointerDown={(ev) => onItemDown(ev, { type: "boundary", edge: i, vertex: null })}>
+          <g key={i} className={isSel && tool === "select" ? "site-edge-sel" : undefined} pointerEvents={garden ? "none" : undefined} onPointerDown={garden ? undefined : (ev) => onItemDown(ev, { type: "boundary", edge: i, vertex: null })}>
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={16 * px} />
             {isSel && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#93c5fd" strokeWidth={9 * px} strokeLinecap="round" />}
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`site-edge edge-${e.kind}`} strokeWidth={(e.kind === "hedge" ? 5 : e.kind === "wall" ? 4 : e.kind === "fence" ? 3 : 1.5) * px} strokeDasharray={e.kind === "open" ? `${6 * px} ${4 * px}` : undefined} />
@@ -86,7 +92,7 @@ export function SiteWorld({ site, sel, tool, px, outlines, walls, clearances, on
 
       {/* Shortest distance from each side of the house to the boundary. */}
       <g pointerEvents="none">
-        {clearances.map((c) => {
+        {!garden && clearances.map((c) => {
           const mid = { x: (c.from.x + c.to.x) / 2, y: (c.from.y + c.to.y) / 2 };
           const on = c.distance < 0.05;
           const label = on ? `${c.side}: on boundary` : `${c.side} ${c.distance.toFixed(2)} m`;
@@ -128,18 +134,21 @@ export function SiteWorld({ site, sel, tool, px, outlines, walls, clearances, on
 }
 
 interface SelectionProps {
-  sel: NonNullable<Sel>;
+  sel: Item;
   poly: readonly { x: number; y: number }[];
   px: number;
+  /** Smooth surfaces: the control polygon is drawn faintly between its handles. */
+  smooth?: boolean;
   onEdgeDown: (e: React.PointerEvent, s: Item, i: number) => void;
   onMidDown: (e: React.PointerEvent, s: Item, i: number) => void;
   onVertexDown: (e: React.PointerEvent, s: Item, i: number) => void;
 }
 
 /** Edge hits (surfaces and buildings), midpoint plusses and corner handles of the selected polygon. */
-export function SelectionLayer({ sel, poly, px, onEdgeDown, onMidDown, onVertexDown }: SelectionProps) {
+export function SelectionLayer({ sel, poly, px, smooth, onEdgeDown, onMidDown, onVertexDown }: SelectionProps) {
   return (
     <g>
+      {smooth && <polygon points={svgPoints(poly as { x: number; y: number }[])} className="site-control-poly" strokeWidth={px} strokeDasharray={`${3 * px} ${3 * px}`} pointerEvents="none" />}
       {sel.type !== "boundary" &&
         poly.map((a, i) => {
           const b = poly[(i + 1) % poly.length];
@@ -157,5 +166,6 @@ export function SelectionLayer({ sel, poly, px, onEdgeDown, onMidDown, onVertexD
 
 /** The rubber-band rectangle while drawing a surface or building. */
 export function DraftRect({ draft, px }: { draft: NonNullable<Draft>; px: number }) {
+  if (draft.circle) return <circle cx={draft.a.x} cy={draft.a.y} r={Math.hypot(draft.b.x - draft.a.x, draft.b.y - draft.a.y)} className="site-draft" strokeWidth={1.5 * px} strokeDasharray={`${4 * px} ${3 * px}`} pointerEvents="none" />;
   return <polygon points={svgPoints(rectPoly(draft.a.x, draft.a.y, draft.b.x, draft.b.y))} className="site-draft" strokeWidth={1.5 * px} strokeDasharray={`${4 * px} ${3 * px}`} />;
 }

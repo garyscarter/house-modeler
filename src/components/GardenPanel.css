@@ -1,0 +1,29 @@
+/* Garden mode's panel: the selected item's fields, the surfaces and the items by category. Colours and spacing are tokens. */
+.garden-panel { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
+.garden-panel h4 { margin: var(--sp-2, 8px) 0 var(--sp-1, 4px); font-size: 13px; }
+.garden-add { display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
+.garden-add > button { align-self: flex-start; }
+.garden-add > button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.garden-add-pop { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-2, 8px); background: var(--panel); max-height: 320px; display: flex; flex-direction: column; }
+.garden-group { margin-bottom: var(--sp-2, 8px); }
+.garden-row { display: flex; align-items: center; gap: var(--sp-2, 8px); width: 100%; padding: 3px 8px; text-align: left; font-size: 13px; border-color: transparent; background: transparent; }
+.garden-row:hover:not(:disabled) { background: var(--surface-2); }
+.garden-row.active { background: var(--accent-soft); color: var(--accent); }
+.garden-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.garden-thumb { flex: none; border-radius: var(--radius-s, 6px); background: var(--surface-2); }
+.garden-surface { border: 1px solid var(--line); border-radius: var(--radius); margin: var(--sp-1, 4px) 0; padding: 0 var(--sp-2, 8px); }
+.garden-surface > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); padding: 7px 0; cursor: pointer; font-size: 13px; }
+.garden-surface-body { padding-bottom: var(--sp-2, 8px); display: flex; flex-direction: column; gap: var(--sp-1, 4px); }
+.garden-inspector { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-2, 8px) var(--sp-3, 12px); background: var(--surface-2); }
+.garden-inspector h4 { margin-top: 0; }
+.garden-sizes { gap: var(--sp-2, 8px); }
+.garden-sizes label { flex: 1; min-width: 0; }
+.garden-turn { display: flex; align-items: flex-end; gap: var(--sp-2, 8px); }
+.garden-turn label { flex: 1; min-width: 0; }
+.garden-item-actions { margin-top: var(--sp-2, 8px); }
+.garden-hint { margin-top: var(--sp-2, 8px); }
+.garden-picker .picker-rows button { align-items: center; gap: var(--sp-2, 8px); }
+.garden-picker .picker-rows button .muted { margin-left: auto; white-space: nowrap; font-size: 11px; }
+.garden-picker .garden-row-name { flex: 1; min-width: 0; }
+.app[data-touch] .garden-row { min-height: 44px; }
+.app[data-touch] .garden-surface > summary { min-height: 44px; }

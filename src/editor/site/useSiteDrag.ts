@@ -5,6 +5,9 @@ import { edgesOf, insertBoundaryVertex, rectPoly,type LevelOutline } from "../..
 import { moveBoundaryCorner, slideCorner, type SlideAlong } from "../../lib/boundaryOpening";
 import { lockToAxis, snapPoint, SNAP_PX } from "../../lib/polygonEdit";
 import { uid, type Neighbour, type Site, type SurfaceKind, type WPt } from "../../types";
+import { circleControls } from "../../lib/surfaceCurve";
+import { itemsOf, snapItem } from "../../lib/siteItems";
+import { angleToward, moveRunEnd, patchItem, resizePatch, snapRot, toLocal } from "./gardenEdit";
 import { useDoublePress, useDrag, usePolygonEdit, type CanvasCamera, type DragSpec, type Press, type PolygonTarget } from "../core";
 import { keyOf, sameItem, type Draft, type Item, type Sel, type Tool } from "./types";
 
@@ -25,6 +28,21 @@ export function slideFor(site: Site, s: Item, index: number): SlideAlong | undef
   return undefined;
 }
 
+/** What the Garden tools do once the pointer has chosen a point; SitePlan owns the state they change. */
+export interface GardenActions {
+  /** The selected item ids (the store's `gardenSel`). */
+  selection: string[];
+  selectItems: (ids: string[]) => void;
+  /** A click with the polygon tool: adds a corner or closes the surface. `tol` is a screen click's reach in metres. */
+  polyClick: (at: WPt, tol: number) => void;
+  /** A click with an armed one-point entry. */
+  placeAt: (at: WPt, shift: boolean) => void;
+  /** A click with an armed run entry: first end, then second. */
+  runClick: (at: WPt, shift: boolean) => void;
+  /** The pointer over the canvas, for ghosts and rubber lines; null when it leaves. */
+  hover: (at: WPt | null) => void;
+}
+
 interface Args {
   svgRef: RefObject<SVGSVGElement | null>;
   camera: CanvasCamera;
@@ -38,11 +56,12 @@ interface Args {
   setDraft: (d: Draft) => void;
   editPoly: (s: Item, f: (poly: WPt[]) => WPt[]) => void;
   deleteVertex: (s: Item, i: number) => void;
+  garden: GardenActions;
 }
 
 /** The site's pointer behaviour on the shared core: item presses, corners, edges, midpoints, rectangles and pan. */
 export function useSiteDrag(a: Args) {
-  const { site, outlines, tool, drawKind, sel, setSel, setTool, setDraft, editPoly, deleteVertex } = a;
+  const { site, outlines, tool, drawKind, sel, setSel, setTool, setDraft, editPoly, deleteVertex, garden } = a;
   const updateSite = useStore((s) => s.updateSite);
   const peeking = useStore((s) => s.peek);
   const dbl = useDoublePress();
@@ -146,11 +165,67 @@ export function useSiteDrag(a: Args) {
     };
   };
 
+  /** Drag out a circle from its centre; it becomes a smooth surface through eight control points. */
+  const circleSpec = (p: Press): DragSpec => {
+    const snap = (q: WPt) => snapPoint(q, corners(), SNAP_PX * a.camera.frame().unitsPerPx, { axis: false }).p;
+    const c = snap(p.at);
+    const kind = drawKind;
+    const data = { r: 0 };
+    setDraft({ a: c, b: c, circle: true });
+    const create = () => {
+      setDraft(null);
+      const r = Math.round(data.r * 20) / 20;
+      if (r < 0.3) return;
+      const id = uid();
+      updateSite((st) => ({ ...st, surfaces: [...st.surfaces, { id, kind, polygon: circleControls(c, r), smooth: true }] }));
+      setSel({ type: "surface", id, vertex: null });
+      setTool("select");
+    };
+    return {
+      kind: "circle",
+      data,
+      slop: 0,
+      move: (m) => {
+        data.r = Math.hypot(m.at.x - c.x, m.at.y - c.y);
+        setDraft({ a: c, b: m.at, circle: true });
+      },
+      end: create,
+      tap: () => setDraft(null),
+      cancelled: () => setDraft(null),
+    };
+  };
+
+  /** A press that only counts as a click (the polygon, place and run tools); dragging does nothing. */
+  const clickSpec = (fn: (m: { at: WPt; shift: boolean }) => void): DragSpec => ({ kind: "tool-click", data: null, undo: false, tap: (m) => fn({ at: m.at, shift: m.shift }) });
+
+  const backgroundSpec = (p: Press): DragSpec | null => {
+    switch (tool) {
+      case "select":
+        return null;
+      case "circle":
+        return circleSpec(p);
+      case "polygon":
+        return clickSpec((m) => {
+          const tol = SNAP_PX * a.camera.frame().unitsPerPx;
+          garden.polyClick(snapPoint(m.at, corners(), tol, { axis: false }).p, tol * 1.5);
+        });
+      case "place":
+        return clickSpec((m) => garden.placeAt(m.at, m.shift));
+      case "run":
+        return clickSpec((m) => garden.runClick(m.at, m.shift));
+      default:
+        return rectSpec(p);
+    }
+  };
+
   const drag = useDrag({
     svg: a.svgRef,
     camera: a.camera,
-    background: (p) => (tool === "select" ? null : rectSpec(p)),
-    backgroundTap: () => setSel(null),
+    background: backgroundSpec,
+    backgroundTap: () => {
+      setSel(null);
+    },
+    hover: (m) => garden.hover(m ? m.at : null),
     disabled: () => useStore.getState().peek,
   });
   const edit = usePolygonEdit(drag, a.camera, dbl);
@@ -175,15 +250,94 @@ export function useSiteDrag(a: Args) {
 
   const itemDown = (e: React.PointerEvent, s: Item) => {
     if (tool !== "select") return; // let drawing start over items
-    const already = !!sel && sameItem(sel, s);
+    const already = !!sel && sel.type !== "item" && sameItem(sel, s);
     setSel(s);
     if (already && s.type !== "boundary") drag.begin(e, moveSpec(s));
     else if (already && s.type === "boundary" && s.edge !== null) edit.edgeDown(e, targetOf(s), s.edge);
     else drag.beginPan(e);
   };
 
+  // ---- Garden items ----
+
+  const outlinePolys = (): WPt[][] => outlines.flatMap((o) => o.polys);
+
+  /** Move the selected items together; one item snaps like a placement (and, for wall entries, to walls); Shift holds an axis, Alt turns snapping off. */
+  const itemMoveSpec = (ids: string[]): DragSpec => {
+    const orig = new Map(itemsOf(siteNow() ?? site).filter((it) => ids.includes(it.id)).map((it) => [it.id, structuredClone(it)]));
+    const single = orig.size === 1;
+    return {
+      kind: "item-move",
+      data: null,
+      move: (m) => {
+        const d = m.shift ? lockToAxis(m.delta) : m.delta;
+        updateSite((st) => ({
+          ...st,
+          items: itemsOf(st).map((it) => {
+            const o = orig.get(it.id);
+            if (!o) return it;
+            if (single && !o.to) {
+              const raw = { x: o.x + d.x, y: o.y + d.y };
+              const s = m.alt ? { ...raw, rot: o.rot } : snapItem(o, raw, st, outlinePolys());
+              return { ...it, x: s.x, y: s.y, rot: s.rot };
+            }
+            return { ...it, x: o.x + d.x, y: o.y + d.y, ...(o.to ? { to: { x: o.to.x + d.x, y: o.to.y + d.y } } : {}) };
+          }),
+        }));
+      },
+    };
+  };
+
+  /** A press on a garden item: Shift toggles it in the selection; otherwise it is selected (as is) and dragged. */
+  const gardenItemDown = (e: React.PointerEvent, id: string) => {
+    if (tool !== "select") return; // placing and drawing start over items
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.shiftKey) {
+      e.stopPropagation();
+      garden.selectItems(garden.selection.includes(id) ? garden.selection.filter((x) => x !== id) : [...garden.selection, id]);
+      return;
+    }
+    const ids = garden.selection.includes(id) ? garden.selection : [id];
+    if (ids !== garden.selection) garden.selectItems(ids);
+    drag.begin(e, itemMoveSpec(ids));
+  };
+
+  const itemNow = (id: string) => itemsOf(siteNow() ?? site).find((it) => it.id === id);
+
+  const rotateDown = (e: React.PointerEvent, id: string) => {
+    const o = itemNow(id);
+    if (!o) return;
+    drag.begin(e, {
+      kind: "item-rotate",
+      data: null,
+      slop: 0,
+      move: (m) => updateSite((st) => patchItem(st, id, { rot: snapRot(angleToward({ x: o.x, y: o.y }, m.at), m.shift) })),
+    });
+  };
+  const resizeDown = (e: React.PointerEvent, id: string, handle: "spread" | "w" | "d") => {
+    const o = itemNow(id);
+    if (!o) return;
+    drag.begin(e, {
+      kind: "item-resize",
+      data: null,
+      slop: 0,
+      move: (m) => updateSite((st) => patchItem(st, id, resizePatch(o, handle, toLocal(o, m.at)))),
+    });
+  };
+  const endDown = (e: React.PointerEvent, id: string, end: "from" | "to") => {
+    drag.begin(e, {
+      kind: "item-end",
+      data: null,
+      slop: 0,
+      move: (m) => updateSite((st) => moveRunEnd(st, id, end, m.alt ? m.at : { x: Math.round(m.at.x * 20) / 20, y: Math.round(m.at.y * 20) / 20 })),
+    });
+  };
+
   return {
     drag,
+    gardenItemDown,
+    rotateDown,
+    resizeDown,
+    endDown,
     itemDown,
     vertexDown: (e: React.PointerEvent, s: Item, i: number) => edit.vertexDown(e, targetOf(s), i),
     edgeDown: (e: React.PointerEvent, s: Item, i: number) => edit.edgeDown(e, targetOf(s), i),
