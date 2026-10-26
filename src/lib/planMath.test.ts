@@ -521,3 +521,14 @@ describe("cornerCorners", () => {
     expect(c[c.length - 1].y).toBeCloseTo(50);
   });
 });
+
+describe("cornerCorners with square ends", () => {
+  it("gains a corner for each square end, the front starting out from the walls", () => {
+    const c = cornerCorners({ x: 0, y: 0 }, 100, 100, 0, "flat", { endBack: 0, endSide: 30 });
+    expect(c).toHaveLength(4);
+    expect(c[2]).toEqual({ x: -20, y: 50 });
+    const both = cornerCorners({ x: 0, y: 0 }, 100, 100, 0, "flat", { endBack: 20, endSide: 30 });
+    expect(both).toHaveLength(5);
+    expect(both[2]).toEqual({ x: 50, y: -30 });
+  });
+});

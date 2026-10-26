@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import { isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
+import { cornerEnds, isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
 import { EXT_WALL_T, WALL_T, polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -313,12 +313,20 @@ function placeCorners(c: Pt, pts: [number, number][], rotDeg: number): Pt[] {
 
 /**
  * Footprint of a corner unit: the right angle at the back-left corner with legs along the back and the left side, and
- * the front across the corner, a straight diagonal or (curved) an arc traced in a few steps. Convex either way.
+ * the front across the corner, a straight diagonal or (curved) an arc traced in a few steps. Square ends (`ends`,
+ * px) move the front's start out from each wall. Convex either way.
  */
-export function cornerCorners(c: Pt, w: number, d: number, rotDeg: number, front: "flat" | "curved" = "flat"): Pt[] {
-  const pts: [number, number][] = [[-w / 2, -d / 2]];
-  if (front === "curved") for (let i = 0; i <= 6; i++) pts.push([-w / 2 + w * Math.cos((i / 6) * (Math.PI / 2)), -d / 2 + d * Math.sin((i / 6) * (Math.PI / 2))]);
-  else pts.push([w / 2, -d / 2], [-w / 2, d / 2]);
+export function cornerCorners(c: Pt, w: number, d: number, rotDeg: number, front: "flat" | "curved" = "flat", ends = { endBack: 0, endSide: 0 }): Pt[] {
+  const { endBack: kb, endSide: ks } = ends;
+  const pts: [number, number][] = [[-w / 2, -d / 2], [w / 2, -d / 2]];
+  if (kb > 0) pts.push([w / 2, -d / 2 + kb]);
+  if (front === "curved") {
+    const rw = w - ks;
+    const rd = d - kb;
+    for (let i = 1; i < 6; i++) pts.push([-w / 2 + ks + rw * Math.cos((i / 6) * (Math.PI / 2)), -d / 2 + kb + rd * Math.sin((i / 6) * (Math.PI / 2))]);
+  }
+  if (ks > 0) pts.push([-w / 2 + ks, d / 2]);
+  pts.push([-w / 2, d / 2]);
   return placeCorners(c, pts, rotDeg);
 }
 
@@ -565,7 +573,10 @@ export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: 
     const item = lookup(fx.type);
     if (!item || isFloorCovering(item)) continue;
     const b = fixtureBox(fx, item);
-    const corners = isCornerUnit(item) ? cornerCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot, fx.front) : rectCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot);
+    const ends = cornerEnds(b.w, b.d, fx);
+    const corners = isCornerUnit(item)
+      ? cornerCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot, fx.front, { endBack: ends.endBack * pxPerM, endSide: ends.endSide * pxPerM })
+      : rectCorners(fx, b.w * pxPerM, b.d * pxPerM, fx.rot);
     out.push({ id: fx.id, corners, z0: b.z0, z1: b.z0 + b.h });
   }
   return out;

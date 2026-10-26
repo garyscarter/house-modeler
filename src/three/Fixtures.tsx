@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
@@ -58,7 +58,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front)) {
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, f.color ?? item.color, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f))) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -167,7 +167,19 @@ const GLOW = "#fff1d6";
  * footprint on its base, y up, back towards -z (the top of the plan).
  * `mount` is the height of that base above the floor, for parts that reach down to it.
  */
-function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: string, worktopColor = WORKTOP, mount = 0, j?: Joinery, seat?: number, front?: "flat" | "curved"): Part[] {
+function fixtureParts(
+  symbol: Symbol,
+  w: number,
+  d: number,
+  h: number,
+  color: string,
+  worktopColor = WORKTOP,
+  mount = 0,
+  j?: Joinery,
+  seat?: number,
+  front?: "flat" | "curved",
+  ends = { endBack: 0, endSide: 0 },
+): Part[] {
   const out: Part[] = [];
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
@@ -530,27 +542,39 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
     }
     case "corner-tv": {
       // A low unit in the corner: right angle at the back-left, legs along the two walls, doors across the corner.
+      // Square ends (kb on the back leg, ks on the side leg) are boxes along the walls; the corner piece spans the rest.
       const curved = front === "curved";
-      const corner = (y0: number, y1: number, inset: number, c: string, f: Finish = "satin") =>
-        out.push({ g: curved ? "quarter" : "wedge", p: [-w / 2, (y0 + y1) / 2, -d / 2], s: [w - inset, y1 - y0, d - inset], c, f });
+      const { endBack: kb, endSide: ks } = ends;
+      const rw = w - ks;
+      const rd = d - kb;
+      const corner = (y0: number, y1: number, inset: number, c: string, f: Finish = "satin") => {
+        const yc = (y0 + y1) / 2;
+        const sy = y1 - y0;
+        out.push({ g: curved ? "quarter" : "wedge", p: [-w / 2 + ks, yc, -d / 2 + kb], s: [rw - inset, sy, rd - inset], c, f });
+        if (ks > 0) box(-w / 2 + ks / 2, yc, (kb - inset) / 2, ks, sy, d - inset - kb + 0.001, c, f);
+        if (kb > 0) box(-ks / 2 - inset / 2, yc, -d / 2 + kb / 2, w - inset - ks + 0.001, sy, kb, c, f);
+      };
       corner(0, 0.1, 0.06, PLINTH, "matt");
       corner(0.1, h - 0.03, 0.01, color);
       corner(h - 0.03, h, -0.02, shade(color, 1.05));
-      const L = Math.hypot(w, d);
-      const ang = Math.atan2(d, w);
-      const nx = d / L;
-      const nz = w / L;
+      const L = Math.hypot(rw, rd);
+      const ang = Math.atan2(rd, rw);
+      const nx = rd / L;
+      const nz = rw / L;
+      // Midpoint of the front, in the unit's centred frame.
+      const mx = ks / 2;
+      const mz = kb / 2;
       const yc = (0.12 + h - 0.05) / 2;
       const dh = h - 0.17;
       if (curved) {
         // One joint line down the middle of the curved front.
         const t = Math.PI / 4;
-        turn(-w / 2 + (w - 0.005) * Math.cos(t), yc, -d / 2 + (d - 0.005) * Math.sin(t), 0.006, dh, 0.012, ang, DARK);
+        turn(-w / 2 + ks + (rw - 0.005) * Math.cos(t), yc, -d / 2 + kb + (rd - 0.005) * Math.sin(t), 0.006, dh, 0.012, ang, DARK);
       } else {
         // Two doors across the diagonal, a joint between them and a handle on each.
-        turn(nx * 0.01, yc, nz * 0.01, L - 0.04, dh, 0.02, ang, color, "satin");
-        turn(nx * 0.021, yc, nz * 0.021, 0.006, dh - 0.02, 0.012, ang, DARK);
-        for (const s of [-1, 1]) turn(nx * 0.032 + s * (w / L) * 0.08, h - 0.1, nz * 0.032 - s * (d / L) * 0.08, 0.12, 0.012, 0.02, ang, CHROME, "metal");
+        turn(mx + nx * 0.01, yc, mz + nz * 0.01, L - 0.04, dh, 0.02, ang, color, "satin");
+        turn(mx + nx * 0.021, yc, mz + nz * 0.021, 0.006, dh - 0.02, 0.012, ang, DARK);
+        for (const s of [-1, 1]) turn(mx + nx * 0.032 + s * (rw / L) * 0.08, h - 0.1, mz + nz * 0.032 - s * (rd / L) * 0.08, 0.12, 0.012, 0.02, ang, CHROME, "metal");
       }
       break;
     }
@@ -580,6 +604,27 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       cyl(0, (h - 0.3) / 2, 0, 0.022, h - 0.3, DARK, "metal");
       drum(h - 0.33, h, shadeD, shadeD, color);
       drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      break;
+    }
+    case "table-lamp": {
+      // A weighted base, a short stem and a drum shade lit from inside.
+      const shadeD = Math.min(w, d);
+      const shadeH = Math.min(0.28, h * 0.45);
+      drum(0, 0.02, shadeD * 0.5, shadeD * 0.5, DARK, "metal");
+      drum(0.02, 0.06, shadeD * 0.3, shadeD * 0.3, "#8a7a5a", "satin");
+      cyl(0, 0.06 + (h - shadeH - 0.06) / 2, 0, 0.03, h - shadeH - 0.06, "#8a7a5a", "satin");
+      drum(h - shadeH, h, shadeD, shadeD, color);
+      drum(h - shadeH + 0.003, h - shadeH + 0.012, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      break;
+    }
+    case "desk-lamp": {
+      // A round base at the back, a jointed arm reaching forward and a small conical head looking down.
+      drum(0, 0.015, Math.min(w, d * 0.5), Math.min(w, d * 0.5), color, "metal");
+      const armH = h - 0.08;
+      lean(0, 0.015 + armH * 0.5 * 0.5, -d / 2 + d * 0.25 + d * 0.12, 0.014, armH * 0.55, 0.014, 0.35, color, "metal");
+      lean(0, 0.015 + armH * 0.5 + armH * 0.45 * 0.5, d * 0.1, 0.014, armH * 0.5, 0.014, -0.9, color, "metal");
+      out.push({ g: "cyl", p: [0, h - 0.06, d / 2 - d * 0.2], s: [0.12, 0.08, 0.12], c: color, f: "metal", tilt: 0.3 });
+      out.push({ g: "cyl", p: [0, h - 0.095, d / 2 - d * 0.2], s: [0.08, 0.004, 0.08], c: GLOW, f: "glow", tilt: 0.3 });
       break;
     }
     case "tv-wall": {

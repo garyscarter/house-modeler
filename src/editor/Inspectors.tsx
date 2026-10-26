@@ -697,6 +697,18 @@ export function FixtureInspector({
           </select>
         </label>
       )}
+      {isCornerUnit(item) && (
+        <div className="field">
+          <span className="field-label">
+            Square ends, back leg × side leg (m)
+            <Info>How far out from each wall the front starts, so the unit can sit square against a chimney breast or an alcove unit. 0 runs the front wall to wall.</Info>
+          </span>
+          <div className="size-row">
+            <NumberField value={fixture.endBack ?? 0} label="Square end on the back leg" min={-0.001} disabled={locked} onCommit={(v) => onChange({ endBack: v > 0 ? v : undefined })} />
+            <NumberField value={fixture.endSide ?? 0} label="Square end on the side leg" min={-0.001} disabled={locked} onCommit={(v) => onChange({ endSide: v > 0 ? v : undefined })} />
+          </div>
+        </div>
+      )}
       {hasSeatDepth(item) && (
         <div className="field">
           <span className="field-label">Seat depth (m)</span>

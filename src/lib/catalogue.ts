@@ -82,6 +82,8 @@ export type Symbol =
   | "wood-armchair"
   | "corner-tv"
   | "cube-shelves"
+  | "table-lamp"
+  | "desk-lamp"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -131,6 +133,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "bed-super-king", name: "Super king bed", category: "Bedroom", w: 1.85, d: 2.05, h: 0.5, color: "#d9c7e8", symbol: "bed", note: "Mattress 180 × 200 cm" },
   { id: "cot", name: "Cot", category: "Bedroom", w: 1.24, d: 0.66, h: 0.9, color: "#f3efe6", symbol: "cot", note: "Mattress 120 × 60 cm" },
   { id: "bedside", name: "Bedside table", category: "Bedroom", w: 0.45, d: 0.40, h: 0.55, color: WOOD, symbol: "box" },
+  { id: "table-lamp-small", name: "Bedside lamp", category: "Bedroom", w: 0.24, d: 0.24, h: 0.4, color: "#e9d9c4", symbol: "table-lamp", mount: 0.55, note: "A small lamp for a bedside table; set the height above the floor to the table's top" },
   { id: "wardrobe-double", name: "Double wardrobe", category: "Bedroom", w: 1.00, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-triple", name: "Triple wardrobe", category: "Bedroom", w: 1.50, d: 0.60, h: 2.0, color: WOOD, symbol: "box" },
   { id: "wardrobe-fitted", name: "Fitted wardrobe", category: "Bedroom", w: 1.80, d: 0.60, h: 2.4, color: "#f5f5f5", symbol: "fitted-wardrobe", toCeiling: true, note: "Floor to ceiling, with top boxes; set any width" },
@@ -186,6 +189,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "coffee-table-round", name: "Coffee table (round)", category: "Living", w: 0.90, d: 0.90, h: 0.38, color: "#d9cfc0", symbol: "round-table", note: "Stone top on a drum pedestal" },
   { id: "side-table-round", name: "Side table (round)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: "#2b2b2b", symbol: "round-table" },
   { id: "media-unit", name: "Media unit (floating)", category: "Living", w: 1.80, d: 0.40, h: 0.40, color: WALNUT, symbol: "media-unit", mount: 0.25, note: "Wall-hung, fluted handleless fronts" },
+  { id: "table-lamp", name: "Table lamp (drum shade)", category: "Living", w: 0.35, d: 0.35, h: 0.55, color: "#f1ece2", symbol: "table-lamp", mount: 0.55, note: "Sits on a side table or sideboard: set the height above the floor to the top of whatever it stands on (0.55 m side table, 0.8 m sideboard)" },
   { id: "floor-lamp", name: "Floor lamp", category: "Living", w: 0.40, d: 0.40, h: 1.60, color: "#f1ece2", symbol: "floor-lamp", note: "Linen drum shade on a slim black stem" },
   { id: "rug-large", name: "Rug (200 × 300)", category: "Living", w: 3.00, d: 2.00, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
   { id: "rug-medium", name: "Rug (160 × 230)", category: "Living", w: 2.30, d: 1.60, h: 0.01, color: "#d8cdb9", symbol: "rug", note: "Furniture can stand on it" },
@@ -273,6 +277,7 @@ export const CATALOGUE: CatalogueItem[] = [
 
   // Other
   { id: "desk", name: "Desk", category: "Other", w: 1.20, d: 0.60, h: 0.75, color: WOOD, symbol: "table" },
+  { id: "desk-lamp", name: "Desk lamp (angled)", category: "Other", w: 0.18, d: 0.3, h: 0.45, color: "#2b2d31", symbol: "desk-lamp", mount: 0.75, note: "A task lamp on a jointed arm; set the height above the floor to the desk top" },
   { id: "car", name: "Car (family hatchback)", category: "Other", w: 1.80, d: 4.40, h: 1.5, color: "#8c96a3", symbol: "car", note: "Typical UK family car" },
   { id: "custom", name: "Custom box", category: "Other", w: 1.00, d: 1.00, h: 1.0, color: "#b8c4a8", symbol: "box", note: "Set its size and label in the inspector" },
 ];
@@ -323,6 +328,15 @@ export const CUBE_BOARD = 0.035;
 /** How many cubes across and up a cube-shelving unit of w × h metres has: one per 0.385 m, at least one each way. */
 export function cubeGrid(w: number, h: number): { cols: number; rows: number } {
   return { cols: Math.max(1, Math.round(w / CUBE)), rows: Math.max(1, Math.round(h / CUBE)) };
+}
+
+/**
+ * Square ends of a corner unit of footprint w × d metres, kept inside the legs: how far the front's start on the
+ * back leg (endBack, along the side at x = w) and on the side leg (endSide, along the face at y = d) is from the walls.
+ */
+export function cornerEnds(w: number, d: number, fx: { endBack?: number; endSide?: number }): { endBack: number; endSide: number } {
+  const clampTo = (v: number | undefined, max: number) => (v !== undefined && Number.isFinite(v) ? Math.min(Math.max(0, v), Math.max(0, max)) : 0);
+  return { endBack: clampTo(fx.endBack, d - 0.1), endSide: clampTo(fx.endSide, w - 0.1) };
 }
 
 /** Whether an item is a corner unit with a flat-or-curved front. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, cubeGrid, isCornerUnit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, cornerEnds, cubeGrid, isCornerUnit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -194,5 +194,25 @@ describe("corner TV unit and cube shelving", () => {
     expect(cubeGrid(1.47, 0.77)).toEqual({ cols: 4, rows: 2 });
     expect(cubeGrid(0.42, 1.47)).toEqual({ cols: 1, rows: 4 });
     expect(cubeGrid(0.1, 0.1)).toEqual({ cols: 1, rows: 1 });
+  });
+});
+
+describe("cornerEnds", () => {
+  it("keeps a square end inside its leg and treats unset as none", () => {
+    expect(cornerEnds(1.2, 1.2, {})).toEqual({ endBack: 0, endSide: 0 });
+    const clamped = cornerEnds(1.2, 1.2, { endBack: 0.3, endSide: 5 });
+    expect(clamped.endBack).toBeCloseTo(0.3);
+    expect(clamped.endSide).toBeCloseTo(1.1);
+    expect(cornerEnds(1.2, 1.2, { endBack: -1 })).toEqual({ endBack: 0, endSide: 0 });
+  });
+});
+
+describe("lamps that stand on furniture", () => {
+  it("start at the height of what they stand on", () => {
+    expect(byId("table-lamp")?.mount).toBe(0.55);
+    expect(byId("table-lamp-small")?.mount).toBe(0.55);
+    expect(byId("desk-lamp")?.mount).toBe(0.75);
+    expect(byId("side-table-round")?.h).toBe(0.55);
+    expect(byId("desk")?.h).toBe(0.75);
   });
 });

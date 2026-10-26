@@ -364,6 +364,13 @@ export interface Fixture {
   seat?: number;
   /** Corner units: the face across the corner, a flat diagonal (default) or a curve. */
   front?: "flat" | "curved";
+  /**
+   * Corner units: a square end on the back leg (along the wall the back lies on) and on the side leg, metres: the
+   * front then starts that far out from the wall instead of at it, so the unit can sit square against a chimney
+   * breast or an alcove unit. Unset or 0: the front runs wall to wall.
+   */
+  endBack?: number;
+  endSide?: number;
   color?: string;
   /** Worktop colour of kitchen base units, sink units, runs and islands (default dark grey). */
   worktop?: string;

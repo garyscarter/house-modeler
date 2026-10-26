@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, cornerArm, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
@@ -32,7 +32,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   clash?: boolean;
   ghost?: boolean;
   /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
-  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front">;
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front" | "endBack" | "endSide">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);
@@ -229,13 +229,21 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <ellipse key="o" cx={0} cy={d * 0.06} rx={w / 2} ry={d * 0.44} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
         <path key="b" d={`M${x0} ${y0 + d * 0.2} A${w / 2} ${d * 0.3} 0 0 1 ${x1} ${y0 + d * 0.2}`} {...line} />,
       );
+    case "desk-lamp":
+      // Base at the back, the head reaching forward over the desk.
+      return g(
+        <ellipse key="b" cx={0} cy={y0 + d * 0.25} rx={w / 2} ry={d * 0.25} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <line key="a" x1={0} y1={y0 + d * 0.25} x2={0} y2={y1 - d * 0.2} {...line} />,
+        <ellipse key="h" cx={0} cy={y1 - d * 0.2} rx={w * 0.4} ry={d * 0.2} {...thin} />,
+      );
     case "pouf":
     case "round-table":
     case "floor-lamp":
+    case "table-lamp":
       return g(
         <ellipse key="o" cx={0} cy={0} rx={w / 2} ry={d / 2} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
         item.symbol === "pouf" && <ellipse key="s" cx={0} cy={0} rx={w * 0.38} ry={d * 0.38} {...thin} />,
-        item.symbol === "floor-lamp" && <circle key="s" cx={0} cy={0} r={Math.min(w, d) * 0.08} {...line} />,
+        (item.symbol === "floor-lamp" || item.symbol === "table-lamp") && <circle key="s" cx={0} cy={0} r={Math.min(w, d) * 0.08} {...line} />,
       );
     case "tv-wall":
       return g(
@@ -521,22 +529,31 @@ export const FixtureSymbol = memo(function FixtureSymbol({
       );
     }
     case "corner-tv": {
-      // Right angle at the back-left corner, legs along the back and the left wall, the front across the corner.
+      // Right angle at the back-left corner, legs along the back and the left wall, the front across the corner,
+      // starting a square end out from each wall when set (to sit against a chimney breast).
       const curved = fixture?.front === "curved";
-      const path = curved ? `M${x0} ${y0} L${x1} ${y0} A${w} ${d} 0 0 1 ${x0} ${y1} Z` : `M${x0} ${y0} L${x1} ${y0} L${x0} ${y1} Z`;
-      const L = Math.hypot(w, d);
-      const ux = -w / L;
-      const uy = d / L;
+      const e = cornerEnds(w / m, d / m, fixture ?? {});
+      const kb = e.endBack * m;
+      const ks = e.endSide * m;
+      // The front runs from A on the back leg's end to B on the side leg's end.
+      const [ax, ay] = [x1, y0 + kb];
+      const [bx, by] = [x0 + ks, y1];
+      const rw = w - ks;
+      const rd = d - kb;
+      const path = curved ? `M${x0} ${y0} L${x1} ${y0} L${ax} ${ay} A${rw} ${rd} 0 0 1 ${bx} ${by} L${x0} ${y1} Z` : `M${x0} ${y0} L${x1} ${y0} L${ax} ${ay} L${bx} ${by} L${x0} ${y1} Z`;
+      const L = Math.hypot(rw, rd);
+      const ux = -rw / L;
+      const uy = rd / L;
       // Door line inset from the front, and the joint between the two doors at its middle.
       const ins = 0.03 * m;
-      const nx = d / L;
-      const ny = w / L;
+      const nx = rd / L;
+      const ny = rw / L;
       const inset = curved ? 0.05 * m : ins;
-      const [mx, my] = [0 - nx * inset, 0 - ny * inset];
+      const [mx, my] = [(ax + bx) / 2 - nx * inset, (ay + by) / 2 - ny * inset];
       return g(
         <path key="o" d={path} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} strokeLinejoin="round" />,
         curved ? (
-          <path key="f" d={`M${x1 - inset} ${y0} A${w - inset} ${d - inset} 0 0 1 ${x0} ${y1 - inset}`} {...thin} />
+          <path key="f" d={`M${ax - inset} ${ay} A${rw - inset} ${rd - inset} 0 0 1 ${bx} ${by - inset}`} {...thin} />
         ) : (
           <line key="f" x1={mx - (ux * (L - 2 * ins)) / 2} y1={my - (uy * (L - 2 * ins)) / 2} x2={mx + (ux * (L - 2 * ins)) / 2} y2={my + (uy * (L - 2 * ins)) / 2} {...thin} />
         ),
