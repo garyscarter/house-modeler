@@ -216,3 +216,11 @@ describe("lamps that stand on furniture", () => {
     expect(byId("desk")?.h).toBe(0.75);
   });
 });
+
+describe("side tables", () => {
+  it("offers square and rectangular side tables at lamp height", () => {
+    expect(byId("side-table-square")).toMatchObject({ category: "Living", symbol: "table", w: 0.45, d: 0.45, h: 0.55 });
+    expect(byId("side-table-rect")).toMatchObject({ category: "Living", symbol: "table", w: 0.6, d: 0.4, h: 0.55 });
+    expect(byId("table-lamp")?.mount).toBe(byId("side-table-square")?.h);
+  });
+});

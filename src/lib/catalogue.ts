@@ -188,6 +188,8 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "beanbag-chair", name: "Bean bag chair", category: "Living", w: 0.8, d: 0.9, h: 0.85, color: "#5b6b7f", symbol: "beanbag-chair", note: "A bag with a built-up back, like a low armchair" },
   { id: "pouf", name: "Pouffe (round)", category: "Living", w: 0.55, d: 0.55, h: 0.42, color: "#c9b79c", symbol: "pouf" },
   { id: "coffee-table-round", name: "Coffee table (round)", category: "Living", w: 0.90, d: 0.90, h: 0.38, color: "#d9cfc0", symbol: "round-table", note: "Stone top on a drum pedestal" },
+  { id: "side-table-square", name: "Side table (square)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: WOOD, symbol: "table", note: "A square top on four legs; set any size" },
+  { id: "side-table-rect", name: "Side table (rectangular)", category: "Living", w: 0.60, d: 0.40, h: 0.55, color: WOOD, symbol: "table", note: "A rectangular top on four legs; set any size" },
   { id: "side-table-round", name: "Side table (round)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: "#2b2b2b", symbol: "round-table" },
   { id: "media-unit", name: "Media unit (floating)", category: "Living", w: 1.80, d: 0.40, h: 0.40, color: WALNUT, symbol: "media-unit", mount: 0.25, note: "Wall-hung, fluted handleless fronts" },
   { id: "picture", name: "Picture (framed print)", category: "Living", w: 0.42, d: 0.03, h: 0.594, color: "#1b1b1b", symbol: "picture", mount: 1.2, note: "Hang it on a wall: pick the print, a standard size, portrait or landscape and the frame in the inspector; the height above the floor is the bottom edge" },
