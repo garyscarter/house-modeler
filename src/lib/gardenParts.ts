@@ -284,6 +284,44 @@ function playhouse(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
   hut(P, w, d, h, m(item.color ?? def.color, "timber"), m(item.accent ?? def.accent ?? "#7c9a6a", "timber"), m(item.accent ?? def.accent ?? "#7c9a6a", "timber"), 0.62, true);
 }
 
+/**
+ * A playhouse with a summer kitchen wing on its left (the Smoby Life Friends
+ * house): the house itself as a hut set to the right, and on its left a
+ * counter at child height with a grill and a sink, under the house's eaves.
+ */
+function playhouseKitchen(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
+  const walls = m(item.color ?? def.color, "plastic");
+  const roof = m(item.accent ?? def.accent ?? "#c2412f", "plastic");
+  const door = m("#7fb04e", "plastic");
+  const wing = Math.min(0.5, w * 0.22);
+  const hw = w - wing;
+  const hx = wing / 2;
+  const house = new Parts();
+  hut(house, hw, d * 0.9, h, walls, roof, door, 0.62, true);
+  for (const pt of house.out) {
+    pt.p[0] += hx;
+    pt.p[2] -= d * 0.05;
+  }
+  P.out.push(...house.out);
+  // Shutters either side of the window and a doorbell beside the door.
+  const e = h * 0.62;
+  const wy = Math.min(e * 0.55, 1.1);
+  const wh = Math.min(0.45, e * 0.35);
+  const ww = Math.min(0.5, hw * 0.3);
+  for (const s of [-1, 1]) P.box(hx + hw * 0.22 + (s * (ww / 2 + 0.06)), wy - 0.03, wy + wh + 0.03, d * 0.4 - 0.005, 0.1, 0.02, door);
+  P.box(hx - hw * 0.2 + Math.min(0.75, hw * 0.4) / 2 + 0.07, e * 0.5, e * 0.5 + 0.06, d * 0.4 - 0.005, 0.05, 0.02, m("#f2b23c", "plastic"));
+  // The kitchen wing: a counter against the house's left wall, worktop at child height, splashback up the wall.
+  const kx = -w / 2 + wing / 2;
+  const kd = Math.min(0.7, d * 0.45);
+  const top = Math.min(0.6, h * 0.35);
+  P.box(kx, 0.02, top - 0.04, 0, wing - 0.04, kd, m(shadeColor(item.color ?? def.color, 0.92), "plastic"));
+  P.box(kx, top - 0.04, top, 0, wing, kd + 0.04, m("#8a9aa6", "plastic"));
+  P.box(hx - hw / 2 + 0.03, top, Math.min(h * 0.58, top + 0.45), 0, 0.03, kd, door);
+  P.cyl(kx, top, top + 0.1, -kd * 0.22, Math.min(0.32, wing * 0.7), m(DARK, "metal"));
+  P.box(kx, top + 0.1, top + 0.115, -kd * 0.22, Math.min(0.26, wing * 0.55), Math.min(0.26, wing * 0.55), m("#55595e", "metal"));
+  P.cyl(kx, top, top + 0.015, kd * 0.25, Math.min(0.26, wing * 0.55), m("#7fb4d8", "plastic"));
+}
+
 function pergola(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
   const wood = m(item.color ?? def.color, "timber");
   const post = 0.1;
@@ -402,6 +440,7 @@ const BUILDERS: Partial<Record<GardenDef["shape"], Builder>> = {
   shed,
   pergola,
   playhouse,
+  "playhouse-kitchen": playhouseKitchen,
   "mud-kitchen": mudKitchen,
   trampoline,
   "bin-store": binStore,

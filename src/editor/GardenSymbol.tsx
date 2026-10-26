@@ -271,6 +271,24 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
         </>,
         at,
       );
+    case "playhouse-kitchen": {
+      // The house on the right with its ridge and door, the kitchen counter on the left with a grill and sink.
+      const wing = Math.min(0.5, w * 0.22);
+      const hw = w - wing;
+      const hx = wing / 2;
+      const kd = Math.min(0.7, d * 0.45);
+      return group(
+        <>
+          <rect x={x0 + wing} y={y0} width={hw} height={d} rx={0.03} {...fill} />
+          <line x1={x0 + wing} y1={0} x2={-x0} y2={0} {...line} />
+          <rect x={hx - hw * 0.2 - Math.min(0.75, hw * 0.4) / 2} y={-y0 - 0.1} width={Math.min(0.75, hw * 0.4)} height={0.1} fill="#7fb04e" stroke={outline} strokeWidth={sw * 0.5} />
+          <rect x={x0 + 0.02} y={-kd / 2} width={wing - 0.04} height={kd} rx={0.02} fill="#8a9aa6" fillOpacity={0.85} stroke={outline} strokeWidth={sw * 0.6} />
+          <circle cx={x0 + wing / 2} cy={-kd * 0.22} r={Math.min(0.16, wing * 0.35)} {...line} />
+          <circle cx={x0 + wing / 2} cy={kd * 0.25} r={Math.min(0.13, wing * 0.28)} {...thin} />
+        </>,
+        at,
+      );
+    }
     case "pergola": {
       const rafters = Math.max(3, Math.round(w / 0.35));
       return group(

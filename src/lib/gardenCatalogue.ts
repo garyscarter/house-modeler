@@ -62,6 +62,7 @@ export type GardenShape =
   | "shed"
   | "pergola"
   | "playhouse"
+  | "playhouse-kitchen"
   | "mud-kitchen"
   | "trampoline"
   | "bin-store"
@@ -164,6 +165,9 @@ export const GARDEN_ITEMS: GardenDef[] = [
   { id: "pergola", name: "Pergola", category: "Structures", kind: "structure", shape: "pergola", w: 3.0, d: 3.0, h: 2.4, color: TIMBER, costLine: "gardenStructure" },
   // Play
   { id: "playhouse", name: "Playhouse", category: "Play", kind: "play", shape: "playhouse", w: 1.4, d: 1.2, h: 1.6, color: "#d9cfb8", accent: "#7c9a6a", shade: true, costLine: "gardenStructure" },
+  // Smoby Life Friends playhouse with its summer kitchen: 217 x 155 x 172 cm (retailer listing), cream walls, red roof,
+  // green door, kitchen wing with a grill and sink on the left, electronic doorbell by the door.
+  { id: "playhouse-smoby-friends", name: "Smoby Life Friends playhouse with kitchen", category: "Play", kind: "play", shape: "playhouse-kitchen", w: 2.17, d: 1.55, h: 1.72, color: "#efe6cf", accent: "#c2412f", shade: true, costLine: "gardenStructure", note: "Summer kitchen on the left with a grill and sink, picnic area in front, doorbell; about 1.7 m tall" },
   { id: "mud-kitchen", name: "Mud kitchen", category: "Play", kind: "play", shape: "mud-kitchen", w: 1.0, d: 0.5, h: 0.95, color: "#a98b62", wall: true, costLine: "gardenFurniture" },
   { id: "trampoline-8ft", name: "Trampoline, 8 ft with net", category: "Play", kind: "play", shape: "trampoline", w: 2.44, d: 2.44, h: 2.3, color: "#2b2e33", accent: "#3d6fb0", round: true, costLine: "gardenStructure" },
   // Utility
