@@ -20,6 +20,7 @@ import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { cutRun, SCREEN_THICK, screenBand } from "../lib/screenBlocks";
 import { useSiteView } from "./siteView";
 import { SunHoursOverlay } from "./SunHours";
+import { SiteItems } from "./SiteItems";
 
 /** Ground level relative to the ground floor's finished floor (floor 0 sits on a 0.25 m slab). */
 export const GROUND_Y = -0.26;
@@ -64,6 +65,7 @@ function SiteContent({ site, house, centre: houseCentre, quiet }: { quiet: boole
         <Surface key={s.id} surface={s} />
       ))}
       <Boundary site={site} buildings={buildings} />
+      <SiteItems site={site} quiet={quiet} buildings={buildings} />
       {site.neighbours.map((n) => (
         <NeighbourMass key={n.id} n={n} ghost={ghost} house={houseCentre} quiet={quiet} />
       ))}

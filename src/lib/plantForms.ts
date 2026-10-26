@@ -86,12 +86,12 @@ function stem(c: Ctx, x: number, z: number, y0: number, len: number, dia: number
   return [x + ax * len, y0 + ay * len, z + az * len];
 }
 
-/** A round canopy of n blobs filling the top of the plant from y0 to h. */
-function canopy(c: Ctx, n: number, y0: number, size: number, flat = 1, color = c.leaf) {
+/** A round canopy of n blobs filling the top of the plant from y0 to h, round a core blob `core` of the spread. */
+function canopy(c: Ctx, n: number, y0: number, size: number, flat = 1, color = c.leaf, core = 0.8) {
   const R = c.w / 2;
   const H = c.h - y0;
   const cy = y0 + H / 2;
-  blob(c, 0, cy + H * 0.05, 0, R * 0.8, (H / 2) * 0.9 * flat, R * 0.8, shadeColor(color, 0.92));
+  if (core > 0) blob(c, 0, cy + H * 0.05, 0, R * core, (H / 2) * (core + 0.1) * flat, R * core, shadeColor(color, 0.92));
   for (let i = 1; i < n; i++) {
     const a = c.r() * Math.PI * 2;
     const br = R * between(c.r, size * 0.75, size * 1.1);
@@ -133,15 +133,16 @@ function birch(c: Ctx) {
   // Two side branches and dark marks on the white bark.
   for (let i = 0; i < 2; i++) stem(c, t[0] * 0.5, t[2] * 0.5, h * between(r, 0.4, 0.55), h * 0.3, 0.05, between(r, 0.5, 0.8), r() * 6.28);
   for (let i = 0; i < 4; i++) c.P.box(t[0] * (0.1 + i * 0.12), h * (0.08 + i * 0.12), h * (0.08 + i * 0.12) + 0.04, t[2] * (0.1 + i * 0.12), 0.13, 0.13, gmat("#2b2a28", "bark"), r() * 3);
-  const n = 6 + Math.floor(r() * 3);
-  canopy(c, n, h * 0.38, 0.38, 1.1);
+  // Loose, airy crown: no core, small blobs hung off the upper trunk and branches.
+  const n = 9 + Math.floor(r() * 4);
+  canopy(c, n, h * 0.35, 0.3, 1.25, c.leaf, 0);
 }
 
 function apple(c: Ctx) {
   const { w, h, r } = c;
   stem(c, 0, 0, 0, h * 0.4, Math.min(0.2, w * 0.07));
   for (let i = 0; i < 3; i++) stem(c, 0, 0, h * 0.35, h * 0.3, 0.07, between(r, 0.5, 0.8), (i / 3) * 6.28 + r());
-  canopy(c, 5 + Math.floor(r() * 2), h * 0.42, 0.45, 0.85);
+  canopy(c, 6 + Math.floor(r() * 3), h * 0.42, 0.4, 0.85, c.leaf, 0.6);
   if (c.accent) speckle(c, 10, h * 0.5, h * 0.92, w * 0.42, 0.045, c.accent);
 }
 
@@ -166,7 +167,7 @@ function olive(c: Ctx) {
   const dir = r() * 6.28;
   const t = stem(c, 0, 0, 0, h * 0.35, Math.min(0.16, w * 0.1), lean, dir);
   stem(c, t[0], t[2], t[1], h * 0.2, 0.08, -lean, dir);
-  canopy(c, 6 + Math.floor(r() * 3), h * 0.42, 0.42, 0.8);
+  canopy(c, 7 + Math.floor(r() * 3), h * 0.42, 0.36, 0.75, c.leaf, 0.5);
 }
 
 function bay(c: Ctx) {

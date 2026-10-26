@@ -15,6 +15,9 @@ const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
 /** Key light intensities: the default front-right light, and the real sun at full height. */
 const KEY_DEFAULT = 4.2;
 const KEY_SUN = 5;
+/** Extra key light (warm) while the sun sits on the horizon, and how much the sky dims then. */
+const DUSK_KEY = 0.9;
+const DUSK_DIM = 0.35;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
 /** Shadow edge softness in shadow-map texels. */
 const SHADOW_RADIUS = { high: 3, balanced: 2, low: 1 } as const;
@@ -53,7 +56,9 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   const altitude = active ? sun!.position.altitude : 50;
   const day = daylight(altitude);
   const night = active && altitude < NIGHT_ALTITUDE;
-  useSkyEnvironment(active && !night ? sun!.vector : null, altitude, day.sky);
+  const low = active ? 1 - THREE.MathUtils.smoothstep(altitude, 0, 6) : 0;
+  const skyLevel = active ? day.sky * (1 - DUSK_DIM * low) : 1;
+  useSkyEnvironment(active && !night ? sun!.vector : null, altitude, skyLevel);
   const dir = useMemo(() => (active ? new THREE.Vector3(...sun!.vector) : DEFAULT_DIR.clone()), [active, sun]);
 
   // Everything that casts or catches a shadow worth seeing: the house, and the plot and neighbours when shown.
@@ -121,9 +126,11 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
     invalidate();
   }, [quality, night, invalidate]);
 
-  const keyIntensity = active ? KEY_SUN * day.sun : KEY_DEFAULT;
+  // Dusk, the sun within a few degrees of the horizon: a weak, warm raking light stays on (the daylight curve
+  // alone leaves almost none), and the sky dims so garden lights read.
+  const dusk = active ? THREE.MathUtils.smoothstep(altitude, -1.5, 0.5) * (1 - THREE.MathUtils.smoothstep(altitude, 3, 8)) : 0;
+  const keyIntensity = active ? KEY_SUN * day.sun + DUSK_KEY * dusk : KEY_DEFAULT;
   const keyColor = useMemo(() => (active ? WHITE_SUN.clone().lerp(LOW_SUN, day.warmth) : WHITE_SUN.clone()), [active, day.warmth]);
-  const skyLevel = active ? day.sky : 1;
   const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1), [active, day.sky]);
 
   return (
