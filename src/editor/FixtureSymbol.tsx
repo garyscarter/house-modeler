@@ -1,5 +1,5 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import type { Fixture } from "../types";
 
@@ -289,6 +289,69 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <circle key="t" cx={x0 + 0.06 * m + bw / 2} cy={y0 + 0.05 * m} r={0.02 * m} {...line} />,
       );
     }
+    case "gas-hob":
+      return g(
+        body(r * 0.5),
+        ...SIX_RINGS.map(([fx, fy], i) => (
+          <g key={`r${i}`}>
+            <circle cx={fx * w} cy={fy * d} r={0.075 * m} stroke={burnerInk} strokeWidth={sw * 0.6} fill="none" />
+            <circle cx={fx * w} cy={fy * d} r={0.03 * m} stroke={burnerInk} strokeWidth={sw * 0.6} fill="none" />
+          </g>
+        )),
+        ...[...new Set(SIX_RINGS.map(([, fy]) => fy))].map((fy) => <line key={`s${fy}`} x1={x0 + 0.03 * m} y1={fy * d} x2={x1 - 0.03 * m} y2={fy * d} {...thin} stroke={burnerInk} />),
+      );
+    case "induction":
+      return g(
+        body(r * 0.3),
+        ...SIX_RINGS.map(([fx, fy], i) => (
+          <g key={`z${i}`}>
+            <circle cx={fx * w} cy={fy * d} r={0.085 * m} {...thin} stroke={burnerInk} />
+            <circle cx={fx * w} cy={fy * d} r={0.06 * m} {...thin} stroke={burnerInk} strokeDasharray={`${stroke * 2} ${stroke * 2}`} />
+          </g>
+        )),
+        <rect key="c" x={-0.15 * m} y={y1 - 0.06 * m} width={0.3 * m} height={0.02 * m} {...thin} stroke={burnerInk} />,
+      );
+    case "vented-hob":
+      return g(
+        body(r * 0.3),
+        ...VENTED_ZONES.map(([fx, fy], i) => <circle key={`z${i}`} cx={fx * w} cy={fy * d} r={0.085 * m} {...thin} stroke={burnerInk} />),
+        <rect key="e" x={-0.1 * m} y={-0.04 * m} width={0.2 * m} height={0.08 * m} fill="#1f2937" stroke={outline} strokeWidth={sw * 0.5} />,
+        ...[-0.02, 0, 0.02].map((dy) => <line key={`gr${dy}`} x1={-0.08 * m} y1={dy * m} x2={0.08 * m} y2={dy * m} stroke="#e5e7eb" strokeWidth={sw * 0.4} />),
+      );
+    case "glass-hood":
+      return g(
+        body(0),
+        <rect key="c" x={-0.15 * m} y={y0} width={0.3 * m} height={0.12 * m} {...line} strokeDasharray={dash} />,
+        <rect key="gl" x={x0} y={y0 + 0.12 * m} width={w} height={d - 0.12 * m} fill="#1f2937" fillOpacity={0.5} stroke={outline} strokeWidth={sw * 0.6} strokeDasharray={dash} />,
+      );
+    case "box-hood":
+      return g(body(0), <rect key="g" x={x0 + 0.04 * m} y={y0 + 0.04 * m} width={w - 0.08 * m} height={d - 0.08 * m} {...thin} strokeDasharray={dash} />, <line key="f" x1={x0} y1={y1 - 0.03 * m} x2={x1} y2={y1 - 0.03 * m} {...thin} />);
+    case "island-hood":
+      return g(
+        body(0),
+        <rect key="g" x={x0 + 0.05 * m} y={y0 + 0.05 * m} width={w - 0.1 * m} height={d - 0.1 * m} {...thin} strokeDasharray={dash} />,
+        <rect key="c" x={-0.125 * m} y={-0.125 * m} width={0.25 * m} height={0.25 * m} {...line} strokeDasharray={dash} />,
+      );
+    case "beanbag":
+      return g(
+        <ellipse key="o" cx={0} cy={0} rx={w / 2} ry={d / 2} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <ellipse key="d" cx={0} cy={d * 0.05} rx={w * 0.3} ry={d * 0.25} {...thin} />,
+        <path key="c1" d={`M ${-w * 0.38} ${-d * 0.2} Q ${-w * 0.3} ${-d * 0.3} ${-w * 0.15} ${-d * 0.36}`} {...thin} />,
+        <path key="c2" d={`M ${w * 0.4} ${d * 0.15} Q ${w * 0.33} ${d * 0.3} ${w * 0.18} ${d * 0.38}`} {...thin} />,
+      );
+    case "beanbag-chair":
+      return g(
+        <ellipse key="o" cx={0} cy={0} rx={w / 2} ry={d / 2} fill={fill} fillOpacity={fo} stroke={outline} strokeWidth={sw} />,
+        <ellipse key="b" cx={0} cy={y0 + d * 0.22} rx={w * 0.45} ry={d * 0.2} fill={fill} stroke={outline} strokeWidth={sw} />,
+      );
+    case "wood-armchair":
+      return g(
+        body(r * 0.2),
+        <rect key="al" x={x0} y={y0 + 0.1 * m} width={0.06 * m} height={d - 0.1 * m} {...thin} fill={outline} fillOpacity={0.35} />,
+        <rect key="ar" x={x1 - 0.06 * m} y={y0 + 0.1 * m} width={0.06 * m} height={d - 0.1 * m} {...thin} fill={outline} fillOpacity={0.35} />,
+        <rect key="s" x={x0 + 0.08 * m} y={y0 + 0.2 * m} width={w - 0.16 * m} height={d - 0.24 * m} {...thin} />,
+        <line key="b" x1={x0 + 0.08 * m} y1={y0 + 0.2 * m} x2={x1 - 0.08 * m} y2={y0 + 0.2 * m} {...line} />,
+      );
     case "hob":
       return g(
         body(r * 0.5),
