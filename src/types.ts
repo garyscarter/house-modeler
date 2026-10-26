@@ -205,6 +205,14 @@ export interface Opening {
   boardColor?: string;
   /** Internal doors: colour of the lining and architraves (default white). */
   liningColor?: string;
+  /**
+   * Doors, front doors, bi-folds and archways: the leaf colour (archway: lining colour) on the back side when
+   * it differs from `color`. The front side is the outside for an opening in an external wall, and the local
+   * +z side (n = the wall direction turned anticlockwise on the plan) for an internal wall; the back side is the other.
+   */
+  backColor?: string;
+  /** Internal doors and bi-folds: lining and architrave colour on the back side when it differs from `liningColor`. */
+  backLiningColor?: string;
   /** Frame colour, instead of the house's window and door frame colour (e.g. a white garage-door frame). */
   frameColor?: string;
   /** Swing and French doors: how far the leaves are drawn open in 3D, degrees (default 75, French 80; 0 = shut). */

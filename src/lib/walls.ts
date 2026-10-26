@@ -179,7 +179,7 @@ export type FaceSlot =
   | { kind: "inside"; roomId: string; edge?: number }
   | { kind: "outside"; roomId: string | null; edge?: number }
   | { kind: "top" }
-  | { kind: "part"; mat: PartMat };
+  | { kind: "part"; mat: PartMat; side?: 1 | -1 };
 
 export interface FaceQuad {
   /** Corners, wound anticlockwise seen from the front. */

@@ -393,3 +393,29 @@ describe("house door colours", () => {
     expect(withHouseDoorColour(op, ext, true)).toEqual({ kind: "door", color: "#2f5a3a" });
   });
 });
+
+describe("door sides", () => {
+  it("gives an internal door architraves on both sides and a leaf spanning the thickness", () => {
+    const { boxes } = openingParts(place("door", 0.8, {}, 2.05), 0.1, 0);
+    const lining = boxes.filter((b) => b.mat === "lining");
+    expect(lining.filter((b) => b.side === 1)).toHaveLength(3);
+    expect(lining.filter((b) => b.side === -1)).toHaveLength(3);
+    expect(lining.filter((b) => !b.side)).toHaveLength(3);
+    expect(leaves(boxes).some((b) => b.faces)).toBe(true);
+  });
+  it("puts a front door letter plate on the front side, whichever way the wall faces", () => {
+    for (const out of [1, -1] as const) {
+      const { boxes } = openingParts(place("front", 0.95, {}, 2.1), 0.3, out);
+      const plate = boxes.find((b) => b.mat === "metal" && Math.abs(b.s[0] - 0.28) < 1e-9)!;
+      expect(plate.side).toBe(1);
+      expect(Math.sign(plate.p[2])).toBe(out);
+    }
+  });
+  it("tags box faces by side in boxQuads", () => {
+    const quads = boxQuads([{ mat: "leaf", p: [0, 0, 0], s: [1, 1, 0.04], faces: 1 }], { centre: { x: 0, y: 0 }, dir: { x: 1, y: 0 } });
+    const sides = quads.map((q) => (q.slot.kind === "part" ? q.slot.side : undefined));
+    expect(sides.filter((s) => s === 1)).toHaveLength(1);
+    expect(sides.filter((s) => s === -1)).toHaveLength(1);
+    expect(sides.filter((s) => s === undefined)).toHaveLength(4);
+  });
+});
