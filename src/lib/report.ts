@@ -179,7 +179,7 @@ export function areaReport(current?: HouseModel, proposed?: HouseModel): AreaRep
 // Changes
 
 export type Unit = "m²" | "m" | "each";
-export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site";
+export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site" | "Garden";
 export type CostLineId =
   | "newFloorArea"
   | "removeWall"
@@ -195,7 +195,17 @@ export type CostLineId =
   | "joineryClosed"
   | "joineryOpen"
   | "floatingShelf"
-  | "windowSeat";
+  | "windowSeat"
+  // Garden (lib/siteDiff.ts gardenChanges; each catalogue entry names its line in lib/gardenCatalogue.ts)
+  | "newLawn"
+  | "newBed"
+  | "gardenEdging"
+  | "gardenFurniture"
+  | "gardenStructure"
+  | "gardenLighting"
+  | "gardenPlanting"
+  | "hedging"
+  | "removeGardenItem";
 
 export interface Change {
   key: string;
@@ -655,6 +665,15 @@ export const COST_LINES: CostLineDef[] = [
   { id: "joineryOpen", label: "Fitted joinery: open shelving", unit: "m²", example: 350 },
   { id: "floatingShelf", label: "Floating shelf", unit: "each", example: 120 },
   { id: "windowSeat", label: "Window seat or banquette", unit: "m", example: 900 },
+  { id: "newLawn", label: "New lawn (turf)", unit: "m²", example: 15 },
+  { id: "newBed", label: "New planting bed", unit: "m²", example: 60 },
+  { id: "gardenEdging", label: "Lawn and bed edging", unit: "m", example: 45 },
+  { id: "gardenFurniture", label: "Garden furniture, pots and BBQ", unit: "each", example: 250 },
+  { id: "gardenStructure", label: "Shed, pergola or play structure", unit: "each", example: 1200 },
+  { id: "gardenLighting", label: "Garden lighting", unit: "each", example: 120 },
+  { id: "gardenPlanting", label: "Trees, shrubs and plants", unit: "each", example: 40 },
+  { id: "hedging", label: "Hedging, screens and climbers", unit: "m", example: 60 },
+  { id: "removeGardenItem", label: "Remove a garden item", unit: "each", example: 60 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */

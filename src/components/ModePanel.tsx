@@ -31,7 +31,7 @@ export function ModePanel() {
   const clashes = useClashCount(floor ?? EMPTY_FLOOR);
 
   const body = (() => {
-    if (mode === "plot") return <PlotPanel />;
+    if (mode === "plot" || mode === "garden") return <PlotPanel />; // Garden: GardenPanel (Charli XCX)
     if (mode === "review") return null;
     if (!model || !floor) return <p className="muted small">Load a house to start.</p>;
     switch (mode) {

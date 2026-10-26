@@ -13,8 +13,8 @@ const ui = (p: Partial<ModeUi> = {}): ModeUi => ({
 const apply = (u: ModeUi, next: ModeUi["mode"]): ModeUi => ({ ...u, ...modeSwitchPatch(u, next) });
 
 describe("modes", () => {
-  it("lists the five modes in order with labels", () => {
-    expect(MODES.map((m) => MODE_LABEL[m])).toEqual(["Build", "Decorate", "Furnish", "Plot", "Review"]);
+  it("lists the six modes in order with labels", () => {
+    expect(MODES.map((m) => MODE_LABEL[m])).toEqual(["Build", "Decorate", "Furnish", "Garden", "Plot", "Review"]);
     expect(isMode("furnish")).toBe(true);
     expect(isMode("nope")).toBe(false);
   });
@@ -84,5 +84,15 @@ describe("modes", () => {
   it("does not overwrite the remembered floor when already on the site", () => {
     const p = apply(ui({ mode: "build", editFloorId: SITE_EDIT_ID, floorBeforeSite: "f1" }), "plot");
     expect(p.floorBeforeSite).toBe("f1");
+  });
+});
+
+describe("garden mode", () => {
+  it("opens the site editor like Plot, and leaves it for a floor mode", () => {
+    const g = modeSwitchPatch({ mode: "build", tab: "plan", editFloorId: "f1", floorBeforeSite: null, selectedRoomId: null, selectedEdge: null }, "garden");
+    expect(g.editFloorId).toBe(SITE_EDIT_ID);
+    expect(g.floorBeforeSite).toBe("f1");
+    const b = modeSwitchPatch({ mode: "garden", tab: "plan", editFloorId: SITE_EDIT_ID, floorBeforeSite: "f1", selectedRoomId: null, selectedEdge: null }, "furnish");
+    expect(b.editFloorId).toBe("f1");
   });
 });
