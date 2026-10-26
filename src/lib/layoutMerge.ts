@@ -15,15 +15,16 @@ import { convexOverlap, defaultHead, defaultSill, DOOR_KINDS, fixtureSolids, rec
  * where it is very likely to be a listing update that fits the design (see `listingUpdates`).
  */
 
-export type UpdateGroup = "exterior" | "neighbours" | "fixtures" | "stairs" | "openings";
+export type UpdateGroup = "exterior" | "neighbours" | "garden" | "fixtures" | "stairs" | "openings";
 export const UPDATE_GROUP_LABEL: Record<UpdateGroup, string> = {
   exterior: "Roof and exterior settings",
   neighbours: "Neighbouring buildings",
+  garden: "Garden",
   fixtures: "New fittings and furniture",
   stairs: "Stairs settings",
   openings: "Doors and windows",
 };
-export const UPDATE_GROUP_ORDER: UpdateGroup[] = ["exterior", "neighbours", "fixtures", "stairs", "openings"];
+export const UPDATE_GROUP_ORDER: UpdateGroup[] = ["exterior", "neighbours", "garden", "fixtures", "stairs", "openings"];
 
 /** One change on offer. `T` is what it applies to: the layout (HouseModel) or its plot (Site). */
 export interface Change<T> {

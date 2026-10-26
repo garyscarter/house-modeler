@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Site } from "../types";
 import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
-import { boundaryPieces, changedPieces, diffSites } from "./siteDiff";
+import { boundaryPieces, changedPieces, diffSites, gardenChanges } from "./siteDiff";
 import { updateSiteOf, type Sites } from "./sites";
 import { COST_LINES, diffModels, estimateCosts } from "./report";
 import { areaOf, insertBoundaryVertex } from "./site";
 import { rectPoly } from "./site";
+import { circleControls } from "./surfaceCurve";
 
 /** Boundary corner between the front garden wall (edge 5) and the drive opening (edge 6). */
 const DRIVE_CORNER = 6;
@@ -151,5 +152,86 @@ describe("screen blocks on walls", () => {
     const texts = diffSites(before, after).map((c) => c.description);
     expect(texts.some((t) => /screen blocks removed/.test(t))).toBe(true);
     expect(changedPieces(before, before)).toHaveLength(0);
+  });
+});
+
+describe("garden changes", () => {
+  const base = (): Site => ({ ...listingSite(), items: [], surfaces: [{ id: "l", kind: "lawn", polygon: rectPoly(0, 0, 4, 4) }] });
+  const withItems = (items: NonNullable<Site["items"]>): Site => ({ ...base(), items });
+
+  it("prices an added item on its catalogue line, one each", () => {
+    const [c] = diffSites(base(), withItems([{ id: "p", type: "parasol", x: 1, y: 1, rot: 0 }]));
+    expect(c).toMatchObject({ key: "site:item:p", category: "Garden", costLine: "gardenFurniture", quantity: 1, unit: "each", description: "New Parasol, 2.7 m" });
+  });
+  it("prices runs by the unit of their line", () => {
+    const changes = gardenChanges(
+      base(),
+      withItems([
+        { id: "h", type: "hedge", x: 0, y: 0, rot: 0, to: { x: 6, y: 0 } },
+        { id: "f", type: "festoon", x: 0, y: 1, rot: 0, to: { x: 5, y: 1 } },
+        { id: "s", type: "stepping-stones", x: 0, y: 2, rot: 0, to: { x: 3, y: 2 } },
+      ]),
+    );
+    const by = (id: string) => changes.find((c) => c.key === `site:item:${id}`)!;
+    expect(by("h")).toMatchObject({ costLine: "hedging", quantity: 6, unit: "m" });
+    expect(by("f")).toMatchObject({ costLine: "gardenLighting", quantity: 1, unit: "each" });
+    expect(by("s")).toMatchObject({ costLine: "newPaving", unit: "m²" });
+    expect(by("s").quantity).toBeCloseTo(6 * 0.45 * 0.45, 1);
+  });
+  it("prices a removal and leaves moves and resizes as information", () => {
+    const a = withItems([
+      { id: "a", type: "bench", x: 1, y: 1, rot: 0 },
+      { id: "b", type: "bench", x: 2, y: 2, rot: 0 },
+      { id: "c", type: "bench", x: 3, y: 3, rot: 0 },
+    ]);
+    const b = withItems([
+      { id: "a", type: "bench", x: 1, y: 1, rot: 0 },
+      { id: "b", type: "bench", x: 2.5, y: 2, rot: 0 },
+      { id: "c", type: "bench", x: 3, y: 3, rot: 0, w: 2 },
+    ]);
+    const c = gardenChanges(a, b);
+    expect(c.map((x) => x.description)).toEqual(["Garden bench moved", "Garden bench resized"]);
+    expect(c.every((x) => !x.costLine)).toBe(true);
+    expect(gardenChanges(a, withItems([a.items![0], a.items![1]]))).toEqual([expect.objectContaining({ description: "Remove Garden bench", costLine: "removeGardenItem", quantity: 1 })]);
+  });
+  it("pairs a re-imported item by type within 30 cm", () => {
+    const a = withItems([{ id: "a", type: "bench", x: 1, y: 1, rot: 0 }]);
+    expect(gardenChanges(a, withItems([{ id: "z", type: "bench", x: 1.1, y: 1, rot: 0 }]))).toEqual([]);
+  });
+  it("prices new lawn and bed ground, grown lawn, and keeps paving on paving", () => {
+    const a = base();
+    const b = structuredClone(a);
+    b.surfaces.push({ id: "bed", kind: "bed", polygon: rectPoly(5, 0, 7, 2) }, { id: "pat", kind: "patio", polygon: rectPoly(8, 0, 10, 2) }, { id: "l2", kind: "lawn", polygon: rectPoly(0, 6, 3, 8) });
+    b.surfaces[0].polygon = rectPoly(0, 0, 4, 6);
+    const lines = diffSites(a, b).map((c) => [c.costLine, c.quantity]);
+    expect(lines).toContainEqual(["newBed", 4]);
+    expect(lines).toContainEqual(["newPaving", 4]);
+    expect(lines).toContainEqual(["newLawn", 6]);
+    expect(lines).toContainEqual(["newLawn", 8]);
+  });
+  it("prices a kerb that appears or changes, by perimeter, and ignores smooth alone", () => {
+    const a = base();
+    const kerbed = structuredClone(a);
+    kerbed.surfaces[0].kerb = "sleeper";
+    expect(diffSites(a, kerbed)).toEqual([expect.objectContaining({ costLine: "gardenEdging", quantity: 16, unit: "m" })]);
+    const changed = structuredClone(kerbed);
+    changed.surfaces[0].kerb = "corten";
+    expect(diffSites(kerbed, changed)).toEqual([expect.objectContaining({ costLine: "gardenEdging" })]);
+    const smooth = structuredClone(a);
+    smooth.surfaces[0] = { ...smooth.surfaces[0], polygon: circleControls({ x: 2, y: 2 }, 2), smooth: false };
+    const toggled = structuredClone(smooth);
+    toggled.surfaces[0].smooth = true;
+    expect(diffSites(smooth, toggled)).toEqual([]);
+    const height = structuredClone(kerbed);
+    height.surfaces[0].kerbHeight = 0.2;
+    expect(diffSites(kerbed, height)).toEqual([]);
+  });
+  it("flows through diffModels and totals in the estimate", () => {
+    const m = listing91770873("");
+    const b = withItems([{ id: "p", type: "parasol", x: 1, y: 1, rot: 0 }, { id: "t", type: "apple-tree", x: 3, y: 3, rot: 0 }]);
+    const changes = diffModels(m, m, { a: base(), b });
+    expect(changes.filter((c) => c.category === "Garden")).toHaveLength(2);
+    const est = estimateCosts(changes, { gardenFurniture: 200, gardenPlanting: 100 });
+    expect(est.subtotal).toBe(300);
   });
 });

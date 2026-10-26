@@ -1,7 +1,10 @@
-import { SURFACE_LABEL, type BoundaryEdge, type Site, type SiteSurface, type SurfaceKind, type WPt } from "../types";
+import { SURFACE_LABEL, type BoundaryEdge, type GardenItem, type Site, type SiteSurface, type SurfaceKind, type WPt } from "../types";
 import { screenKey } from "./screenBlocks";
-import type { Change } from "./report";
+import { COST_LINES, type Change, type CostLineId } from "./report";
+import { KERBS, gardenDef, itemSize, kerbOf } from "./gardenCatalogue";
 import { areaOf, edgesOf } from "./site";
+import { itemsOf, runLength, steppingStones } from "./siteItems";
+import { surfaceArea, surfacePerimeter } from "./surfaceCurve";
 
 /**
  * Plot changes between two layouts: boundary treatments (walls, fences,
@@ -244,6 +247,8 @@ function boundaryChanges(before: Site, after: Site): Change[] {
 /** Surfaces laid as new hard landscaping (priced as paving). Pavement and road are public, so left out. */
 const HARD = new Set<SurfaceKind>(["drive", "patio", "path"]);
 const centroid = (poly: WPt[]) => poly.reduce((s, p) => ({ x: s.x + p.x / poly.length, y: s.y + p.y / poly.length }), { x: 0, y: 0 });
+/** A surface as JSON without what is reported on its own (id, smoothing, edging). */
+const plain = ({ id: _id, smooth: _s, kerb: _k, kerbHeight: _h, ...rest }: SiteSurface) => JSON.stringify(rest);
 const significant = (a: number, b: number) => Math.abs(b - a) >= AREA_TOL && Math.abs(b - a) >= AREA_FRAC * Math.max(a, b);
 
 function pairSurfaces(a: SiteSurface[], b: SiteSurface[]): { a?: SiteSurface; b?: SiteSurface }[] {
@@ -279,37 +284,110 @@ function surfaceChanges(before: Site, after: Site): Change[] {
   const push = (key: string, c: Omit<Change, "key" | "level" | "floor" | "category">) =>
     out.push({ key: `site:surface:${key}`, level: SITE_LEVEL, floor: SITE_GROUP, category: "Site", ...c });
 
+  /** Planted and mown ground is priced on its own lines; hard surfaces as paving. */
+  const lineOf = (k: SurfaceKind): CostLineId | undefined => (HARD.has(k) ? "newPaving" : k === "lawn" ? "newLawn" : k === "bed" ? "newBed" : undefined);
+  const edging = (a: SiteSurface | undefined, b: SiteSurface) => {
+    const [ka, kb] = [a ? kerbOf(a) : { style: "none" as const, height: 0 }, kerbOf(b)];
+    if (ka.style === kb.style || (!a && !b.kerb)) return; // new surfaces count only an edging chosen on purpose
+    if (kb.style === "none") {
+      push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[ka.style].label.toLowerCase()} edging removed`, quantity: r1(surfacePerimeter(b)), unit: "m" });
+      return;
+    }
+    push(`${b.id}:kerb`, { description: `${name(b)}: ${KERBS[kb.style].label.toLowerCase()} edging`, quantity: r1(surfacePerimeter(b)), unit: "m", costLine: "gardenEdging" });
+  };
+
   for (const { a, b } of pairSurfaces(before.surfaces, after.surfaces)) {
     if (a && !b) {
-      push(a.id, { description: `${name(a)} removed (${m2(areaOf(a.polygon))})`, quantity: r1(areaOf(a.polygon)), unit: "m²" });
+      push(a.id, { description: `${name(a)} removed (${m2(surfaceArea(a))})`, quantity: r1(surfaceArea(a)), unit: "m²" });
       continue;
     }
     if (b && !a) {
-      const area = areaOf(b.polygon);
-      push(b.id, { description: `New ${name(b).toLowerCase()} (${m2(area)})`, quantity: r1(area), unit: "m²", ...(HARD.has(b.kind) ? { costLine: "newPaving" as const } : {}) });
+      const area = surfaceArea(b);
+      const line = lineOf(b.kind);
+      push(b.id, { description: `New ${name(b).toLowerCase()} (${m2(area)})`, quantity: r1(area), unit: "m²", ...(line ? { costLine: line } : {}) });
+      edging(undefined, b);
       continue;
     }
     if (!a || !b) continue;
-    const [aa, ab] = [areaOf(a.polygon), areaOf(b.polygon)];
+    if (plain(a) === plain(b)) {
+      edging(a, b); // smoothing and edging only: smooth alone is not a change
+      continue;
+    }
+    const [aa, ab] = [surfaceArea(a), surfaceArea(b)];
     if (a.kind !== b.kind) {
+      const line = lineOf(b.kind);
       push(b.id, {
         description: `${name(a)} changed to ${SURFACE_LABEL[b.kind].toLowerCase()} (${m2(ab)})`,
         quantity: r1(ab),
         unit: "m²",
-        ...(HARD.has(b.kind) && !HARD.has(a.kind) ? { costLine: "newPaving" as const } : {}),
+        ...(line && line !== lineOf(a.kind) ? { costLine: line } : {}),
       });
     } else if (significant(aa, ab)) {
       const bigger = ab > aa;
+      const line = lineOf(b.kind);
       push(b.id, {
         description: `${name(b)} ${bigger ? "enlarged" : "reduced"} from ${m2(aa)} to ${m2(ab)}`,
         quantity: r1(Math.abs(ab - aa)),
         unit: "m²",
-        ...(bigger && HARD.has(b.kind) ? { costLine: "newPaving" as const } : {}),
+        ...(bigger && line ? { costLine: line } : {}),
       });
     } else if (a.polygon.length !== b.polygon.length || a.polygon.some((p, i) => Math.hypot(p.x - b.polygon[i].x, p.y - b.polygon[i].y) > LEN_TOL)) {
       push(b.id, { description: `${name(b)} reshaped (${m2(ab)})`, quantity: r1(ab), unit: "m²" });
-    } else if (JSON.stringify({ ...a, id: "" }) !== JSON.stringify({ ...b, id: "" })) {
+    } else {
       push(b.id, { description: `${name(b)} changed (${m2(ab)})`, quantity: r1(ab), unit: "m²" });
+    }
+    edging(a, b);
+  }
+  return out;
+}
+
+// Garden items
+
+const ITEM_MATCH = 0.3;
+
+/** Garden items added, removed, moved or resized between two layouts, with their cost lines. */
+export function gardenChanges(before: Site, after: Site): Change[] {
+  const out: Change[] = [];
+  const A = itemsOf(before);
+  const B = itemsOf(after);
+  const push = (id: string, c: Omit<Change, "key" | "level" | "floor" | "category">) =>
+    out.push({ key: `site:item:${id}`, level: SITE_LEVEL, floor: SITE_GROUP, category: "Garden", ...c });
+  const pairs: { a?: GardenItem; b?: GardenItem }[] = [];
+  const taken = new Set<GardenItem>();
+  for (const a of A) {
+    const m = B.find((t) => !taken.has(t) && t.id === a.id);
+    if (m) taken.add(m);
+    pairs.push({ a, b: m });
+  }
+  for (const p of pairs) {
+    if (p.b) continue;
+    const m = B.find((t) => !taken.has(t) && t.type === p.a!.type && Math.hypot(t.x - p.a!.x, t.y - p.a!.y) <= ITEM_MATCH && !A.some((x) => x.id === t.id));
+    if (m) {
+      taken.add(m);
+      p.b = m;
+    }
+  }
+  for (const t of B) if (!taken.has(t)) pairs.push({ b: t });
+
+  const nameOf = (it: GardenItem) => gardenDef(it.type)?.name ?? it.type;
+  const sizeKey = (it: GardenItem) => JSON.stringify([it.w ?? null, it.d ?? null, it.h ?? null, it.to ? runLength(it).toFixed(1) : null, it.seats ?? null]);
+  for (const { a, b } of pairs) {
+    if (b && !a) {
+      const def = gardenDef(b.type);
+      if (!def) continue;
+      const sz = itemSize(b);
+      // Quantity in the cost line's own unit: one each, a run's length in metres, or stones' area in m².
+      const unit = COST_LINES.find((l) => l.id === def.costLine)?.unit ?? "each";
+      const stones = def.run === "stones" ? steppingStones(b).length : 0;
+      const quantity = unit === "m" ? r1(runLength(b)) : unit === "m²" ? (stones ? Math.round(stones * sz.w * sz.d * 100) / 100 : sz.w * sz.d) : 1;
+      const tail = stones ? ` (${stones} stones, ${runLength(b).toFixed(1)} m)` : def.run ? ` (${runLength(b).toFixed(1)} m)` : "";
+      push(b.id, { description: `New ${def.name}${tail}`, quantity, unit, costLine: def.costLine });
+    } else if (a && !b) {
+      push(a.id, { description: `Remove ${nameOf(a)}`, quantity: 1, unit: "each", costLine: "removeGardenItem" });
+    } else if (a && b) {
+      const moved = Math.hypot(b.x - a.x, b.y - a.y) >= ITEM_MATCH || (b.to && a.to && Math.hypot(b.to.x - a.to.x, b.to.y - a.to.y) >= ITEM_MATCH);
+      if (moved) push(b.id, { description: `${nameOf(b)} moved`, quantity: 1, unit: "each" });
+      else if (sizeKey(a) !== sizeKey(b)) push(b.id, { description: `${nameOf(b)} resized`, quantity: 1, unit: "each" });
     }
   }
   return out;
@@ -347,5 +425,5 @@ export function diffSites(before: Site | undefined, after: Site | undefined): Ch
   if (!before || !after) {
     return [{ key: "site:plot", level: SITE_LEVEL, floor: SITE_GROUP, category: "Site", description: before ? "Proposed has no plot" : "Plot added for Proposed", quantity: 1, unit: "each" }];
   }
-  return [...boundaryChanges(before, after), ...surfaceChanges(before, after), ...otherChanges(before, after)];
+  return [...boundaryChanges(before, after), ...surfaceChanges(before, after), ...gardenChanges(before, after), ...otherChanges(before, after)];
 }

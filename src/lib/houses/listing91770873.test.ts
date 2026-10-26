@@ -5,6 +5,9 @@ import { bayOutline } from "../openings";
 import { convexOverlap, doorSwing, fixtureBox, fixtureSolids, outsideSide, overlappingIds, rectCorners } from "../planMath";
 import { planRoofs, roofGeometry } from "../roof";
 import { clipSegmentOutside } from "../site";
+import { gardenDef } from "../gardenCatalogue";
+import { itemFootprint, itemsOf } from "../siteItems";
+import { surfaceOutline } from "../surfaceCurve";
 import { surfaceHeightAt } from "../surfaceSlope";
 import { boundaryWallSegments } from "../wallSteps";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./listing91770873";
@@ -405,5 +408,59 @@ describe("the main roof (fitted to the front photos)", () => {
     const attached = listingSite().neighbours.find((n) => n.name === "Attached neighbour")!;
     expect(attached.pitchDeg).toBe(house.exterior!.pitchDeg);
     expect(attached.overhang).toBe(house.exterior!.overhang);
+  });
+});
+
+describe("the listing's garden baseline", () => {
+  const site = listingSite();
+  const items = itemsOf(site);
+  const houseRooms = house.floors.filter((f) => f.level === 0).flatMap((f) => f.rooms.map((r) => roomWorldPolygon(f, r)));
+
+  it("has fixed, unique ids and catalogue types", () => {
+    expect(items.map((i) => i.id).sort()).toEqual(
+      ["listing-bin-store", "listing-buddleia", "listing-conifer", "listing-dining", "listing-parasol", "listing-recycling", "listing-washing-line"],
+    );
+    expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+    for (const i of items) expect(gardenDef(i.type), i.id).toBeDefined();
+  });
+  it("stands every item inside the boundary and outside the house", () => {
+    for (const i of items) {
+      for (const p of itemFootprint(i)) {
+        expect(pointInPolygon(p, site.boundary), `${i.id} in the plot`).toBe(true);
+        for (const room of houseRooms) expect(pointInPolygon(p, room), `${i.id} clear of the house`).toBe(false);
+      }
+    }
+  });
+  it("has the bin store's back against the west wall", () => {
+    const bin = items.find((i) => i.id === "listing-bin-store")!;
+    const back = Math.min(...itemFootprint(bin).map((p) => p.x));
+    expect(back - site.boundary[10].x).toBeGreaterThan(0);
+    expect(back - site.boundary[10].x).toBeLessThan(0.15); // wall face is about 0.1 m in from the line
+  });
+  it("puts the recycling box beside the back door and plants in their beds", () => {
+    const door = house.floors[0].openings.find((o) => o.kind === "door" && o.x === 604 && o.y === 22)!;
+    const dw = toWorld(house.floors[0], door);
+    const box = items.find((i) => i.id === "listing-recycling")!;
+    expect(Math.hypot(box.x - dw.x, box.y - dw.y)).toBeLessThan(1.5);
+    for (const [id, bed] of [["listing-conifer", 1], ["listing-buddleia", 2]] as const) {
+      const it = items.find((i) => i.id === id)!;
+      const beds = site.surfaces.filter((s) => s.kind === "bed");
+      expect(pointInPolygon(it, surfaceOutline(beds[bed - 1])), id).toBe(true);
+    }
+  });
+  it("keeps the dining set and parasol east of centre and clear of the curved planter", () => {
+    const planter = site.surfaces.find((s) => s.smooth)!;
+    for (const id of ["listing-dining", "listing-parasol"]) {
+      const it = items.find((i) => i.id === id)!;
+      expect(it.x).toBeGreaterThan(0.6);
+      for (const p of itemFootprint(it)) expect(pointInPolygon(p, surfaceOutline(planter)), id).toBe(false);
+    }
+  });
+  it("draws the planter as eight smooth control points and edges raised beds in brick", () => {
+    const beds = site.surfaces.filter((s) => s.kind === "bed");
+    expect(beds).toHaveLength(3);
+    expect(beds.filter((b) => b.smooth)).toHaveLength(1);
+    expect(beds.find((b) => b.smooth)!.polygon).toHaveLength(8);
+    for (const b of beds) expect(b.kerb).toBe("brick");
   });
 });

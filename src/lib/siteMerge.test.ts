@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listingSite } from "./houses/listing91770873";
 import { setOpeningWidth } from "./boundaryOpening";
-import { describeBoundaryChanges, mergeBoundaryTreatments, mergeKeepingEdits, neighbourUpdates } from "./siteMerge";
+import { describeBoundaryChanges, gardenUpdates, mergeBoundaryTreatments, mergeKeepingEdits, neighbourUpdates } from "./siteMerge";
 import { applyChanges, defaultSelection } from "./layoutMerge";
 import { insertBoundaryVertex } from "./site";
 import type { BoundaryEdge, Site } from "../types";
@@ -263,5 +263,49 @@ describe("mergeKeepingEdits", () => {
     mine.neighbours = mine.neighbours.map((n, i) => (i === 0 ? { ...n, polygon: n.polygon.map((p) => ({ x: p.x + 3, y: p.y })) } : n));
     const r = mergeKeepingEdits(mine, newerSite());
     expect(r.site.neighbours[0].polygon).toEqual(mine.neighbours[0].polygon);
+  });
+});
+
+describe("gardenUpdates", () => {
+  const latest = () => listingSite();
+  const withoutItems = (): Site => ({ ...listingSite(), items: undefined });
+
+  it("offers nothing when the gardens match", () => {
+    expect(gardenUpdates(listingSite(), latest())).toEqual([]);
+  });
+  it("offers every built-in item, ticked, to a plot from before the garden", () => {
+    const c = gardenUpdates(withoutItems(), latest());
+    expect(c).toHaveLength(latest().items!.length);
+    expect(c.every((x) => x.group === "garden" && x.defaultSelected)).toBe(true);
+    const next = c.reduce((s, x) => x.apply(s), withoutItems());
+    expect(next.items).toEqual(latest().items);
+  });
+  it("offers a missing item unticked when the plot has some items already", () => {
+    const mine = listingSite();
+    mine.items = mine.items!.filter((i) => i.id !== "listing-conifer");
+    const [c] = gardenUpdates(mine, latest());
+    expect(c).toMatchObject({ id: "garden.listing-conifer.add", defaultSelected: false });
+    expect(c.apply(mine).items).toHaveLength(latest().items!.length);
+    expect(c.apply(c.apply(mine)).items).toHaveLength(latest().items!.length); // applying twice adds it once
+  });
+  it("offers a moved or resized built-in item unticked, and a nudge under 5 cm not at all", () => {
+    const mine = listingSite();
+    mine.items = mine.items!.map((i) => (i.id === "listing-dining" ? { ...i, x: i.x + 0.04 } : i.id === "listing-parasol" ? { ...i, x: i.x + 0.5 } : i.id === "listing-buddleia" ? { ...i, h: 2 } : i));
+    const c = gardenUpdates(mine, latest());
+    expect(c.map((x) => x.id).sort()).toEqual(["garden.listing-buddleia.change", "garden.listing-parasol.change"]);
+    expect(c.every((x) => !x.defaultSelected)).toBe(true);
+    expect(c[0].apply(mine).items!.find((i) => i.id === "listing-buddleia")!.h).toBe(3);
+  });
+  it("leaves the owner's own items alone", () => {
+    const mine = listingSite();
+    mine.items = [...mine.items!, { id: "mine", type: "bench", x: 0, y: -8, rot: 0 }];
+    expect(gardenUpdates(mine, latest())).toEqual([]);
+  });
+  it("brings the garden in with mergeKeepingEdits only for a plot that has none", () => {
+    const edited = withoutItems();
+    edited.boundary = edited.boundary.map((p, i) => (i === 0 ? { ...p, x: p.x - 0.5 } : p));
+    expect(mergeKeepingEdits(edited, latest()).site.items).toHaveLength(latest().items!.length);
+    const keep = { ...edited, items: [{ id: "mine", type: "bench", x: 0, y: -8, rot: 0 }] };
+    expect(mergeKeepingEdits(keep, latest()).site.items).toEqual(keep.items);
   });
 });

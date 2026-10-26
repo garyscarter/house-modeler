@@ -2,7 +2,7 @@ import { uid, type GardenItem, type Site, type WPt } from "../types";
 import { gardenDef, itemSize } from "./gardenCatalogue";
 import { bbox, pointInPolygon, polygonCentroid } from "./geometry";
 import type { Prism } from "./site";
-import { closestOnSegment } from "./site";
+import { closestOnSegment, edgesOf } from "./site";
 import { surfaceHeightAt } from "./surfaceSlope";
 import { surfaceArea, surfaceOutline } from "./surfaceCurve";
 
@@ -97,16 +97,47 @@ export function hitItem(items: GardenItem[], p: WPt, tol = 0.15): string | undef
 export function snapItem(
   item: GardenItem,
   p: WPt,
-  site: Pick<Site, "boundary">,
+  site: Pick<Site, "boundary" | "boundaryEdges">,
   houseOutline: WPt[][],
   reach = 0.4,
 ): { x: number; y: number; rot: number } {
-  // TODO(Lily Allen): pull `wall` entries' backs against the nearest wall within `reach` and turn them.
-  void site;
-  void houseOutline;
-  void reach;
   const g = (v: number) => Math.round(v / 0.05) * 0.05;
-  return { x: g(p.x), y: g(p.y), rot: item.rot };
+  const plain = { x: g(p.x), y: g(p.y), rot: item.rot };
+  const def = gardenDef(item.type);
+  if (!def?.wall) return plain;
+  const half = item.to ? 0 : itemSize(item).d / 2;
+
+  let best: { dist: number; foot: WPt; n: WPt } | undefined;
+  const consider = (a: WPt, b: WPt) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+    const foot = closestOnSegment(p, a, b);
+    const dist = Math.hypot(p.x - foot.x, p.y - foot.y);
+    // Unit normal on the side the point is on (a point exactly on the wall goes to the left of a to b).
+    let n = { x: dy / len, y: -dx / len };
+    if ((p.x - foot.x) * n.x + (p.y - foot.y) * n.y < 0) n = { x: -n.x, y: -n.y };
+    const out = { x: foot.x + n.x * 0.05, y: foot.y + n.y * 0.05 };
+    if (houseOutline.some((poly) => poly.length >= 3 && pointInPolygon(out, poly))) return; // inside the house: not an outside face
+    if (!best || dist < best.dist) best = { dist, foot, n };
+  };
+  const edges = edgesOf(site);
+  site.boundary.forEach((a, i) => {
+    const kind = edges[i].kind;
+    if (kind === "wall" || kind === "fence") consider(a, site.boundary[(i + 1) % site.boundary.length]);
+  });
+  for (const poly of houseOutline) poly.forEach((a, i) => consider(a, poly[(i + 1) % poly.length]));
+
+  const hit = best as { dist: number; foot: WPt; n: WPt } | undefined;
+  if (!hit || hit.dist > reach + half) return plain;
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  // Slide along the wall on the grid-free foot; stand off by half the depth so the back is flush.
+  const x = r3(hit.foot.x + hit.n.x * half);
+  const y = r3(hit.foot.y + hit.n.y * half);
+  if (item.to) return { x, y, rot: item.rot }; // climbers and other wall runs: each end lies on the wall line
+  const rot = Math.round((Math.atan2(-hit.n.x, hit.n.y) * 180) / Math.PI);
+  return { x, y, rot: ((rot % 360) + 360) % 360 };
 }
 
 /** Move items by (dx, dy) metres (both ends of a run). Returns a new site. */
@@ -173,11 +204,25 @@ export function steppingStones(item: GardenItem): { x: number; y: number; rot: n
   });
 }
 
-/** Plants and structures with `shade` as sun-study blocks: a tree's canopy as a prism raised off the ground (base = clear trunk). */
+/**
+ * Plants and structures with `shade` as sun-study blocks: a tree's canopy as a prism raised off the ground (base =
+ * 35% of its height, the clear trunk), shrubs and hedges from the ground, sheds and playhouses as boxes from the
+ * ground to `h`, runs as their strip. Plants are "boundary" blocks (a point under a tree is still garden).
+ */
 export function itemOccluders(site: Pick<Site, "items" | "surfaces">): Prism[] {
-  // TODO(Lily Allen): canopies as raised prisms, sheds and playhouses from the ground.
-  void site;
-  return [];
+  const out: Prism[] = [];
+  for (const it of itemsOf(site)) {
+    const def = gardenDef(it.type);
+    if (!def?.shade) continue;
+    const ground = groundHeightAt(site, it);
+    const { h } = itemSize(it);
+    const poly = itemFootprint(it);
+    if (def.kind === "plant") {
+      const tree = def.category === "Trees";
+      out.push({ poly, base: ground + (tree ? 0.35 * h : 0), height: ground + h, kind: "boundary" });
+    } else out.push({ poly, base: ground, height: ground + h, kind: "building" });
+  }
+  return out;
 }
 
 /**

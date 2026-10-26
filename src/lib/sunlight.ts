@@ -1,6 +1,8 @@
 import type { HouseModel, OpeningKind, Site } from "../types";
 import { EXT_WALL_T, buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
 import { floorBase } from "./roof";
+import { gardenDef } from "./gardenCatalogue";
+import { itemOccluders, itemsOf } from "./siteItems";
 import { bearingToWorld, solarPosition, sunTimes } from "./sun";
 import {
   GROUND_DROP,
@@ -174,9 +176,9 @@ export interface SunlightResult {
   garden?: GardenSun;
 }
 
-/** Everything that can cast a shadow: the house, the neighbours and the boundary. */
+/** Everything that can cast a shadow: the house, the neighbours, the boundary and the garden's trees, hedges and sheds. */
 export function occludersFor(model: HouseModel, site: Site): Prism[] {
-  return [...housePrisms(model), ...site.neighbours.map(neighbourPrism), ...boundaryPrisms(site)];
+  return [...housePrisms(model), ...site.neighbours.map(neighbourPrism), ...boundaryPrisms(site), ...itemOccluders(site)];
 }
 
 export function gardenSun(site: Site, occluders: Prism[], samples: SunSample[], cell = 1, stepH = 0.25): GardenSun | undefined {
@@ -228,6 +230,11 @@ export function sunlightKey(model: HouseModel, site: Site): string {
     site.boundary,
     site.boundaryEdges ?? null,
     site.neighbours.map((n) => [n.id, n.polygon, n.eaves, n.roof, n.pitchDeg ?? null]),
+    // Only items that cast shade, and only what shapes the shadow (not colours or seats).
+    itemsOf(site)
+      .filter((i) => gardenDef(i.type)?.shade)
+      .map((i) => [i.id, i.type, i.x, i.y, i.rot, i.w ?? null, i.d ?? null, i.h ?? null, i.to ?? null]),
+    site.surfaces.some((x) => x.slope) ? site.surfaces.map((x) => [x.polygon, x.smooth ?? false, x.slope ?? null]) : null,
     site.latitude,
     site.longitude,
     site.frontBearing,
