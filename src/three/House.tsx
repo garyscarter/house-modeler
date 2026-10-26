@@ -328,11 +328,12 @@ function FloorShell({
         wallFinish: finish,
         wallColor: ext.wallColor,
         trimColor: ext.trimColor,
+        doorColours: { frontDoorColor: ext.frontDoorColor, backDoorColor: ext.backDoorColor },
         doorsOpen,
         flight,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, doorsOpen, flight],
+    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 

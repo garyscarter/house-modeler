@@ -67,6 +67,29 @@ export const DEFAULT_BAY_DEPTH = 0.6;
 export const DEFAULT_ARCHWAY_COLOUR = "#3b2418";
 
 /** Styles offered for a kind of opening (none for kinds without a leaf style). */
+/** Usual leaf colours: red front and garage doors, oak swing doors. */
+export const DEFAULT_FRONT_DOOR = "#b3202e";
+export const DEFAULT_BACK_DOOR = "#c9a26b";
+
+/**
+ * The colour an outside door takes from the house: the front door colour for a
+ * front door, the back door colour for a swing door in an outside wall. A
+ * door's own colour wins; inside doors and glazed sets (patio, French,
+ * bi-fold, garage) take nothing from here.
+ */
+export function houseDoorColour(op: Pick<Opening, "kind" | "color">, ext: { frontDoorColor?: string; backDoorColor?: string }, external: boolean): string | undefined {
+  if (op.color || !external) return op.color;
+  if (op.kind === "front") return ext.frontDoorColor;
+  if (op.kind === "door") return ext.backDoorColor;
+  return undefined;
+}
+
+/** The opening with the house's door colour filled in where it applies (see houseDoorColour). */
+export function withHouseDoorColour<T extends Pick<Opening, "kind" | "color">>(op: T, ext: { frontDoorColor?: string; backDoorColor?: string }, external: boolean): T {
+  const color = houseDoorColour(op, ext, external);
+  return color === op.color ? op : { ...op, color };
+}
+
 export function styleOptions(kind: OpeningKind): { value: OpeningStyle; label: string }[] {
   if (kind === "door" || kind === "front") return (Object.keys(DOOR_STYLE_LABEL) as DoorStyle[]).map((value) => ({ value, label: DOOR_STYLE_LABEL[value] }));
   if (kind === "garage") return (Object.keys(GARAGE_STYLE_LABEL) as GarageStyle[]).map((value) => ({ value, label: GARAGE_STYLE_LABEL[value] }));

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box } from "./openings";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -371,5 +371,25 @@ describe("sills", () => {
     expect(upvc.p[2] + upvc.s[2] / 2).toBeGreaterThan(T / 2);
     expect(win("none").some((b) => b.mat === "sill")).toBe(false);
     for (const s of [undefined, "upvc", "none"] as const) expect(win(s).some((b) => b.mat === "board")).toBe(true);
+  });
+});
+
+describe("house door colours", () => {
+  const ext = { frontDoorColor: "#1f3a5f", backDoorColor: "#2f5a3a" };
+  it("gives a front door the front colour and an outside swing door the back colour", () => {
+    expect(houseDoorColour({ kind: "front" }, ext, true)).toBe("#1f3a5f");
+    expect(houseDoorColour({ kind: "door" }, ext, true)).toBe("#2f5a3a");
+  });
+  it("leaves inside doors, glazed sets and doors with their own colour alone", () => {
+    expect(houseDoorColour({ kind: "door" }, ext, false)).toBeUndefined();
+    expect(houseDoorColour({ kind: "patio" }, ext, true)).toBeUndefined();
+    expect(houseDoorColour({ kind: "garage" }, ext, true)).toBeUndefined();
+    expect(houseDoorColour({ kind: "front", color: "#ffffff" }, ext, true)).toBe("#ffffff");
+    expect(houseDoorColour({ kind: "front" }, {}, true)).toBeUndefined();
+  });
+  it("returns the same opening when nothing applies", () => {
+    const op = { kind: "door" as const, color: undefined };
+    expect(withHouseDoorColour(op, ext, false)).toBe(op);
+    expect(withHouseDoorColour(op, ext, true)).toEqual({ kind: "door", color: "#2f5a3a" });
   });
 });

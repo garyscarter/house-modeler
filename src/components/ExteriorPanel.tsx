@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, type HouseModel, type FlatRoofSkirt, type PlanSide, type TileStyle, type VariantKey, type WallFinish } from "../types";
 import { chimneyOnRidge, defaultChimney, exteriorOf, planRoofs } from "../lib/roof";
 import { modelBounds } from "../lib/geometry";
+import { DEFAULT_BACK_DOOR, DEFAULT_FRONT_DOOR } from "../lib/openings";
 import { Info } from "./Info";
 import { SwatchField } from "./inspector";
 import "./ExteriorPanel.css";
@@ -263,6 +264,24 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
           </Field>
           <SwatchField dulux label="Wall colour" value={ext.wallColor} isSet onChange={(wallColor) => set({ wallColor })} />
           <SwatchField dulux label="Window frames" value={ext.trimColor} isSet onChange={(trimColor) => set({ trimColor })} />
+          <SwatchField
+            dulux
+            label="Front door"
+            value={ext.frontDoorColor ?? DEFAULT_FRONT_DOOR}
+            isSet={!!ext.frontDoorColor}
+            onChange={(frontDoorColor) => set({ frontDoorColor })}
+            onReset={() => set({ frontDoorColor: undefined })}
+            info={<Info>The front door&apos;s colour, unless the door itself is given one in Plan.</Info>}
+          />
+          <SwatchField
+            dulux
+            label="Back door"
+            value={ext.backDoorColor ?? DEFAULT_BACK_DOOR}
+            isSet={!!ext.backDoorColor}
+            onChange={(backDoorColor) => set({ backDoorColor })}
+            onReset={() => set({ backDoorColor: undefined })}
+            info={<Info>Every other swing door in an outside wall, unless the door itself is given a colour in Plan. Patio, French and bi-fold doors take the window frame colour.</Info>}
+          />
         </div>
         <p className="muted small">Rooms can have their own outside finish and colour in Plan.</p>
       </section>

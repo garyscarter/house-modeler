@@ -83,6 +83,8 @@ const EXT_SPECS: Record<ExtKey, ExtSpec> = {
   roofColor: { label: "Roof colour", show: text, tick: true },
   wallColor: { label: "Wall colour", show: text, tick: true },
   trimColor: { label: "Window and door frame colour", show: text, tick: true },
+  frontDoorColor: { label: "Front door colour", show: text, tick: true },
+  backDoorColor: { label: "Back door colour", show: text, tick: true },
   wallFinish: { label: "Outside wall finish", show: (v) => (v ? WALL_FINISH_LABEL[v as keyof typeof WALL_FINISH_LABEL] : "default"), tick: true },
   tileStyle: { label: "Roof tiles", show: (v) => (v ? TILE_STYLE_LABEL[v as keyof typeof TILE_STYLE_LABEL] : "default"), tick: true },
   fascia: { label: "Fascias and gutters", show: (v) => (v === "trim" ? "window frame colour" : "white"), tick: true },

@@ -321,6 +321,7 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
     <>
       {COLOUR_KINDS.includes(k) && (
         <SwatchField
+          dulux={k !== "archway"}
           label="Colour"
           value={opening.color ?? (k === "door" ? "#c9a26b" : k === "archway" ? DEFAULT_ARCHWAY_COLOUR : "#b3202e")}
           isSet={opening.color !== undefined}

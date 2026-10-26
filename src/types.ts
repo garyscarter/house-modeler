@@ -443,6 +443,10 @@ export interface Exterior {
   roofColor: string;
   wallColor: string;
   trimColor: string;
+  /** Colour of the front door (kind "front") unless the door sets its own. Unset: the usual red. */
+  frontDoorColor?: string;
+  /** Colour of the other outside doors (swing doors in an outside wall) unless a door sets its own. Unset: the usual oak. */
+  backDoorColor?: string;
   /** Default finish for external walls (rooms can override). */
   wallFinish?: WallFinish;
   /** Roof covering on pitched roofs, tinted by roofColor. */

@@ -9,7 +9,7 @@ import {
   type WallSeg,
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
-import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, type Box, type PartMat } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, type Box, type PartMat } from "../lib/openings";
 import { coverLayout, coverTop, coverV, interiorFinish, outsideLook, splitFinish, splitQuadAtY, type InteriorFinish } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { skirtingColour } from "../lib/skirting";
@@ -39,6 +39,8 @@ export interface ShellInput {
   wallFinish: WallFinish;
   wallColor: string;
   trimColor: string;
+  /** The house's front and back door colours, for outside doors without their own. */
+  doorColours: { frontDoorColor?: string; backDoorColor?: string };
   /** Draw swing doors at their open angle; off draws them all shut. */
   doorsOpen: boolean;
   /** The flight up from this floor, if any: walls it passes over stop under its treads. */
@@ -253,8 +255,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   });
 
   function addOpening(pl: OpeningPlacement, wall: WallSeg, wallT: number, spans: [ReturnType<typeof sideSpans>, ReturnType<typeof sideSpans>]) {
-    const op = pl.opening;
     const out = outwardSign(pl, polys);
+    const op = withHouseDoorColour(pl.opening, inp.doorColours, out !== 0);
     const frame = { centre: pl.centre, dir: pl.dir };
     let parts;
     if (op.kind === "bay" && out) {
