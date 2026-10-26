@@ -1,8 +1,10 @@
-import type { BoundaryEdge, Neighbour, Site, WPt } from "../types";
+import type { BoundaryEdge, GardenItem, Neighbour, Site, WPt } from "../types";
 import { screenKey } from "./screenBlocks";
 import { uid } from "../types";
 import type { Change } from "./layoutMerge";
+import { gardenDef, itemSize } from "./gardenCatalogue";
 import { areaOf, edgesOf, pointSegmentDistance } from "./site";
+import { itemsOf } from "./siteItems";
 import { metres } from "./layoutMerge";
 
 /**
@@ -175,7 +177,7 @@ export function describeBoundaryChanges(parts: { name?: string; changes: Boundar
  */
 export function mergeKeepingEdits(mine: Site, latest: Site): BoundaryMerge {
   const merged = mergeBoundaryTreatments(mine, latest);
-  const picked = neighbourUpdates(merged.site, latest).filter((c) => c.defaultSelected);
+  const picked = [...neighbourUpdates(merged.site, latest), ...gardenUpdates(merged.site, latest)].filter((c) => c.defaultSelected);
   return { site: picked.reduce((s, c) => c.apply(s), merged.site), changes: merged.changes, buildings: picked.map((c) => c.label) };
 }
 
@@ -298,6 +300,63 @@ export function neighbourUpdates(mine: Site, latest: Site): PlotChange[] {
         defaultSelected: tick,
         available: true,
         apply: (site) => withNeighbour(site, name, (n) => ({ ...n, polygon: structuredClone(ln.polygon) })),
+      });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Garden items
+
+/** A built-in garden item that moved by more than this (metres) is offered as a change. */
+export const GARDEN_MOVE_M = 0.05;
+
+const itemMoved = (a: GardenItem, b: GardenItem) =>
+  a.type !== b.type ||
+  Math.hypot(a.x - b.x, a.y - b.y) > GARDEN_MOVE_M ||
+  (!!a.to !== !!b.to) ||
+  (!!a.to && !!b.to && Math.hypot(a.to.x - b.to.x, a.to.y - b.to.y) > GARDEN_MOVE_M);
+const itemResized = (a: GardenItem, b: GardenItem) => {
+  const [sa, sb] = [itemSize(a), itemSize(b)];
+  return Math.abs(sa.w - sb.w) > 0.01 || Math.abs(sa.d - sb.d) > 0.01 || Math.abs(sa.h - sb.h) > 0.01;
+};
+const itemName = (it: GardenItem) => gardenDef(it.type)?.name ?? it.type;
+
+/**
+ * Changes to bring the built-in garden (Site.items with fixed ids) of plot `mine` in line with `latest`.
+ *
+ * An item of `latest` that `mine` lacks is offered to add: ticked when `mine` has no items at all (a plot from
+ * before the garden was modelled), unticked otherwise, since the owner may have taken it out on purpose. An
+ * item with the same id but a different type, position (more than 5 cm) or size is offered unticked, since the
+ * owner may have moved it. Items only `mine` has are never touched.
+ */
+export function gardenUpdates(mine: Site, latest: Site): PlotChange[] {
+  const out: PlotChange[] = [];
+  const mineItems = itemsOf(mine);
+  const bare = mineItems.length === 0;
+  for (const li of itemsOf(latest)) {
+    const mi = mineItems.find((i) => i.id === li.id);
+    const name = itemName(li);
+    if (!mi) {
+      out.push({
+        id: `garden.${li.id}.add`,
+        group: "garden",
+        label: `Add ${name}`,
+        ...(bare ? {} : { note: "Not ticked: your plot doesn't have it, which may be on purpose." }),
+        defaultSelected: bare,
+        available: true,
+        apply: (site) => (itemsOf(site).some((i) => i.id === li.id) ? site : { ...site, items: [...itemsOf(site), structuredClone(li)] }),
+      });
+    } else if (itemMoved(mi, li) || itemResized(mi, li)) {
+      out.push({
+        id: `garden.${li.id}.change`,
+        group: "garden",
+        label: mi.type !== li.type ? `${name}: replaces ${itemName(mi).toLowerCase()}` : itemMoved(mi, li) ? `${name}: new position` : `${name}: new size`,
+        note: "Not ticked: it replaces this item on your plot, in case you moved or resized it yourself.",
+        defaultSelected: false,
+        available: true,
+        apply: (site) => ({ ...site, items: itemsOf(site).map((i) => (i.id === li.id ? structuredClone(li) : i)) }),
       });
     }
   }

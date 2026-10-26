@@ -1,5 +1,6 @@
-import type { Floor, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, SurfaceFinish, WPt } from "../../types";
+import type { Floor, GardenItem, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, SurfaceFinish, WPt } from "../../types";
 import { DEFAULT_EXTERIOR, uid } from "../../types";
+import { circleControls } from "../surfaceCurve";
 
 /**
  * Rightmove listing 91770873, traced from the Giraffe360 floorplan image
@@ -82,7 +83,7 @@ const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 export const LISTING_PRESET = { id: "listing-91770873", version: 23 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 23 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
-export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 6 };
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 7 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -574,6 +575,8 @@ const surface = (kind: SiteSurface["kind"], pts: [number, number][], slope?: Sit
   polygon: w(pts),
   ...(LISTING_FINISH[kind] ? { finish: LISTING_FINISH[kind] } : {}),
   ...(slope ? { slope } : {}),
+  // Every raised bed in the photos is edged in brick: explicit, so it survives a change of the default.
+  ...(kind === "bed" && slope ? { kerb: "brick" as const } : {}),
 });
 
 /**
@@ -583,6 +586,27 @@ const surface = (kind: SiteSurface["kind"], pts: [number, number][], slope?: Sit
  * out 0.02 m under it at the garage door.
  */
 const DRIVE_RISE = 0.24;
+
+/**
+ * The garden as photographed (rear-garden, rear-1 to rear-4), with fixed ids so a listing update can match
+ * them. Positions are judged by eye from the photos against the boundary and the patio; see NOTES.md "Rear garden layout".
+ */
+function listingItems(): GardenItem[] {
+  return [
+    // Against the west wall, its back to it, from the house's rear corner (z -5.59) about 1.4 m back; the wall's
+    // inner face is about 0.1 m in from the boundary line.
+    { id: "listing-bin-store", type: "bin-store", x: -4.06, y: -6.4, rot: 270 },
+    // In the long raised bed, towards the west end (its place along the bed is an estimate).
+    { id: "listing-conifer", type: "conifer", x: -2.2, y: -10.05, rot: 0, w: 1.0, d: 1.0, h: 4 },
+    // Tall shrubs in the west raised bed, which is only 0.8 m wide, so the spread is kept to that.
+    { id: "listing-buddleia", type: "buddleia", x: -4.1, y: -8.3, rot: 0, w: 0.7, d: 0.7, h: 3 },
+    { id: "listing-washing-line", type: "washing-line", x: -1.9, y: -7.6, rot: 0 },
+    { id: "listing-dining", type: "dining-6", x: 1.2, y: -7.4, rot: 0 },
+    { id: "listing-parasol", type: "parasol", x: 1.2, y: -7.4, rot: 0 },
+    // Beside the back door (ground floor plan 604, 22: world x -3.58, z -5.59), against the rear wall.
+    { id: "listing-recycling", type: "recycling-box", x: -2.7, y: -5.9, rot: 180 },
+  ];
+}
 
 /**
  * Plot, neighbours and orientation for the listing, measured from the
@@ -696,8 +720,8 @@ export function listingSite(): Site {
         ],
         RAISED_BED,
       ),
-      // Curved raised planter in front of the patio doors (rear-3, rear-4), as a polygon.
-      surface("bed", Array.from({ length: 20 }, (_, i) => [4.1 + 1.5 * Math.cos((i / 20) * Math.PI * 2), -7.2 + 0.8 * Math.sin((i / 20) * Math.PI * 2)] as [number, number]), RAISED_BED),
+      // Curved raised planter in front of the patio doors (rear-3, rear-4): an ellipse drawn as a smooth curve through eight control points.
+      { ...surface("bed", [], RAISED_BED), polygon: circleControls({ x: 4.1, y: -7.2 }, 1.5, 0.8), smooth: true },
       surface("lawn", [
         [-4.5, -10.5],
         [5.82, -10.5],
@@ -756,5 +780,6 @@ export function listingSite(): Site {
         [-16, 16.0],
       ]),
     ],
+    items: listingItems(),
   };
 }

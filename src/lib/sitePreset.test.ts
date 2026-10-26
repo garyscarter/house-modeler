@@ -194,6 +194,25 @@ describe("telling edited plots from unedited ones", () => {
   it("sees no edits in a copy that differs only in treatments and ids", () => {
     expect(hasPlotEdits(legacySite(), listingSite())).toBe(false);
   });
+  it("sees the owner's garden items and edging, but not a missing built-in item", () => {
+    const base = listingSite();
+    expect(hasPlotEdits({ ...listingSite(), items: undefined }, base)).toBe(false);
+    const added = listingSite();
+    added.items = [...added.items!, { id: "mine", type: "bench", x: 0, y: -8, rot: 0 }];
+    expect(hasPlotEdits(added, base)).toBe(true);
+    const moved = listingSite();
+    moved.items = moved.items!.map((i) => (i.id === "listing-dining" ? { ...i, x: i.x + 1 } : i));
+    expect(hasPlotEdits(moved, base)).toBe(true);
+    const resized = listingSite();
+    resized.items = resized.items!.map((i) => (i.id === "listing-buddleia" ? { ...i, h: 5 } : i));
+    expect(hasPlotEdits(resized, base)).toBe(true);
+    const kerbed = listingSite();
+    kerbed.surfaces = kerbed.surfaces.map((x) => (x.kind === "lawn" ? { ...x, kerb: "sleeper" as const } : x));
+    expect(hasPlotEdits(kerbed, base)).toBe(true);
+    const smoothed = listingSite();
+    smoothed.surfaces = smoothed.surfaces.map((x) => (x.kind === "patio" ? { ...x, smooth: true } : x));
+    expect(hasPlotEdits(smoothed, base)).toBe(true);
+  });
   it("sees a moved corner, a changed neighbour or a moved bearing", () => {
     expect(hasPlotEdits(setOpeningWidth(listingSite(), 6, 4), listingSite())).toBe(true);
     const n = listingSite();

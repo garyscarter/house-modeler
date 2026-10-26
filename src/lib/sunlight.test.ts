@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HouseModel, Opening, Site } from "../types";
 import { floor, rect } from "./testing";
 import { prismBlocks, rectPoly, type Prism } from "./site";
-import { compareRooms, glazingPoints, roomSunHours, sunSamples, sunlightFor, sunlightKey, type SunSample, type SunlightResult } from "./sunlight";
+import { occludersFor, compareRooms, glazingPoints, roomSunHours, sunSamples, sunlightFor, sunlightKey, type SunSample, type SunlightResult } from "./sunlight";
 import { dayOfYear } from "./sun";
 
 const win = (id: string, x: number, y: number, orientation: "h" | "v", extra: Partial<Opening> = {}): Opening => ({
@@ -113,6 +113,21 @@ describe("compareRooms", () => {
 describe("sunlightKey", () => {
   const site: Site = { frontBearing: 180, latitude: 51.45, longitude: -2.6, boundary: rectPoly(-5, -5, 9, 12), neighbours: [], surfaces: [] };
   const base = () => model([floor([rect("Room", 0, 0, 400, 400)], [win("w", 200, 400, "h")])]);
+
+  it("changes when a tree is added or moved, not when a seat colour changes", () => {
+    const m = base();
+    const k = sunlightKey(m, site);
+    const tree = { ...site, items: [{ id: "t", type: "silver-birch", x: 2, y: -2, rot: 0 }] };
+    const k1 = sunlightKey(m, tree);
+    expect(k1).not.toBe(k);
+    expect(sunlightKey(m, { ...tree, items: [{ ...tree.items[0], x: 3 }] })).not.toBe(k1);
+    expect(sunlightKey(m, { ...tree, items: [...tree.items, { id: "d", type: "dining-6", x: 5, y: 5, rot: 0, color: "#ff0000" }] })).toBe(k1);
+  });
+
+  it("adds the garden's shade to the occluders", () => {
+    const tree = { ...site, items: [{ id: "t", type: "silver-birch", x: 2, y: -2, rot: 0 }] };
+    expect(occludersFor(base(), tree).length).toBe(occludersFor(base(), site).length + 1);
+  });
 
   it("ignores colours and images, but not an opening moving", () => {
     const k = sunlightKey(base(), site);

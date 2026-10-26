@@ -1,6 +1,7 @@
-import type { HouseModel, Site, VariantKey } from "../types";
+import type { GardenItem, HouseModel, Site, VariantKey } from "../types";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "./houses/listing91770873";
 import { areaOf } from "./site";
+import { itemsOf } from "./siteItems";
 import type { Sites } from "./sites";
 
 export type SiteRegistry = Record<string, { version: number; build: () => Site }>;
@@ -13,6 +14,7 @@ const extent = (pts: { x: number; y: number }[]) => {
   const ys = pts.map((p) => p.y);
   return { w: Math.max(...xs) - Math.min(...xs), d: Math.max(...ys) - Math.min(...ys) };
 };
+const round = (v: number) => Math.round(v * 20) / 20;
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol * Math.max(Math.abs(a), Math.abs(b), 1e-9);
 
 /**
@@ -66,8 +68,19 @@ export function isListingPlot(site: Site | null | undefined, model: Pick<HouseMo
 export function hasPlotEdits(site: Site, fresh: Site): boolean {
   const core = (s: Site) =>
     // Ids are made fresh each time a plot is built, so they do not count.
-    JSON.stringify([s.boundary, s.neighbours.map(({ id: _id, ...rest }) => rest), s.surfaces.map((x) => [x.kind, x.polygon]), s.frontBearing, s.latitude, s.longitude]);
-  return core(site) !== core(fresh);
+    JSON.stringify([
+      s.boundary,
+      s.neighbours.map(({ id: _id, ...rest }) => rest),
+      s.surfaces.map((x) => [x.kind, x.polygon, !!x.smooth, x.kerb ?? null, x.kerbHeight ?? null]),
+      s.frontBearing,
+      s.latitude,
+      s.longitude,
+    ]);
+  if (core(site) !== core(fresh)) return true;
+  // Garden items: the owner's own are edits. A built-in item the plot lacks is an update on offer (gardenUpdates), not an edit.
+  const key = (i: GardenItem) => JSON.stringify([i.type, round(i.x), round(i.y), i.to ? [round(i.to.x), round(i.to.y)] : null, i.w ?? null, i.d ?? null, i.h ?? null]);
+  const builtIn = new Set(itemsOf(fresh).map(key));
+  return itemsOf(site).some((i) => !builtIn.has(key(i)));
 }
 
 /** The built-in plot to put in place of a stale `site`: the one its marker names, else the listing's. */

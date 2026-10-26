@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SiteSurface } from "../types";
 import { listingSite } from "./houses/listing91770873";
 import { edgesOf } from "./site";
+import { circleControls } from "./surfaceCurve";
 import { COURSE, boundaryWallSegments, groundAlong, groundAt, resolveFollow, wallAt, wallSegments, type GroundSample } from "./wallSteps";
 
 /** Ground climbing steadily from 0 to `rise` over `len`, the same on both sides... except the far side, which stays at 0. */
@@ -166,5 +167,15 @@ describe("listing 91770873", () => {
       if (i === 7 || e.kind === "open") return;
       expect(segs(i)).toEqual([{ start: 0, end: expect.any(Number), base: 0, top: e.height, baseEnd: 0, topEnd: e.height }]);
     });
+  });
+});
+
+describe("groundAt on a smooth surface", () => {
+  it("tests a point against the curve, not the control polygon", () => {
+    const patio = { kind: "patio" as const, polygon: circleControls({ x: 0, y: 0 }, 2), slope: { toward: "back" as const, rise: 0, base: 0.2 }, smooth: true };
+    // Between two control points the curve bulges out past the octagon's straight edge.
+    const p = { x: 1.818, y: 0.753 };
+    expect(groundAt([patio], p)).toBeCloseTo(0.2);
+    expect(groundAt([{ ...patio, smooth: false }], p)).toBe(0);
   });
 });

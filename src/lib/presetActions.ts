@@ -3,7 +3,7 @@ import type { HouseModel, Site, VariantKey } from "../types";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "./houses/listing91770873";
 import { listingFloorplan } from "./houses/listingAssets";
 import { freshSiteFor } from "./sitePreset";
-import { mergeKeepingEdits, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
+import { gardenUpdates, mergeKeepingEdits, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
 import { applyChanges, isBasedOnListing, listingUpdates, type LayoutChange } from "./layoutMerge";
 
 /**
@@ -112,7 +112,7 @@ export function planListingReview(variant: VariantKey = "proposed"): ListingRevi
     model,
     version: latest.version,
     changes: listingUpdates(model, latest.model),
-    ...(plotVariant && site && latest.site ? { plot: { variant: plotVariant, site, changes: neighbourUpdates(site, latest.site) } } : {}),
+    ...(plotVariant && site && latest.site ? { plot: { variant: plotVariant, site, changes: [...neighbourUpdates(site, latest.site), ...gardenUpdates(site, latest.site)] } } : {}),
   };
 }
 
