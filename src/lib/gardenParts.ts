@@ -23,7 +23,7 @@ export type GMat = { color: string; finish: GFinish; glow?: string };
  * Euler order "YXZ", so a grass blade is tilted and then spun round the plant's axis.
  */
 export interface GPart {
-  g: "box" | "cyl" | "cone" | "sphere" | "ico" | "prism";
+  g: "box" | "cyl" | "cone" | "cone8" | "sphere" | "ico" | "prism" | "blade" | "pillow";
   p: [number, number, number];
   s: [number, number, number];
   mat: GMat;
