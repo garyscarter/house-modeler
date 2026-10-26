@@ -504,8 +504,8 @@ function Orbit({
 
   // Dev builds expose the camera and controls (like window.__houseStore) for the Playwright checks.
   useEffect(() => {
-    if (import.meta.env.DEV) Object.assign(window, { __houseCamera: { camera, controls: controls.current } });
-  }, [camera]);
+    if (import.meta.env.DEV) Object.assign(window, { __houseCamera: { camera, controls: controls.current }, __houseRenderer: gl });
+  }, [camera, gl]);
 
   const tmp = useMemo(() => ({ off: new THREE.Spherical(), v: new THREE.Vector3(), t: new THREE.Vector3() }), []);
   const viewer = useRef<HTMLElement | null>(null);
