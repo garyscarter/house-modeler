@@ -1,6 +1,7 @@
 import { useStore, useSite } from "../../store";
 import { SURFACE_LABEL, type GardenItem, type SiteSurface, type SurfaceKind } from "../../types";
 import { RaisedField, SlopeFields } from "../../components/SlopeFields";
+import { edgeCurved, setEdgeCurved } from "../../lib/surfaceCurve";
 import { SurfaceFinishField } from "../../components/SurfaceFinishField";
 import { KerbFields } from "../../components/KerbFields";
 import { gardenDef, isPlant, itemSize } from "../../lib/gardenCatalogue";
@@ -61,7 +62,7 @@ function Cm({ label, value, min = 5, max = 1500, onChange }: { label: string; va
 }
 
 /** Fields shared by the surface inspector in the site editor and the Garden panel's surface rows. */
-export function SurfaceFields({ surface }: { surface: SiteSurface }) {
+export function SurfaceFields({ surface, edge }: { surface: SiteSurface; edge?: number | null }) {
   const updateSite = useStore((s) => s.updateSite);
   const set = (p: Partial<SiteSurface>) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === surface.id ? { ...x, ...p } : x)) }));
   return (
@@ -80,9 +81,15 @@ export function SurfaceFields({ surface }: { surface: SiteSurface }) {
       <RaisedField surface={surface} onChange={(slope) => set({ slope })} />
       <SlopeFields surface={surface} onChange={(slope) => set({ slope })} />
       <label className="check">
-        <input type="checkbox" checked={!!surface.smooth} onChange={(e) => set({ smooth: e.target.checked, curves: undefined })} /> Curved edges
-        {!surface.smooth && !!surface.curves?.length && <span className="muted small"> ({surface.curves.length} of {surface.polygon.length} curved: press an edge to change one)</span>}
+        <input type="checkbox" checked={!!surface.smooth} onChange={(e) => set({ smooth: e.target.checked, curves: undefined })} /> Curved edges (all of them)
       </label>
+      {edge !== null && edge !== undefined && edge < surface.polygon.length ? (
+        <label className="check" data-garden-edge={edge}>
+          <input type="checkbox" checked={edgeCurved(surface, edge)} onChange={(e) => set(setEdgeCurved(surface, edge, e.target.checked))} /> Curve edge {edge + 1} of {surface.polygon.length}
+        </label>
+      ) : (
+        <p className="muted small">{surface.smooth ? "Every edge is curved." : surface.curves?.length ? `${surface.curves.length} of ${surface.polygon.length} edges curved. ` : ""}Press an edge on the plan to curve just that one.</p>
+      )}
       <KerbFields surface={surface} onChange={(p) => set(p)} />
       {(surface.kind === "lawn" || surface.kind === "bed") && (surface.slope?.base ?? 0) > 0 && (
         <p className="muted small">The kerb stands on top of the raised surface; set its height to 0 for one flush with the soil.</p>

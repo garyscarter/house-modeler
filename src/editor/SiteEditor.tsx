@@ -29,7 +29,7 @@ import { slideFor, useSiteDrag, type GardenActions } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
 import { GardenItems, ItemHandles, PlacementGhost, PolyDraftView, RunDraftView } from "./site/GardenLayers";
 import { ItemInspector, SurfaceFields } from "./site/GardenInspectors";
-import { curvesAfterRemove, edgeCurved, setEdgeCurved } from "../lib/surfaceCurve";
+import { curvesAfterRemove } from "../lib/surfaceCurve";
 import { addItem, closesPolygon, gardenClipboard, newItem, pasteItems, removeItems, rotateItems } from "./site/gardenEdit";
 import type { Draft, Item, Sel, SiteMode, Tool } from "./site/types";
 import "./PlanEditor.css"; // the rail, popover and zoom styles are shared with the plan
@@ -609,17 +609,7 @@ function Inspector({
     return (
       <div className="inspector" data-garden-inspector="surface">
         <h4>Garden surface</h4>
-        <SurfaceFields surface={s} />
-        {sel.edge !== null && sel.edge !== undefined && sel.edge < s.polygon.length && (
-          <label className="check" data-garden-edge={sel.edge}>
-            <input
-              type="checkbox"
-              checked={edgeCurved(s, sel.edge)}
-              onChange={(e) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, ...setEdgeCurved(x, sel.edge!, e.target.checked) } : x)) }))}
-            />{" "}
-            Curve edge {sel.edge + 1} of {s.polygon.length}
-          </label>
-        )}
+        <SurfaceFields surface={s} edge={sel.edge} />
         <p className="muted small">{surfaceArea(s).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">
           {vertexButton}
