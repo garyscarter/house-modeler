@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, SIX_RINGS, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -167,5 +167,16 @@ describe("seat depth of L-shaped sofas", () => {
     expect(cornerSofaSizes(2.5, 1.9, 0.2).s).toBeCloseTo(0.5);
     expect(cornerSofaSizes(2.5, 1.9, 5).s).toBeCloseTo(1.6);
     expect(chaiseSizes(2.0, 1.0, 0.95).s).toBeCloseTo(0.7);
+  });
+});
+
+describe("hobs, hoods and bean bags", () => {
+  it("lists the six-ring hobs, the vented hob, the new hoods and bean bags", () => {
+    for (const id of ["gas-hob-900", "induction-hob-900", "vented-hob", "glass-hood", "box-hood-600", "box-hood-900", "island-hood"]) expect(byId(id)?.category).toBe("Kitchen");
+    for (const id of ["beanbag-large", "beanbag-small", "beanbag-chair", "armchair-wood"]) expect(byId(id)?.category).toBe("Living");
+    expect(byId("gas-hob-900")?.mount).toBe(0.9);
+    expect(byId("glass-hood")?.mount).toBeGreaterThan(1.4);
+    expect(SIX_RINGS).toHaveLength(6);
+    expect(VENTED_ZONES).toHaveLength(4);
   });
 });

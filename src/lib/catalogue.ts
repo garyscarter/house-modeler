@@ -71,6 +71,15 @@ export type Symbol =
   | "peninsula-handleless"
   | "stool"
   | "stool-back"
+  | "gas-hob"
+  | "induction"
+  | "vented-hob"
+  | "glass-hood"
+  | "box-hood"
+  | "island-hood"
+  | "beanbag"
+  | "beanbag-chair"
+  | "wood-armchair"
   | "chimney-hood"
   | "shelf"
   | "built-in"
@@ -164,6 +173,10 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "sofa-low-2", name: "Modern sofa (2 seat)", category: "Living", w: 1.80, d: 1.00, h: 0.75, color: "#bdb5a6", symbol: "low-sofa", note: "Low and deep, slim track arms, on black metal legs" },
   { id: "sofa-chaise", name: "Chaise sofa", category: "Living", w: 2.70, d: 1.65, h: 0.75, color: "#7d8a7a", symbol: "chaise-sofa", note: "Modern low sofa with a chaise end on the right" },
   { id: "lounge-chair", name: "Lounge chair (mid-century)", category: "Living", w: 0.85, d: 0.85, h: 0.85, color: "#3a3634", symbol: "lounge-chair", note: "Reclined leather seat in a walnut shell, on a swivel base" },
+  { id: "armchair-wood", name: "Armchair (wooden frame)", category: "Living", w: 0.72, d: 0.82, h: 0.8, color: "#c9b79c", symbol: "wood-armchair", note: "Oak frame with slatted arms and loose seat and back cushions; the colour is the cushions" },
+  { id: "beanbag-large", name: "Bean bag (large)", category: "Living", w: 0.95, d: 0.95, h: 0.55, color: "#7d8a7a", symbol: "beanbag", note: "A big round bag that slumps into a seat" },
+  { id: "beanbag-small", name: "Bean bag (small)", category: "Living", w: 0.65, d: 0.65, h: 0.4, color: "#c9b79c", symbol: "beanbag", note: "Child size" },
+  { id: "beanbag-chair", name: "Bean bag chair", category: "Living", w: 0.8, d: 0.9, h: 0.85, color: "#5b6b7f", symbol: "beanbag-chair", note: "A bag with a built-up back, like a low armchair" },
   { id: "pouf", name: "Pouffe (round)", category: "Living", w: 0.55, d: 0.55, h: 0.42, color: "#c9b79c", symbol: "pouf" },
   { id: "coffee-table-round", name: "Coffee table (round)", category: "Living", w: 0.90, d: 0.90, h: 0.38, color: "#d9cfc0", symbol: "round-table", note: "Stone top on a drum pedestal" },
   { id: "side-table-round", name: "Side table (round)", category: "Living", w: 0.45, d: 0.45, h: 0.55, color: "#2b2b2b", symbol: "round-table" },
@@ -221,6 +234,13 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "pan-drawers", name: "Pan drawer unit (800)", category: "Kitchen", w: 0.80, d: 0.60, h: 0.9, color: UNIT, symbol: "drawers", note: "Three deep drawers; good under a hob" },
   { id: "wine-cooler", name: "Wine cooler (600, under counter)", category: "Kitchen", w: 0.60, d: 0.60, h: 0.9, color: UNIT, symbol: "wine-cooler", note: "Glass-door cooler in a base unit, under the worktop" },
   { id: "induction-hob", name: "Induction hob (800)", category: "Kitchen", w: 0.80, d: 0.52, h: 0.01, color: "#141518", symbol: "hob", mount: 0.9, note: "Flush black glass; sits on a worktop or pan drawers" },
+  { id: "gas-hob-900", name: "Gas hob, 6 burner (900)", category: "Kitchen", w: 0.90, d: 0.52, h: 0.04, color: "#2b2d31", symbol: "gas-hob", mount: 0.9, note: "Six burners in two rows on cast-iron pan supports; sits on a worktop or base unit" },
+  { id: "induction-hob-900", name: "Induction hob, 6 zone (900)", category: "Kitchen", w: 0.90, d: 0.52, h: 0.01, color: "#141518", symbol: "induction", mount: 0.9, note: "Flush black glass with six zones; sits on a worktop or pan drawers" },
+  { id: "vented-hob", name: "Vented induction hob (800)", category: "Kitchen", w: 0.80, d: 0.52, h: 0.01, color: "#141518", symbol: "vented-hob", mount: 0.9, note: "Four zones around a central downdraught extractor, so no hood is needed" },
+  { id: "glass-hood", name: "Angled glass hood (900)", category: "Kitchen", w: 0.90, d: 0.40, h: 1.0, color: "#141518", symbol: "glass-hood", mount: 1.5, note: "Inclined black glass on the wall at head height with a slim chimney; set the height to reach the ceiling" },
+  { id: "box-hood-600", name: "Slimline box hood (600)", category: "Kitchen", w: 0.60, d: 0.50, h: 0.12, color: STAINLESS, symbol: "box-hood", mount: 1.5, note: "Flat canopy on the wall, on its own or under a wall cabinet" },
+  { id: "box-hood-900", name: "Slimline box hood (900)", category: "Kitchen", w: 0.90, d: 0.50, h: 0.12, color: STAINLESS, symbol: "box-hood", mount: 1.5, note: "Flat canopy on the wall, on its own or under a wall cabinet" },
+  { id: "island-hood", name: "Island hood (900)", category: "Kitchen", w: 0.90, d: 0.50, h: 0.75, color: STAINLESS, symbol: "island-hood", mount: 1.5, note: "Box canopy hung from the ceiling over an island or peninsula; set the height to reach the ceiling" },
   { id: "chimney-hood", name: "Chimney extractor (900)", category: "Kitchen", w: 0.90, d: 0.50, h: 1.0, color: STAINLESS, symbol: "chimney-hood", mount: 1.55, note: "Wall-mounted canopy and chimney; set the height to reach the ceiling" },
   { id: "oven-pair", name: "Oven tower (oven and combi microwave)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "oven-pair", note: "Single oven with a compact combi microwave above, at eye level" },
   { id: "fridge-integrated", name: "Integrated fridge freezer (tall)", category: "Kitchen", w: 0.60, d: 0.60, h: 2.2, color: UNIT, symbol: "tall", note: "Built in behind two cabinet doors" },
@@ -290,6 +310,24 @@ export function hasSeatDepth(item: Pick<CatalogueItem, "symbol">): boolean {
  * Burner positions on a cooker or range top as fractions of its width and
  * depth from the centre: four on a 600 mm cooker, five on a range.
  */
+/** Burner or zone centres of a six-ring hob as fractions of its width and depth from the centre: three across, two rows. */
+export const SIX_RINGS: readonly [number, number][] = [
+  [-0.3, -0.22],
+  [0, -0.22],
+  [0.3, -0.22],
+  [-0.3, 0.2],
+  [0, 0.2],
+  [0.3, 0.2],
+];
+
+/** Zone centres of a vented hob: four zones in two pairs either side of the central extractor slot. */
+export const VENTED_ZONES: readonly [number, number][] = [
+  [-0.3, -0.22],
+  [0.3, -0.22],
+  [-0.3, 0.22],
+  [0.3, 0.22],
+];
+
 export function burners(widthM: number): [number, number][] {
   return widthM < 0.8
     ? [
