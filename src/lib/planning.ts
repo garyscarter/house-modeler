@@ -5,6 +5,7 @@ import { diffModels } from "./report";
 import { exteriorOf, flatRoofTop, leanToHeightAt, planRoofs, roofGeometry, roofHeightAt, type RoofBlock, type RoofPlan } from "./roof";
 import { GROUND_DROP, areaOf, houseOutlines, pointSegmentDistance, segmentSegmentClosest } from "./site";
 import { boundaryPieces, sameEdge } from "./siteDiff";
+import { surfaceOutline } from "./surfaceCurve";
 import { surfaceLook } from "./surfaceFinish";
 
 /**
@@ -282,7 +283,7 @@ function boundaryEdgesOf(site: Site): BEdge[] {
 }
 
 /** Whether a point is on a road or pavement of the plot plan. */
-const onHighway = (site: Site, p: V2) => site.surfaces.some((s) => (s.kind === "road" || s.kind === "pavement") && pointInPolygon(p, s.polygon));
+const onHighway = (site: Site, p: V2) => site.surfaces.some((s) => (s.kind === "road" || s.kind === "pavement") && pointInPolygon(p, surfaceOutline(s)));
 const hasHighway = (site: Site) => site.surfaces.some((s) => s.kind === "road" || s.kind === "pavement");
 
 /**
@@ -1086,7 +1087,7 @@ function hardSurfaceRule(before: Site | undefined, after: Site | undefined, g: G
   const key = (site: Site, p: V2) => {
     for (let s = site.surfaces.length - 1; s >= 0; s--) {
       const sf = site.surfaces[s];
-      if (pointInPolygon(p, sf.polygon)) return HARD.has(sf.kind) ? `${sf.kind}:${surfaceLook(sf)}` : null;
+      if (pointInPolygon(p, surfaceOutline(sf))) return HARD.has(sf.kind) ? `${sf.kind}:${surfaceLook(sf)}` : null;
     }
     return null;
   };

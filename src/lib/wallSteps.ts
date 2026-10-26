@@ -1,5 +1,6 @@
 import type { BoundaryEdge, SiteSurface, WallFollow } from "../types";
 import { pointInPolygon, polygonArea, type V2 } from "./geometry";
+import { surfaceOutline } from "./surfaceCurve";
 import { surfaceHeightAt } from "./surfaceSlope";
 
 /**
@@ -54,11 +55,11 @@ export interface WallSegment {
  * where there is none. Planting beds are left out: a raised bed is a planter
  * built against a wall, not the ground the wall stands on.
  */
-export function groundAt(surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope">[], p: V2): number {
+export function groundAt(surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope" | "smooth">[], p: V2): number {
   let h = 0;
   let found = false;
   for (const s of surfaces) {
-    if (s.kind === "bed" || s.polygon.length < 3 || !pointInPolygon(p, s.polygon)) continue;
+    if (s.kind === "bed" || s.polygon.length < 3 || !pointInPolygon(p, surfaceOutline(s))) continue;
     const z = surfaceHeightAt(s, p);
     if (!found || z > h) h = z;
     found = true;
@@ -78,7 +79,7 @@ function inwardNormal(a: V2, b: V2, area: number): V2 {
  * plot wound with signed area `area`): the plot side's ground, and the lowest
  * ground on either side, every 5 cm and at both ends.
  */
-export function groundAlong(a: V2, b: V2, surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope">[], area: number): GroundSample[] {
+export function groundAlong(a: V2, b: V2, surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope" | "smooth">[], area: number): GroundSample[] {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   if (len < 1e-9) return [];
   const nIn = inwardNormal(a, b, area);
@@ -253,7 +254,7 @@ export function boundaryWallSegments(
   boundary: V2[],
   edge: Pick<BoundaryEdge, "kind" | "height" | "follow" | "stepEvery">,
   i: number,
-  surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope">[],
+  surfaces: Pick<SiteSurface, "kind" | "polygon" | "slope" | "smooth">[],
 ): WallSegment[] {
   const a = boundary[i];
   const b = boundary[(i + 1) % boundary.length];
