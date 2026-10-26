@@ -159,7 +159,20 @@ export function ItemInspector({ ids }: { ids: string[] }) {
           <Cm label="Height (cm)" value={size.h} onChange={(h) => set({ h })} />
         </div>
       )}
-      {!plant && !run && <Cm label="Height (cm)" value={size.h} onChange={(h) => set({ h })} />}
+      {!plant && !run && (
+        <div className="row garden-sizes">
+          <Cm label="Height (cm)" value={size.h} onChange={(h) => set({ h })} />
+          {def.seats !== undefined && (
+            <label>
+              Seats
+              <input type="number" min={1} max={12} step={1} aria-label="Seats" value={item.seats ?? def.seats} onChange={(e) => {
+                const v = num(e.target.value);
+                if (v !== undefined) set({ seats: Math.min(12, Math.max(1, Math.round(v))) });
+              }} />
+            </label>
+          )}
+        </div>
+      )}
 
       {def.shape === "festoon" && (
         <>
@@ -171,16 +184,6 @@ export function ItemInspector({ ids }: { ids: string[] }) {
         </>
       )}
       {def.shape === "wall-light" && <Cm label="Height above ground (cm)" value={item.mount ?? def.mount ?? 1.7} min={0} max={500} onChange={(mount) => set({ mount })} />}
-      {def.seats !== undefined && (
-        <label>
-          Seats
-          <input type="number" min={1} max={12} step={1} aria-label="Seats" value={item.seats ?? def.seats} onChange={(e) => {
-            const v = num(e.target.value);
-            if (v !== undefined) set({ seats: Math.min(12, Math.max(1, Math.round(v))) });
-          }} />
-        </label>
-      )}
-
       {rotatable && (
         <div className="garden-turn">
           <label>
