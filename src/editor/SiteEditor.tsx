@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
 import { SurfaceFinishField } from "../components/SurfaceFinishField";
-import { SURFACE_LABEL, type BoundaryEdge, type HouseModel, type Neighbour, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
+import { SURFACE_LABEL, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
 import { bbox, polygonArea } from "../lib/geometry";
 import type { Rect } from "../lib/planMath";
 import { siteWalls } from "../lib/siteWalls";
 import { boundaryWallSegments, groundAlong, resolveFollow } from "../lib/wallSteps";
+import { screenBand } from "../lib/screenBlocks";
 import { bearingToWorld } from "../lib/sun";
 import { areaOf, defaultDepths, edgesOf, houseOutlines, removeBoundaryVertex, sideClearances, simpleSite } from "../lib/site";
 import { SlopeFields } from "../components/SlopeFields";
@@ -354,6 +355,7 @@ function Inspector({
                   <input type="checkbox" checked={edges[i].piers ?? true} onChange={(e) => setEdge({ piers: e.target.checked })} />
                   Piers
                 </label>
+                <ScreenBlocks site={site} edge={i} setEdge={setEdge} />
               </>
             )}
             {(edges[i].kind === "wall" || edges[i].kind === "fence") && <FollowGround site={site} edge={i} setEdge={setEdge} />}
@@ -539,6 +541,68 @@ function Clearances({ clearances }: { clearances: ReturnType<typeof sideClearanc
           ))}
         </tbody>
       </table>
+    </>
+  );
+}
+
+/**
+ * Pierced screen blocks let into the top of a wall, under its top course: none,
+ * one row or two, along the whole edge or a stretch of it.
+ */
+function ScreenBlocks({ site, edge, setEdge }: { site: Site; edge: number; setEdge: (p: Partial<BoundaryEdge>) => void }) {
+  const e = edgesOf(site)[edge];
+  const n = site.boundary.length;
+  const a = site.boundary[edge];
+  const b = site.boundary[(edge + 1) % n];
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const s = e.screen;
+  const num = (v: string) => (Number.isFinite(parseFloat(v)) ? Math.max(0, parseFloat(v)) : undefined);
+  const set = (p: Partial<ScreenPanel>) => setEdge({ screen: s ? { ...s, ...p } : undefined });
+  const whole = !s || (s.from === undefined && s.length === undefined);
+  return (
+    <>
+      <label>
+        Screen blocks in the top
+        <select
+          value={s ? s.rows : 0}
+          onChange={(ev) => {
+            const rows = parseInt(ev.target.value, 10);
+            setEdge({ screen: rows === 1 || rows === 2 ? { ...(s ?? {}), rows } : undefined });
+          }}
+        >
+          <option value={0}>None</option>
+          <option value={1}>One row (290 mm)</option>
+          <option value={2}>Two rows (580 mm)</option>
+        </select>
+      </label>
+      {s && (
+        <>
+          <label>
+            Along
+            <select value={whole ? "all" : "part"} onChange={(ev) => setEdge({ screen: ev.target.value === "all" ? { rows: s.rows } : { rows: s.rows, from: 0, length: Math.min(len, 1.16) } })}>
+              <option value="all">The whole edge</option>
+              <option value="part">Part of the edge</option>
+            </select>
+          </label>
+          {!whole && (
+            <div className="row">
+              <label>
+                From (m)
+                <input type="number" step={0.05} min={0} max={len} value={s.from ?? 0} onChange={(ev) => set({ from: num(ev.target.value) ?? 0 })} />
+              </label>
+              <label>
+                Length (m)
+                <input type="number" step={0.29} min={0.29} max={len} value={s.length ?? len} onChange={(ev) => set({ length: num(ev.target.value) })} />
+              </label>
+            </div>
+          )}
+          <p className="muted small">
+            {screenBand(e, len, e.top === "brick" ? 0.1025 : 0.06)
+              ? "Whole 290 mm blocks under the top course, with brick below them; the wall is see-through there."
+              : "No blocks fit: the wall needs at least 0.3 m of brick under them, and room for one block along the edge."}
+          </p>
+        </>
+      )}
     </>
   );
 }

@@ -17,6 +17,7 @@ import { triangles } from "./geometryUtil";
 import { membraneTexture, tileTextures } from "./roofTextures";
 import { getMaterial } from "./textures";
 import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
+import { cutRun, SCREEN_THICK, screenBand } from "../lib/screenBlocks";
 import { useSiteView } from "./siteView";
 import { SunHoursOverlay } from "./SunHours";
 
@@ -85,6 +86,8 @@ function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
       polygonOffset: layer > 0,
       polygonOffsetFactor: -layer,
       polygonOffsetUnits: -layer * 4,
+      // Screen blocks are see-through where the texture is clear, shadows included.
+      ...(kind === "screen" ? { alphaTest: 0.5 } : {}),
     });
     if (kind === "road") breakUpRepeat(m as THREE.MeshStandardMaterial);
     materials.set(key, m);
@@ -175,7 +178,7 @@ function Surface({ surface }: { surface: SiteSurface }) {
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
       <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surfaceLook(surface), layer)} receiveShadow />
-      {edge && <mesh geometry={edge} material={plainMaterial(surface.kind === "bed" ? "#9a4d3a" : "#a19e96")} castShadow receiveShadow />}
+      {edge && <mesh geometry={edge} material={surface.kind === "bed" ? surfaceMaterial("brick") : plainMaterial("#a19e96")} castShadow receiveShadow />}
       {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );
@@ -197,11 +200,13 @@ function surfaceEdge(poly: V2[], height: (p: V2) => number, sink: number): THREE
     area += a.x * b.y - b.x * a.y;
   });
   const pos: number[] = [];
+  const uv: number[] = [];
   poly.forEach((a, i) => {
     const b = poly[(i + 1) % n];
     const ha = height(a);
     const hb = height(b);
     if (ha < 0.004 && hb < 0.004) return;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     // Outward in plan for an anticlockwise polygon is (dy, -dx); flip for clockwise.
@@ -215,10 +220,20 @@ function surfaceEdge(poly: V2[], height: (p: V2) => number, sink: number): THREE
     const v = [Bt[0] - A[0], Bt[1] - A[1], Bt[2] - A[2]];
     const nx = u[1] * v[2] - u[2] * v[1];
     const nz = u[0] * v[1] - u[1] * v[0];
+    // UVs in metres (along the edge, up) so a brick kerb's courses stay level.
+    const T = new Map<number[], [number, number]>([
+      [A, [0, -sink]],
+      [B, [len, -sink]],
+      [Bt, [len, hb]],
+      [At, [0, ha]],
+    ]);
     const tris = nx * out.x + nz * out.y >= 0 ? [A, B, Bt, A, Bt, At] : [A, Bt, B, A, At, Bt];
-    for (const q of tris) pos.push(q[0], q[1], q[2]);
+    for (const q of tris) {
+      pos.push(q[0], q[1], q[2]);
+      uv.push(...T.get(q)!);
+    }
   });
-  return pos.length ? triangles(pos) : null;
+  return pos.length ? triangles(pos, uv) : null;
 }
 
 /**
@@ -279,7 +294,7 @@ function along(g: THREE.BufferGeometry, p: V2, q: V2, y: number): THREE.BufferGe
   return g;
 }
 
-type Part = "timber" | "concrete" | "brick" | "coping" | "mortar" | "hedge";
+type Part = "timber" | "concrete" | "brick" | "coping" | "mortar" | "hedge" | "screen";
 
 /** Plan point d metres along a→b (length len). */
 const at = (a: V2, b: V2, len: number, d: number): V2 => ({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
@@ -397,23 +412,36 @@ function pier(out: Record<Part, THREE.BufferGeometry[]>, c: V2, dir: V2, base: n
 
 /**
  * One-brick garden wall over the runs of one stretch of boundary a→b (length
- * len), `h` its nominal height. The top is a grey coping, or a course of bricks
- * on edge (slightly proud, vertical joints every 75 mm). Each run is built on
- * its own, so at a step the higher run's end closes the face. Piers about every
- * 3 m when asked.
+ * len), to the edge's nominal height. The top is a grey coping, or a course of
+ * bricks on edge (slightly proud, vertical joints every 75 mm). Each run is
+ * built on its own, so at a step the higher run's end closes the face. Piers
+ * about every 3 m when asked. A screen-block panel sits in the top of a level
+ * run, under the top course, with brick below it; a raked run stays all brick.
  */
-function brickWall(out: Record<Part, THREE.BufferGeometry[]>, a: V2, b: V2, len: number, runs: WallSegment[], h: number, top: "coping" | "brick" = "coping", withPiers = true) {
+function brickWall(out: Record<Part, THREE.BufferGeometry[]>, a: V2, b: V2, len: number, runs: WallSegment[], edge: BoundaryEdge) {
   if (!runs.length) return;
+  const h = edge.height;
+  const top = edge.top ?? "coping";
+  const withPiers = edge.piers ?? true;
   const onEdge = top === "brick" && h > EDGE_BRICK_H + 0.1;
   const capH = onEdge ? EDGE_BRICK_H : 0.06;
+  const band = screenBand(edge, len, capH);
   for (const r of runs) {
     const rl = r.end - r.start;
     const p = at(a, b, len, r.start);
     const q = at(a, b, len, r.end);
     const level = Math.abs(r.top - r.topEnd) < 1e-6 && Math.abs(r.base - r.baseEnd) < 1e-6;
     const body = Math.max(0.1, r.top - r.base - capH);
-    if (level) out.brick.push(along(metricBox(rl, body, 0.215), p, q, GROUND_Y + r.base + body / 2));
-    else out.brick.push(slab(a, b, len, r.start, r.end, 0.215, GROUND_Y + r.base, GROUND_Y + r.baseEnd, GROUND_Y + r.top - capH, GROUND_Y + r.topEnd - capH));
+    if (level) {
+      for (const piece of cutRun(r.start, r.end, band)) {
+        const pp = at(a, b, len, piece.start);
+        const pq = at(a, b, len, piece.end);
+        const pl = piece.end - piece.start;
+        const under = piece.screened ? Math.max(0.1, body - band!.height) : body;
+        out.brick.push(along(metricBox(pl, under, 0.215), pp, pq, GROUND_Y + r.base + under / 2));
+        if (piece.screened) out.screen.push(along(metricBox(pl, band!.height, SCREEN_THICK), pp, pq, GROUND_Y + r.base + under + band!.height / 2));
+      }
+    } else out.brick.push(slab(a, b, len, r.start, r.end, 0.215, GROUND_Y + r.base, GROUND_Y + r.baseEnd, GROUND_Y + r.top - capH, GROUND_Y + r.topEnd - capH));
     if (onEdge) {
       // Where a run meets the next at a step, its end brick is flush with the step and hides the bedding.
       const stepAtStart = r !== runs[0];
@@ -500,12 +528,13 @@ const PART_MATERIAL: Record<Part, () => THREE.Material> = {
   coping: () => plainMaterial("#bdb9b0"),
   mortar: () => plainMaterial("#b4ac9c"),
   hedge: () => surfaceMaterial("hedge"),
+  screen: () => surfaceMaterial("screen"),
 };
 
 /** Fences, walls and hedges along the plot boundary, stopping at buildings and stepping or raking with sloping ground. Merged into one mesh per material. */
 function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { site: Site; buildings: V2[][] }) {
   const parts = useMemo(() => {
-    const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], mortar: [], hedge: [] };
+    const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], mortar: [], hedge: [], screen: [] };
     const edges = edgesOf({ boundary, boundaryEdges });
     boundary.forEach((a, i) => {
       const e = edges[i];
@@ -516,7 +545,7 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
       const segs = e.kind === "hedge" ? [] : boundaryWallSegments(boundary, e, i, surfaces);
       for (const [t0, t1] of clipSegmentOutside(a, b, buildings, 0.12)) {
         if (e.kind === "fence") fence(out, a, b, len, runsBetween(segs, t0 * len, t1 * len));
-        else if (e.kind === "wall") brickWall(out, a, b, len, runsBetween(segs, t0 * len, t1 * len), e.height, e.top ?? "coping", e.piers ?? true);
+        else if (e.kind === "wall") brickWall(out, a, b, len, runsBetween(segs, t0 * len, t1 * len), e);
         else hedge(out, at(a, b, 1, t0), at(a, b, 1, t1), e.height);
       }
     });

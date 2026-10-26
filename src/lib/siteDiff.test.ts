@@ -140,3 +140,16 @@ describe("site changes", () => {
     expect(diffSites(undefined, listingSite())[0].description).toBe("Plot added for Proposed");
   });
 });
+
+describe("screen blocks on walls", () => {
+  it("count as a change of treatment, named in the change list", () => {
+    const before = listingSite();
+    const i = (before.boundaryEdges ?? []).findIndex((e) => e.screen?.rows === 2);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const after: Site = { ...before, boundaryEdges: before.boundaryEdges!.map((e, k) => (k === i ? { ...e, screen: undefined } : e)) };
+    expect(changedPieces(before, after)).toHaveLength(1);
+    const texts = diffSites(before, after).map((c) => c.description);
+    expect(texts.some((t) => /screen blocks removed/.test(t))).toBe(true);
+    expect(changedPieces(before, before)).toHaveLength(0);
+  });
+});

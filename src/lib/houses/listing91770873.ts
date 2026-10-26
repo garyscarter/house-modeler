@@ -82,7 +82,7 @@ const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 export const LISTING_PRESET = { id: "listing-91770873", version: 23 };
 export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 23 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
-export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 5 };
+export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 6 };
 
 export function listing91770873(image: string): HouseModel {
   const base = (name: string, level: number, origin: Pt, rooms: Room[], openings: Opening[], stairs: Pt, canopies?: Pt[][]): Floor => ({
@@ -630,7 +630,10 @@ export function listingSite(): Site {
       // 1 east, back garden: the wall beside the conservatory carries on past its far end at the
       // same height (rear-3); further back it is not visible (owner).
       { kind: "wall", height: 1.4, top: "brick", piers: false },
-      { kind: "wall", height: 1.4, top: "brick", piers: false }, // 2 east, beside the attached neighbour's conservatory (rear-3)
+      // 2 east, beside the attached neighbour's conservatory (rear-3): a panel of pierced screen blocks, four
+      // wide and two high, let into the wall's top under its brick-on-edge course, over the conservatory's
+      // rear half (its place along the wall is judged by eye).
+      { kind: "wall", height: 1.4, top: "brick", piers: false, screen: { rows: 2, from: 0.25, length: 1.16 } },
       { kind: "wall", height: 1.4, top: "brick", piers: false }, // 3 east, along the party wall (hidden by the buildings)
       // A low brick wall like the front one, from the house front to the pavement (owner; front-garden).
       { kind: "wall", height: 0.95, top: "brick", piers: false }, // 4 east, front garden
@@ -645,8 +648,10 @@ export function listingSite(): Site {
       { kind: "wall", height: 1.075, top: "brick", piers: false, follow: "level" },
       { kind: "wall", height: 1.3, top: "brick", piers: false }, // 9 west, along the garage wall (hidden by it)
       { kind: "wall", height: 1.3, top: "brick", piers: false }, // 10 west, rear corner of the house (rear-1, rear-2, rear-4)
-      // 11 west, back garden: the same wall carries on behind a raised bed of tall shrubs (rear-2; owner).
-      { kind: "wall", height: 1.3, top: "brick", piers: false },
+      // 11 west, back garden: from the bin store back, the 1.3 m wall carries a row of pierced screen blocks
+      // under a flat concrete coping (rear-2, rear-4), about 1.65 m in all; it runs on behind the raised bed of
+      // tall shrubs (owner), where the blocks are assumed to continue.
+      { kind: "wall", height: 1.65, top: "coping", piers: false, screen: { rows: 1 } },
     ],
     neighbours: [
       // Pale render with a brick band, under one continuous roof with ours: the same 32 degree pitch and eaves.

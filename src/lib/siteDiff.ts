@@ -1,4 +1,5 @@
 import { SURFACE_LABEL, type BoundaryEdge, type Site, type SiteSurface, type SurfaceKind, type WPt } from "../types";
+import { screenKey } from "./screenBlocks";
 import type { Change } from "./report";
 import { areaOf, edgesOf } from "./site";
 
@@ -119,14 +120,14 @@ export function boundaryPieces(before: Site | undefined, after: Site | undefined
   return pieces;
 }
 
-/** Same treatment: kind, height and, for walls, the top and piers. */
+/** Same treatment: kind, height and, for walls, the top, piers and screen blocks. */
 export function sameEdge(x?: BoundaryEdge, y?: BoundaryEdge): boolean {
   if (!x || !y) return x === y;
   if (x.kind !== y.kind) return false;
   if (x.kind === "open") return true;
   if (Math.abs(x.height - y.height) > 0.005) return false;
   if (x.kind !== "wall") return true;
-  return (x.top ?? "coping") === (y.top ?? "coping") && (x.piers ?? true) === (y.piers ?? true);
+  return (x.top ?? "coping") === (y.top ?? "coping") && (x.piers ?? true) === (y.piers ?? true) && screenKey(x.screen) === screenKey(y.screen);
 }
 
 /** Stretches whose treatment differs, for the 3D overlay. */
@@ -216,6 +217,8 @@ function boundaryChanges(before: Site, after: Site): Change[] {
       if (Math.abs(x.height - y.height) > 0.005) tweaks.set(`h${x.kind}${x.height}${y.height}`, { noun: x.kind, rest: `${y.height > x.height ? "raised" : "lowered"} from ${len(x.height)} to ${len(y.height)}` });
       if (x.kind === "wall" && (x.top ?? "coping") !== (y.top ?? "coping")) tweaks.set(`t${y.top}`, { noun: "wall", rest: `topped with ${TOP_LABEL[y.top ?? "coping"]} instead of ${TOP_LABEL[x.top ?? "coping"]}` });
       if (x.kind === "wall" && (x.piers ?? true) !== (y.piers ?? true)) tweaks.set(`p${y.piers}`, { noun: "wall", rest: (y.piers ?? true) ? "piers added" : "piers removed" });
+      if (x.kind === "wall" && screenKey(x.screen) !== screenKey(y.screen))
+        tweaks.set(`s${screenKey(y.screen)}`, { noun: "wall", rest: !y.screen ? "screen blocks removed" : !x.screen ? "screen blocks added" : "screen blocks changed" });
     }
     phrases.push(...tweaks.values());
     if (!phrases.length) continue;

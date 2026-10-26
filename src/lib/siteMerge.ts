@@ -1,4 +1,5 @@
 import type { BoundaryEdge, Neighbour, Site, WPt } from "../types";
+import { screenKey } from "./screenBlocks";
 import { uid } from "../types";
 import type { Change } from "./layoutMerge";
 import { areaOf, edgesOf, pointSegmentDistance } from "./site";
@@ -13,7 +14,7 @@ import { metres } from "./layoutMerge";
 export const MATCH_TOL = 0.05;
 
 /** The treatment fields that follow the latest plot. `endFinish` is the owner's, so it is not here. */
-const FIELDS = ["kind", "height", "top", "piers", "follow", "stepEvery"] as const;
+const FIELDS = ["kind", "height", "top", "piers", "follow", "stepEvery", "screen"] as const;
 
 export interface BoundaryChange {
   /** Index of the edge in the plot being updated (edge i runs from boundary[i] to boundary[i + 1]). */
@@ -75,6 +76,8 @@ function value(e: BoundaryEdge, f: (typeof FIELDS)[number]): unknown {
       return wall ? (e.top ?? "coping") : undefined;
     case "piers":
       return wall ? (e.piers ?? true) : undefined;
+    case "screen":
+      return wall ? screenKey(e.screen) : undefined;
     case "follow":
     case "stepEvery":
       return e.kind === "open" ? undefined : e[f];
@@ -96,6 +99,7 @@ function describe(e: BoundaryEdge, other: BoundaryEdge): string {
   parts.push(`${noun} ${metres(e.height)}`);
   const extra: string[] = [];
   if (e.kind === "wall" && other.kind === "wall" && value(e, "piers") !== value(other, "piers")) extra.push(e.piers === false ? "no piers" : "piers");
+  if (e.kind === "wall" && other.kind === "wall" && value(e, "screen") !== value(other, "screen")) extra.push(e.screen ? `${e.screen.rows === 2 ? "two rows" : "a row"} of screen blocks` : "no screen blocks");
   // Only said when this side sets it; an unset one just takes the default for the ground.
   if (e.follow && (value(e, "follow") !== value(other, "follow") || value(e, "stepEvery") !== value(other, "stepEvery"))) {
     const how = e.follow === "step" ? "stepped top" : e.follow === "rake" ? "sloping top" : "level top";

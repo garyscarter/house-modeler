@@ -632,9 +632,21 @@ export interface BoundaryEdge {
    * climbed another brick course, at least 0.9 m apart.
    */
   stepEvery?: number;
+  /**
+   * Walls only: a row or two of pierced concrete screen blocks (290 mm square) let into the top of the wall
+   * under its top course, see-through, as 1960s garden walls have (see lib/screenBlocks.ts).
+   */
+  screen?: ScreenPanel;
 }
 
 export type WallFollow = "level" | "step" | "rake";
+
+/** A panel of pierced screen blocks in a wall's top. `from` and `length` are metres along the edge from its start; left out, the blocks run the whole edge. */
+export interface ScreenPanel {
+  rows: 1 | 2;
+  from?: number;
+  length?: number;
+}
 
 /** A neighbouring building block (or outbuilding), drawn as simple massing. */
 export interface Neighbour {

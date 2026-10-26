@@ -170,19 +170,36 @@ describe("the kitchen", () => {
 });
 
 describe("the listing's garden walls", () => {
-  it("have brick-on-edge tops without piers, and the drive wall ends under the porch pillar", () => {
+  it("have brick-on-edge tops without piers (coping only over the screen blocks), and the drive wall ends under the porch pillar", () => {
     const site = listingSite();
     const edges = site.boundaryEdges ?? [];
     const walls = edges.filter((e) => e.kind === "wall");
     expect(walls.length).toBeGreaterThan(0);
     for (const w of walls) {
-      expect(w.top).toBe("brick");
+      expect(w.top).toBe(w.screen?.rows === 1 ? "coping" : "brick");
       expect(w.piers).toBe(false);
     }
     const pillar = planRoofs(house).pillars[0];
     const i = edges.findIndex((e, k) => e.kind === "wall" && site.boundary[k + 1] && Math.abs(site.boundary[k + 1].y - pillar.z) < 0.01);
     expect(i).toBeGreaterThanOrEqual(0);
     expect(Math.abs(site.boundary[i + 1].x - pillar.x)).toBeLessThan(0.15);
+  });
+
+  it("carry pierced screen blocks on the two rear side walls: a two-row panel beside the conservatory, a row along the west wall behind the bin store", () => {
+    const site = listingSite();
+    const edges = site.boundaryEdges ?? [];
+    const screened = edges.map((e, i) => ({ e, i })).filter(({ e }) => e.screen);
+    expect(screened).toHaveLength(2);
+    const [east, west] = screened;
+    // East: the edge beside the conservatory (x about 5.8, y -9.41 to -5.59), a four-block panel two rows high.
+    expect(site.boundary[east.i].x).toBeGreaterThan(5);
+    expect(east.e.screen).toEqual({ rows: 2, from: 0.25, length: 1.16 });
+    expect(east.e.height).toBe(1.4);
+    // West: the back-garden stretch behind the bin store, one row under a coping, about 0.35 m over the plain wall.
+    expect(site.boundary[west.i].x).toBeLessThan(-4);
+    expect(west.e.screen).toEqual({ rows: 1 });
+    expect(west.e.height).toBeCloseTo(1.65, 6);
+    expect(edges[west.i - 1].height).toBe(1.3);
   });
 
   it("walls the plot all round: no fences or hedges, only the drive left open", () => {

@@ -7,7 +7,7 @@ import { rng } from "./textures";
  * a canvas and shared by every viewer. Each covers `metres` of ground, so a
  * geometry with UVs in metres sets repeat to 1 / metres.
  */
-export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge";
+export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen";
 
 export interface SiteTexture {
   map: THREE.Texture;
@@ -246,6 +246,45 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       }
       speckle(g, r, 5000, 0.12, 0.2);
       metres = 0.9;
+      break;
+    }
+    case "screen": {
+      // One pierced concrete screen block per tile: a weathered grey square with a thin joint round it, a
+      // bar across each diagonal and four leaf-shaped holes between the bars (alpha 0, so the wall is
+      // see-through there and casts a pierced shadow).
+      g.clearRect(0, 0, SIZE, SIZE);
+      const joint = 7;
+      g.fillStyle = hsl(40, 6, 70);
+      g.fillRect(joint, joint, SIZE - 2 * joint, SIZE - 2 * joint);
+      speckle(g, r, 3500, 0.1, 0.16, 3);
+      g.fillStyle = hsl(40, 5, 58);
+      g.fillRect(0, 0, SIZE, joint);
+      g.fillRect(0, SIZE - joint, SIZE, joint);
+      g.fillRect(0, 0, joint, SIZE);
+      g.fillRect(SIZE - joint, 0, joint, SIZE);
+      g.save();
+      g.globalCompositeOperation = "destination-out";
+      for (const [cx, cy, rx, ry] of [
+        [SIZE / 2, SIZE * 0.3, SIZE * 0.25, SIZE * 0.13],
+        [SIZE / 2, SIZE * 0.7, SIZE * 0.25, SIZE * 0.13],
+        [SIZE * 0.3, SIZE / 2, SIZE * 0.13, SIZE * 0.25],
+        [SIZE * 0.7, SIZE / 2, SIZE * 0.13, SIZE * 0.25],
+      ]) {
+        g.beginPath();
+        g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
+      // The diagonal bars, painted back over the holes so each hole ends in a leaf's point.
+      g.fillStyle = hsl(40, 6, 66);
+      for (const a of [Math.PI / 4, -Math.PI / 4]) {
+        g.save();
+        g.translate(SIZE / 2, SIZE / 2);
+        g.rotate(a);
+        g.fillRect(-SIZE, -SIZE * 0.045, SIZE * 2, SIZE * 0.09);
+        g.restore();
+      }
+      metres = 0.29;
       break;
     }
     case "hedge": {
