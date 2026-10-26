@@ -2,7 +2,7 @@ const { chromium, devices } = require('/opt/node22/lib/node_modules/playwright')
 const out = process.env.OUT || '/tmp/shots';
 require('fs').mkdirSync(out, { recursive: true });
 // Usage: PORT=5201 OUT=/path/to/shots node scripts/shoot-chassis.cjs  (against a running `npx vite --port 5201`)
-// Screenshots every mode at phone (390x844), iPad portrait (820x1180) and iPad landscape (1180x820), all touch.
+// Screenshots every mode (Build, Decorate, Furnish, Garden, Plot, Review) at phone (390x844), iPad portrait (820x1180) and iPad landscape (1180x820), all touch.
 const sizes = [
   ['phone', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }],
   ['tablet-portrait', { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }],
@@ -35,6 +35,24 @@ const sizes = [
     await page.evaluate(() => window.__houseStore.getState().setMode('furnish'));
     await page.waitForTimeout(800);
     await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-furnish.png` });
+    // Garden: the plan with the panel, then with a table and a tree placed and the table selected (the phone sheet shows its fields), then 3D.
+    await page.evaluate(() => window.__houseStore.getState().setMode('garden'));
+    await page.waitForTimeout(1500);
+    await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-garden.png` });
+    await page.evaluate(() => {
+      const s = window.__houseStore.getState();
+      const site = s.sites[s.activeVariant] || s.sites.current;
+      const lawn = site.surfaces.filter((x) => x.kind === 'lawn').sort((a, b) => b.polygon.length - a.polygon.length)[0];
+      const cx = lawn.polygon.reduce((a, p) => a + p.x, 0) / lawn.polygon.length, cy = lawn.polygon.reduce((a, p) => a + p.y, 0) / lawn.polygon.length;
+      s.updateSite((st) => ({ ...st, items: [...(st.items || []), { id: 'shoot-dining', type: 'dining-6', x: cx, y: cy, rot: 0 }, { id: 'shoot-tree', type: 'apple-tree', x: cx + 2.5, y: cy - 1.5, rot: 0 }] }));
+      s.setUi({ gardenSel: ['shoot-dining'] });
+    });
+    await page.waitForTimeout(1200);
+    await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-garden-item.png` });
+    await page.evaluate(() => window.__houseStore.getState().setUi({ tab: '3d' }));
+    await page.waitForTimeout(3500);
+    await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-3d-garden.png` });
+    await page.evaluate(() => window.__houseStore.getState().setUi({ tab: 'plan' }));
     await page.evaluate(() => window.__houseStore.getState().setMode('plot'));
     await page.waitForTimeout(1500);
     await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-plot.png` });

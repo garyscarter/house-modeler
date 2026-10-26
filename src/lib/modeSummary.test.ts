@@ -13,6 +13,7 @@ import {
   printedChip,
   outsideSummary,
   shapeSummary,
+  gardenSummary,
   siteSummary,
   stairsSummary,
   wallsSummary,
@@ -121,6 +122,17 @@ describe("other summaries", () => {
     expect(openingLookSummary(door("a"))).toBe("Standard look");
     expect(openingLookSummary({ ...door("a"), color: "#27364f", style: "glazed", frameColor: "#ffffff" })).toBe("Navy · Fully glazed · frame near Snow Scene");
     expect(openingLookSummary({ ...door("a"), kind: "garage", style: "up-over" })).toContain("Up-and-over");
+  });
+
+  it("gardenSummary", () => {
+    expect(gardenSummary(undefined)).toBe("No plot yet");
+    expect(gardenSummary({ surfaces: [] } as unknown as Site)).toBe("Nothing in the garden yet");
+    const site = {
+      surfaces: [{}, {}, {}],
+      items: [{ type: "dining-6" }, { type: "apple-tree" }, { type: "hedge" }, { type: "bench" }, { type: "bench" }, { type: "bench" }, { type: "pot-small" }],
+    } as unknown as Site;
+    expect(gardenSummary(site)).toBe("3 surfaces · 7 items · 2 plants");
+    expect(gardenSummary({ surfaces: [{}], items: [{ type: "bench" }] } as unknown as Site)).toBe("1 surface · 1 item · 0 plants");
   });
 
   it("siteSummary and exteriorSummary", () => {

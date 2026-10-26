@@ -282,7 +282,7 @@ export default function App() {
               </div>
             }
           >
-            {editingSite && <SiteEditor />}
+            {editingSite && <SiteEditor key={mode} mode={mode === "garden" ? "garden" : "plot"} />}
             {!editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
           </Suspense>
           </ErrorBoundary>

@@ -95,4 +95,8 @@ describe("garden mode", () => {
     const b = modeSwitchPatch({ mode: "garden", tab: "plan", editFloorId: SITE_EDIT_ID, floorBeforeSite: "f1", selectedRoomId: null, selectedEdge: null }, "furnish");
     expect(b.editFloorId).toBe("f1");
   });
+
+  it("clears the garden selection on every switch", () => {
+    expect(modeSwitchPatch({ mode: "garden", tab: "plan", editFloorId: SITE_EDIT_ID, floorBeforeSite: null, selectedRoomId: null, selectedEdge: null, gardenSel: ["a"] }, "plot").gardenSel).toEqual([]);
+  });
 });

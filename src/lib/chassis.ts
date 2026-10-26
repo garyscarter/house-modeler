@@ -44,7 +44,7 @@ export const FEATURES: Record<Chassis, Features> = {
 };
 
 /** The tools the chassis cannot offer; the plan rail filters these out. */
-export const DRAW_TOOLS = ["rect", "room", "wall", "canopy", "gap", "calibrate"] as const;
+export const DRAW_TOOLS = ["rect", "circle", "polygon", "room", "wall", "canopy", "gap", "calibrate"] as const;
 export const toolAllowed = (chassis: Chassis, tool: string): boolean => FEATURES[chassis].draw || !(DRAW_TOOLS as readonly string[]).includes(tool);
 
 /** The compare mode to show: side by side falls back to wipe where two views don't fit. */

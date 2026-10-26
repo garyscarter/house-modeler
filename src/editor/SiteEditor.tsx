@@ -1,29 +1,37 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
-import { SurfaceFinishField } from "../components/SurfaceFinishField";
-import { SURFACE_LABEL, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
+import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { listingSite } from "../lib/houses/listing91770873";
-import { bbox, polygonArea } from "../lib/geometry";
+import { bbox, pointInPolygon, polygonArea } from "../lib/geometry";
 import type { Rect } from "../lib/planMath";
 import { siteWalls } from "../lib/siteWalls";
 import { boundaryWallSegments, groundAlong, resolveFollow } from "../lib/wallSteps";
 import { screenBand } from "../lib/screenBlocks";
 import { bearingToWorld } from "../lib/sun";
 import { areaOf, defaultDepths, edgesOf, houseOutlines, removeBoundaryVertex, sideClearances, simpleSite } from "../lib/site";
-import { SlopeFields } from "../components/SlopeFields";
 import { PlotPanel } from "../components/PlotPanel";
 import { MIN_OPENING, defaultOpeningEnd, edgeLength, moveBoundaryCorner, neighbourEdgeOf, setOpeningWidth, slideCorner, type OpeningEnd } from "../lib/boundaryOpening";
 import { arrowDelta, shiftPts } from "../lib/nudge";
-import { ToolRail } from "./ToolRail";
+import { toolAllowed } from "../lib/chassis";
+import { type GardenDef } from "../lib/gardenCatalogue";
+import { copyItems, itemsOf, moveItems, placeSpot, snapItem } from "../lib/siteItems";
+import { surfaceArea } from "../lib/surfaceCurve";
+import { GardenPanel } from "../components/GardenPanel";
+import { ToolRail, type RailItem } from "./ToolRail";
+import { AddPopover, GardenPicker } from "./AddItem";
 import { InspectorCard } from "../components/InspectorCard";
 import { Info } from "../components/Info";
 import { Icon } from "../components/icons";
 import { BrandMark } from "../components/BrandMark";
 import { lowerSheet, raiseSheet, useCameraInsets, useCanvasCamera, useEditorKeys } from "./core";
-import { slideFor, useSiteDrag } from "./site/useSiteDrag";
+import { slideFor, useSiteDrag, type GardenActions } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
-import type { Draft, Item, Sel, Tool } from "./site/types";
+import { GardenItems, ItemHandles, PlacementGhost, PolyDraftView, RunDraftView } from "./site/GardenLayers";
+import { ItemInspector, SurfaceFields } from "./site/GardenInspectors";
+import { addItem, closesPolygon, gardenClipboard, newItem, pasteItems, removeItems, rotateItems } from "./site/gardenEdit";
+import type { Draft, Item, Sel, SiteMode, Tool } from "./site/types";
+import "./PlanEditor.css"; // the rail, popover and zoom styles are shared with the plan
 import "./SiteEditor.css";
 
 const EDGE_LABEL: Record<BoundaryEdge["kind"], string> = { fence: "Close-board fence", wall: "Brick wall", hedge: "Hedge", open: "Open (no boundary)" };
@@ -31,12 +39,15 @@ const EDGE_DEFAULT_HEIGHT: Record<BoundaryEdge["kind"], number> = { fence: 1.8, 
 const NICE = [0.5, 1, 2, 5, 10, 20, 50, 100];
 const SITE_LIMITS = () => ({ minS: 1 / 400, maxS: 1 / 2 });
 
-/** Top-down editor for the plot boundary, garden surfaces and neighbouring buildings, in world metres. */
-export function SiteEditor() {
+/**
+ * Top-down editor in world metres, in two modes. Plot: the boundary and neighbouring buildings are selectable, the
+ * garden is drawn faded. Garden: surfaces and items are selectable, the boundary and neighbours are drawn only.
+ */
+export function SiteEditor({ mode = "plot" }: { mode?: SiteMode }) {
   const site = useSite();
   const model = useStore((s) => s.variants[s.activeVariant]);
   if (!site) return <NoSite model={model} />;
-  return <SitePlan site={site} model={model} />;
+  return <SitePlan site={site} model={model} mode={mode} />;
 }
 
 function NoSite({ model }: { model?: HouseModel }) {
@@ -54,13 +65,41 @@ function NoSite({ model }: { model?: HouseModel }) {
   );
 }
 
-function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
+function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode: SiteMode }) {
+  const garden = mode === "garden";
   const updateSite = useStore((s) => s.updateSite);
+  const setUi = useStore((s) => s.setUi);
+  const gardenSel = useStore((s) => s.gardenSel);
+  const chassis = useChassis((s) => s.chassis);
   const svgRef = useRef<SVGSVGElement>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [drawKind, setDrawKind] = useState<SurfaceKind>("lawn");
-  const [sel, setSel] = useState<Sel>(null);
+  const [polySel, setPolySel] = useState<Item | null>(null);
   const [draft, setDraft] = useState<Draft>(null);
+  // Garden tools: the armed catalogue entry, a run's first end, the polygon's corners so far, and the pointer for ghosts.
+  const [armed, setArmed] = useState<GardenDef | null>(null);
+  const [runStart, setRunStart] = useState<WPt | null>(null);
+  const [polyPts, setPolyPts] = useState<WPt[]>([]);
+  const [hover, setHoverState] = useState<WPt | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const hoverNext = useRef<WPt | null>(null);
+  const hoverRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(hoverRaf.current), []);
+
+  /** Garden items hold the selection in the store (shared with the panel); everything else is local. */
+  const sel: Sel = garden && gardenSel.length ? { type: "item", ids: gardenSel } : polySel;
+  const setSel = (s: Sel) => {
+    if (s?.type === "item") {
+      setPolySel(null);
+      setUi({ gardenSel: s.ids });
+      return;
+    }
+    setPolySel(s);
+    if (gardenSel.length) setUi({ gardenSel: [] });
+  };
+  const selectItems = (ids: string[]) => setSel(ids.length ? { type: "item", ids } : null);
+  const psel: Item | null = sel?.type === "item" ? null : sel;
+  const itemIds = sel?.type === "item" ? sel.ids : [];
 
   const outlines = useMemo(() => (model ? houseOutlines(model) : []), [model]);
   // Clearances run from the outer wall faces (outlines carry them), not the wall centre lines.
@@ -97,6 +136,11 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     else editPoly(s, (poly) => (poly.length > 3 ? poly.filter((_, j) => j !== i) : poly));
     setSel({ ...s, vertex: null } as Sel);
   };
+  const deleteSelectedItems = () => {
+    if (!itemIds.length) return;
+    updateSite((st) => removeItems(st, itemIds));
+    setSel(null);
+  };
   const deleteItem = (s: Item) => {
     if (s.type === "surface") updateSite((st) => ({ ...st, surfaces: st.surfaces.filter((x) => x.id !== s.id) }));
     if (s.type === "neighbour") updateSite((st) => ({ ...st, neighbours: st.neighbours.filter((x) => x.id !== s.id) }));
@@ -124,38 +168,168 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     return true;
   };
 
-  const { drag, itemDown, vertexDown, edgeDown, midDown } = useSiteDrag({ svgRef, camera, site, outlines, tool, drawKind, sel, setSel, setTool, setDraft, editPoly, deleteVertex });
+  const houseOutline = () => outlines.flatMap((o) => o.polys);
+  const grid = (p: WPt): WPt => ({ x: Math.round(p.x * 20) / 20, y: Math.round(p.y * 20) / 20 });
+  const disarm = () => {
+    setArmed(null);
+    setRunStart(null);
+    setPolyPts([]);
+    setDraft(null);
+    setHoverState(null);
+  };
+  const finishPoly = (pts: WPt[]) => {
+    if (pts.length < 3) return;
+    const polygon = polygonArea(pts) < 0 ? [...pts].reverse() : pts;
+    if (Math.abs(polygonArea(polygon)) < 0.1) return;
+    const id = uid();
+    updateSite((st) => ({ ...st, surfaces: [...st.surfaces, { id, kind: drawKind, polygon }] }));
+    setSel({ type: "surface", id, vertex: null });
+    setPolyPts([]);
+    setHoverState(null);
+    setTool("select");
+  };
+  const gardenActions: GardenActions = {
+    selection: itemIds,
+    selectItems,
+    polyClick: (at, tol) => {
+      if (closesPolygon(polyPts, at, tol)) return finishPoly(polyPts);
+      const last = polyPts[polyPts.length - 1];
+      if (last && Math.hypot(last.x - at.x, last.y - at.y) < tol / 3) return;
+      setPolyPts([...polyPts, at]);
+    },
+    placeAt: (at, shift) => {
+      if (!armed || armed.run) return;
+      const proto = newItem(armed, at);
+      const s = snapItem(proto, at, site, houseOutline());
+      const item = { ...proto, x: s.x, y: s.y, rot: s.rot };
+      updateSite((st) => addItem(st, item));
+      selectItems([item.id]);
+      if (!shift) {
+        disarm();
+        setTool("select");
+      }
+    },
+    runClick: (at, shift) => {
+      if (!armed?.run) return;
+      const p = grid(at);
+      if (!runStart) return setRunStart(p);
+      if (Math.hypot(p.x - runStart.x, p.y - runStart.y) < 0.2) return;
+      const item = newItem(armed, runStart, 0, p);
+      updateSite((st) => addItem(st, item));
+      selectItems([item.id]);
+      if (shift) setRunStart(null);
+      else {
+        disarm();
+        setTool("select");
+      }
+    },
+    hover: (at) => {
+      if (tool !== "place" && tool !== "run" && tool !== "polygon") return;
+      hoverNext.current = at;
+      if (!hoverRaf.current)
+        hoverRaf.current = requestAnimationFrame(() => {
+          hoverRaf.current = 0;
+          setHoverState(hoverNext.current);
+        });
+    },
+  };
+
+  const { drag, gardenItemDown, rotateDown, resizeDown, endDown, itemDown, vertexDown, edgeDown, midDown } = useSiteDrag({ svgRef, camera, site, outlines, tool, drawKind, sel, setSel, setTool, setDraft, editPoly, deleteVertex, garden: gardenActions });
+
+  /** Where a new entry goes without a point (a phone's pick): the middle of the view when it is on the plot, else the lawn or patio. */
+  const spotNow = (): WPt => {
+    const c = cam && size ? { x: cam.x + (size.w * cam.s) / 2, y: cam.y + (size.h * cam.s) / 2 } : null;
+    return c && site.boundary.length >= 3 && pointInPolygon(c, site.boundary) ? grid(c) : placeSpot(site);
+  };
+  /** The picker's choice: arm the tool on a pointer chassis, or put it straight down on a phone. */
+  const pickGarden = (def: GardenDef) => {
+    setAddOpen(false);
+    if (chassis === "phone") {
+      const item = newItem(def, spotNow());
+      updateSite((st) => addItem(st, item));
+      selectItems([item.id]);
+      return;
+    }
+    disarm();
+    setArmed(def);
+    setTool(def.run ? "run" : "place");
+  };
 
   // Esc during a drag is the core's (it restores the snapshot); this runs when nothing is being dragged.
   useEditorKeys((e) => {
+    if (garden && (e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k = e.key.toLowerCase();
+      const picked = itemsOf(site).filter((it) => itemIds.includes(it.id));
+      if (k === "d" && picked.length) {
+        e.preventDefault();
+        const r = copyItems(site, itemIds);
+        updateSite(() => r.site);
+        selectItems(r.ids);
+      } else if (k === "c" && picked.length) {
+        e.preventDefault();
+        gardenClipboard.set(picked);
+      } else if (k === "v" && gardenClipboard.count()) {
+        e.preventDefault();
+        const r = pasteItems(site, gardenClipboard.get());
+        updateSite(() => r.site);
+        selectItems(r.ids);
+      }
+      return;
+    }
     const arrow = !e.ctrlKey && !e.metaKey && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
     if (arrow) {
-      if (sel && tool === "select" && nudge(sel, arrow.x, arrow.y)) e.preventDefault();
+      if (itemIds.length && tool === "select") {
+        updateSite((st) => moveItems(st, itemIds, arrow.x, arrow.y));
+        e.preventDefault();
+      } else if (psel && tool === "select" && nudge(psel, arrow.x, arrow.y)) e.preventDefault();
       return;
     }
     if (e.key === "Escape") {
       setSel(null);
-      setDraft(null);
+      disarm();
       setTool("select");
+      return;
+    }
+    if (garden && tool === "polygon") {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        return finishPoly(polyPts);
+      }
+      if (e.key === "Backspace" && polyPts.length) {
+        e.preventDefault();
+        return setPolyPts(polyPts.slice(0, -1));
+      }
     }
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
       const k = e.key.toLowerCase();
-      if (k === "v" || k === "r" || k === "b") {
-        setTool(k === "v" ? "select" : k === "r" ? "surface" : "neighbour");
-        setDraft(null);
-      } else if (k === "f") camera.fit();
+      const pick = (t: Tool) => {
+        disarm();
+        setTool(t);
+      };
+      if (k === "v") pick("select");
+      else if (garden && k === "r") pick("surface");
+      else if (garden && k === "c") pick("circle");
+      else if (garden && k === "p") pick("polygon");
+      else if (garden && k === "a") {
+        e.preventDefault(); // or the search box would take the letter
+        setAddOpen((v) => !v);
+      }
+      else if (!garden && k === "b") pick("neighbour");
+      else if (garden && (k === "q" || k === "e") && itemIds.length) updateSite((st) => rotateItems(st, itemIds, k === "e" ? 15 : -15));
+      else if (k === "f") camera.fit();
       else if (k === "+" || k === "=") camera.zoomBy(1.4);
       else if (k === "-" || k === "_") camera.zoomBy(1 / 1.4);
     }
     if ((e.key === "Delete" || e.key === "Backspace") && sel) {
       e.preventDefault();
-      if (sel.vertex !== null) deleteVertex(sel, sel.vertex);
-      else deleteItem(sel);
+      if (itemIds.length) deleteSelectedItems();
+      else if (psel && psel.vertex !== null) deleteVertex(psel, psel.vertex);
+      else if (psel) deleteItem(psel);
     }
   });
 
   // On the phone a tap that selects a plot item brings the inspector sheet up; clearing the selection drops it.
-  const selKey = sel ? `${sel.type}:${"id" in sel ? sel.id : ""}` : "";
+  const selKey = sel ? `${sel.type}:${sel.type === "item" ? sel.ids.join(",") : "id" in sel ? sel.id : ""}` : "";
   const prevSelKey = useRef(selKey);
   useEffect(() => {
     if (prevSelKey.current === selKey) return;
@@ -164,11 +338,46 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
     else lowerSheet();
   }, [selKey]);
 
-  const selPoly = sel ? polyOf(sel) : [];
+  const selPoly = psel ? polyOf(psel) : [];
+  const selSurface = psel?.type === "surface" ? site.surfaces.find((x) => x.id === psel.id) : undefined;
+  const oneItem = itemIds.length === 1 ? itemsOf(site).find((it) => it.id === itemIds[0]) : undefined;
   const north = bearingToWorld(site.frontBearing, 0);
   const northDeg = (Math.atan2(north.x, -north.z) * 180) / Math.PI;
   const scaleLen = NICE.find((n) => n / px >= 70) ?? 100;
   const cursor = tool === "select" ? "grab" : "crosshair";
+  const toolItem = (id: Tool, icon: RailItem["icon"], label: string, shortcut: string, gate = id as string): RailItem[] =>
+    toolAllowed(chassis, gate) ? [{ id, icon, label, shortcut, active: tool === id, onClick: () => { disarm(); setTool(id); } }] : [];
+  const railGroups: RailItem[][] = garden
+    ? [
+        [
+          {
+            id: "add",
+            icon: "plus",
+            label: "Add to the garden",
+            shortcut: "A",
+            active: addOpen || tool === "place" || tool === "run",
+            onClick: () => {
+              if (!addOpen && chassis === "phone") lowerSheet(); // the picker sits above the sheet's peek, so the sheet must be down
+              setAddOpen(!addOpen);
+            },
+            extra: (
+              <AddPopover open={addOpen} onOpenChange={setAddOpen}>
+                <GardenPicker activeId={armed?.id} onPick={pickGarden} />
+              </AddPopover>
+            ),
+          },
+        ],
+        toolItem("select", "select", "Select / move", "V"),
+        [...toolItem("surface", "rect", "Rectangle surface", "R", "rect"), ...toolItem("circle", "circle", "Circle surface", "C"), ...toolItem("polygon", "polygon", "Polygon surface", "P")],
+      ]
+    : [toolItem("select", "select", "Select / move", "V"), toolItem("neighbour", "house", "Draw building", "B")];
+  const selectedIds = itemIds;
+  const armedItem = armed && hover && tool === "place" ? (() => {
+    const proto = newItem(armed, hover);
+    const s = snapItem(proto, hover, site, houseOutline());
+    return { ...proto, x: s.x, y: s.y, rot: s.rot };
+  })() : null;
+  const runGhost = armed?.run && runStart && hover ? { ...newItem(armed, runStart, 0, grid(hover)) } : null;
   // The grid is three viewports wide, so a pan never shows past its edge.
   const vb = cam && size ? { x: cam.x, y: cam.y, w: size.w * cam.s, h: size.h * cam.s } : null;
 
@@ -185,8 +394,14 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
                   </pattern>
                 </defs>
                 <rect x={vb.x - vb.w} y={vb.y - vb.h} width={3 * vb.w} height={3 * vb.h} fill="url(#site-grid)" />
-                <SiteWorld site={site} sel={sel} tool={tool} px={px} outlines={outlines} walls={walls} clearances={clearances} onItemDown={itemDown} />
-                {sel && selPoly.length > 0 && <SelectionLayer sel={sel} poly={selPoly} px={px} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
+                <SiteWorld site={site} mode={mode} sel={psel} tool={tool} px={px} outlines={outlines} walls={walls} clearances={clearances} onItemDown={itemDown} />
+                <GardenItems site={site} selected={selectedIds} px={px} interactive={garden} onDown={gardenItemDown} />
+                {psel && selPoly.length > 0 && <SelectionLayer sel={psel} poly={selPoly} px={px} smooth={!!selSurface?.smooth} onEdgeDown={edgeDown} onMidDown={midDown} onVertexDown={vertexDown} />}
+                {garden && tool === "select" && oneItem && !peeking && <ItemHandles item={oneItem} px={px} touch={touch} onRotateDown={(e) => rotateDown(e, oneItem.id)} onResizeDown={(e, h) => resizeDown(e, oneItem.id, h)} onEndDown={(e, end) => endDown(e, oneItem.id, end)} />}
+                {armedItem && armed && <PlacementGhost def={armed} item={armedItem} px={px} />}
+                {armed?.run && runStart && <RunDraftView from={runStart} to={hover ? grid(hover) : null} px={px} />}
+                {runGhost && armed && <PlacementGhost def={armed} item={runGhost} px={px} />}
+                {tool === "polygon" && <PolyDraftView points={polyPts} hover={hover} px={px} />}
                 {draft && <DraftRect draft={draft} px={px} />}
               </g>
             )}
@@ -206,18 +421,16 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
       {!peeking && (
         <ToolRail
-          groups={[
-            [{ id: "select", icon: "select", label: "Select / move", shortcut: "V", active: tool === "select", onClick: () => setTool("select") }],
-            [
-              { id: "surface", icon: "rect", label: "Draw surface", shortcut: "R", active: tool === "surface", onClick: () => setTool("surface") },
-              { id: "neighbour", icon: "house", label: "Draw building", shortcut: "B", active: tool === "neighbour", onClick: () => setTool("neighbour") },
-            ],
-          ]}
+          groups={railGroups}
           footer={
             <Info label="How this works">
-              {touch
-                ? "Tap a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background to pan; pinch to zoom."
-                : "Click a boundary edge, surface or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10)."}
+              {garden
+                ? touch
+                  ? "Tap a surface or item. Drag to move it; drag the round handles to turn or resize. Add puts a new one in the middle of the view. Drag the background to pan; pinch to zoom."
+                  : "Click a surface or item; Shift-click adds to the selection. Drag to move; the handles turn and resize. Q and E turn by 15°, arrows nudge (Shift ×10), Ctrl+D duplicates, Ctrl+C and Ctrl+V copy and paste, Delete removes. A adds an item, R, C and P draw surfaces."
+                : touch
+                  ? "Tap a boundary edge or building. Drag corners; + adds a corner. Drag the background to pan; pinch to zoom."
+                  : "Click a boundary edge or building. Drag corners; + adds a corner. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Arrows nudge the selected corner or shape (Shift ×10)."}
             </Info>
           }
         />
@@ -245,9 +458,23 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         </div>
       )}
       {!peeking && tool !== "select" && (
-        <div className="site-status float-card" role="status">
-          <span>Drag out a rectangle.</span>
-          {tool === "surface" && (
+        <div className="site-status float-card" role="status" data-site-status={tool}>
+          <span>
+            {tool === "circle"
+              ? "Drag out a circle from its centre."
+              : tool === "polygon"
+                ? polyPts.length < 3
+                  ? "Click each corner."
+                  : "Click the first corner or press Enter to finish. Backspace drops the last."
+                : tool === "place"
+                  ? `Click to place the ${armed?.name.toLowerCase() ?? "item"}. Shift keeps adding.`
+                  : tool === "run"
+                    ? runStart
+                      ? "Click the other end."
+                      : "Click the first end."
+                    : "Drag out a rectangle."}
+          </span>
+          {garden && (tool === "surface" || tool === "circle" || tool === "polygon") && (
             <select value={drawKind} onChange={(e) => setDrawKind(e.target.value as SurfaceKind)} aria-label="Surface to draw">
               {(Object.keys(SURFACE_LABEL) as SurfaceKind[]).map((k) => (
                 <option key={k} value={k}>
@@ -259,8 +486,8 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
         </div>
       )}
 
-      <InspectorCard className="side site-side" title="Plot">
-        <Inspector site={site} sel={sel} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+      <InspectorCard className="side site-side" title={garden ? "Garden" : "Plot"}>
+        <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
       </InspectorCard>
     </div>
   );
@@ -269,17 +496,21 @@ function SitePlan({ site, model }: { site: Site; model?: HouseModel }) {
 
 function Inspector({
   site,
-  sel,
+  sel: selection,
+  garden,
   onDeleteVertex,
   onDeleteItem,
   clearances,
 }: {
   site: Site;
   sel: Sel;
-  onDeleteVertex: (s: NonNullable<Sel>, i: number) => void;
-  onDeleteItem: (s: NonNullable<Sel>) => void;
+  garden: boolean;
+  onDeleteVertex: (s: Item, i: number) => void;
+  onDeleteItem: (s: Item) => void;
   clearances: ReturnType<typeof sideClearances>;
 }) {
+  if (selection?.type === "item") return <ItemInspector ids={selection.ids} />;
+  const sel: Item | null = selection;
   const updateSite = useStore((s) => s.updateSite);
   const num = (v: string, f: number) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : f);
   const corners =
@@ -370,21 +601,10 @@ function Inspector({
     const s = site.surfaces.find((x) => x.id === sel.id);
     if (!s) return <EmptyInspector />;
     return (
-      <div className="inspector">
+      <div className="inspector" data-garden-inspector="surface">
         <h4>Garden surface</h4>
-        <label>
-          Surface
-          <select value={s.kind} onChange={(e) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, kind: e.target.value as SurfaceKind } : x)) }))}>
-            {(Object.keys(SURFACE_LABEL) as SurfaceKind[]).map((k) => (
-              <option key={k} value={k}>
-                {SURFACE_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <SurfaceFinishField surface={s} onChange={(finish) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, finish } : x)) }))} />
-        <SlopeFields surface={s} onChange={(slope) => updateSite((st) => ({ ...st, surfaces: st.surfaces.map((x) => (x.id === s.id ? { ...x, slope } : x)) }))} />
-        <p className="muted small">{areaOf(s.polygon).toFixed(1)} m². Drag it to move it.</p>
+        <SurfaceFields surface={s} />
+        <p className="muted small">{surfaceArea(s).toFixed(1)} m². Drag it to move it.</p>
         <div className="row">
           {vertexButton}
           <button className="danger" onClick={() => onDeleteItem(sel)}>
@@ -452,7 +672,7 @@ function Inspector({
       </div>
     );
   }
-  return <EmptyInspector />;
+  return garden ? <GardenPanel /> : <EmptyInspector />;
 }
 
 /** Typed width of the selected edge. One end slides along the wall next to it, so the boundary line holds. */

@@ -31,6 +31,16 @@
 .site-handle, .site-mid { cursor: pointer; }
 .site-draft { fill: rgba(37, 99, 235, 0.12); stroke: #2563eb; }
 
+/* Garden mode: drawing aids, the item handles and the control polygon of a curved surface. Brand tokens only. */
+.site-draft-line { fill: none; stroke: var(--accent); }
+.site-poly-pt { fill: var(--panel); stroke: var(--accent); }
+.site-poly-first { fill: var(--accent-soft); stroke: var(--accent); }
+.site-control-poly { fill: none; stroke: var(--accent); stroke-opacity: 0.5; }
+.site-rot-stem { stroke: var(--accent); stroke-opacity: 0.7; }
+.site-rot circle + circle { fill: var(--accent); stroke: var(--panel); }
+.garden-item { cursor: grab; }
+.garden-symbol { color: var(--text); }
+
 .site-north {
   position: absolute; top: var(--float-top); right: calc(var(--float-gap) + 332px); width: 40px; height: 52px; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; font-weight: 700; color: var(--danger); font-size: 12px;

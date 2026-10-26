@@ -1246,7 +1246,20 @@ async function siteSuite() {
     assert(Math.abs(cross) < 1e-6 * len * len, `the corner left its wall: cross ${cross}`);
   });
 
+  // Surfaces are drawn and edited in Garden mode; Plot keeps the survey (boundary and buildings) and draws surfaces faded.
+  // Each check starts in Plot, so these three switch to Garden first and wait for the editor to remount and refit.
+  const toGarden = async () => {
+    await reg(() => window.__houseStore.getState().setMode("garden"));
+    for (let i = 0, last = "", same = 0; i < 50 && same < 3; i++) {
+      await settle(200);
+      const vb = await reg(() => window.__reg.svg()?.getAttribute("viewBox") ?? "");
+      same = vb === last ? same + 1 : 0;
+      last = vb;
+    }
+  };
+
   await check("site", "10 draw a rectangle", async () => {
+    await toGarden();
     const spot = await reg(() => window.__reg.siteEmptySpot(80, 60));
     assert(spot, "no empty stretch of canvas for a rectangle");
     const n0 = (await siteNow()).surfaces.length;
@@ -1270,6 +1283,7 @@ async function siteSuite() {
     "site",
     "11 move a surface with Shift",
     async () => {
+      await toGarden();
       const sf = await addSurface(80, 60);
       await tap(sf.c);
       const before = await surfaceNow(sf.id);
@@ -1284,6 +1298,7 @@ async function siteSuite() {
   );
 
   await check("site", "12 nudge and delete a corner", async () => {
+    await toGarden();
     const sf = await addSurface(80, 60);
     await tap(sf.c);
     await tap(await reg((id) => window.__reg.toClient(window.__reg.site().surfaces.find((s) => s.id === id).polygon[0]), sf.id));

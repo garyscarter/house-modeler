@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useStore } from "../store";
+import { editsSite } from "../lib/modes";
 import { keyBelongsElsewhere } from "../lib/nudge";
 import { dockFloorPick, floorForKey, spaceKeyApplies, tabKeyApplies, tabSwitchPatch } from "../lib/studio";
 
@@ -54,7 +55,7 @@ export function useStudioKeys() {
       }
       if (s.peek) return; // the floor shown is the one you left; digits wait for release
       if (e.shiftKey || !/^[0-9]$/.test(e.key)) return;
-      if (s.tab === "plan" && s.mode === "plot") return;
+      if (s.tab === "plan" && editsSite(s.mode)) return;
       const pick = floorForKey(model.floors, e.key);
       if (pick === null || (pick === "all" && s.tab !== "3d")) return;
       e.preventDefault();
