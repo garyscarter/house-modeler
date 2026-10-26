@@ -604,6 +604,48 @@ export interface Site {
   boundaryEdges?: BoundaryEdge[];
   neighbours: Neighbour[];
   surfaces: SiteSurface[];
+  /**
+   * Garden furniture, structures, lights and plants, edited in Garden mode
+   * (see lib/gardenCatalogue.ts and lib/siteItems.ts). Absent on plots saved
+   * before the garden was modelled: read it as an empty list.
+   */
+  items?: GardenItem[];
+}
+
+/**
+ * A garden item or plant placed on the plot, by garden catalogue id. World
+ * metres like the rest of the Site (x right, y towards the street). It stands
+ * on whatever surface is under its centre (lib/siteItems.ts groundHeightAt).
+ */
+export interface GardenItem {
+  id: string;
+  /** Garden catalogue id (lib/gardenCatalogue.ts GARDEN_ITEMS). */
+  type: string;
+  /** Centre of the footprint, world metres; for a run (`to` set), its first end. */
+  x: number;
+  y: number;
+  /** Rotation in degrees, clockwise on the plan; the editor snaps to 15 degree steps. Ignored for runs. */
+  rot: number;
+  /** Size overrides in metres (default from the catalogue). Plants: w = d = canopy spread, h = height. */
+  w?: number;
+  d?: number;
+  h?: number;
+  /** Height of the base above the ground under it, metres, for wall-hung items (default from the catalogue). */
+  mount?: number;
+  /** Runs only (festoon lights, stepping stones, hedge, bamboo screen, climber): the second end, world metres. */
+  to?: WPt;
+  /** Festoon lights: height of the second end above the ground (the first end is `h`). Default the same as `h`. */
+  toH?: number;
+  /** Festoon lights: how far the string sags below the straight line at mid-span, metres (default 0.3). */
+  sag?: number;
+  /** Dining and lounge sets: number of chairs (default from the catalogue). */
+  seats?: number;
+  /** Main colour override (frame, body, foliage). */
+  color?: string;
+  /** Second colour override (parasol canopy, cushions, flowers). */
+  accent?: string;
+  /** Plants: a number that varies the procedural shape, so two of a kind differ. Default from the id. */
+  seed?: number;
 }
 
 export interface BoundaryEdge {
@@ -700,6 +742,9 @@ export interface SurfaceSlope {
   base?: number;
 }
 
+/** The edging round a lawn or bed (see lib/gardenCatalogue.ts KERBS for sizes, colours and labels). */
+export type KerbStyle = "brick" | "sleeper" | "corten" | "render" | "none";
+
 /**
  * What a hard surface (drive, patio, path, pavement) is laid with. Left out, it
  * looks as it always has: block paving on a drive, slabs on a patio and so on.
@@ -721,6 +766,19 @@ export interface SiteSurface {
   finish?: SurfaceFinish;
   /** Absent: flat at ground level. */
   slope?: SurfaceSlope;
+  /**
+   * Draw the outline as a closed smooth curve through the polygon's points
+   * (lib/surfaceCurve.ts surfaceOutline); the points stay the control points
+   * the editor drags. Default false: straight edges.
+   */
+  smooth?: boolean;
+  /**
+   * Lawns and beds: the edging. Absent: "brick" round a raised bed (slope.base > 0), as before, otherwise
+   * "none" (lib/gardenCatalogue.ts kerbOf).
+   */
+  kerb?: KerbStyle;
+  /** How far the kerb stands above the surface's own top at its edge, metres. Absent: the style's default. */
+  kerbHeight?: number;
 }
 
 export interface Photo {

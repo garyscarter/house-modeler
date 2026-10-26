@@ -19,7 +19,7 @@ import { runStartupPrompt } from "./components/startupDialog";
 import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
-import { siteEditPatch } from "./lib/modes";
+import { editsSite, siteEditPatch } from "./lib/modes";
 import { floorAtLevel, houseName } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
@@ -97,20 +97,20 @@ export default function App() {
   const both = !!variants.current && !!variants.proposed;
   const effectiveViewMode = effectiveCompare(viewMode, chassis, both, "single", "wipe", "side-by-side");
   // On the plan, Plot always shows the site editor and no other mode does.
-  const editingSite = mode === "plot";
+  const editingSite = editsSite(mode);
   // While peeking, the shown layout has other floor ids: follow the level of the floor you were on, and keep the editor's key.
   const homeModel = peek && peekReturn ? variants[peekReturn] : model;
   const homeFloor = (editFloorId && editFloorId !== SITE_EDIT_ID ? homeModel?.floors.find((f) => f.id === editFloorId) : undefined) ?? homeModel?.floors[0];
   const editFloor = peek && homeFloor && model ? floorAtLevel(model.floors, homeFloor.level) ?? model.floors[0] : (editFloorId && editFloorId !== SITE_EDIT_ID ? model?.floors.find((f) => f.id === editFloorId) : undefined) ?? model?.floors[0];
 
   useEffect(() => {
-    if (tab === "plan" && mode === "plot" && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
+    if (tab === "plan" && editsSite(mode) && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
   }, [tab, mode, editFloorId, setUi]);
 
   // Stable callbacks, so the 3D view's memoised floors don't re-render on every App render.
   const onSelectRoom = useCallback(
     (floor: Floor, room: Room) => {
-      if (mode === "plot") return;
+      if (editsSite(mode)) return;
       if (chassis === "phone") useSheet.getState().raise();
       if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
       else if (mode === "decorate") {
@@ -172,7 +172,7 @@ export default function App() {
       </div>
     );
 
-  const showInspector = tab === "3d" && mode !== "review" && (!!model || mode === "plot");
+  const showInspector = tab === "3d" && mode !== "review" && (!!model || editsSite(mode));
 
   return (
     <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined}>

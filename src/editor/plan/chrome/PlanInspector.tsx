@@ -6,6 +6,7 @@ import { exactGroup, expandToGroups, rotateFixtures, ungroupFixtures } from "../
 import { DOUBLE_DOOR_M, outsideSide } from "../../../lib/planMath";
 import { byId } from "../../../lib/catalogue";
 import type { Fixture, Floor, Room, VariantKey } from "../../../types";
+import type { Mode } from "../../../lib/modes";
 import { useStore } from "../../../store";
 import { DecoratePanel } from "../../DecoratePanel";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../Inspectors";
@@ -27,7 +28,7 @@ export function PlanInspector({
 }: {
   variant: VariantKey;
   floor: Floor;
-  mode: "build" | "decorate" | "furnish" | "plot" | "review";
+  mode: Mode;
   sel: PlanSelection;
   selectedRoom: Room | undefined;
   clashes: ReadonlySet<string>;

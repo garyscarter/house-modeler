@@ -8,7 +8,7 @@ import { setLink, syncLinks } from "./lib/roomLinks";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
-import { isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./lib/modes";
+import { editsSite, isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./lib/modes";
 import type { EdgePick } from "./lib/decorPick";
 import { peekPatch } from "./lib/studio";
 
@@ -480,7 +480,7 @@ export const useStore = create<State>()(
         if (!isMode(merged.mode)) merged.mode = "build";
         if (!VIEW_MODES.includes(merged.viewMode)) merged.viewMode = "single";
         if (merged.tab !== "3d" && merged.tab !== "plan") merged.tab = "3d";
-        if (merged.editFloorId === SITE_EDIT_ID && merged.mode !== "plot") merged.editFloorId = null;
+        if (merged.editFloorId === SITE_EDIT_ID && !editsSite(merged.mode)) merged.editFloorId = null;
         if (merged.editFloorId !== null && typeof merged.editFloorId !== "string") merged.editFloorId = null;
         if (!isMode(merged.modeBeforeReview) || merged.modeBeforeReview === "review") merged.modeBeforeReview = null;
         return merged;
