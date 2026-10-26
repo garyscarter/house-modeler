@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { DEFAULT_WORKTOP, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerSofaSizes, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
@@ -443,6 +443,80 @@ function fixtureParts(symbol: Symbol, w: number, d: number, h: number, color: st
       drum(seat - seatT, seat, w, d * 0.9, color, "satin");
       for (const sx of [-1, 1]) box(sx * (w / 2 - 0.05), (seat + h) / 2, -d / 2 + 0.05, 0.02, h - seat, 0.02, DARK, "metal");
       lean(0, h - 0.08, -d / 2 + 0.05, w - 0.06, 0.16, 0.03, -0.12, color, "satin");
+      break;
+    }
+    case "gas-hob": {
+      box(0, 0.006, 0, w, 0.012, d, color, "gloss");
+      for (const [fx, fy] of SIX_RINGS) {
+        cyl(fx * w, 0.02, fy * d, 0.11, 0.016, "#2a2a2a", "metal");
+        cyl(fx * w, 0.04, fy * d, 0.06, 0.006, "#8d7a4a", "metal");
+      }
+      for (const fy of [-0.22, 0.2]) {
+        for (const s of [-1, 1]) box(0, 0.052, fy * d + s * 0.13, w - 0.06, 0.012, 0.012, DARK, "matt");
+        for (const [fx, ry] of SIX_RINGS) if (Math.abs(ry - fy) < 0.1) box(fx * w, 0.052, fy * d, 0.012, 0.012, 0.26, DARK, "matt");
+      }
+      for (let i = 0; i < 6; i++) cyl(-w / 2 + (w * (i + 0.5)) / 6, 0.018, d / 2 - 0.03, 0.035, 0.012, DARK, "matt");
+      break;
+    }
+    case "induction":
+    case "vented-hob": {
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      const zones = symbol === "induction" ? SIX_RINGS : VENTED_ZONES;
+      for (const [fx, fy] of zones) {
+        cyl(fx * w, h + 0.001, fy * d, 0.2, 0.002, "#5a5e64", "satin");
+        cyl(fx * w, h + 0.0025, fy * d, 0.12, 0.0025, "#3a3d42", "satin");
+      }
+      box(0, h + 0.001, d / 2 - 0.04, 0.3, 0.002, 0.02, "#8e9399", "satin");
+      if (symbol === "vented-hob") {
+        box(0, h + 0.002, 0, 0.2, 0.01, 0.09, "#101214", "matt");
+        box(0, h + 0.008, 0, 0.19, 0.003, 0.08, STEEL, "metal");
+        for (const dz of [-0.025, 0, 0.025]) box(0, h + 0.01, dz, 0.19, 0.003, 0.006, DARK, "matt");
+      }
+      break;
+    }
+    case "glass-hood": {
+      box(0, 0.45 + (h - 0.45) / 2, -d / 2 + 0.125, 0.3, h - 0.45, 0.25, STEEL, "metal");
+      box(0, 0.4, -d / 2 + 0.15, 0.5, 0.1, 0.3, STEEL, "metal");
+      lean(0, 0.2, -0.025, w, 0.45, 0.012, -0.9, color, "gloss");
+      box(0, 0.01, d / 2 - 0.05, w, 0.02, 0.02, STEEL, "metal");
+      box(0, 0.345, -d / 2 + 0.2, 0.4, 0.008, 0.03, "#f4efd8", "gloss");
+      break;
+    }
+    case "box-hood": {
+      box(0, 0.01 + (h - 0.02) / 2, 0, w, h - 0.02, d, STEEL, "metal");
+      box(0, 0.004, 0, w - 0.08, 0.006, d - 0.1, "#55595f", "metal");
+      box(0, h / 2, d / 2 + 0.002, w - 0.1, 0.012, 0.004, "#2a2d31", "satin");
+      break;
+    }
+    case "island-hood": {
+      box(0, 0.06, 0, w, 0.12, d, STEEL, "metal");
+      box(0, 0.004, 0, w - 0.08, 0.006, d - 0.08, "#55595f", "metal");
+      box(0, 0.12 + (h - 0.12) / 2, 0, 0.25, h - 0.12, 0.25, STEEL, "metal");
+      for (const s of [-1, 1]) box(s * w * 0.25, 0.0, 0, 0.05, 0.004, 0.05, "#f4efd8", "gloss");
+      break;
+    }
+    case "beanbag":
+      drum(0, h * 0.55, w, d, color);
+      drum(h * 0.55, h * 0.85, w * 0.85, d * 0.85, shade(color, 1.06));
+      drum(h * 0.85, h, w * 0.55, d * 0.55, shade(color, 0.92));
+      break;
+    case "beanbag-chair": {
+      drum(0, h * 0.45, w, d, color);
+      lean(0, h * 0.45 + (h * 0.55) / 2, -d / 2 + d * 0.22, w * 0.9, h * 0.55, d * 0.38, -0.25, color);
+      drum(h * 0.45, h * 0.52, w * 0.6, d * 0.5, shade(color, 1.06));
+      break;
+    }
+    case "wood-armchair": {
+      const oak = "#c9a26b";
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.05), 0.21, sz * (d / 2 - 0.05), 0.04, 0.42, 0.04, oak, "satin");
+      for (const sx of [-1, 1]) {
+        box(sx * (w / 2 - 0.035), 0.6, 0, 0.05, 0.03, d - 0.1, oak, "satin");
+        box(sx * (w / 2 - 0.035), 0.51, d / 2 - 0.05, 0.03, 0.2, 0.03, oak, "satin");
+        box(sx * (w / 2 - 0.05), 0.42 + (h - 0.42) / 2, -d / 2 + 0.05, 0.03, h - 0.42, 0.03, oak, "satin");
+      }
+      box(0, 0.42, 0, w - 0.1, 0.03, d - 0.1, oak, "satin");
+      box(0, 0.49, 0.03, w - 0.12, 0.1, d - 0.16, color);
+      lean(0, 0.72, -d / 2 + 0.12, w - 0.14, 0.4, 0.1, -0.15, color);
       break;
     }
     case "pouf":
