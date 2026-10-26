@@ -208,7 +208,7 @@ function Surface({ surface }: { surface: SiteSurface }) {
 
 /** The material of a kerb style's band and of the raised sides it edges. */
 function kerbMaterial(style: KerbStyle): THREE.Material {
-  if (style === "brick" || style === "sleeper" || style === "corten" || style === "render") return surfaceMaterial(style);
+  if (style === "brick" || style === "paving" || style === "sleeper" || style === "corten" || style === "render") return surfaceMaterial(style);
   return plainMaterial("#a19e96");
 }
 

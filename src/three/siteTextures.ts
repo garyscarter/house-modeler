@@ -7,7 +7,7 @@ import { rng } from "./textures";
  * a canvas and shared by every viewer. Each covers `metres` of ground, so a
  * geometry with UVs in metres sets repeat to 1 / metres.
  */
-export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen" | "sleeper" | "corten" | "render";
+export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen" | "sleeper" | "paving" | "corten" | "render";
 
 export interface SiteTexture {
   map: THREE.Texture;
@@ -331,6 +331,35 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       }
       speckle(g, r, 6000, 0.08, 0.2);
       metres = 1;
+      break;
+    }
+    case "paving": {
+      // The patio's own weathered 200 x 60 mm block pavers (block-weathered colours) lifted and re-laid on
+      // their sides in stretcher bond, 60 mm courses with thin sandy joints: a border built from the patio
+      // that came up for the lawn. 3 blocks by 10 courses per 0.6 m tile.
+      const cols = 3;
+      const rows = 10;
+      const w = SIZE / cols;
+      const h = SIZE / rows;
+      g.fillStyle = "#8d8373";
+      g.fillRect(0, 0, SIZE, SIZE);
+      const gap = 3;
+      for (let j = 0; j < rows; j++) {
+        const off = (j % 2) * (w / 2);
+        for (let i = -1; i < cols + 1; i++) {
+          const v = r();
+          g.fillStyle = v < 0.34 ? hsl(10 + r() * 8, 26 + r() * 12, 38 + r() * 9) : v < 0.5 ? hsl(14 + r() * 8, 14 + r() * 8, 29 + r() * 7) : hsl(25 + r() * 20, 3 + r() * 5, 33 + r() * 11);
+          g.fillRect(i * w + off + gap / 2, j * h + gap / 2, w - gap, h - gap);
+        }
+      }
+      for (let i = 0; i < 40; i++) {
+        g.fillStyle = `rgba(70,80,40,${0.08 + r() * 0.12})`;
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 6 + r() * 18, 4 + r() * 10, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      speckle(g, r, 5000, 0.1, 0.22);
+      metres = 0.6;
       break;
     }
     case "render": {

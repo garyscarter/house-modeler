@@ -754,7 +754,8 @@ export interface SurfaceSlope {
 }
 
 /** The edging round a lawn or bed (see lib/gardenCatalogue.ts KERBS for sizes, colours and labels). */
-export type KerbStyle = "brick" | "sleeper" | "corten" | "render" | "none";
+/** A lawn's or bed's edging; "paving" is reclaimed block pavers (the patio's) laid in courses like bricks. */
+export type KerbStyle = "brick" | "paving" | "sleeper" | "corten" | "render" | "none";
 
 /**
  * What a hard surface (drive, patio, path, pavement) is laid with. Left out, it

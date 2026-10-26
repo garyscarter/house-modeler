@@ -235,6 +235,7 @@ export interface KerbDef {
 
 export const KERBS: Record<KerbStyle, KerbDef> = {
   brick: { label: "Brick", width: 0.1025, height: 0, color: "#9c4f3a" },
+  paving: { label: "Reclaimed paving blocks", width: 0.1, height: 0, color: "#5a4f4a" },
   sleeper: { label: "Timber sleeper", width: 0.2, height: 0.1, color: "#6b5137" },
   corten: { label: "Corten steel", width: 0.006, height: 0.05, color: "#8a4a26" },
   render: { label: "Rendered block", width: 0.15, height: 0, color: "#e6e1d6" },
