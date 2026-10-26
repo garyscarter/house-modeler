@@ -8,7 +8,7 @@ import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
-import { DEFAULT_WORKTOP, MIN_SEAT, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, mountOf, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -655,6 +655,26 @@ export function FixtureInspector({
         Label
         <input value={fixture.label ?? ""} placeholder="Shown on the plan" onChange={(e) => onChange({ label: e.target.value || undefined })} />
       </label>
+      {isTv(item) && (
+        <label>
+          Screen size
+          <select
+            value={tvInches(fixture.w ?? item.w) ?? "custom"}
+            disabled={locked}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (n) onChange(tvSize(item, n));
+            }}
+          >
+            {TV_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n} inch
+              </option>
+            ))}
+            {tvInches(fixture.w ?? item.w) === undefined && <option value="custom">Custom ({((fixture.w ?? item.w) / 0.0254 / Math.cos(Math.atan(9 / 16))).toFixed(0)} inch)</option>}
+          </select>
+        </label>
+      )}
       <div className="field">
         <span className="field-label">Width × depth × height (m)</span>
         <div className="size-row">

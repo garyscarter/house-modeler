@@ -17,15 +17,37 @@ export interface PersistedLike {
   [k: string]: unknown;
 }
 
+/** The old fixed-size TV items and what they became; the 65s carry their size so they keep looking the same. */
+const OLD_TVS: Record<string, { type: string; w?: number; h?: number; d?: number }> = {
+  "tv-wall-55": { type: "tv-wall" },
+  "tv-wall-65": { type: "tv-wall", w: 1.45, h: 0.83 },
+  "tv-stand-55": { type: "tv-stand" },
+  "tv-stand-65": { type: "tv-stand", w: 1.45, h: 0.88, d: 0.28 },
+};
+
 const isListing = (m?: HouseModel) => m?.preset?.id === LISTING_PRESET.id || m?.preset?.id === LISTING_PROPOSED_PRESET.id;
 
 /**
  * Fix old shapes in one model (a saved project, an import or a server copy). Idempotent.
  * - A door with `style: "garage"` becomes `kind: "garage"` (`style` is now a valid DoorStyle, so only that case).
  * - The built-in listing with an exterior but no `roofStyle` becomes a hipped semi joined on the right.
+ * - The old TV presets (`tv-wall-55`, `tv-wall-65`, `tv-stand-55`, `tv-stand-65`) become the sized items `tv-wall` and
+ *   `tv-stand`, a 65 keeping its size.
  */
 export function migrateModel(m: HouseModel): HouseModel {
   let out = m;
+  if (m.floors.some((f) => (f.fixtures ?? []).some((fx) => fx.type in OLD_TVS))) {
+    out = {
+      ...out,
+      floors: out.floors.map((f) => ({
+        ...f,
+        fixtures: (f.fixtures ?? []).map((fx) => {
+          const to = OLD_TVS[fx.type];
+          return to ? { ...fx, type: to.type, w: fx.w ?? to.w, h: fx.h ?? to.h, ...(to.d !== undefined && fx.d === undefined ? { d: to.d } : {}) } : fx;
+        }),
+      })),
+    };
+  }
   if (m.floors.some((f) => f.openings.some((o) => (o as { style?: string }).style === "garage"))) {
     out = {
       ...out,

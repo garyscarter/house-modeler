@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, SIX_RINGS, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -145,14 +145,17 @@ describe("corner units and peninsulas", () => {
 });
 
 describe("TVs", () => {
-  it("offers wall-mounted and stand TVs in 55 and 65 inch under Living", () => {
-    for (const id of ["tv-wall-55", "tv-wall-65", "tv-stand-55", "tv-stand-65"]) expect(byId(id)?.category, id).toBe("Living");
-    expect(byId("tv-wall-55")!.mount).toBeGreaterThanOrEqual(0.95);
-    expect(byId("tv-wall-65")!.mount).toBeGreaterThanOrEqual(0.95);
-    expect(byId("tv-stand-55")!.mount).toBe(0.5);
-    expect(byId("tv-stand-65")!.mount).toBe(0.5);
-    expect(byId("tv-wall-65")!.w).toBeGreaterThan(byId("tv-wall-55")!.w);
-    expect(byId("tv-stand-65")!.w).toBeGreaterThan(byId("tv-stand-55")!.w);
+  it("offers a wall-mounted and a stand TV under Living, sized by screen diagonal", () => {
+    for (const id of ["tv-wall", "tv-stand"]) expect(byId(id)?.category, id).toBe("Living");
+    expect(byId("tv-wall")!.mount).toBeGreaterThanOrEqual(0.95);
+    expect(byId("tv-stand")!.mount).toBe(0.5);
+    expect(tvSize(byId("tv-wall")!, 55)).toEqual({ w: 1.22, d: 0.08, h: 0.68 });
+    expect(tvSize(byId("tv-stand")!, 65).h).toBeCloseTo(0.91, 2);
+    expect(tvSize(byId("tv-wall")!, 32).w).toBeLessThan(tvSize(byId("tv-wall")!, 43).w);
+    expect(tvInches(1.22)).toBe(55);
+    expect(tvInches(1.45)).toBe(65);
+    expect(tvInches(1.0)).toBeUndefined();
+    expect(TV_SIZES).toContain(32);
   });
 });
 

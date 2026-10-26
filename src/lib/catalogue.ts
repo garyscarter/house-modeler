@@ -161,10 +161,8 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "armchair", name: "Armchair", category: "Living", w: 0.90, d: 0.90, h: 0.85, color: "#9ab0c8", symbol: "sofa" },
   { id: "coffee-table", name: "Coffee table", category: "Living", w: 1.00, d: 0.50, h: 0.45, color: WOOD, symbol: "table" },
   { id: "tv-unit", name: "TV unit", category: "Living", w: 1.20, d: 0.40, h: 0.5, color: WOOD, symbol: "box" },
-  { id: "tv-wall-55", name: "TV, wall-mounted (55 in)", category: "Living", w: 1.23, d: 0.08, h: 0.71, color: "#15171a", symbol: "tv-wall", mount: 1.0, note: "Screen bottom 1 m up, centre about 1.35 m; set the height to suit your seating" },
-  { id: "tv-wall-65", name: "TV, wall-mounted (65 in)", category: "Living", w: 1.45, d: 0.08, h: 0.83, color: "#15171a", symbol: "tv-wall", mount: 0.95, note: "Screen bottom 1 m up, centre about 1.35 m; set the height to suit your seating" },
-  { id: "tv-stand-55", name: "TV on a stand (55 in)", category: "Living", w: 1.23, d: 0.25, h: 0.76, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
-  { id: "tv-stand-65", name: "TV on a stand (65 in)", category: "Living", w: 1.45, d: 0.28, h: 0.88, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
+  { id: "tv-wall", name: "TV, wall-mounted", category: "Living", w: 1.23, d: 0.08, h: 0.71, color: "#15171a", symbol: "tv-wall", mount: 1.0, note: "55 inch to start; pick the screen size in the inspector. Screen bottom 1 m up; set the height to suit your seating" },
+  { id: "tv-stand", name: "TV on a stand", category: "Living", w: 1.23, d: 0.25, h: 0.76, color: "#15171a", symbol: "tv-stand", mount: 0.5, note: "55 inch to start; pick the screen size in the inspector. Sits on a TV unit: set the height to the unit's top (0.5 m for the TV unit, 0.65 m for the floating media unit)" },
   { id: "bookcase", name: "Bookcase", category: "Living", w: 0.80, d: 0.30, h: 1.8, color: WOOD, symbol: "shelves" },
   { id: "fireplace", name: "Fireplace (gas fire)", category: "Living", w: 1.40, d: 0.50, h: 1.15, color: "#5a2a1c", symbol: "fireplace", note: "Carved timber surround, marble hearth and back panel, brass gas fire" },
   { id: "sideboard", name: "Sideboard", category: "Living", w: 1.60, d: 0.45, h: 0.8, color: WOOD, symbol: "cabinet" },
@@ -310,6 +308,32 @@ export function hasSeatDepth(item: Pick<CatalogueItem, "symbol">): boolean {
  * Burner positions on a cooker or range top as fractions of its width and
  * depth from the centre: four on a 600 mm cooker, five on a range.
  */
+/** Screen sizes offered for a TV, inches across the diagonal. */
+export const TV_SIZES: readonly number[] = [32, 40, 43, 50, 55, 65, 75, 85];
+/** Height of the pedestal under a TV on a stand, metres (part of the item's height). */
+export const TV_STAND_H = 0.1;
+const INCH = 0.0254;
+/** A 16:9 screen's width and height from its diagonal in inches. */
+const SCREEN_W = Math.cos(Math.atan(9 / 16));
+const SCREEN_H = Math.sin(Math.atan(9 / 16));
+
+/** Whether an item is a TV, whose size is picked by screen diagonal. */
+export function isTv(item: Pick<CatalogueItem, "symbol">): boolean {
+  return item.symbol === "tv-wall" || item.symbol === "tv-stand";
+}
+
+/** The footprint size of a TV of `inches` across the diagonal: the screen, plus the pedestal on a stand. */
+export function tvSize(item: Pick<CatalogueItem, "symbol" | "d">, inches: number): { w: number; d: number; h: number } {
+  const w = inches * INCH * SCREEN_W;
+  const h = inches * INCH * SCREEN_H + (item.symbol === "tv-stand" ? TV_STAND_H : 0);
+  return { w: Math.round(w * 100) / 100, d: item.symbol === "tv-stand" ? Math.round(Math.max(0.22, w * 0.2) * 100) / 100 : item.d, h: Math.round(h * 100) / 100 };
+}
+
+/** The screen size in inches that a TV of width `w` metres is, or undefined when it is no standard size. */
+export function tvInches(w: number): number | undefined {
+  return TV_SIZES.find((n) => Math.abs(n * INCH * SCREEN_W - w) < 0.02);
+}
+
 /** Burner or zone centres of a six-ring hob as fractions of its width and depth from the centre: three across, two rows. */
 export const SIX_RINGS: readonly [number, number][] = [
   [-0.3, -0.22],

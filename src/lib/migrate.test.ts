@@ -74,3 +74,18 @@ describe("migrateModel", () => {
     expect(out.exterior?.partyWall).toBe("right");
   });
 });
+
+describe("old TV presets", () => {
+  it("become the sized TV items, a 65 keeping its size and a 55 taking the default", () => {
+    const base = listing91770873("");
+    const f0 = base.floors[0];
+    const m = { ...base, floors: [{ ...f0, fixtures: [{ id: "a", type: "tv-wall-65", x: 0, y: 0, rot: 0 }, { id: "b", type: "tv-stand-55", x: 0, y: 0, rot: 0 }, { id: "c", type: "tv-stand-65", x: 0, y: 0, rot: 0, w: 1.6 }] }, ...base.floors.slice(1)] };
+    const out = migrateModel(m);
+    const [a, b, c] = out.floors[0].fixtures!;
+    expect(a).toMatchObject({ type: "tv-wall", w: 1.45, h: 0.83 });
+    expect(b).toMatchObject({ type: "tv-stand" });
+    expect(b.w).toBeUndefined();
+    expect(c).toMatchObject({ type: "tv-stand", w: 1.6, h: 0.88, d: 0.28 });
+    expect(migrateModel(out)).toBe(out);
+  });
+});
