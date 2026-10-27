@@ -148,10 +148,10 @@ describe("schedule", () => {
 
   it("counts a grid as its bulbs, with a size note and a ceiling height", () => {
     const g = rows.find((r) => r.id === "k2")!;
-    expect(g.quantity).toBe(6);
+    expect(g.quantity).toBe(4);
     expect(g.height).toBe("Ceiling");
-    expect(g.notes).toContain("3 × 2 at 1.0 m");
-    expect(rows.reduce((a, r) => a + r.quantity, 0)).toBe(1 + 1 + 1 + 1 + 6 + 1 + 1 + 1);
+    expect(g.notes).toContain("2 × 2 at 1.2 m");
+    expect(rows.reduce((a, r) => a + r.quantity, 0)).toBe(1 + 1 + 1 + 1 + 4 + 1 + 1 + 1);
   });
 
   it("notes the lights a switch controls and the switches of a light, across rooms and floors", () => {
@@ -188,7 +188,7 @@ describe("schedule", () => {
 
   it("totals one row per type, by kind then name", () => {
     const t = totals(rows);
-    expect(t.find((x) => x.type === "Downlights (grid)")!.count).toBe(6);
+    expect(t.find((x) => x.type === "Downlights, grid")!.count).toBe(4);
     expect(t.find((x) => x.type === "Socket (double)")!.count).toBe(2);
     expect(t.reduce((a, x) => a + x.count, 0)).toBe(rows.reduce((a, r) => a + r.quantity, 0));
     const kinds = t.map((x) => ["board", "light", "switch", "socket", "connection", "appliance", "alarm", "data"].indexOf(x.kind));

@@ -2,10 +2,10 @@ import type { Floor, HouseModel, Site } from "../types";
 import { esc, planExtent, planScale, planSvg, toCsv, type PlanFrame } from "./export";
 import { CIRCUIT_KIND_LABEL, glyphOffset, POINT_KIND_LABEL, POINT_KINDS, links, numberPoints, pointRows, scheduleRows, totals, type NumberedPoint, type PointKind } from "./electrics";
 import { GLYPH_MM, glyphSvg } from "./electricSymbols";
-import { lampBulbs } from "./lights";
+import { gridPoints } from "./lights";
 import { fixtureBox } from "./planMath";
 import { BRAND_DISPLAY_FONT, BRAND_INK, BRAND_NAME, BRAND_TEAL, markSvg, wordmarkSvg } from "./brand";
-import type { Symbol } from "./catalogue";
+import { pitchOf, type Symbol } from "./catalogue";
 
 /**
  * The wiring guide for the electrician (Electrics mode and Review): per floor, the scaled plan (export.ts planSvg)
@@ -68,8 +68,8 @@ export function electricalLayerSvg(model: HouseModel, floor: Floor, numbered: Nu
     where.set(fx.id, { c, dir });
     const box = fixtureBox(fx, item, model.ceilingHeight);
     let hx = GLYPH_MM / 2;
-    if (item.grid || item.symbol === "strip-light") {
-      const bulbs = item.symbol === "strip-light" ? [] : lampBulbs(fx, item, box);
+    if (item.symbol === "downlight-grid" || item.symbol === "strip-light") {
+      const bulbs = item.symbol === "strip-light" ? [] : gridPoints(box.w, box.d, pitchOf(fx, item), 0);
       const ca = Math.cos(a);
       const sa = Math.sin(a);
       const at = (lx: number, lz: number): Xy => ({ x: frame.x({ x: p.at.x + lx * ca - lz * sa, y: p.at.y + lx * sa + lz * ca }), y: frame.y({ x: p.at.x + lx * ca - lz * sa, y: p.at.y + lx * sa + lz * ca }) });

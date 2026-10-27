@@ -18,13 +18,13 @@ function withPoints(): HouseModel {
   const c1 = { x: (r1[0].x + r1[2].x) / 2, y: (r1[0].y + r1[2].y) / 2 };
   const gf = [
     fx("sock", "socket-double", c.x, c.y),
-    fx("p1", "light-pendant", c.x + 60, c.y + 30),
-    fx("p2", "light-pendant", c.x - 60, c.y + 30),
+    fx("p1", "pendant", c.x + 60, c.y + 30),
+    fx("p2", "pendant", c.x - 60, c.y + 30),
     fx("sw", "switch-1g", c.x, c.y - 40, { controls: ["p1", "p2", "up"] }),
-    fx("grid", "light-downlight-grid", c.x, c.y + 80),
-    fx("out", "light-outside", c.x, c.y - 4000),
+    fx("grid", "downlight-grid", c.x, c.y + 80),
+    fx("out", "outside-light", c.x, c.y - 4000),
   ];
-  const ff = [fx("up", "light-flush", c1.x, c1.y), fx("s2", "socket-single", c1.x + 20, c1.y + 20)];
+  const ff = [fx("up", "flush-light", c1.x, c1.y), fx("s2", "socket-single", c1.x + 20, c1.y + 20)];
   return {
     ...base,
     circuits: [{ id: "c", name: "Ring 1", kind: "ring", points: ["sock", "s2"] }],
@@ -58,7 +58,7 @@ describe("wiring guide", () => {
   it("has a legend row for each used symbol and none for unused", () => {
     const legend = html.match(/<ul class="legend">[\s\S]*?<\/ul>/g)!.join("");
     expect(legend).toContain("Socket (double)");
-    expect(legend).toContain("Downlights (grid)");
+    expect(legend).toContain("Downlights, grid");
     expect(legend).not.toContain("Cooker switch");
     const used = new Set(numbered.map((p) => p.item.symbol));
     expect((legend.match(/<li>/g) ?? []).length).toBe(used.size);
@@ -80,7 +80,7 @@ describe("wiring guide", () => {
     expect(layer).toContain(`to ${model.floors.find((f) => f.level > 0)!.name}`);
     expect(layer).toContain("stroke-dasharray");
     expect(layer).toContain("<path d=\"M"); // an arc for the same-floor link
-    expect((layer.match(/<g transform/g) ?? []).length).toBeGreaterThanOrEqual(6 + 4);
+    expect((layer.match(/<g transform/g) ?? []).length).toBeGreaterThanOrEqual(5 + 4);
   });
 
   it("CSV has one row per point plus the header", () => {

@@ -413,8 +413,10 @@ export function pointRows(model: HouseModel, numbered: NumberedPoint[] = numberP
       const sws = (idx.get(p.fx.id) ?? []).map((sw) => byFx.get(sw.id)).filter((x): x is NumberedPoint => !!x);
       if (sws.length) notes.push(`On ${sws.map((sw) => refName(p, sw)).join(", ")}`);
     }
-    const g = gridOf(p.fx, p.item);
-    if (g) notes.push(`${g.cols} × ${g.rows} at ${fmtPitch(g.pitch)}`);
+    if (p.item.symbol === "downlight-grid") {
+      const pitch = pitchOf(p.fx, p.item);
+      notes.push(`${Math.max(1, Math.round((p.fx.w ?? p.item.w) / pitch))} × ${Math.max(1, Math.round((p.fx.d ?? p.item.d) / pitch))} at ${fmtPitch(pitch)}`);
+    }
     return {
       id: p.fx.id,
       floor: p.floor.name,

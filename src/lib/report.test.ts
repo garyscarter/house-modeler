@@ -308,7 +308,7 @@ describe("electrical costs", () => {
   const none = withFx();
 
   it("charges five new points on the electrical works line", () => {
-    const five = withFx(fx("a", "socket-double", 50), fx("b", "socket-double", 150), fx("c", "socket-double", 250), fx("d", "switch-1g", 350), fx("e", "light-pendant", 450));
+    const five = withFx(fx("a", "socket-double", 50), fx("b", "socket-double", 150), fx("c", "socket-double", 250), fx("d", "switch-1g", 350), fx("e", "pendant", 450));
     const ch = elec(none, five);
     expect(ch.every((c) => c.costLine === "electricalWorks")).toBe(true);
     expect(ch.reduce((a, c) => a + c.quantity, 0)).toBe(5);
@@ -319,19 +319,19 @@ describe("electrical costs", () => {
   });
 
   it("counts every bulb of a downlight grid", () => {
-    const ch = elec(none, withFx(fx("g", "light-downlight-grid")));
+    const ch = elec(none, withFx(fx("g", "downlight-grid")));
     expect(ch).toHaveLength(1);
-    expect(ch[0].quantity).toBe(6);
+    expect(ch[0].quantity).toBe(4);
   });
 
   it("charges a point moved 0.3 m or more once, and ignores small moves, relinks and scene settings", () => {
-    const base = withFx(fx("s", "socket-double", 100, 100), fx("sw", "switch-1g", 300, 100), fx("l", "light-pendant", 200, 200));
-    expect(elec(base, withFx(fx("s", "socket-double", 120, 100), fx("sw", "switch-1g", 300, 100), fx("l", "light-pendant", 200, 200)))).toEqual([]);
-    const moved = elec(base, withFx(fx("s", "socket-double", 140, 100), fx("sw", "switch-1g", 300, 100), fx("l", "light-pendant", 200, 200)));
+    const base = withFx(fx("s", "socket-double", 100, 100), fx("sw", "switch-1g", 300, 100), fx("l", "pendant", 200, 200));
+    expect(elec(base, withFx(fx("s", "socket-double", 120, 100), fx("sw", "switch-1g", 300, 100), fx("l", "pendant", 200, 200)))).toEqual([]);
+    const moved = elec(base, withFx(fx("s", "socket-double", 140, 100), fx("sw", "switch-1g", 300, 100), fx("l", "pendant", 200, 200)));
     expect(moved).toHaveLength(1);
     expect(moved[0]).toMatchObject({ quantity: 1, costLine: "electricalWorks" });
     expect(moved[0].description).toMatch(/^Move socket/);
-    const relinked = withFx(fx("s", "socket-double"), fx("sw", "switch-1g", 300, 100, { controls: ["l"] }), fx("l", "light-pendant", 200, 200, { dim: 40, warmth: 3000, on: false }));
+    const relinked = withFx(fx("s", "socket-double"), fx("sw", "switch-1g", 300, 100, { controls: ["l"] }), fx("l", "pendant", 200, 200, { dim: 40, warmth: 3000, on: false }));
     expect(elec(base, relinked)).toEqual([]);
   });
 
@@ -344,6 +344,6 @@ describe("electrical costs", () => {
   });
 
   it("puts outdoor lights outside", () => {
-    expect(elec(none, withFx(fx("o", "light-outside")))[0].description).toBe("New outside wall light outside");
+    expect(elec(none, withFx(fx("o", "outside-light")))[0].description).toBe("New outside wall light outside");
   });
 });
