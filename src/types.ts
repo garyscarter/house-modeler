@@ -399,6 +399,8 @@ export interface Fixture {
   locked?: boolean;
   /** Fitted joinery settings (built-ins, window seats, wall boxes, floating-shelf stacks); see lib/joinery.ts. */
   joinery?: JoineryConfig;
+  /** Lights (lamps, lit mirrors, ceiling lights): switched on. Absent = on; the Lights master in the sun study still decides whether it is lit (see lib/lights.ts). */
+  on?: boolean;
 }
 
 export interface Floor {

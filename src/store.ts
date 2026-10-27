@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, MyPiece, Photo, Room, SavedView, Site, VariantKey } from "./types";
 import { applyPiece, unlinkPiece } from "./lib/myFurniture";
+import type { LightsMaster } from "./lib/lights";
 import { imageAwareStorage, useHydration } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
 import { setLink, syncLinks } from "./lib/roomLinks";
@@ -31,6 +32,8 @@ export interface SunState {
   dayOfYear: number;
   /** Local clock time in hours (e.g. 14.5 = 2:30 pm), UK time incl. BST. */
   hour: number;
+  /** The Lights master: auto (on from dusk), on or off. Absent in older saves = auto (see lib/lights.ts `lightsMaster`). */
+  lights?: LightsMaster;
 }
 
 interface Snapshot {
