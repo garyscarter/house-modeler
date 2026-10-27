@@ -9,6 +9,7 @@ import { daylight, worldToBearing } from "../lib/sun";
 import { useSunInfo } from "./useSun";
 import { GROUND_Y } from "./Site";
 import { setGlassMode } from "./textures";
+import { useOffstageCompile } from "./frameLoop";
 
 /** Default key light: high, from the front right, so the front elevation reads with soft side shadows. */
 const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
@@ -167,6 +168,8 @@ const ENV_DUSK = ["#9ea8c4", "#f0cfae"];
 const DUSK_ALTITUDE = 25;
 /** The environment is re-baked at most this often while the sun moves. */
 const REBAKE_MS = 250;
+/** Cube face size of the environment, px (PMREM's own default). */
+const ENV_SIZE = 256;
 
 /** The visible physical sky dome. Unscaled, it would blow out to white. */
 function makeSky(scale: number) {
@@ -193,6 +196,9 @@ function aimSky(sky: Sky, sunVector: readonly number[], altitude: number) {
  * sun nears the horizon, so dusk gets warm ambient light. (Baking the
  * physical sky itself doesn't work: it draws nothing into PMREM's cube
  * camera.) Re-baking is throttled, and the last position always lands.
+ * Every bake reuses one cube map and one PMREM target, so scene.environment
+ * stays the same texture: a new one would send every lit material back
+ * through program selection on the next frame, and allocate 6 MB besides.
  */
 function useSkyEnvironment(sunVector: [number, number, number] | null, altitude: number, skyLevel: number) {
   const gl = useThree((s) => s.gl);
@@ -212,6 +218,8 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
     gradient.add(new THREE.Mesh(gradientGeo, gradientMat));
     const top = new THREE.Color(ENV_GRADIENT[0]), horizon = new THREE.Color(ENV_GRADIENT[1]);
     const duskTop = new THREE.Color(ENV_DUSK[0]), duskHorizon = new THREE.Color(ENV_DUSK[1]);
+    const cube = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { type: THREE.HalfFloatType });
+    const cubeCamera = new THREE.CubeCamera(0.1, 100, cube);
     let rt: THREE.WebGLRenderTarget | null = null;
     let baked = -1;
     bake.current = (v, alt) => {
@@ -221,10 +229,14 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
       baked = warmth;
       gradientMat.uniforms.top.value.copy(top).lerp(duskTop, warmth);
       gradientMat.uniforms.horizon.value.copy(horizon).lerp(duskHorizon, warmth);
-      const next = pmrem.fromScene(gradient, 0.02);
-      scene.environment = next.texture;
-      rt?.dispose();
-      rt = next;
+      // The post-processing composer turns autoClear off; each cube face needs clearing.
+      const autoClear = gl.autoClear;
+      gl.autoClear = true;
+      cubeCamera.update(gl, gradient);
+      gl.autoClear = autoClear;
+      // The first bake allocates the target (and PMREM's working targets); later ones refill it.
+      rt = pmrem.fromCubemap(cube.texture, rt);
+      scene.environment = rt.texture;
       invalidate();
     };
     bake.current(wanted.current.v, wanted.current.alt);
@@ -232,6 +244,7 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
       bake.current = () => {};
       if (rt && scene.environment === rt.texture) scene.environment = null;
       rt?.dispose();
+      cube.dispose();
       gradientGeo.dispose();
       gradientMat.dispose();
       pmrem.dispose();
@@ -337,6 +350,10 @@ export function SkyBackdrop() {
     },
     [sky],
   );
+  // Only one of the physical sky and the gradient dome is in the scene at a time: compile both up front,
+  // so the first sun study (or the first night) doesn't stall on the other's shader.
+  const standIns = useMemo(() => [new THREE.Mesh(sky.geometry, sky.material), new THREE.Mesh(sky.geometry, backdrop)], [sky, backdrop]);
+  useOffstageCompile(standIns);
   const invalidate = useThree((s) => s.invalidate);
   // Keep the dome centred on the camera so its horizon stays level wherever it goes.
   useFrame(() => dome.current?.position.copy(camera.position));

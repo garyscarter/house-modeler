@@ -215,7 +215,7 @@ function ViewerImpl(props: ViewerProps) {
           </Suspense>
         )}
         <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
-        <Precompile token={quality} before={before} onDone={setCompiled} />
+        <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
         <TrackScene />
         <FrameOnCommit />
