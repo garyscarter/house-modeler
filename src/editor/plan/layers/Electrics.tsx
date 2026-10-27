@@ -110,6 +110,10 @@ export const ElectricsLayer = memo(function ElectricsLayer({
         return (
           <g key={fx.id} className="plan-fixture plan-point" data-fixture-id={fx.id} data-point={q.p.label} onPointerDown={(e) => onDown(e, fx)}>
             <rect x={q.x - hit / 2} y={q.y - hit / 2} width={hit} height={hit} fill="transparent" />
+            {bulbs.length > 1 && (
+              // A grid: its centre is empty space between the downlights, so its whole area (the dashed outline on the plan) is the hit area.
+              <rect x={-((fx.w ?? item.w) * ppm) / 2} y={-((fx.d ?? item.d) * ppm) / 2} width={(fx.w ?? item.w) * ppm} height={(fx.d ?? item.d) * ppm} transform={`translate(${fx.x} ${fx.y}) rotate(${fx.rot})`} fill="transparent" />
+            )}
             {bulbs.length > 1 ? (
               bulbs.map((b, i) => {
                 const a = (fx.rot * Math.PI) / 180;
