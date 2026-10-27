@@ -52,6 +52,10 @@ interface Ctx {
   leaf: string;
   trunk: string;
   accent?: string;
+  /** The catalogue id, for plants whose flower heads differ by kind. */
+  id: string;
+  /** The blobs placed so far (for fruit hung on their outsides). */
+  blobs?: { x: number; y: number; z: number; rx: number; ry: number; rz: number }[];
   /** A run: blobs are kept within w/2 across it (z) only, not round the origin. */
   run?: boolean;
 }
@@ -73,6 +77,7 @@ function blob(c: Ctx, x: number, y: number, z: number, rx: number, ry: number, r
     z *= room / reach;
   }
   y = Math.min(Math.max(y, ry), c.h - ry);
+  c.blobs?.push({ x, y, z, rx, ry, rz });
   c.P.blob(x, y, z, rx * 2, ry * 2, rz * 2, gmat(color, "leaf"), g);
 }
 
@@ -111,6 +116,15 @@ function speckle(c: Ctx, n: number, y0: number, y1: number, rIn: number, size: n
   }
 }
 
+/** Short flower spikes: speckles kept to the top of the mound, between y0 and y1. */
+function spikes(c: Ctx, n: number, y0: number, y1: number, rIn: number, size: number, color: string) {
+  for (let i = 0; i < n; i++) {
+    const a = c.r() * Math.PI * 2;
+    const d = Math.sqrt(c.r()) * rIn;
+    blob(c, Math.cos(a) * d, y0 + (y1 - y0) * between(c.r, 0, 1), Math.sin(a) * d, size, size * 1.6, size, shadeColor(color, between(c.r, 0.9, 1.1)));
+  }
+}
+
 function conifer(c: Ctx) {
   const { w, h } = c;
   stem(c, 0, 0, 0, h * 0.2, Math.min(0.18, w * 0.12));
@@ -121,7 +135,16 @@ function conifer(c: Ctx) {
     const base = y0 + (h - y0) * t * 0.82;
     const top = Math.min(h, base + (h - y0) * (0.5 - t * 0.12));
     const dia = w * (1 - t * 0.55) * between(c.r, 0.92, 1);
-    c.P.cone(between(c.r, -0.03, 0.03) * w, base, top, between(c.r, -0.03, 0.03) * w, Math.min(w, dia), gmat(shadeColor(c.leaf, between(c.r, 0.9, 1.1)), "leaf"));
+    const cx = between(c.r, -0.03, 0.03) * w, cz = between(c.r, -0.03, 0.03) * w;
+    const col = shadeColor(c.leaf, between(c.r, 0.9, 1.1));
+    c.P.cone(cx, base, top, cz, Math.min(w, dia), gmat(col, "leaf"));
+    // Two soft blobs at the tier's base break the cone's hard edge.
+    const bd = Math.min(w, dia) * 0.35;
+    const a0 = c.r() * Math.PI;
+    for (let k = 0; k < 2; k++) {
+      const a = a0 + k * Math.PI;
+      blob(c, cx + Math.cos(a) * (Math.min(w, dia) / 2 - bd * 0.55), base + bd * 0.4, cz + Math.sin(a) * (Math.min(w, dia) / 2 - bd * 0.55), bd / 2, bd * 0.4, bd / 2, shadeColor(col, between(c.r, 0.92, 1.08)));
+    }
   }
   // Leader at the top.
   c.P.cone(0, h * 0.86, h, 0, w * 0.22, gmat(shadeColor(c.leaf, 1.05), "leaf"));
@@ -142,23 +165,35 @@ function apple(c: Ctx) {
   const { w, h, r } = c;
   stem(c, 0, 0, 0, h * 0.4, Math.min(0.2, w * 0.07));
   for (let i = 0; i < 3; i++) stem(c, 0, 0, h * 0.35, h * 0.3, 0.07, between(r, 0.5, 0.8), (i / 3) * 6.28 + r());
-  canopy(c, 6 + Math.floor(r() * 3), h * 0.42, 0.4, 0.85, c.leaf, 0.6);
-  if (c.accent) speckle(c, 10, h * 0.5, h * 0.92, w * 0.42, 0.045, c.accent);
+  c.blobs = [];
+  canopy(c, 11 + Math.floor(r() * 4), h * 0.42, 0.3, 0.85, c.leaf, 0.5);
+  if (c.accent) {
+    // Fruit hung on the outside of the canopy blobs.
+    const out = c.blobs.filter((b) => Math.hypot(b.x, b.z) > 0.1);
+    for (let i = 0; i < 12 && out.length; i++) {
+      const b = out[Math.floor(r() * out.length)];
+      const a = Math.atan2(b.z, b.x) + between(r, -0.8, 0.8);
+      const fx = b.x + Math.cos(a) * b.rx * 0.95;
+      const fz = b.z + Math.sin(a) * b.rz * 0.95;
+      blob(c, fx, b.y + between(r, -0.3, 0.3) * b.ry, fz, 0.03, 0.03, 0.03, shadeColor(c.accent, between(r, 0.9, 1.1)), "sphere");
+    }
+  }
 }
 
 function acer(c: Ctx) {
   const { w, h, r } = c;
   for (let i = 0; i < 3; i++) stem(c, 0, 0, 0, h * 0.5, 0.05, between(r, 0.25, 0.5), (i / 3) * 6.28 + r());
-  // Layered, flat tiers of foliage.
-  const n = 5 + Math.floor(r() * 2);
+  // Layered, thin tiers of foliage stepping up the stem.
+  const n = 8 + Math.floor(r() * 3);
+  const R = w / 2;
   for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
     const a = r() * Math.PI * 2;
-    const R = w / 2;
-    const br = R * between(r, 0.4, 0.6);
-    const d = between(r, 0.2, 1) * (R - br);
-    blob(c, Math.cos(a) * d, h * between(r, 0.45, 0.9), Math.sin(a) * d, br, br * 0.45, br, shadeColor(c.leaf, between(r, 0.85, 1.15)));
+    const br = R * between(r, 0.3, 0.45);
+    const d = between(r, 0.3, 1) * (R - br);
+    blob(c, Math.cos(a) * d, h * (0.45 + 0.45 * t), Math.sin(a) * d, br, br * 0.3, br, shadeColor(c.leaf, between(r, 0.85, 1.15)));
   }
-  blob(c, 0, h * 0.82, 0, w * 0.33, h * 0.15, w * 0.33, shadeColor(c.leaf, 1.05));
+  blob(c, 0, h * 0.86, 0, w * 0.25, h * 0.1, w * 0.25, shadeColor(c.leaf, 1.05));
 }
 
 function olive(c: Ctx) {
@@ -199,12 +234,23 @@ function mound(c: Ctx, n: number, height = 1) {
 
 function lavender(c: Ctx) {
   mound(c, 2, 0.6);
-  if (c.accent) speckle(c, 22, c.h * 0.62, c.h, c.w * 0.45, Math.min(0.04, c.w * 0.06), c.accent);
+  if (c.accent) spikes(c, 30, c.h * 0.75, c.h, c.w * 0.45, Math.min(0.025, c.w * 0.04), c.accent);
 }
 
 function hydrangea(c: Ctx) {
   mound(c, 3, 0.85);
-  if (c.accent) speckle(c, 12, c.h * 0.55, c.h * 0.95, c.w * 0.42, Math.min(0.11, c.w * 0.09), c.accent);
+  if (!c.accent) return;
+  // Five to seven round flower heads sunk into the top of the mound.
+  const n = 5 + Math.floor(c.r() * 3);
+  const H = c.h * 0.85;
+  const R = c.w * 0.45;
+  for (let i = 0; i < n; i++) {
+    const a = c.r() * Math.PI * 2;
+    const dia = Math.min(between(c.r, 0.14, 0.18), c.w * 0.25);
+    const d = Math.sqrt(c.r()) * (R * 0.7);
+    const surface = H * 0.9 * Math.sqrt(Math.max(0, 1 - (d / R) ** 2));
+    blob(c, Math.cos(a) * d, surface + dia * 0.1, Math.sin(a) * d, dia / 2, (dia / 2) * 0.8, dia / 2, shadeColor(c.accent, between(c.r, 0.92, 1.08)), "sphere");
+  }
 }
 
 function perennials(c: Ctx) {
@@ -216,7 +262,7 @@ function perennials(c: Ctx) {
 /** A low leafy clump with five to nine upright stems, each topped by a flower head in the accent colour: tulips to sunflowers by size. */
 function flowers(c: Ctx) {
   mound(c, 3, 0.4);
-  const n = Math.round(between(c.r, 5, 9));
+  const n = Math.min(Math.round(between(c.r, 5, 9)), c.id === "foxgloves" ? 6 : 9);
   const base = c.h * 0.28;
   for (let i = 0; i < n; i++) {
     const a = c.r() * Math.PI * 2;
@@ -226,12 +272,39 @@ function flowers(c: Ctx) {
     const lean = between(c.r, 0, 0.14) * Math.min(1, c.w / c.h);
     const d = Math.sqrt(c.r()) * Math.max(0, c.w / 2 - hr * 1.15 - Math.sin(lean) * len);
     const top = stem(c, Math.cos(a) * d, Math.sin(a) * d, base, len, Math.min(0.015, c.w * 0.03), lean, c.r() * Math.PI * 2, shadeColor(c.leaf, 0.85));
-    if (c.accent) blob(c, top[0], top[1] - hr * 0.3, top[2], hr, hr * 0.7, hr, shadeColor(c.accent, between(c.r, 0.9, 1.1)), "sphere");
+    if (c.accent) head(c, top, hr, len);
+  }
+}
+
+/** One flower head on top of a stem, by kind (the catalogue id). */
+function head(c: Ctx, top: [number, number, number], hr: number, len: number) {
+  const [x, y, z] = top;
+  const acc = () => shadeColor(c.accent!, between(c.r, 0.9, 1.1));
+  const id = c.id;
+  if (id === "alliums") {
+    const R = Math.min(between(c.r, 0.04, 0.05), c.w * 0.12);
+    blob(c, x, y, z, R, R, R, acc(), "sphere");
+  } else if (id === "tulips" || id === "daffodils") {
+    const col = acc();
+    blob(c, x, y, z, hr * 0.8, hr * 1.3, hr * 0.8, col, "sphere");
+  } else if (id === "cosmos" || id === "sunflowers" || id === "marigolds") {
+    // A flat disc of petals with a dark centre.
+    c.P.out.push({ g: "cyl", p: [x, y, z], s: [hr * 2, hr * 0.3, hr * 2], mat: gmat(acc(), "leaf") });
+    const cr = hr * 0.4;
+    c.P.blob(x, y + hr * 0.12, z, cr * 2, cr * 1.4, cr * 2, gmat(id === "sunflowers" ? "#3b2a14" : "#5a3d1e", "leaf"), "sphere");
+  } else if (id === "foxgloves") {
+    // Small bells stacked up the top of the stem, tapering.
+    for (let k = 0; k < 4; k++) {
+      const rr = hr * 0.55 * (1 - k * 0.18);
+      blob(c, x, y - len * 0.1 + k * len * 0.1, z, rr, rr, rr, acc(), "sphere");
+    }
+  } else {
+    blob(c, x, y - hr * 0.2, z, hr, hr * 0.75, hr, acc(), "sphere");
   }
 }
 
 /** A fan of thin tilted blades from the middle (grasses, fern fronds). */
-function grassFan(c: Ctx, n: number, color: string, maxLean = 0.7, width = 0.035) {
+function grassFan(c: Ctx, n: number, color: string, maxLean = 0.7, width = 0.045) {
   const { w, h, r } = c;
   for (let i = 0; i < n; i++) {
     const lean = between(r, 0.08, maxLean);
@@ -240,7 +313,8 @@ function grassFan(c: Ctx, n: number, color: string, maxLean = 0.7, width = 0.035
     // Centre of a blade leaning `lean` towards `dir`, its foot at the middle.
     const ax = Math.sin(lean) * Math.sin(dir);
     const az = Math.sin(lean) * Math.cos(dir);
-    c.P.out.push({ g: "box", p: [(ax * len) / 2, (Math.cos(lean) * len) / 2, (az * len) / 2], s: [width, len, 0.012], mat: gmat(shadeColor(color, between(r, 0.85, 1.15)), "leaf"), tilt: lean, rotY: dir });
+    // A tapered blade; its z scale sets how far it bows forward (towards its lean), 0.15 of that at the tip.
+    c.P.out.push({ g: "blade", p: [(ax * len) / 2, (Math.cos(lean) * len) / 2 + 0.02, (az * len) / 2], s: [width, len, Math.min(1, len)], mat: gmat(shadeColor(color, between(r, 0.85, 1.15)), "leaf"), tilt: lean, rotY: dir });
   }
 }
 
@@ -284,7 +358,7 @@ const PLANTS: Partial<Record<GardenDef["shape"], (c: Ctx) => void>> = {
 };
 
 function ctx(def: GardenDef, item: GardenItem, w: number, h: number): Ctx {
-  return { P: new GPartsBuilder(), r: mulberry32(plantSeed(item)), w, h, leaf: item.color ?? def.color, trunk: def.trunk ?? "#5a4030", accent: item.accent ?? def.accent };
+  return { P: new GPartsBuilder(), r: mulberry32(plantSeed(item)), w, h, leaf: item.color ?? def.color, trunk: def.trunk ?? "#5a4030", accent: item.accent ?? def.accent, id: def.id };
 }
 
 /** A single plant's parts in its local frame, within its spread (w) and height (h), seeded by `item.seed` or its id. */

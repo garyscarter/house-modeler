@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { GardenItem, Site } from "../types";
 import type { V2 } from "../lib/geometry";
 import { gardenDef, isPlant, itemSize, type GardenDef } from "../lib/gardenCatalogue";
@@ -72,16 +74,71 @@ function prism(): THREE.BufferGeometry {
   return g;
 }
 
-let shapes: Record<GPart["g"] | "ico0", THREE.BufferGeometry> | undefined;
+/** A lumpy blob: an icosphere with every vertex pushed out 0.92–1.08 by a fixed hash, then welded and smooth shaded. */
+function lumpy(): THREE.BufferGeometry {
+  const g = new THREE.IcosahedronGeometry(0.5, 1);
+  g.deleteAttribute("normal");
+  g.deleteAttribute("uv");
+  const pos = g.getAttribute("position");
+  const v = new THREE.Vector3();
+  const seen = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    // Same point, same push, so the welded blob has no cracks.
+    const key = `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`;
+    let k = seen.get(key);
+    if (k === undefined) seen.set(key, (k = seen.size));
+    v.multiplyScalar(0.92 + 0.16 * (jitter(k, 7) + 0.5));
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  const m = mergeVertices(g, 1e-3);
+  g.dispose();
+  m.computeVertexNormals();
+  return m;
+}
+
+/** A flat double-sided tapered strip (1 wide at the foot, 0.1 at the tip, 1 tall), bowing 0.15 towards +z, in 3 quads. */
+function blade(): THREE.BufferGeometry {
+  const rows = 4;
+  const row = (i: number) => {
+    const t = i / (rows - 1);
+    const hw = 0.5 * (1 - 0.9 * t);
+    const z = 0.15 * t * t - 0.05;
+    return [[-hw, t - 0.5, z], [hw, t - 0.5, z]];
+  };
+  const pos: number[] = [];
+  for (let i = 0; i < rows - 1; i++) {
+    const [a, b] = row(i);
+    const [c, d] = row(i + 1);
+    // Front faces, then the same faces wound the other way.
+    pos.push(...a, ...b, ...d, ...a, ...d, ...c, ...a, ...d, ...b, ...a, ...c, ...d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Rounded cushion: a 1 × 1 × 1 box with soft edges. */
+function pillowGeo(): THREE.BufferGeometry {
+  const g = new RoundedBoxGeometry(1, 1, 1, 2, 0.15);
+  return g;
+}
+
+let shapes: Record<GPart["g"] | "ico0" | "cylLo", THREE.BufferGeometry> | undefined;
 function unitShapes() {
   return (shapes ??= {
     box: unit(new THREE.BoxGeometry(1, 1, 1)),
-    cyl: unit(new THREE.CylinderGeometry(0.5, 0.5, 1, 12)),
-    cone: unit(new THREE.ConeGeometry(0.5, 1, 9)),
+    cyl: unit(new THREE.CylinderGeometry(0.5, 0.5, 1, 24)),
+    cylLo: unit(new THREE.CylinderGeometry(0.5, 0.5, 1, 12)),
+    cone: unit(new THREE.ConeGeometry(0.5, 1, 12)),
+    cone8: unit(new THREE.ConeGeometry(0.5, 1, 8)),
     sphere: unit(new THREE.SphereGeometry(0.5, 12, 8)),
-    ico: unit(new THREE.IcosahedronGeometry(0.5, 1)),
-    ico0: unit(new THREE.IcosahedronGeometry(0.5, 0)),
+    ico: unit(lumpy()),
+    ico0: unit(new THREE.SphereGeometry(0.5, 8, 6)),
     prism: unit(prism()),
+    blade: unit(blade()),
+    pillow: unit(pillowGeo()),
   });
 }
 
@@ -94,8 +151,8 @@ const FINISH: Record<GFinish, THREE.MeshStandardMaterialParameters> = {
   plastic: { roughness: 0.55 },
   fabric: { roughness: 0.95, side: THREE.DoubleSide },
   stone: { roughness: 0.95 },
-  leaf: { roughness: 0.9, flatShading: true },
-  bark: { roughness: 1, flatShading: true },
+  leaf: { roughness: 0.9 },
+  bark: { roughness: 1 },
   soil: { roughness: 1 },
   bulb: { roughness: 0.4 },
 };
@@ -117,15 +174,18 @@ function material(finish: GFinish, glow?: string): THREE.MeshStandardMaterial {
   return m;
 }
 
+/** Festoon bulbs stay clear glass by day: no glow until the lights come up past the daytime level. */
+const clearGlass = (g: number) => Math.max(0, g - 0.15) / 0.85;
+
 let currentGlow = lightGlow(null);
 /** Turn every bulb, halo and light pool up or down for the sun's altitude. */
 function setGlow(g: number) {
   currentGlow = g;
-  for (const [key, m] of materials) if (!key.endsWith("|")) m.emissiveIntensity = BULB_INTENSITY * g;
+  for (const [key, m] of materials) if (!key.endsWith("|")) m.emissiveIntensity = BULB_INTENSITY * (key.startsWith("bulb-inst") ? clearGlass(g) : g);
   // Halos and pools show from about the time the lamps would be switched on.
   const t = THREE.MathUtils.smoothstep(g, 0.3, 0.9);
   halo().opacity = 0.85 * t;
-  pool().opacity = 0.8 * t;
+  pool().opacity = 0.55 * t;
   halo().visible = pool().visible = t > 0.01;
 }
 
@@ -139,7 +199,8 @@ function glowTexture(): THREE.Texture {
   const g = c.getContext("2d")!;
   const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.25, "rgba(255,255,255,0.45)");
+  grad.addColorStop(0.12, "rgba(255,255,255,0.5)");
+  grad.addColorStop(0.4, "rgba(255,255,255,0.12)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, size, size);
@@ -150,7 +211,7 @@ function glowTexture(): THREE.Texture {
 let haloMat: THREE.PointsMaterial | undefined;
 function halo(): THREE.PointsMaterial {
   return (haloMat ??= new THREE.PointsMaterial({
-    size: 0.55,
+    size: 0.32,
     map: glowTexture(),
     color: "#ffc98a",
     transparent: true,
@@ -277,6 +338,9 @@ interface Sink {
   geom: (g: THREE.BufferGeometry, matrix: THREE.Matrix4, mat: GPart["mat"], salt: number) => void;
 }
 
+/** Light pools float this far above the ground under them: clear of the stacked ground layers in Site.tsx (up to 0.05 m). */
+const POOL_LIFT = 0.06;
+
 /** Where a light pool goes and how big it is. */
 interface Pool {
   x: number;
@@ -306,7 +370,7 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
   /** A part placed by `place` (and lifted `lift` metres) into its finish's group. */
   const addPart = (pt: GPart, place: THREE.Matrix4, lift: number, salt: number) => {
     const big = Math.max(pt.s[0], pt.s[1], pt.s[2]);
-    const src = pt.g === "ico" && big < 0.25 ? S.ico0 : S[pt.g];
+    const src = pt.g === "ico" && big < 0.25 ? S.ico0 : pt.g === "cyl" && Math.max(pt.s[0], pt.s[2]) < 0.1 ? S.cylLo : S[pt.g];
     _q.setFromEuler(_e.set(pt.tilt ?? 0, pt.rotY ?? 0, 0, "YXZ"));
     _m.compose(_v.set(pt.p[0], pt.p[1], pt.p[2]), _q, _s.set(pt.s[0], pt.s[1], pt.s[2]));
     _m.premultiply(place);
@@ -332,7 +396,7 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
   itemsOf(site).forEach((item, idx) => {
     const def = gardenDef(item.type);
     if (!def) return;
-    if (def.run === "festoon") return festoon(item, def, idx, sink, bulbs, tied);
+    if (def.run === "festoon") return festoon(item, def, idx, sink, bulbs, pools, tied);
     const base = ground(item.x, item.y);
     if (def.run) {
       const yaw = item.to ? -Math.atan2(item.to.y - item.y, item.to.x - item.x) : (-item.rot * Math.PI) / 180;
@@ -357,7 +421,7 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
       const { d } = itemSize(item);
       // A wall light throws its pool forwards from the wall, a bollard round its foot.
       const fwd = def.shape === "wall-light" ? 0.25 + d : 0;
-      pools.push({ x: item.x + Math.sin(yaw) * fwd, y: GROUND_Y + base + 0.012, z: item.y + Math.cos(yaw) * fwd, r: def.shape === "wall-light" ? 1.6 : 1.1 });
+      pools.push({ x: item.x + Math.sin(yaw) * fwd, y: GROUND_Y + base + POOL_LIFT, z: item.y + Math.cos(yaw) * fwd, r: def.shape === "wall-light" ? 1.6 : 1.1 });
     }
   });
 
@@ -407,7 +471,18 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
   }
   temp.forEach((g) => g.dispose());
   const ms = performance.now() - t0;
-  if (import.meta.env.DEV) Object.assign(window, { __gardenBuildMs: ms });
+  if (import.meta.env.DEV) {
+    let meshes = 0, triangles = 0;
+    group.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const geo = mesh.geometry;
+      const per = (geo.index ? geo.index.count : geo.getAttribute("position").count) / 3;
+      meshes++;
+      triangles += per * ((mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh).count : 1);
+    });
+    Object.assign(window, { __gardenBuildMs: ms, __gardenStats: { meshes, triangles }, __gardenGroup: group });
+  }
   return { group, ms, dispose: () => owned.forEach((g) => g.dispose()) };
 }
 
@@ -416,7 +491,7 @@ function bulbMaterial(glow: string): THREE.MeshStandardMaterial {
   const key = `bulb-inst|${glow}`;
   let m = materials.get(key);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color: glow, emissive: glow, emissiveIntensity: BULB_INTENSITY * currentGlow, roughness: 0.4 });
+    m = new THREE.MeshStandardMaterial({ color: "#f6f1e7", emissive: glow, emissiveIntensity: BULB_INTENSITY * clearGlass(currentGlow), roughness: 0.15 });
     materials.set(key, m);
   }
   return m;
@@ -432,6 +507,7 @@ function festoon(
   idx: number,
   sink: Sink,
   bulbs: THREE.Vector3[],
+  pools: Pool[],
   tied: (p: V2) => boolean,
 ) {
   const { h } = itemSize(item);
@@ -441,10 +517,15 @@ function festoon(
   const a = { x: item.x, y: GROUND_Y + ga + h, z: item.y };
   const b = { x: to.x, y: GROUND_Y + gb + (item.toH ?? h), z: to.y };
   const curve = festoonCurve(a, b, item.sag ?? 0.3, 24);
-  const wire = unit(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve.map((p) => new THREE.Vector3(p.x, p.y, p.z))), 32, 0.006, 4, false));
-  sink.geom(wire, new THREE.Matrix4(), { color: def.color, finish: "plastic" }, idx);
+  const wire = unit(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve.map((p) => new THREE.Vector3(p.x, p.y, p.z))), 32, 0.004, 4, false));
+  sink.geom(wire, new THREE.Matrix4(), { color: "#2b2b2b", finish: "plastic" }, idx);
   sink.own(wire);
-  for (const p of alongEvery(curve, Math.max(0.1, def.pitch ?? 0.5))) bulbs.push(new THREE.Vector3(p.x, p.y - 0.06, p.z));
+  const radius = def.id === "festoon-warm" ? 1.0 : 0.9;
+  alongEvery(curve, Math.max(0.1, def.pitch ?? 0.5)).forEach((p, i) => {
+    bulbs.push(new THREE.Vector3(p.x, p.y - 0.06, p.z));
+    // A pool of warm light on the ground under every second bulb.
+    if (i % 2 === 0) pools.push({ x: p.x, y: GROUND_Y + sink.ground(p.x, p.z) + POOL_LIFT, z: p.z, r: radius });
+  });
   for (const [end, g, top] of [[{ x: item.x, y: item.y }, ga, h], [to, gb, item.toH ?? h]] as [V2, number, number][]) {
     if (tied(end)) continue;
     _place.makeTranslation(end.x, GROUND_Y + g, end.y);

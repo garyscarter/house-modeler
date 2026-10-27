@@ -16,14 +16,14 @@ const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
 const KEY_DEFAULT = 4.2;
 const KEY_SUN = 5;
 /** Extra key light (warm) while the sun sits on the horizon, and how much the sky dims then. */
-const DUSK_KEY = 0.9;
+const DUSK_KEY = 0.7;
 const DUSK_DIM = 0.35;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
 /** Shadow edge softness in shadow-map texels. */
 const SHADOW_RADIUS = { high: 3, balanced: 2, low: 1 } as const;
 
 const WHITE_SUN = new THREE.Color("#fff3e2");
-const LOW_SUN = new THREE.Color("#ff9a52");
+const LOW_SUN = new THREE.Color("#ffae78");
 const DAY_SKY = new THREE.Color("#eef0f2");
 const DUSK_SKY = new THREE.Color("#5d6f9c");
 const GROUND_BOUNCE = new THREE.Color("#8d8270");
@@ -135,7 +135,7 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
 
   return (
     <>
-      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={skyLevel * 0.15} />
+      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={Math.max(skyLevel * 0.15, 0.35 * dusk)} />
       <directionalLight position={[-0.3, 0.8, 0.5]} color={MOON} intensity={night ? 0.3 : 0} />
       {/* Always casts, even at night, so the sun setting doesn't recompile every material. */}
       <directionalLight ref={light} intensity={keyIntensity} color={keyColor} castShadow />
