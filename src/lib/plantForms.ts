@@ -54,6 +54,8 @@ interface Ctx {
   accent?: string;
   /** The catalogue id, for plants whose flower heads differ by kind. */
   id: string;
+  /** The blobs placed so far (for fruit hung on their outsides). */
+  blobs?: { x: number; y: number; z: number; rx: number; ry: number; rz: number }[];
   /** A run: blobs are kept within w/2 across it (z) only, not round the origin. */
   run?: boolean;
 }
@@ -75,6 +77,7 @@ function blob(c: Ctx, x: number, y: number, z: number, rx: number, ry: number, r
     z *= room / reach;
   }
   y = Math.min(Math.max(y, ry), c.h - ry);
+  c.blobs?.push({ x, y, z, rx, ry, rz });
   c.P.blob(x, y, z, rx * 2, ry * 2, rz * 2, gmat(color, "leaf"), g);
 }
 
@@ -162,15 +165,17 @@ function apple(c: Ctx) {
   const { w, h, r } = c;
   stem(c, 0, 0, 0, h * 0.4, Math.min(0.2, w * 0.07));
   for (let i = 0; i < 3; i++) stem(c, 0, 0, h * 0.35, h * 0.3, 0.07, between(r, 0.5, 0.8), (i / 3) * 6.28 + r());
+  c.blobs = [];
   canopy(c, 11 + Math.floor(r() * 4), h * 0.42, 0.3, 0.85, c.leaf, 0.5);
   if (c.accent) {
-    // Fruit on the outside of the canopy.
-    const R = w / 2;
-    for (let i = 0; i < 12; i++) {
-      const a = r() * Math.PI * 2;
-      const d = R * between(r, 0.85, 0.95);
-      const y = between(r, h * 0.52, h * 0.88);
-      blob(c, Math.cos(a) * d, y, Math.sin(a) * d, 0.06, 0.06, 0.06, shadeColor(c.accent, between(r, 0.9, 1.1)), "sphere");
+    // Fruit hung on the outside of the canopy blobs.
+    const out = c.blobs.filter((b) => Math.hypot(b.x, b.z) > 0.1);
+    for (let i = 0; i < 12 && out.length; i++) {
+      const b = out[Math.floor(r() * out.length)];
+      const a = Math.atan2(b.z, b.x) + between(r, -0.8, 0.8);
+      const fx = b.x + Math.cos(a) * b.rx * 0.95;
+      const fz = b.z + Math.sin(a) * b.rz * 0.95;
+      blob(c, fx, b.y + between(r, -0.3, 0.3) * b.ry, fz, 0.03, 0.03, 0.03, shadeColor(c.accent, between(r, 0.9, 1.1)), "sphere");
     }
   }
 }

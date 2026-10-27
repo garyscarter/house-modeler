@@ -338,6 +338,9 @@ interface Sink {
   geom: (g: THREE.BufferGeometry, matrix: THREE.Matrix4, mat: GPart["mat"], salt: number) => void;
 }
 
+/** Light pools float this far above the ground under them: clear of the stacked ground layers in Site.tsx (up to 0.05 m). */
+const POOL_LIFT = 0.06;
+
 /** Where a light pool goes and how big it is. */
 interface Pool {
   x: number;
@@ -418,7 +421,7 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
       const { d } = itemSize(item);
       // A wall light throws its pool forwards from the wall, a bollard round its foot.
       const fwd = def.shape === "wall-light" ? 0.25 + d : 0;
-      pools.push({ x: item.x + Math.sin(yaw) * fwd, y: GROUND_Y + base + 0.012, z: item.y + Math.cos(yaw) * fwd, r: def.shape === "wall-light" ? 1.6 : 1.1 });
+      pools.push({ x: item.x + Math.sin(yaw) * fwd, y: GROUND_Y + base + POOL_LIFT, z: item.y + Math.cos(yaw) * fwd, r: def.shape === "wall-light" ? 1.6 : 1.1 });
     }
   });
 
@@ -478,7 +481,7 @@ function buildGarden(site: Site, quiet: boolean, buildings: V2[][]): Built {
       meshes++;
       triangles += per * ((mesh as THREE.InstancedMesh).isInstancedMesh ? (mesh as THREE.InstancedMesh).count : 1);
     });
-    Object.assign(window, { __gardenBuildMs: ms, __gardenStats: { meshes, triangles } });
+    Object.assign(window, { __gardenBuildMs: ms, __gardenStats: { meshes, triangles }, __gardenGroup: group });
   }
   return { group, ms, dispose: () => owned.forEach((g) => g.dispose()) };
 }
@@ -521,7 +524,7 @@ function festoon(
   alongEvery(curve, Math.max(0.1, def.pitch ?? 0.5)).forEach((p, i) => {
     bulbs.push(new THREE.Vector3(p.x, p.y - 0.06, p.z));
     // A pool of warm light on the ground under every second bulb.
-    if (i % 2 === 0) pools.push({ x: p.x, y: GROUND_Y + sink.ground(p.x, p.z) + 0.012, z: p.z, r: radius });
+    if (i % 2 === 0) pools.push({ x: p.x, y: GROUND_Y + sink.ground(p.x, p.z) + POOL_LIFT, z: p.z, r: radius });
   });
   for (const [end, g, top] of [[{ x: item.x, y: item.y }, ga, h], [to, gb, item.toH ?? h]] as [V2, number, number][]) {
     if (tied(end)) continue;
