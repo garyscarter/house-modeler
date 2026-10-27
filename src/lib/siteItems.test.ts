@@ -46,7 +46,7 @@ describe("siteItems", () => {
     const b = itemBounds({ id: "a", type: "dining-6", x: 0, y: 0, rot: 90 });
     expect(rect).toHaveLength(4);
     expect(b.x1 - b.x0).toBeCloseTo(2.0); // d across after a quarter turn
-    expect(b.y1 - b.y0).toBeCloseTo(1.9);
+    expect(b.y1 - b.y0).toBeCloseTo(2.4); // w across after a quarter turn
     const round = itemFootprint({ id: "p", type: "parasol", x: 1, y: 1, rot: 0 });
     expect(round).toHaveLength(16);
     expect(polygonArea(round)).toBeGreaterThan(Math.PI * 1.35 * 1.35 * 0.95);

@@ -165,29 +165,24 @@ function diningSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: num
     }
     return;
   }
-  // The table's long side runs along the longer of w and d; chairs on the long sides, one at each end when odd.
-  const along = d >= w ? "z" : "x";
-  const L = along === "z" ? d : w;
-  const W = along === "z" ? w : d;
-  const tl = Math.max(0.6, L - 0.2);
-  const tw = Math.max(0.6, Math.min(W - 0.9, 1.0));
-  const tx = along === "z" ? tw : tl;
-  const tz = along === "z" ? tl : tw;
-  P.box(0, h - 0.03, h, 0, tx, tz, top);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) P.box((sx * tx) / 2 - sx * 0.05, 0, h - 0.03, (sz * tz) / 2 - sz * 0.05, 0.04, 0.04, frame);
-  const perSide = Math.ceil(seats / 2);
-  const off = tw / 2 + 0.18;
-  for (let side = 0; side < 2; side++) {
-    const n = side === 0 ? perSide : seats - perSide;
-    for (let i = 0; i < n; i++) {
-      const t = (i + 0.5) / n - 0.5;
-      const u = t * (tl - 0.4);
-      const sgn = side === 0 ? -1 : 1;
-      // Chairs face the table: their +z points across it.
-      if (along === "z") chair(P, sgn * off, u, sgn < 0 ? Math.PI / 2 : -Math.PI / 2, seat, h, frame, seatMat, seats >= 6);
-      else chair(P, u, sgn * off, sgn < 0 ? 0 : Math.PI, seat, h, frame, seatMat, seats >= 6);
-    }
+  // Same layout as the plan symbol (editor/GardenSymbol.tsx): the table's long side runs left to right (x),
+  // the chairs sit along its front and back, and the remaining one or two take the ends.
+  const perSide = Math.max(0, Math.floor((seats - 2) / 2));
+  const ends = Math.min(2, seats - perSide * 2);
+  // End chairs tuck under the table's ends, so the set is only 0.6 m longer than the table.
+  const tl = Math.max(0.6, w - (ends ? 0.6 : 0.1));
+  const td = Math.max(0.6, d * 0.44);
+  P.box(0, h - 0.03, h, 0, tl, td, top);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) P.box((sx * tl) / 2 - sx * 0.05, 0, h - 0.03, (sz * td) / 2 - sz * 0.05, 0.04, 0.04, frame);
+  const off = td / 2 + 0.2;
+  for (let i = 0; i < perSide; i++) {
+    const u = -tl / 2 + (tl * (i + 0.5)) / perSide;
+    // Chairs face the table: the back row faces +z, the front row faces -z.
+    chair(P, u, -off, 0, seat, h, frame, seatMat, seats >= 6);
+    chair(P, u, off, Math.PI, seat, h, frame, seatMat, seats >= 6);
   }
+  if (ends >= 1) chair(P, -tl / 2 - 0.12, 0, Math.PI / 2, seat, h, frame, seatMat, seats >= 6);
+  if (ends >= 2) chair(P, tl / 2 + 0.12, 0, -Math.PI / 2, seat, h, frame, seatMat, seats >= 6);
 }
 
 function loungeSet(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
@@ -509,6 +504,35 @@ function binStore(P: Parts, def: GardenDef, item: GardenItem, w: number, d: numb
   for (const x of [-1, 1]) P.box((x * w) / 4 + x * 0.15, h * 0.45, h * 0.55, d / 2 + 0.005, 0.03, 0.01, dark);
 }
 
+/**
+ * A resin garden storage box (Keter Darwin): a dark plinth, a planked body in the
+ * main colour with vertical grooves on the front and ends, a darker frame band
+ * at each corner, and a darker lid that overhangs a little with a lip at the
+ * front and a lock tab in the middle.
+ */
+function storageBox(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
+  const main = item.color ?? def.color;
+  const dark = item.accent ?? def.accent ?? shadeColor(main, 0.5);
+  const body = m(main, "plastic");
+  const groove = m(shadeColor(main, 0.72), "plastic");
+  const frame = m(dark, "plastic");
+  const lidH = Math.min(0.06, h * 0.1);
+  const top = h - lidH;
+  P.box(0, 0, 0.03, 0, w - 0.02, d - 0.02, frame); // plinth
+  P.box(0, 0.03, top, 0, w - 0.01, d - 0.01, body);
+  for (const x of [-1, 1]) P.box((x * (w - 0.04)) / 2, 0.03, top, 0, 0.03, d, frame); // corner bands
+  // Vertical plank grooves on the front and both ends.
+  const pitch = 0.1;
+  const nf = Math.max(2, Math.round((w - 0.1) / pitch));
+  for (let i = 0; i < nf; i++) P.box(-w / 2 + 0.05 + ((w - 0.1) * (i + 0.5)) / nf, 0.05, top - 0.02, d / 2 - 0.002, 0.006, 0.012, groove);
+  const ne = Math.max(2, Math.round((d - 0.08) / pitch));
+  for (const x of [-1, 1]) for (let i = 0; i < ne; i++) P.box((x * (w - 0.004)) / 2, 0.05, top - 0.02, -d / 2 + 0.04 + ((d - 0.08) * (i + 0.5)) / ne, 0.012, 0.006, groove);
+  // Lid: a darker slab overhanging the body, with a lip at the front and the lock tab.
+  P.box(0, top, h, 0, w + 0.02, d + 0.01, frame);
+  P.box(0, top - 0.02, top + 0.005, d / 2 + 0.005, w + 0.02, 0.01, frame);
+  P.box(0, top + lidH * 0.3, top + lidH * 0.8, d / 2 + 0.008, 0.05, 0.01, m("#2b2d30", "metal"));
+}
+
 function recyclingBox(P: Parts, def: GardenDef, item: GardenItem, w: number, d: number, h: number) {
   const body = m(item.color ?? def.color, "plastic");
   P.box(0, 0, h * 0.95, 0, w * 0.95, d * 0.95, body);
@@ -582,6 +606,7 @@ const BUILDERS: Partial<Record<GardenDef["shape"], Builder>> = {
   "mud-kitchen": mudKitchen,
   trampoline,
   "bin-store": binStore,
+  "storage-box": storageBox,
   "recycling-box": recyclingBox,
   "water-butt": waterButt,
   "washing-line": washingLine,

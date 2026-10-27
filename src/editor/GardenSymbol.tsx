@@ -171,15 +171,15 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
       const cw = Math.min(0.5, w / (perSide + 1) * 0.6);
       const cd = Math.min(0.45, (d - tableD) / 2 - 0.02);
       const chair = (key: string, cx: number, cy: number, cw2: number, cd2: number) => <rect key={key} x={cx - cw2 / 2} y={cy - cd2 / 2} width={cw2} height={cd2} rx={Math.min(cw2, cd2) * 0.3} fill={accent} fillOpacity={0.85} stroke={outline} strokeWidth={sw * 0.6} strokeOpacity={selected ? 1 : 0.6} />;
-      const tw = w - (ends ? 0.5 : 0);
+      const tw = w - (ends ? 0.6 : 0.1);
       return group(
         <>
           {Array.from({ length: perSide }, (_, i) => {
             const cx = -tw / 2 + (tw * (i + 0.5)) / perSide;
             return [chair(`t${i}`, cx, -tableD / 2 - cd / 2, cw, cd), chair(`b${i}`, cx, tableD / 2 + cd / 2, cw, cd)];
           })}
-          {ends >= 1 && chair("el", -w / 2 + 0.22, 0, 0.42, 0.5)}
-          {ends >= 2 && chair("er", w / 2 - 0.22, 0, 0.42, 0.5)}
+          {ends >= 1 && chair("el", -tw / 2 - 0.12, 0, 0.46, 0.46)}
+          {ends >= 2 && chair("er", tw / 2 + 0.12, 0, 0.46, 0.46)}
           <rect x={-tw / 2} y={-tableD / 2} width={tw} height={tableD} rx={0.04} {...fill} />
         </>,
         at,
@@ -335,6 +335,18 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
         </>,
         at,
       );
+    case "storage-box": {
+      const planks = Math.max(2, Math.round(w / 0.1));
+      return group(
+        <>
+          {body(0.02)}
+          {Array.from({ length: planks - 1 }, (_, i) => <line key={i} x1={x0 + (w * (i + 1)) / planks} y1={y0 + 0.03} x2={x0 + (w * (i + 1)) / planks} y2={-y0 - 0.03} {...thin} />)}
+          <rect x={x0 + 0.02} y={y0 + 0.02} width={w - 0.04} height={d - 0.04} rx={0.02} fill={accent} fillOpacity={0.25} stroke="none" />
+          <rect x={-0.03} y={-y0 - 0.05} width={0.06} height={0.03} fill={accent} stroke="none" />
+        </>,
+        at,
+      );
+    }
     case "recycling-box":
       return group(
         <>

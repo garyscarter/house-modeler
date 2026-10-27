@@ -68,6 +68,7 @@ export type GardenShape =
   | "mud-kitchen"
   | "trampoline"
   | "bin-store"
+  | "storage-box"
   | "recycling-box"
   | "water-butt"
   | "washing-line"
@@ -144,7 +145,7 @@ const LAMP = "#ffd9a0";
  */
 export const GARDEN_ITEMS: GardenDef[] = [
   // Dining and lounge
-  { id: "dining-6", name: "Dining set, table and six chairs", category: "Dining and lounge", kind: "furniture", shape: "dining-set", w: 1.9, d: 2.0, h: 0.75, color: ALU, accent: "#5d6166", seats: 6, costLine: "gardenFurniture", note: "Table 180 × 90 cm" },
+  { id: "dining-6", name: "Dining set, table and six chairs", category: "Dining and lounge", kind: "furniture", shape: "dining-set", w: 2.4, d: 2.0, h: 0.75, color: ALU, accent: "#5d6166", seats: 6, costLine: "gardenFurniture", note: "Table 180 × 90 cm, two chairs along each side and one at each end" },
   { id: "dining-4-round", name: "Round dining set, four chairs", category: "Dining and lounge", kind: "furniture", shape: "dining-set", w: 1.6, d: 1.6, h: 0.74, color: ALU, round: true, seats: 4, costLine: "gardenFurniture" },
   { id: "bistro-2", name: "Bistro set", category: "Dining and lounge", kind: "furniture", shape: "dining-set", w: 1.2, d: 1.2, h: 0.72, color: "#1f2a24", round: true, seats: 2, costLine: "gardenFurniture" },
   { id: "lounge-corner", name: "Corner lounge set", category: "Dining and lounge", kind: "furniture", shape: "lounge-set", w: 2.4, d: 2.0, h: 0.7, color: "#8a8378", accent: "#d8d3c8", costLine: "gardenFurniture" },
@@ -177,6 +178,12 @@ export const GARDEN_ITEMS: GardenDef[] = [
   // Utility
   { id: "bin-store", name: "Bin store, two bins", category: "Utility", kind: "utility", shape: "bin-store", w: 1.5, d: 0.85, h: 1.25, color: "#5f6368", wall: true, costLine: "gardenFurniture" },
   { id: "recycling-box", name: "Recycling box", category: "Utility", kind: "utility", shape: "recycling-box", w: 0.6, d: 0.4, h: 0.35, color: "#5e6266", costLine: "gardenFurniture" },
+  // Keter Darwin resin storage boxes (Wickes/B&Q listings): grey wood-effect planked body, darker lid that seats two,
+  // dark base. Sizes from the listings; the 511 L is the Wickes one.
+  { id: "storage-box-511", name: "Keter Darwin storage box, 511 L", category: "Utility", kind: "utility", shape: "storage-box", w: 1.3, d: 0.653, h: 0.702, color: "#8c8f92", accent: "#3f4245", wall: true, costLine: "gardenFurniture", note: "Grey wood-effect resin; the lid seats two" },
+  { id: "storage-box-380", name: "Keter Darwin storage box, 380 L", category: "Utility", kind: "utility", shape: "storage-box", w: 1.425, d: 0.653, h: 0.545, color: "#8c8f92", accent: "#3f4245", wall: true, costLine: "gardenFurniture" },
+  { id: "storage-box-570", name: "Keter Darwin storage box, 570 L", category: "Utility", kind: "utility", shape: "storage-box", w: 1.425, d: 0.653, h: 0.782, color: "#8c8f92", accent: "#3f4245", wall: true, costLine: "gardenFurniture" },
+  { id: "storage-box-570-brown", name: "Keter Darwin storage box, 570 L, brown", category: "Utility", kind: "utility", shape: "storage-box", w: 1.425, d: 0.653, h: 0.782, color: "#6b5340", accent: "#3a2d22", wall: true, costLine: "gardenFurniture" },
   { id: "bin-store-single", name: "Bin store, one bin", category: "Utility", kind: "utility", shape: "bin-store", w: 0.8, d: 0.85, h: 1.25, color: "#5f6368", wall: true, costLine: "gardenFurniture" },
   { id: "water-butt", name: "Water butt", category: "Utility", kind: "utility", shape: "water-butt", w: 0.6, d: 0.6, h: 0.95, color: "#2f4a38", round: true, wall: true, costLine: "gardenFurniture" },
   { id: "washing-line", name: "Rotary washing line", category: "Utility", kind: "utility", shape: "washing-line", w: 2.6, d: 2.6, h: 1.8, color: "#c7cacd", round: true, costLine: "gardenFurniture" },

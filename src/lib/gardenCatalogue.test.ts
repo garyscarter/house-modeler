@@ -39,6 +39,6 @@ describe("garden catalogue", () => {
     expect(itemSize({ type: "dining-6", w: 3 })).toEqual({ w: 3, d: 2, h: 0.75 });
   });
   it("uses every shape at least once", () => {
-    expect(new Set(GARDEN_ITEMS.map((g) => g.shape)).size).toBe(38);
+    expect(new Set(GARDEN_ITEMS.map((g) => g.shape)).size).toBe(39);
   });
 });
