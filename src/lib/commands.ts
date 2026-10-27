@@ -5,6 +5,7 @@ import { usePanelPrefs } from "../components/panelPrefs";
 import { useChassis } from "../components/useChassis";
 import { FEATURES } from "./chassis";
 import { floorDisplayName, type Look } from "./studio";
+import { sectionStops } from "./sectionCut";
 
 export interface Command {
   id: string;
@@ -153,6 +154,8 @@ export function buildCommands(c: CommandContext): Command[] {
   add("toggle:doors", c.doorsOpen ? "Close doors" : "Open doors", "View", () => c.setUi({ doorsOpen: !c.doorsOpen }), { keywords: ["toggle", "doors open"] });
   toggle("exterior", "exterior", c.showExterior, "showExterior");
   toggle("site", "site", c.showSite, "showSite");
+  if (model) for (const st of sectionStops(model)) if (st.kind === "floor") add(`section:${st.id}`, `Section cut: ${st.label}`, "View", () => c.setUi({ tab: "3d", sectionHeight: st.height }), { keywords: ["cut", "slice", "doll's house", "look inside"] });
+  add("section:off", "Section cut: off", "View", () => c.setUi({ sectionHeight: null }), { keywords: ["cut", "slice"] });
 
   if (c.tab === "3d") {
     const sides: [ViewSide, string][] = [["front", "Look at the front"], ["rear", "Look at the rear"], ["left", "Look at the left"], ["right", "Look at the right"], ["top", "Look at the top"], ["home", "Home view"]];

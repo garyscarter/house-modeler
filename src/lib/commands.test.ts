@@ -167,3 +167,15 @@ describe("studio commands", () => {
     usePanelPrefs.getState().setPrefs({ showPins: false });
   });
 });
+
+describe("section cut commands", () => {
+  it("offers a cut per floor and an off switch", () => {
+    const setUi = vi.fn();
+    const cmds = buildCommands(ctx({ setUi }));
+    const first = cmds.find((x) => x.id === "section:f:floor");
+    expect(first?.title).toBe("Section cut: First floor");
+    first?.run();
+    expect(setUi).toHaveBeenCalledWith({ tab: "3d", sectionHeight: expect.any(Number) });
+    expect(cmds.some((x) => x.id === "section:off")).toBe(true);
+  });
+});

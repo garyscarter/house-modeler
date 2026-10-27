@@ -108,6 +108,8 @@ interface State {
   planWalls: boolean;
   /** Hide floors above this level in the 3D view (null = show all). */
   maxLevel: number | null;
+  /** Section cut in the 3D view: hide everything above this many metres over the ground floor (null = off). Not persisted. */
+  sectionHeight: number | null;
   /** Draw roofs, canopies and exterior photo pins. */
   showExterior: boolean;
   /** Draw the plot, garden and neighbouring buildings. */
@@ -167,6 +169,7 @@ interface State {
         | "planImage"
         | "planWalls"
         | "maxLevel"
+        | "sectionHeight"
         | "showExterior"
         | "showSite"
         | "measureTool"
@@ -318,6 +321,7 @@ export const useStore = create<State>()(
         planImage: { show: true, opacity: 0.3 },
         planWalls: true,
         maxLevel: null,
+        sectionHeight: null,
         showExterior: true,
         showSite: true,
         measureTool: false,

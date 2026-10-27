@@ -19,7 +19,7 @@ const contentSignature = (gl: THREE.WebGLRenderer) => `${gl.info.memory.geometri
  * only redrawn when something in the scene may have changed, never for a
  * frame that only moves the camera. The map is marked dirty (and a frame
  * requested) on mount, in the commit of any change to what the scene is built
- * from (`deps` from the viewer, plus site, sun, variant and site view), and
+ * from (`deps` from the viewer, plus site, sun, variant, site view and section cut), and
  * whenever the renderer's geometry, texture or program counts change, which
  * catches photos and other content that arrive asynchronously. Err on the
  * side of redrawing: a stale shadow is a visible bug, a spare redraw is not.
@@ -38,6 +38,7 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
   const showSite = useStore((s) => s.showSite);
   const activeVariant = useStore((s) => s.activeVariant);
   const siteView = useSiteView((s) => s);
+  const sectionHeight = useStore((s) => s.sectionHeight);
 
   useLayoutEffect(() => {
     gl.shadowMap.autoUpdate = false;
@@ -62,7 +63,7 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
 
   // Runs in the same commit as the scene change, so the shadow pass sees the new geometry.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView]);
+  useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView, sectionHeight]);
 
   useFrame(() => {
     gl.shadowMap.autoUpdate = false;

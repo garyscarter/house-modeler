@@ -93,7 +93,12 @@ export function House({
   const floors = model.floors.filter((f) => shown(f.level));
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
-  const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
+  // A section cut makes the highest floor it leaves standing the top one.
+  const cut = useStore((s) => s.sectionHeight);
+  const standing = cut === null ? floors : floors.filter((f) => floorBaseY(model, f) < cut);
+  const labelLevel = standing.length ? Math.max(...standing.map((f) => f.level)) : null;
+  // Cut below the top labelled floor's ceiling, the roof over it is gone.
+  const roofCut = cut !== null && labelLevel !== null && cut < (labelLevel + 1) * (model.ceilingHeight + model.slabThickness);
   const showPins = usePanelPrefs((s) => s.showPins);
   // Stairwells depend on structure only, so recolouring leaves them (and every floor group's props) as they were.
   const structure = modelStructure(model);
@@ -141,7 +146,7 @@ export function House({
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
           showPins={showPins && !ghost && floor.level === labelLevel}
-          roofOver={!!showExterior && !ghost && ext.showRoof}
+          roofOver={!!showExterior && !ghost && ext.showRoof && !roofCut}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}

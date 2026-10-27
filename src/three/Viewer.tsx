@@ -25,6 +25,7 @@ import { SunControls } from "../components/SunControls";
 import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
+import { SectionCut } from "./SectionCut";
 import { Loader } from "../components/Loader";
 import { Measure, MeasureButton } from "./Measure";
 import "./Viewer.css";
@@ -216,6 +217,7 @@ function ViewerImpl(props: ViewerProps) {
             <Effects />
           </Suspense>
         )}
+        <SectionCut />
         <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
