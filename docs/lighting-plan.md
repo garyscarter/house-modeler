@@ -35,13 +35,27 @@ Rules: a light is lit when `fixtureLit(fx, item, master, altitude)`; `altitude` 
 
 Checks: `npm run check`; Playwright screenshots of the listing at the Night preset with lights Auto, On and Off, and one lamp switched off.
 
-## Phase 2: ceiling and wall lights
+## Phase 2: ceiling and wall lights (foundation landed; builders: Dua Lipa for the plan and inspector, Bowie for 3D)
 
-- Catalogue: a Lighting category with the seven types; `CatalogueItem.ceiling?: boolean` (hangs from the ceiling: `z0 = ceiling - drop - h`), `Fixture.drop?` for pendants, `Fixture.warmth?: 2700 | 3000 | 4000`, `Fixture.dim?: number` (percent, default 100). `LAMPS` gains the new symbols, with `spot?: { angle, penumbra }` for downlights and spot bars (spot lights aiming down).
-- Downlight grids as one fixture with `cols`/`rows` and pitch; each bulb a light, all sharing the fixture's switch.
-- Plan symbols: BS EN 60617 style (circle with cross for a ceiling point, filled circle for a downlight, etc.) in `editor/FixtureSymbol.tsx`.
-- 3D parts in `three/Fixtures.tsx`; inspector fields for drop, warmth and dimmer.
+Phase 3 (`docs/electrics-plan.md`) builds on this; the Electrics mode adds the switches that control these lights.
+
+Foundation on main (keep these; add beside them):
+
+| Where | What |
+|---|---|
+| `src/types.ts` | `Fixture.drop?`, `.warmth?: LightWarmth` (2700 \| 3000 \| 4000), `.dim?` (1-100), `.pitch?` |
+| `src/lib/catalogue.ts` | `CatalogueItem.ceiling?`, `.drop?`, `.pitch?`; symbols `pendant`, `pendant-multi`, `flush-light`, `downlight`, `downlight-grid`, `spot-bar`, `wall-light`, `strip-light`; category "Lighting" (8 entries); `dropOf`, `pitchOf`, `isCeilingItem`, `DEFAULT_CEILING` |
+| `src/lib/planMath.ts` | `fixtureBox`: a ceiling item's `z0 = ceiling - drop - h` (ceiling defaults to 2.4 when not given) |
+| `src/lib/lights.ts` | `LampDef.bulbs(box, pitch)` (several bulbs per fitting), `.spot` (cone aimed down), `gridPoints`; `WARMTHS`, `WARMTH_LABEL`, `WARMTH_COLOR`, `warmthOf`, `dimOf`, `lightColor`, `lampPitch`; `LampLight.spot`; `bulbsWorld`, `floorLamps` (one light per bulb, lumens split, dimmed); `SHADOW_CAP` (4 on high) |
+
+- **Plan** (`editor/FixtureSymbol.tsx`, `editor/plan/layers/Fixtures.tsx`): BS EN 60617 style symbols. Pendant: circle with a cross through it. Multi-pendant: a bar with three such circles. Flush light: circle with a cross and a filled centre. Downlight: small filled circle in a ring; a grid draws one per `gridPoints`. Spot bar: a bar of three arrows-in-circles. Wall light: a half circle on the wall with a cross. Strip: a thin bar with a dashed centre line. Ceiling items are drawn above furniture, outline only (no filled body), in the plan's ink colour; lamps keep their furniture symbols.
+- **Placement** (`editor/plan/useGeometry.ts`, `useDrag.ts`): ceiling items never snap to a wall and never abut neighbours; they place freely (grid snap only).
+- **Inspector** (`editor/Inspectors.tsx`): for lights, Warmth (select), Dimmer (range 10-100, shown as %); for ceiling items a Drop field with a reset (in place of Height above floor); for grids a Spacing field. The existing Switched on toggle stays.
+- **3D** (`three/Fixtures.tsx`): parts for each new symbol (a flex and shade, a bar with three small shades, a shallow diffuser disc, a recessed ring with a lens, a bar with three tilted heads, a backplate with an up-and-down shade, a slim strip). `LampLights` renders a `spotLight` aimed straight down for lights with `spot`, a `pointLight` otherwise; the nearest `SHADOW_CAP[quality]` spot lights cast shadows (small maps, 512). Lit parts glow by `lampGlow × dimOf`, in the fixture's light colour.
+- **Windows, both sides** (`three/shell.ts`, `three/textures.ts`): the lit-room glow must show only on the pane's face that looks into the lit room from the other side. Shell gives every glass quad a `glow` vertex attribute (1 when the room behind that face, seen from where the face points, is lit; 0 otherwise); the glass shader multiplies its emissive by it. From inside a lit room the window stays dark glass; from outside it glows. The same attribute will carry outside lights (garden) onto the inner face later. The `glass|lit` material variant goes away.
+
+Checks: `npm run check`, `npm run build`; screenshots of the listing with a pendant, a downlight grid and a spot bar at the Night preset from inside and outside; a plan screenshot of the Lighting symbols.
 
 ## Phase 3: electrics mode and wiring guide
 
-A separate thread. The brief for it is `docs/wiring-guide-brief.md`.
+The brief is `docs/wiring-guide-brief.md`; the implementation plan, which also covers phase 2 and phase 1's 3D, is `docs/electrics-plan.md`.

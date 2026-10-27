@@ -401,7 +401,7 @@ const mm = (v: number) => Math.round(v * 1000) / 1000;
 function joinerySignature(fx: Fixture, ceiling: number): string {
   const item = byId(fx.type)!;
   const box = fixtureBox(fx, item, ceiling);
-  const { carcass: _c, topColor: _t, cushion: _k, fit: _f, ...j } = joineryOf(fx, item, box);
+  const { carcass: _c, topColor: _t, cushion: _k, fit: _f, trim: _tr, panel: _p, ...j } = joineryOf(fx, item, box);
   return JSON.stringify({ w: mm(box.w), d: mm(box.d), h: mm(box.h), j });
 }
 

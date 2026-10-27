@@ -90,10 +90,10 @@ export type Symbol =
   | "built-in"
   | "window-seat"
   | "wall-box"
-  // Ceiling and wall lights (category "Lighting"): BS EN 60617-style plan symbols, see lib/electricSymbols.ts.
+  // Lighting (see lib/lights.ts for what each one emits)
   | "pendant"
   | "pendant-multi"
-  | "ceiling-flush"
+  | "flush-light"
   | "downlight"
   | "downlight-grid"
   | "spot-bar"
@@ -140,22 +140,19 @@ export interface CatalogueItem {
   mount?: number;
   /** Floor-to-ceiling items (fitted wardrobes): as tall as the room unless set lower, and never taller. */
   toCeiling?: boolean;
+  /** Hangs from the ceiling (pendants, flush and recessed lights): placed freely, never snapped to a wall, its base at ceiling - drop - h. */
+  ceiling?: boolean;
+  /** Ceiling items: default hang below the ceiling to the top of the fitting, metres (0 or absent = flush). */
+  drop?: number;
+  /** Downlight grids: default spacing between downlights, metres. */
+  pitch?: number;
   note?: string;
   /** Id of the owner's MyPiece this entry stands for (see lib/myFurniture.ts). */
   piece?: string;
   /** Default joinery settings (see lib/joinery.ts). */
   joinery?: JoineryConfig;
-  /**
-   * Hangs from the ceiling (ceiling lights, pull cords, smoke and heat alarms): its base is at
-   * ceiling - drop - h (planMath fixtureBox) and `mount` is not used. Not snapped to walls when placed.
-   */
-  ceiling?: boolean;
-  /** Ceiling items on a flex or rod (pendants): default metres from the ceiling to the top of the fitting; Fixture.drop overrides. */
-  drop?: number;
   /** Fitted outside (outside light and socket, doorbell push, EV charger): weatherproof, and numbered under "Outside" in the wiring guide. */
   outdoor?: boolean;
-  /** Downlight grids: default bulbs across (cols), down (rows) and their spacing in metres; Fixture.cols/rows/pitch override. */
-  grid?: { cols: number; rows: number; pitch: number };
 }
 
 /**
@@ -165,8 +162,6 @@ export interface CatalogueItem {
  * guide show the centre (lib/electrics.ts centreHeight).
  */
 const centredAt = (centre: number, h: number) => Math.round((centre - h / 2) * 1000) / 1000;
-/** Diameter of one recessed downlight, metres; a grid's footprint is its bulb spacing plus one of these. */
-export const DOWNLIGHT_D = 0.09;
 /** Faceplate sizes, metres: a single (86 mm square) and a double (146 × 86 mm) UK wall plate. */
 const PLATE = 0.086;
 const PLATE2 = 0.146;
@@ -343,19 +338,21 @@ export const CATALOGUE: CatalogueItem[] = [
   // Other
   { id: "desk", name: "Desk", category: "Other", w: 1.20, d: 0.60, h: 0.75, color: WOOD, symbol: "table" },
   { id: "desk-lamp", name: "Desk lamp (angled)", category: "Other", w: 0.18, d: 0.3, h: 0.45, color: "#2b2d31", symbol: "desk-lamp", mount: 0.75, note: "A task lamp on a jointed arm; set the height above the floor to the desk top" },
+  // Lighting: ceiling and wall fittings (lamps are furniture, in their rooms' categories). Sizes are the fitting itself;
+  // a grid's size is the area it covers. The plan draws these as electrical symbols (editor/FixtureSymbol.tsx).
+  { id: "pendant", name: "Pendant light", category: "Lighting", w: 0.35, d: 0.35, h: 0.25, color: "#f1ece2", symbol: "pendant", ceiling: true, drop: 0.25, note: "One drum shade on a flex from the ceiling rose; set the drop to hang it lower" },
+  { id: "pendant-multi", name: "Pendant bar, 3 drops", category: "Lighting", w: 0.9, d: 0.15, h: 0.2, color: "#2b2d31", symbol: "pendant-multi", ceiling: true, drop: 0.5, note: "Three small shades on a bar, for over a table or island; turn it to run along them" },
+  { id: "flush-light", name: "Flush ceiling light", category: "Lighting", w: 0.3, d: 0.3, h: 0.09, color: "#f4f4f2", symbol: "flush-light", ceiling: true, note: "A round diffuser tight to the ceiling; the usual bathroom and landing fitting" },
+  { id: "downlight", name: "Downlight (recessed)", category: "Lighting", w: 0.09, d: 0.09, h: 0.012, color: "#f4f4f2", symbol: "downlight", ceiling: true, note: "One recessed LED spot; place a few, or use the grid" },
+  { id: "downlight-grid", name: "Downlights, grid", category: "Lighting", w: 2.4, d: 2.4, h: 0.012, color: "#f4f4f2", symbol: "downlight-grid", ceiling: true, pitch: 1.2, note: "Recessed spots at a set spacing; size it to the ceiling area to cover and set the spacing" },
+  { id: "spot-bar", name: "Spotlight bar, 3 heads", category: "Lighting", w: 0.6, d: 0.12, h: 0.16, color: "#2b2d31", symbol: "spot-bar", ceiling: true, note: "Three adjustable heads on a surface-mounted bar, aimed down and out" },
+  { id: "wall-light", name: "Wall light (interior)", category: "Lighting", w: 0.16, d: 0.11, h: 0.26, color: "#c8a24a", symbol: "wall-light", mount: 1.7, note: "An up-and-down wall washer on a backplate; wall-hung, set the height to suit" },
+  { id: "strip-light", name: "Under-cabinet strip", category: "Lighting", w: 0.6, d: 0.03, h: 0.02, color: "#dcdcdc", symbol: "strip-light", mount: 1.43, note: "LED strip under a kitchen wall unit lighting the worktop; size it to the unit run" },
+  { id: "outside-light", name: "Outside wall light", category: "Lighting", w: 0.12, d: 0.12, h: 0.22, color: "#2b2d31", symbol: "wall-light", mount: centredAt(1.9, 0.22), outdoor: true, note: "IP44 or better, on the outside face of a wall" },
   { id: "car", name: "Car (family hatchback)", category: "Other", w: 1.80, d: 4.40, h: 1.5, color: "#8c96a3", symbol: "car", note: "Typical UK family car" },
   { id: "custom", name: "Custom box", category: "Other", w: 1.00, d: 1.00, h: 1.0, color: "#b8c4a8", symbol: "box", note: "Set its size and label in the inspector" },
 
   // Lighting: ceiling and wall lights, in the Furnish and the Electrics pickers. Ids are saved data: never rename.
-  { id: "light-pendant", name: "Pendant (single)", category: "Lighting", w: 0.30, d: 0.30, h: 0.25, color: "#f1ece2", symbol: "pendant", ceiling: true, drop: 0.55, note: "A shade on a flex from a ceiling rose; set the drop" },
-  { id: "light-pendant-3", name: "Pendant cluster (3 drops)", category: "Lighting", w: 0.90, d: 0.25, h: 0.20, color: "#2b2d31", symbol: "pendant-multi", ceiling: true, drop: 0.7, note: "Three shades from one ceiling plate, over a dining table or an island" },
-  { id: "light-flush", name: "Flush ceiling light", category: "Lighting", w: 0.35, d: 0.35, h: 0.10, color: FACE, symbol: "ceiling-flush", ceiling: true, note: "A drum or dish fitted flat to the ceiling" },
-  { id: "light-downlight", name: "Downlight (recessed)", category: "Lighting", w: DOWNLIGHT_D, d: DOWNLIGHT_D, h: 0.02, color: FACE, symbol: "downlight", ceiling: true, note: "Fire-rated LED downlight, 90 mm" },
-  { id: "light-downlight-grid", name: "Downlights (grid)", category: "Lighting", w: 2 + DOWNLIGHT_D, d: 1 + DOWNLIGHT_D, h: 0.02, color: FACE, symbol: "downlight-grid", ceiling: true, grid: { cols: 3, rows: 2, pitch: 1.0 }, note: "One fixture: set the bulbs across and down and their spacing; all on one switch" },
-  { id: "light-spot-bar", name: "Spotlight bar (3 heads)", category: "Lighting", w: 0.75, d: 0.08, h: 0.15, color: "#1f2125", symbol: "spot-bar", ceiling: true, note: "Three adjustable spots on a ceiling bar" },
-  { id: "light-wall", name: "Wall light", category: "Lighting", w: 0.15, d: 0.12, h: 0.20, color: "#f1ece2", symbol: "wall-light", mount: centredAt(1.8, 0.2), note: "Centre 1.8 m up; set the height to suit" },
-  { id: "light-outside", name: "Outside wall light", category: "Lighting", w: 0.12, d: 0.12, h: 0.22, color: "#2b2d31", symbol: "wall-light", mount: centredAt(1.9, 0.22), outdoor: true, note: "IP44 or better, on the outside face of a wall" },
-  { id: "light-strip", name: "Under-cabinet LED strip", category: "Lighting", w: 0.60, d: 0.03, h: 0.01, color: FACE, symbol: "strip-light", mount: 1.44, note: "Under a wall cabinet (base 1.45 m); set the width to the run" },
 
   // Electrics: points for the wiring guide, only in the Electrics picker. Wall-mounted unless `ceiling` (or a floor socket). Ids are saved data: never rename.
   { id: "switch-1g", name: "Light switch (1-gang)", category: "Electrics", w: PLATE, d: 0.03, h: PLATE, color: FACE, symbol: "switch-1g", mount: centredAt(1.2, PLATE), note: "Centre 1.2 m up, beside the door on the handle side" },
@@ -576,6 +573,20 @@ export function isFloorCovering(item: Pick<CatalogueItem, "symbol">): boolean {
 }
 
 /** Height of a fixture's base above the floor: its own override, else the catalogue's, else 0 (on the floor). */
+/** Ceiling height assumed for a ceiling item's position where none is given (plan clash checks). */
+export const DEFAULT_CEILING = 2.4;
+/** How far a ceiling item's top hangs below the ceiling, metres (the fixture's own drop, else the catalogue's, else flush). */
+export function dropOf(fx: { drop?: number }, item: Pick<CatalogueItem, "drop">): number {
+  const d = fx.drop ?? item.drop ?? 0;
+  return Number.isFinite(d) ? Math.max(0, d) : item.drop ?? 0;
+}
+/** Downlight grid spacing, metres: the fixture's own, else the catalogue's (default 1.2 m). */
+export function pitchOf(fx: { pitch?: number }, item: Pick<CatalogueItem, "pitch">): number {
+  const p = fx.pitch ?? item.pitch ?? 1.2;
+  return Number.isFinite(p) && p >= 0.3 ? p : item.pitch ?? 1.2;
+}
+export const isCeilingItem = (item: Pick<CatalogueItem, "ceiling">): boolean => !!item.ceiling;
+
 export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount">): number {
   const m = fx.mount ?? item.mount ?? 0;
   return Number.isFinite(m) ? Math.max(0, m) : item.mount ?? 0;
@@ -605,20 +616,6 @@ export const isFittedLight = (item: Pick<CatalogueItem, "category">): boolean =>
  * (floor, table and desk lamps, the lit mirror) are lights but not points; they stay furniture.
  */
 export const isElectricalItem = (item: Pick<CatalogueItem, "category">): boolean => item.category === LIGHTING || item.category === ELECTRICS;
-
-/** A downlight grid's bulbs across, down and spacing: the fixture's own, else the catalogue's; at least 1 × 1 and 0.2 m apart. */
-export function gridOf(fx: { cols?: number; rows?: number; pitch?: number }, item: Pick<CatalogueItem, "grid">): { cols: number; rows: number; pitch: number } | undefined {
-  if (!item.grid) return undefined;
-  const int = (v: number | undefined, d: number) => (v !== undefined && Number.isFinite(v) ? Math.max(1, Math.min(12, Math.round(v))) : d);
-  const pitch = fx.pitch !== undefined && Number.isFinite(fx.pitch) ? Math.max(0.2, Math.min(3, fx.pitch)) : item.grid.pitch;
-  return { cols: int(fx.cols, item.grid.cols), rows: int(fx.rows, item.grid.rows), pitch };
-}
-
-/** A ceiling item's drop from the ceiling to its top, metres: the fixture's own, else the catalogue's, else 0. */
-export function dropOf(fx: { drop?: number }, item: Pick<CatalogueItem, "drop">): number {
-  const v = fx.drop ?? item.drop ?? 0;
-  return Number.isFinite(v) ? Math.max(0, v) : item.drop ?? 0;
-}
 
 /**
  * Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note.

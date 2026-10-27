@@ -29,7 +29,7 @@ const fallback = (symbol: Symbol): SymPrim[] => [
 
 /** Symbols this module draws: every Lighting and Electrics symbol (plug-in lamps keep their furniture symbols). */
 export const ELECTRIC_SYMBOLS: readonly Symbol[] = [
-  "pendant", "pendant-multi", "ceiling-flush", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light",
+  "pendant", "pendant-multi", "flush-light", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light",
   "switch-1g", "switch-2g", "switch-2way", "switch-dimmer", "switch-pull",
   "socket-1", "socket-2", "socket-usb", "socket-floor", "socket-outdoor", "shaver-socket",
   "fused-spur", "cooker-switch", "cooker-outlet", "shower-point",

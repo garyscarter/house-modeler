@@ -1459,7 +1459,8 @@ export type MatSpec =
   | { kind: "paint"; color: string }
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
   | { kind: "plain"; color: string; roughness?: number; metalness?: number }
-  | { kind: "glass" }
+  /** `lit`: a pane of a room with a lit light in it, which glows at night. */
+  | { kind: "glass"; lit?: boolean }
   | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
 
 export function matKey(s: MatSpec): string {
@@ -1473,7 +1474,7 @@ export function matKey(s: MatSpec): string {
     case "plain":
       return `plain|${s.color}|${s.roughness ?? ""}|${s.metalness ?? ""}`;
     case "glass":
-      return "glass";
+      return s.lit ? "glass|lit" : "glass";
     case "floor":
       return `floor|${s.finish}|${s.color}|${s.selected ? 1 : 0}|${s.grout ?? ""}`;
   }
@@ -1526,13 +1527,17 @@ function styleGlass(m: THREE.MeshPhysicalMaterial) {
     m.side = THREE.DoubleSide;
   }
   m.emissive.copy(GLASS_GLOW);
-  m.emissiveIntensity = glassLit ? 0.6 : 0;
+  m.emissiveIntensity = glassLit && m.userData.lit ? 0.6 : 0;
   m.needsUpdate = true;
 }
 
-/** Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. */
-export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
+/**
+ * Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. A `lit` pane belongs to a room with a
+ * lit light in it and glows warm at night (see setGlassMode); the others stay dark.
+ */
+export function glassMaterial(color = GLASS_TINT, lit = false): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
+  m.userData.lit = lit;
   m.onBeforeCompile = (shader) => glassFresnel(shader, m);
   m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
   glassMaterials.add(m);
@@ -1541,7 +1546,7 @@ export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
   return m;
 }
 
-/** Switch every glass pane between real transmission (high quality) and the film, and light it up at night. */
+/** Switch every glass pane between real transmission (high quality) and the film, and light up the lit rooms' panes at night. */
 export function setGlassMode(high: boolean, lit: boolean) {
   if (high === glassHigh && lit === glassLit) return;
   glassHigh = high;
@@ -1591,7 +1596,7 @@ function create(s: MatSpec): THREE.Material {
     case "plain":
       return new THREE.MeshStandardMaterial({ color: s.color, roughness: s.roughness ?? 0.8, metalness: s.metalness ?? 0 });
     case "glass":
-      return glassMaterial();
+      return glassMaterial(undefined, !!s.lit);
     case "floor": {
       if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : s.color, roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);

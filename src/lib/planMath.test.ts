@@ -533,18 +533,13 @@ describe("cornerCorners with square ends", () => {
   });
 });
 
-describe("fixtureBox for ceiling items and grids", () => {
+describe("fixtureBox for ceiling items", () => {
   const fx = (type: string, extra: Partial<Fixture> = {}): Fixture => ({ id: type, type, x: 0, y: 0, rot: 0, ...extra });
   it("hangs a pendant its drop below the ceiling, and assumes 2.4 m without one", () => {
-    const pendant = byId("light-pendant")!;
-    expect(fixtureBox(fx("light-pendant"), pendant, 2.5).z0).toBeCloseTo(2.5 - 0.55 - 0.25);
-    expect(fixtureBox(fx("light-pendant", { drop: 1 }), pendant, 2.5).z0).toBeCloseTo(2.5 - 1 - 0.25);
-    expect(fixtureBox(fx("light-pendant"), pendant).z0).toBeCloseTo(2.4 - 0.55 - 0.25);
-    expect(fixtureBox(fx("light-flush"), byId("light-flush")!, 2.4).z0).toBeCloseTo(2.3);
-  });
-  it("sizes a downlight grid from its bulbs", () => {
-    const b = fixtureBox(fx("light-downlight-grid", { cols: 4, rows: 3, pitch: 0.8, w: 9 }), byId("light-downlight-grid")!, 2.4);
-    expect(b.w).toBeCloseTo(3 * 0.8 + 0.09);
-    expect(b.d).toBeCloseTo(2 * 0.8 + 0.09);
+    const pendant = byId("pendant")!;
+    expect(fixtureBox(fx("pendant"), pendant, 2.5).z0).toBeCloseTo(2.5 - 0.25 - 0.25);
+    expect(fixtureBox(fx("pendant", { drop: 1 }), pendant, 2.5).z0).toBeCloseTo(2.5 - 1 - 0.25);
+    expect(fixtureBox(fx("pendant"), pendant).z0).toBeCloseTo(2.4 - 0.25 - 0.25);
+    expect(fixtureBox(fx("flush-light"), byId("flush-light")!, 2.4).z0).toBeCloseTo(2.31);
   });
 });

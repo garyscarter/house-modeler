@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOGUE, CATEGORIES, SCOPE_CATEGORIES, dropOf, gridOf, isElectricalItem, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, cornerEnds, cubeGrid, isCornerUnit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
+import { CATALOGUE, CATEGORIES, SCOPE_CATEGORIES, dropOf, isElectricalItem, SIX_RINGS, TV_SIZES, VENTED_ZONES, byId, chaiseSizes, cornerArm, cornerSofaSizes, filterCatalogue, hasWorktop, isFloorCovering, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, cornerEnds, cubeGrid, isCornerUnit, tvInches, tvSize, wardrobeDoorCount } from "./catalogue";
 
 describe("radiators", () => {
   it("offers wall-hung single and double panels, a column and a vertical radiator under Heating", () => {
@@ -86,8 +86,8 @@ describe("filterCatalogue", () => {
     expect(filterCatalogue("socket", "Electrics").map((c) => c.id)).toEqual([]);
     expect(filterCatalogue("double socket", "All", [], "electrics").map((c) => c.id)).toContain("socket-double");
     expect(filterCatalogue("wardrobe", "All", [], "electrics")).toEqual([]);
-    expect(filterCatalogue("pendant", "All").map((c) => c.id)).toContain("light-pendant");
-    expect(filterCatalogue("pendant", "All", [], "electrics").map((c) => c.id)).toContain("light-pendant");
+    expect(filterCatalogue("pendant", "All").map((c) => c.id)).toContain("pendant");
+    expect(filterCatalogue("pendant", "All", [], "electrics").map((c) => c.id)).toContain("pendant");
     expect(SCOPE_CATEGORIES.furnish).not.toContain("Electrics");
     expect(SCOPE_CATEGORIES.furnish).toContain("Lighting");
   });
@@ -241,7 +241,7 @@ describe("lights and electrical points", () => {
   const lighting = CATALOGUE.filter((c) => c.category === "Lighting");
   const electrics = CATALOGUE.filter((c) => c.category === "Electrics");
   it("seeds the seven ceiling and wall light types and the electrical points", () => {
-    expect(new Set(lighting.map((c) => c.symbol))).toEqual(new Set(["pendant", "pendant-multi", "ceiling-flush", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light"]));
+    expect(new Set(lighting.map((c) => c.symbol))).toEqual(new Set(["pendant", "pendant-multi", "flush-light", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light"]));
     expect(electrics.length).toBe(26);
     for (const c of [...lighting, ...electrics]) expect(isElectricalItem(c), c.id).toBe(true);
     expect(isElectricalItem(byId("floor-lamp")!)).toBe(false);
@@ -258,13 +258,9 @@ describe("lights and electrical points", () => {
     }
     expect(byId("socket-floor")!.mount ?? 0).toBe(0);
   });
-  it("reads grid and drop overrides, clamped", () => {
-    const grid = byId("light-downlight-grid")!;
-    expect(gridOf({}, grid)).toEqual({ cols: 3, rows: 2, pitch: 1 });
-    expect(gridOf({ cols: 4.4, rows: 0, pitch: 0.05 }, grid)).toEqual({ cols: 4, rows: 1, pitch: 0.2 });
-    expect(gridOf({}, byId("light-pendant")!)).toBeUndefined();
-    expect(dropOf({}, byId("light-pendant")!)).toBe(0.55);
-    expect(dropOf({ drop: 0.9 }, byId("light-pendant")!)).toBe(0.9);
-    expect(dropOf({}, byId("light-flush")!)).toBe(0);
+  it("reads drop overrides", () => {
+    expect(dropOf({}, byId("pendant")!)).toBe(0.25);
+    expect(dropOf({ drop: 0.9 }, byId("pendant")!)).toBe(0.9);
+    expect(dropOf({}, byId("flush-light")!)).toBe(0);
   });
 });
