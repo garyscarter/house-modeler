@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { byId, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
 import { EXT_WALL_T, WALL_T } from "../../lib/geometry";
 import { abutNeighbours, fixtureBox, fixtureSolids, overlappingIds, rectCorners, snapToWall, wallLines, type Placement, type Seg } from "../../lib/planMath";
 import { planWallLines, planWalls } from "../../lib/planWalls";
@@ -62,7 +62,10 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number)
   // Rugs draw under everything, and wall-hung and worktop items over the units below them, whatever order they were placed in.
   const drawOrder = useMemo(() => {
     const mountedAt = (fx: Fixture) => { const it = byId(fx.type); return !it ? 0 : isFloorCovering(it) ? -1 : mountOf(fx, it); };
-    return [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b));
+    const sorted = [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b));
+    // Ceiling fittings draw last (stable partition) so no table or bed hides them.
+    const isCeil = (fx: Fixture) => { const it = byId(fx.type); return !!it && isCeilingItem(it); };
+    return [...sorted.filter((f) => !isCeil(f)), ...sorted.filter(isCeil)];
   }, [floor.fixtures]);
   const hitShapes = useMemo(
     () =>
@@ -89,8 +92,9 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number)
    * facing into the room and flush with its neighbours in the run; null when
    * no wall is near or Alt is held.
    */
-  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number }, rot: number, free: boolean, exclude?: string): Placement | null => {
-    if (free) return null;
+  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string): Placement | null => {
+    // Ceiling fittings place freely: no wall to back onto, no neighbours to abut.
+    if (free || b.ceiling) return null;
     // Reach: a little more than for corners, and never under 10 cm when zoomed right in.
     const reach = Math.max(snapTol * 1.5, 0.1 * ppm);
     const onWall = snapToWall(c, b.w * ppm, b.d * ppm, faceLines, reach, rot);
