@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
+import { LAMPS, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
 import { CATALOGUE, byId, dropOf } from "./catalogue";
 import { fixtureBox } from "./planMath";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
@@ -82,6 +82,12 @@ describe("light fixtures", () => {
     expect(lights[0].spot).toBeDefined();
     expect(lights[0].color).toBe(WARMTH_COLOR[2700]);
     expect(lights.map((l) => l.id)).toEqual(["g:pm:0", "g:pm:1", "g:pm:2"]);
+  });
+  it("gives every downlight of a grid its full lumens", () => {
+    const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("downlight-grid", { id: "dg" })] } as unknown as Floor;
+    const lights = floorLamps(floor, 2.4, 0, () => true);
+    expect(lights).toHaveLength(4);
+    lights.forEach((l) => expect(l.candela).toBeCloseTo(candela(450), 5));
   });
   it("warmth and dimmer fall back sensibly", () => {
     expect(warmthOf({})).toBe(2700);
@@ -168,5 +174,18 @@ describe("nightHour", () => {
     const h = nightHour(site, YEAR, dayOfYear(YEAR, 6, 21));
     expect(h).toBeGreaterThan(22);
     expect(h).toBeLessThanOrEqual(23.75);
+  });
+});
+
+describe("coneGain", () => {
+  it("is 1 with no cone or a full sphere, and grows as the cone narrows", () => {
+    expect(coneGain()).toBe(1);
+    expect(coneGain(Math.PI)).toBeCloseTo(1);
+    expect(coneGain(Math.PI / 2)).toBeCloseTo(2);
+    expect(coneGain((35 * Math.PI) / 180)).toBeGreaterThan(coneGain((75 * Math.PI) / 180));
+  });
+  it("keeps the flux: gain times the cone's solid angle is the whole sphere", () => {
+    const a = (35 * Math.PI) / 180;
+    expect(coneGain(a) * 2 * Math.PI * (1 - Math.cos(a))).toBeCloseTo(4 * Math.PI);
   });
 });
