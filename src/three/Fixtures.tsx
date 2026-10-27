@@ -94,7 +94,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean): F
     const p = toWorld(floor, { x: f.x, y: f.y });
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
-    const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
+    const j = isJoinery(item) || item.symbol === "shaker-wardrobe" ? joineryOf(f, item, b) : undefined;
     const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : (f.color ?? item.color);
     for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lightsOn && switchedOn(f))) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
@@ -333,7 +333,7 @@ function fixtureParts(
    * Door fronts across bay [x0, x1] in band [y0, y1], faces at zFront: two leaves when the bay is over 0.55 m wide
    * (one when `single`), 4 mm gaps, in the given style.
    */
-  const fronts = (x0: number, x1: number, y0: number, y1: number, zFront: number, style: JoineryFront, c = color, single = false, knob = true) => {
+  const fronts = (x0: number, x1: number, y0: number, y1: number, zFront: number, style: JoineryFront, c = color, single = false, knob = true, trim?: string, panel?: string) => {
     if (style === "open" || y1 - y0 < 0.03) return;
     const t = 0.018;
     const gap = 0.004;
@@ -361,7 +361,8 @@ function fixtureParts(
           const bw = fw - 2 * rail;
           const bh = hh - 2 * rail;
           if (bw > 0.05 && bh > 0.05) {
-            const bead = shade(c, 0.93);
+            const bead = trim ?? shade(c, 0.93);
+            if (panel) box(cx, yc, zFront + 0.001, bw, bh, 0.004, panel, "satin");
             for (const sy of [-1, 1]) box(cx, yc + (sy * bh) / 2, zFront + 0.003, bw, 0.009, 0.006, bead, "satin");
             for (const sx of [-1, 1]) box(cx + (sx * bw) / 2, yc, zFront + 0.003, 0.009, bh, 0.006, bead, "satin");
           }
@@ -1075,7 +1076,7 @@ function fixtureParts(
         for (const x of inner) box(x, (b0 + b1) / 2, 0, t, b1 - b0, d - 0.01, cc, "satin");
         for (const [x0, x1] of bays) {
           if (j.baseFront === "open") box((x0 + x1) / 2, (b0 + b1) / 2, 0, x1 - x0, t, d - 0.04, cc, "satin");
-          else fronts(x0, x1, b0, b1, f, j.baseFront);
+          else fronts(x0, x1, b0, b1, f, j.baseFront, color, false, true, j.trim, j.panel);
         }
       }
       if (L.top) box(0, (L.top[0] + L.top[1]) / 2, 0.01, w, TOP_T, d + 0.02, j.topColor, "satin");
@@ -1100,14 +1101,14 @@ function fixtureParts(
           }
         } else {
           for (const y of L.shelfYs) box(0, y, uz, w - 2 * t, 0.022, ud, cc, "satin");
-          for (const [x0, x1] of bays) fronts(x0, x1, u0, u1, -d / 2 + ud, j.upperFront);
+          for (const [x0, x1] of bays) fronts(x0, x1, u0, u1, -d / 2 + ud, j.upperFront, color, false, true, j.trim, j.panel);
         }
       }
       if (L.topBox) {
         const [y0, y1] = L.topBox;
         box(0, y0 + t / 2, 0, w - 2 * t, t, d - 0.01, cc, "satin");
         const style: JoineryFront = j.upperFront !== "open" ? j.upperFront : j.baseFront !== "open" ? j.baseFront : "slab";
-        for (const [x0, x1] of bays) fronts(x0, x1, y0 + t, y1, f, style);
+        for (const [x0, x1] of bays) fronts(x0, x1, y0 + t, y1, f, style, color, false, true, j.trim, j.panel);
       }
       break;
     }
@@ -1290,7 +1291,7 @@ function fixtureParts(
       const skirt = 0.08;
       const zd = d / 2 - t / 2;
       const front = d / 2;
-      const bead = shade(color, 1.2);
+      const bead = j?.trim ?? shade(color, 1.2);
       box(0, h / 2, -t / 2, w, h, d - t, shade(color, 0.9), "satin");
       box(0, skirt / 2, zd, w, skirt, t, shade(color, 0.85), "satin");
       // A dark backer just behind the door fronts, so the joints between doors read as solid shadow gaps.
@@ -1314,6 +1315,7 @@ function fixtureParts(
         ]) {
           const bh = by1 - by0;
           const bc = (by0 + by1) / 2;
+          if (j?.panel) box(x, bc, front + 0.001, bw, bh, 0.004, j.panel, "satin");
           for (const sy of [by0, by1]) box(x, sy, front + 0.003, bw, 0.009, 0.006, bead, "satin");
           for (const sx of [-1, 1]) box(x + (sx * bw) / 2, bc, front + 0.003, 0.009, bh, 0.006, bead, "satin");
         }

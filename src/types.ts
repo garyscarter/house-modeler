@@ -345,6 +345,10 @@ export interface JoineryConfig {
   front?: JoineryFront;
   /** Carcass and inside colour (unset = the fixture colour). */
   carcass?: string;
+  /** Shaker doors: colour of the raised bead round each panel; unset = a shade of the door colour. */
+  trim?: string;
+  /** Shaker doors: colour of the recessed panel inside the bead; unset = the door colour. */
+  panel?: string;
   /** Shelf thickness, m. */
   shelfT?: number;
   seatFront?: SeatFront;

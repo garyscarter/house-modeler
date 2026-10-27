@@ -890,7 +890,7 @@ export function FixtureInspector({
         </>
       )}
       <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
-      {isJoinery(item) && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
+      {(isJoinery(item) || item.symbol === "shaker-wardrobe") && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
         <SwatchField
           label="Worktop colour"
@@ -955,7 +955,7 @@ function JoineryFields({
   const set = (p: Parameters<typeof patchJoinery>[1]) => onChange(patchJoinery(fixture, p));
   const sym = item.symbol;
   const colourField = (label: string, value: string, isSet: boolean, change: (c: string) => void, reset: () => void) => (
-    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} />
+    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} dulux />
   );
   const frontSelect = (label: string, value: JoineryFront, change: (v: JoineryFront) => void, openLabel?: string) => (
     <label>
@@ -979,6 +979,12 @@ function JoineryFields({
         </button>
       )}
     </div>
+  );
+  const shakerColours = (
+    <>
+      {colourField("Trim colour", j.trim ?? fixture.color ?? item.color, j.trim !== undefined, (c) => set({ trim: c }), () => set({ trim: undefined }))}
+      {colourField("Panel colour", j.panel ?? fixture.color ?? item.color, j.panel !== undefined, (c) => set({ panel: c }), () => set({ panel: undefined }))}
+    </>
   );
   const toCeiling = fixture.h === undefined || (ceiling !== undefined && fixture.h >= ceiling);
   const refitLabel =
@@ -1033,9 +1039,11 @@ function JoineryFields({
             </label>
           )}
           {colourField("Carcass colour", j.carcass, fixture.joinery?.carcass !== undefined, (c) => set({ carcass: c }), () => set({ carcass: undefined }))}
+          {(j.baseFront === "shaker" || j.upperFront === "shaker") && shakerColours}
           {j.top && colourField("Top colour", j.topColor, fixture.worktop !== undefined, (c) => onChange({ worktop: c }), () => onChange({ worktop: undefined }))}
         </>
       )}
+      {sym === "shaker-wardrobe" && shakerColours}
       {sym === "window-seat" && (
         <>
           <label>
