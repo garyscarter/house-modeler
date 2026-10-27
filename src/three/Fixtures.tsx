@@ -374,6 +374,7 @@ function fixtureParts(
       const dz = mz0 + md - dl / 2;
       soft(0, 0.5, dz, mw + 0.06, 0.05, dl, color);
       for (const sx of [-1, 1]) soft(sx * (mw / 2 + 0.03), 0.42, dz, 0.025, 0.2, dl, shade(color, 0.92));
+      soft(0, 0.42, mz0 + md + 0.02, mw + 0.06, 0.2, 0.025, shade(color, 0.92));
       soft(0, 0.515, dz - dl / 2 + 0.06, mw + 0.05, 0.05, 0.12, shade(color, 1.12));
       // Pillows against the headboard.
       const np = w >= 1.2 ? 2 : 1;
