@@ -122,8 +122,28 @@ export interface WallOverride {
   paint?: string;
   /** Pattern colour of the covering. */
   accent?: string;
+  /** A second colour on one side of a line across the wall. Only applies while the wall's covering is paint. */
+  split?: WallSplit;
   /** The same edge's outside face, if it is an outside wall: fields left out follow the room's outside finish. */
   outside?: OutsideOverride;
+}
+
+export type WallSplitKind = "diagonalUp" | "diagonalDown" | "horizontal" | "vertical";
+
+export const WALL_SPLIT_LABEL: Record<WallSplitKind, string> = {
+  diagonalUp: "Diagonal, rising",
+  diagonalDown: "Diagonal, falling",
+  horizontal: "Horizontal line",
+  vertical: "Vertical line",
+};
+
+/** Left/right and rising/falling are as seen by someone in the room looking at the wall. The base paint stays below / left of the line. */
+export interface WallSplit {
+  kind: WallSplitKind;
+  /** horizontal: height of the line (m, default 1.2); vertical: distance from the left end as seen from inside (m, default half the wall). */
+  at?: number;
+  /** The second colour: above the line (horizontal, diagonals) or right of it (vertical). */
+  color: string;
 }
 
 /** One outside wall's own finish (for example a render panel in a brick room). */
