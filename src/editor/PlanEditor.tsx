@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Fixture, Floor, Pt, VariantKey } from "../types";
-import { byId } from "../lib/catalogue";
+import { uid, type Fixture, type Floor, type Pt, type VariantKey } from "../types";
+import { pieceFixtureFields } from "../lib/myFurniture";
+import { byId, isElectricalItem, type CatalogueItem } from "../lib/catalogue";
+import { allControls, gangCount, gangOf, links as linksOf, numberPoints } from "../lib/electrics";
 import { ContextMenu } from "../components/ContextMenu";
 import { usePanelPrefs } from "../components/panelPrefs";
-import { pruneSelection } from "../lib/modes";
+import { editsFixtures, pruneSelection } from "../lib/modes";
+import { snapKind } from "../lib/planHit";
 import { useStore } from "../store";
 import { bbox } from "../lib/geometry";
 import { fixtureBox, imageClipRect, imageStateOf, setEdgeLength, viewBoxOf } from "../lib/planMath";
@@ -24,6 +27,7 @@ import { Backdrop } from "./plan/layers/Backdrop";
 import { CanopyLabels, CanopyShapes } from "./plan/layers/Canopies";
 import { NoRoomsHint, RoomFills, RoomHover, RoomLabels } from "./plan/layers/Rooms";
 import { FreeWalls, WallBands, WallDraft } from "./plan/layers/Walls";
+import { ElectricsLayer } from "./plan/layers/Electrics";
 import { FixtureLabels, FixtureLocks, FixtureSymbols, HoverBox, PlacingGhost, SelectionBox } from "./plan/layers/Fixtures";
 import { StairsMarker } from "./plan/layers/Stairs";
 import { CanopyHandles, RoomEdgeHits, RoomHandles } from "./plan/layers/Handles";
@@ -51,6 +55,12 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const build = mode === "build";
   const decorate = mode === "decorate";
   const furnish = mode === "furnish";
+  const electrics = mode === "electrics";
+  /** Furnish and Electrics both place, pick and move fixtures. */
+  const fixtureMode = editsFixtures(mode);
+  const model = useStore((s) => s.variants[variant]);
+  const linkSwitchId = useStore((s) => s.linkSwitchId);
+  const linkGang = useStore((s) => s.linkGang);
   const setUi = useStore((s) => s.setUi);
   const planImage = useStore((s) => s.planImage);
   const wallsOn = useStore((s) => s.planWalls);
@@ -93,7 +103,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const tools = usePlanTools(mode, floor, () => setEdgeEdit(null));
   const { tool, calib, draft, hover, altHeld, measure, placing, setPlacing, pick, startPlacing } = tools;
 
-  const geo = usePlanGeometry(floor, wallsOn, px * 10);
+  const geo = usePlanGeometry(floor, wallsOn, px * 10, mode);
   const { fitPlacing, snapFixture, faceLines, hitShapes } = geo;
   const toScreen = (p: Pt): Pt => ({ x: (p.x - (cam?.x ?? 0)) / px, y: (p.y - (cam?.y ?? 0)) / px });
   /** Put a fitted unit back in its recess (or at its window), undoably. */
@@ -114,7 +124,15 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const h = useStableHandlers(drag);
   usePlanKeys({ variant, floor, mode, segs: geo.segs, camera, sel: selection, tools, selectedRoomId, setAddOpen });
   const pickEvent = useEvent(pick);
-  const startPlacingEvent = useEvent(startPlacing);
+  const startPlacingEvent = useEvent((item: CatalogueItem) => {
+    if (!(electrics && chassis === "phone")) return startPlacing(item);
+    // Phone, Electrics: picking drops the point at the middle of the view (on the nearest wall if one is in reach) and selects it; drag to move.
+    const c = { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 };
+    const snapped = snapFixture(c, { ...item, z0: item.mount ?? 0 }, 0, false, undefined, snapKind(item));
+    const fx: Fixture = { id: uid(), type: item.id, x: c.x, y: c.y, rot: 0, ...pieceFixtureFields(item), ...snapped };
+    selection.setFixtures((all) => [...all, fx]);
+    select({ fixtures: [fx.id] });
+  });
   const pasteEvent = useEvent(() => pasteFixtures());
   const finishRoom = useEvent(() => {
     if (draft.length >= 3) addRoom(draft);
@@ -153,6 +171,17 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     if (!sel) return [];
     return wallClearances({ c: { x: (sel.x0 + sel.x1) / 2, y: (sel.y0 + sel.y1) / 2 }, w: sel.x1 - sel.x0, d: sel.y1 - sel.y0, rot: 0 }, faceLines, maxPx);
   }, [furnish, tool, liveIds, allFixtures, faceLines, ppm]);
+  // Electrics: the numbered points of the floor, the links drawn from its switches, and the lights ringed for the switch in hand.
+  const numbered = useMemo(() => (electrics && model ? numberPoints(model) : []), [electrics, model]);
+  const floorPoints = useMemo(() => numbered.filter((p) => p.floor.id === floor.id), [numbered, floor.id]);
+  const floorLinks = useMemo(() => (electrics && model ? linksOf(model, numbered).filter((l) => l.from.floor.id === floor.id) : []), [electrics, model, numbered, floor.id]);
+  const switchInHand = linkSwitchId ?? (liveIds.length === 1 ? liveIds[0] : null);
+  const linkedIds = useMemo(() => {
+    const sw = electrics && switchInHand ? numbered.find((p) => p.fx.id === switchInHand && p.kind === "switch") : undefined;
+    return new Set(!sw ? [] : linkSwitchId ? gangOf(sw.fx, linkGang).controls : allControls(sw.fx));
+  }, [electrics, numbered, switchInHand, linkSwitchId, linkGang]);
+  const furnitureOrder = useMemo(() => (electrics ? geo.drawOrder.filter((fx) => { const it = byId(fx.type); return !it || !isElectricalItem(it); }) : geo.drawOrder), [electrics, geo.drawOrder]);
+  const linking = linkSwitchId ? numbered.find((p) => p.fx.id === linkSwitchId) : undefined;
   const hoverBox = useMemo(() => {
     if (!hoverGroup || drag.drag.active()) return null;
     const members = allFixtures.filter((x) => x.groupId === hoverGroup).map((x) => x.id);
@@ -198,20 +227,21 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const ghost =
     ghostFit ??
     (tool === "place" && placing && hover
-      ? snapFixture(hover, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, altHeld) ?? { ...hover, rot: placing.rot }
+      ? snapFixture(hover, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, altHeld, undefined, snapKind(placing.item)) ?? { ...hover, rot: placing.rot }
       : null);
   const hovered = hoveredRoomId && hoveredRoomId !== selectedRoomId ? floor.rooms.find((r) => r.id === hoveredRoomId) : undefined;
 
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
   const imageState = imageStateOf(planImage);
   const clip = useMemo(() => imageClipRect(roomsRect, ppm, { w: floor.imageW, h: floor.imageH }), [roomsRect, ppm, floor.imageW, floor.imageH]);
-  const neutralFills = quiet && (build || furnish);
+  const neutralFills = quiet && (build || furnish || electrics);
   const showRoomLabels = !(planImage.show && imageState === "trace");
   const editSelect = build && tool === "select";
 
   const statusText = statusTextFor({
     tool, draftLen: draft.length, measureLen: measure.length, calibLen: calib.length, placing,
     movingWall: drag.movingWall, roomHint, hasSelectedRoom: !!selectedRoomId, touch,
+    linking: linking ? `${linking.label}${gangCount(linking.item) > 1 ? ` gang ${linkGang + 1}` : ""} (${linking.room.name})` : linkSwitchId ? "switch" : null,
   });
 
   return (
@@ -229,8 +259,9 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {showRoomLabels && <RoomLabels rooms={orderedRooms} ppm={ppm} px={px} />}
 
             <FixtureSymbols
-              ordered={geo.drawOrder}
-              furnish={furnish}
+              ordered={furnitureOrder}
+              furnish={fixtureMode}
+              dimmed={electrics ? "furniture" : furnish ? "points" : "none"}
               hoverable={furnish && tool === "select"}
               selectedIds={liveIds}
               flagged={geo.flagged}
@@ -239,8 +270,22 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
               onDown={h.fixtureDown}
               onHoverGroup={setHoverGroup}
             />
-            {furnish && tool === "select" && selBox && <SelectionBox box={selBox} px={px} />}
-            {furnish && hoverBox && <HoverBox box={hoverBox} px={px} />}
+            {electrics && (
+              <ElectricsLayer
+                points={floorPoints}
+                links={floorLinks}
+                selectedIds={liveIds}
+                linkSwitchId={linkSwitchId}
+                linkGang={linkGang}
+                linkedIds={linkedIds}
+                ppm={ppm}
+                px={px}
+                touch={touch}
+                onDown={h.fixtureDown}
+              />
+            )}
+            {fixtureMode && tool === "select" && selBox && <SelectionBox box={selBox} px={px} />}
+            {fixtureMode && hoverBox && <HoverBox box={hoverBox} px={px} />}
             {marquee && <Marquee a={marquee.a} b={marquee.b} px={px} />}
             <FixtureLabels fixtures={fixtures} px={px} />
             <FixtureLocks fixtures={fixtures} ppm={ppm} px={px} />

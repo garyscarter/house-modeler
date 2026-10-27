@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODES, MODE_LABEL, PLAN_TOOLS, SITE_EDIT_ID, canSelect, isMode, modeSwitchPatch, pruneSelection, roomTapSelects, type ModeUi, type SelKind } from "./modes";
+import { MODES, MODE_ICON, MODE_LABEL, MODE_SUBTITLE, PLAN_TOOLS, editsFixtures, SITE_EDIT_ID, canSelect, isMode, modeSwitchPatch, pruneSelection, roomTapSelects, type ModeUi, type SelKind } from "./modes";
 
 const ui = (p: Partial<ModeUi> = {}): ModeUi => ({
   mode: "build",
@@ -13,8 +13,8 @@ const ui = (p: Partial<ModeUi> = {}): ModeUi => ({
 const apply = (u: ModeUi, next: ModeUi["mode"]): ModeUi => ({ ...u, ...modeSwitchPatch(u, next) });
 
 describe("modes", () => {
-  it("lists the six modes in order with labels", () => {
-    expect(MODES.map((m) => MODE_LABEL[m])).toEqual(["Build", "Decorate", "Furnish", "Garden", "Plot", "Review"]);
+  it("lists the seven modes in order with labels", () => {
+    expect(MODES.map((m) => MODE_LABEL[m])).toEqual(["Build", "Decorate", "Furnish", "Electrics", "Garden", "Plot", "Review"]);
     expect(isMode("furnish")).toBe(true);
     expect(isMode("nope")).toBe(false);
   });
@@ -25,6 +25,7 @@ describe("modes", () => {
     expect(allowed("build")).toEqual(["room", "opening", "wall", "canopy", "corner"]);
     expect(allowed("decorate")).toEqual(["room", "edge", "wall"]);
     expect(allowed("furnish")).toEqual(["fixture"]);
+    expect(allowed("electrics")).toEqual(["fixture"]);
     expect(allowed("plot")).toEqual([]);
     expect(allowed("review")).toEqual([]);
     expect(MODES.filter(roomTapSelects)).toEqual(["build", "decorate"]);
@@ -42,6 +43,7 @@ describe("modes", () => {
     for (const m of MODES) expect(PLAN_TOOLS[m].includes("calibrate")).toBe(m === "build");
     expect(PLAN_TOOLS.build).toHaveLength(10);
     expect(PLAN_TOOLS.furnish).toEqual(["select", "measure"]);
+    expect(PLAN_TOOLS.electrics).toEqual(["select", "measure", "place"]);
   });
 
   it("Build to Furnish clears the room and edge", () => {
@@ -98,5 +100,17 @@ describe("garden mode", () => {
 
   it("clears the garden selection on every switch", () => {
     expect(modeSwitchPatch({ mode: "garden", tab: "plan", editFloorId: SITE_EDIT_ID, floorBeforeSite: null, selectedRoomId: null, selectedEdge: null, gardenSel: ["a"] }, "plot").gardenSel).toEqual([]);
+  });
+});
+
+describe("electrics mode", () => {
+  it("sits after Furnish with its icon and subtitle, and edits fixtures like Furnish", () => {
+    expect(MODES.indexOf("electrics")).toBe(MODES.indexOf("furnish") + 1);
+    expect(MODE_ICON.electrics).toBe("plug");
+    expect(MODE_SUBTITLE.electrics).toBe("Lights, switches, sockets and circuits");
+    expect(MODES.filter(editsFixtures)).toEqual(["furnish", "electrics"]);
+  });
+  it("a mode switch ends any linking", () => {
+    expect(modeSwitchPatch(ui({ mode: "electrics", linkSwitchId: "sw" }), "furnish").linkSwitchId).toBeNull();
   });
 });

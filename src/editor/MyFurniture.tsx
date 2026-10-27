@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { VARIANT_LABEL, type Fixture, type MyPiece, type VariantKey } from "../types";
-import { byId, CATALOGUE, CATEGORIES } from "../lib/catalogue";
+import { byId, CATALOGUE, SCOPE_CATEGORIES } from "../lib/catalogue";
 import { pieceWhereabouts, whereaboutsLine } from "../lib/myFurniture";
 import { useStore } from "../store";
 import { ask } from "../components/Dialogs";
@@ -73,7 +73,7 @@ export function PieceForm({ initial, onSave, onCancel }: { initial?: MyPiece; on
       <label>
         Draws as
         <select value={kind} onChange={(e) => pickKind(e.target.value)}>
-          {CATEGORIES.map((c) => (
+          {SCOPE_CATEGORIES.furnish.map((c) => (
             <optgroup key={c} label={c}>
               {CATALOGUE.filter((i) => i.category === c).map((i) => (
                 <option key={i.id} value={i.id}>

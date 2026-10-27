@@ -2,6 +2,7 @@ import type { Fixture, Floor, HouseModel, Opening, OpeningKind, Room, Site } fro
 import { FLOOR_FINISH_LABEL, type FloorFinish } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { byId } from "./catalogue";
+import { OUTSIDE, pointsOf, type Point } from "./electrics";
 import { frontAreas, isJoinery, joineryOf, shelfStack } from "./joinery";
 import { fixtureBox, M2_TO_FT2 } from "./planMath";
 import { diffSites } from "./siteDiff";
@@ -179,7 +180,7 @@ export function areaReport(current?: HouseModel, proposed?: HouseModel): AreaRep
 // Changes
 
 export type Unit = "m²" | "m" | "each";
-export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site" | "Garden";
+export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site" | "Garden" | "Electrics";
 export type CostLineId =
   | "newFloorArea"
   | "removeWall"
@@ -205,7 +206,9 @@ export type CostLineId =
   | "gardenLighting"
   | "gardenPlanting"
   | "hedging"
-  | "removeGardenItem";
+  | "removeGardenItem"
+  // Electrics (electricalChanges): each new or moved light, switch, socket or other point
+  | "electricalWorks";
 
 export interface Change {
   key: string;
@@ -398,7 +401,7 @@ const mm = (v: number) => Math.round(v * 1000) / 1000;
 function joinerySignature(fx: Fixture, ceiling: number): string {
   const item = byId(fx.type)!;
   const box = fixtureBox(fx, item, ceiling);
-  const { carcass: _c, topColor: _t, cushion: _k, fit: _f, ...j } = joineryOf(fx, item, box);
+  const { carcass: _c, topColor: _t, cushion: _k, fit: _f, trim: _tr, panel: _p, ...j } = joineryOf(fx, item, box);
   return JSON.stringify({ w: mm(box.w), d: mm(box.d), h: mm(box.h), j });
 }
 
@@ -469,6 +472,59 @@ export function joineryChanges(fa: Floor | undefined, fb: Floor, ceilA: number, 
   }
   return out;
 }
+
+/**
+ * Costed changes to electrical points on one floor (Dua Lipa implements; docs/electrics-plan.md section 7): new
+ * points and points moved 0.3 m or more, grouped per room and catalogue type, on the electricalWorks line, quantity
+ * = points (a downlight grid counts every bulb); removed points for information only. Category "Electrics".
+ */
+export function electricalChanges(fa: Floor | undefined, fb: Floor): JoineryChange[] {
+  const A = fa ? pointsOf(fa) : [];
+  const B = pointsOf(fb);
+  const taken = new Set<string>();
+  const partner = new Map<string, Point>();
+  for (const p of B) {
+    const hit = A.find((x) => x.fx.id === p.fx.id);
+    if (hit) {
+      partner.set(p.fx.id, hit);
+      taken.add(hit.fx.id);
+    }
+  }
+  for (const p of B) {
+    if (partner.has(p.fx.id)) continue;
+    const hit = A.filter((x) => !taken.has(x.fx.id) && x.fx.type === p.fx.type).find((x) => Math.hypot(x.at.x - p.at.x, x.at.y - p.at.y) < ELEC_MOVE_M);
+    if (hit) {
+      partner.set(p.fx.id, hit);
+      taken.add(hit.fx.id);
+    }
+  }
+  type Group = { roomKey: string; room: string; item: Point["item"]; quantity: number };
+  const added = new Map<string, Group>();
+  const moved = new Map<string, Group>();
+  const add = (m: Map<string, Group>, p: Point) => {
+    const key = `${p.room.key}:${p.item.id}`;
+    const g = m.get(key) ?? { roomKey: p.room.key, room: p.room.name, item: p.item, quantity: 0 };
+    g.quantity += p.quantity;
+    m.set(key, g);
+  };
+  for (const p of B) {
+    const was = partner.get(p.fx.id);
+    if (!was) add(added, p);
+    else if (Math.hypot(was.at.x - p.at.x, was.at.y - p.at.y) >= ELEC_MOVE_M) add(moved, p);
+  }
+  const where = (room: string) => (room === OUTSIDE ? "outside" : `in the ${room}`);
+  const lead = (verb: string, g: Group) => `${verb} ${g.item.name.toLowerCase()} ${where(g.room)}${g.quantity > 1 ? ` × ${g.quantity}` : ""}`;
+  const out: JoineryChange[] = [];
+  for (const [k, g] of added) out.push({ key: `elec:new:${k}`, category: "Electrics", description: lead("New", g), quantity: g.quantity, unit: "each", costLine: "electricalWorks" });
+  for (const [k, g] of moved) out.push({ key: `elec:move:${k}`, category: "Electrics", description: lead("Move", g), quantity: g.quantity, unit: "each", costLine: "electricalWorks" });
+  const gone = new Map<string, Group>();
+  for (const p of A) if (!taken.has(p.fx.id)) add(gone, p);
+  for (const [k, g] of gone) out.push({ key: `elec:removed:${k}`, category: "Electrics", description: `${g.item.name}${g.quantity > 1 ? ` × ${g.quantity}` : ""} removed ${g.room === OUTSIDE ? "from outside" : `from the ${g.room}`}`, quantity: g.quantity, unit: "each" });
+  return out;
+}
+
+/** A point moved this far (metres) or more is a new job; closer pairs are the same point. */
+const ELEC_MOVE_M = 0.3;
 
 export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?: Site }): Change[] {
   const out: Change[] = [];
@@ -633,6 +689,8 @@ export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?:
 
     // Fitted joinery.
     for (const c of joineryChanges(fa, fb!, a.ceilingHeight, b.ceilingHeight)) push(c);
+    // Electrical points (lights, switches, sockets and the rest).
+    for (const c of electricalChanges(fa, fb!)) push(c);
   }
   if (sites) out.push(...diffSites(sites.a, sites.b));
   return out;
@@ -674,6 +732,7 @@ export const COST_LINES: CostLineDef[] = [
   { id: "gardenPlanting", label: "Trees, shrubs and plants", unit: "each", example: 40 },
   { id: "hedging", label: "Hedging, screens and climbers", unit: "m", example: 60 },
   { id: "removeGardenItem", label: "Remove a garden item", unit: "each", example: 60 },
+  { id: "electricalWorks", label: "Electrical works (per new point)", unit: "each", example: 120 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */

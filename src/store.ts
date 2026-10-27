@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Floor, HouseModel, MyPiece, Photo, Room, SavedView, Site, VariantKey } from "./types";
 import { applyPiece, unlinkPiece } from "./lib/myFurniture";
+import type { LightsMaster } from "./lib/lights";
 import { imageAwareStorage, useHydration } from "./lib/persist";
 import { renamePhotos } from "./lib/modelOps";
 import { setLink, syncLinks } from "./lib/roomLinks";
@@ -31,6 +32,8 @@ export interface SunState {
   dayOfYear: number;
   /** Local clock time in hours (e.g. 14.5 = 2:30 pm), UK time incl. BST. */
   hour: number;
+  /** The Lights master: auto (on from dusk), on or off. Absent in older saves = auto (see lib/lights.ts `lightsMaster`). */
+  lights?: LightsMaster;
 }
 
 interface Snapshot {
@@ -73,6 +76,10 @@ interface State {
   floorBeforeSite: string | null;
   /** Garden mode: the selected garden items, shared by the site editor and the Garden panel. Not persisted; cleared by a mode switch. */
   gardenSel: string[];
+  /** Electrics mode: the switch whose lights are being linked on the plan (see lib/modes.ts ModeUi). Not persisted; cleared by a mode switch. */
+  linkSwitchId: string | null;
+  /** Which rocker (gang, 0-based) of the linking switch the tapped lights go on. */
+  linkGang: number;
   setMode: (m: Mode) => void;
   /** The mode Review was opened from, so closing it goes back there. Persisted. */
   modeBeforeReview: Mode | null;
@@ -149,6 +156,8 @@ interface State {
         | "selectedEdge"
         | "floorBeforeSite"
         | "gardenSel"
+        | "linkSwitchId"
+        | "linkGang"
         | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
@@ -273,6 +282,8 @@ export const useStore = create<State>()(
 
         mode: "build",
         gardenSel: [],
+        linkSwitchId: null,
+        linkGang: 0,
         selectedEdge: null,
         floorBeforeSite: null,
         setMode: (m) =>
@@ -438,7 +449,7 @@ export const useStore = create<State>()(
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
           ),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [] }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [], linkSwitchId: null, linkGang: 0 }),
       };
     },
     {

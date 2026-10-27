@@ -41,8 +41,8 @@ import { svgPoints,
   cornerCorners,
 } from "./planMath";
 import { floor, rect } from "./testing";
-import type { CatalogueItem } from "./catalogue";
-import type { Opening } from "../types";
+import { byId, type CatalogueItem } from "./catalogue";
+import type { Fixture, Opening } from "../types";
 
 // 100 px per metre throughout, so coordinates read as centimetres.
 const PX = 100;
@@ -530,5 +530,16 @@ describe("cornerCorners with square ends", () => {
     const both = cornerCorners({ x: 0, y: 0 }, 100, 100, 0, "flat", { endBack: 20, endSide: 30 });
     expect(both).toHaveLength(5);
     expect(both[2]).toEqual({ x: 50, y: -30 });
+  });
+});
+
+describe("fixtureBox for ceiling items", () => {
+  const fx = (type: string, extra: Partial<Fixture> = {}): Fixture => ({ id: type, type, x: 0, y: 0, rot: 0, ...extra });
+  it("hangs a pendant its drop below the ceiling, and assumes 2.4 m without one", () => {
+    const pendant = byId("pendant")!;
+    expect(fixtureBox(fx("pendant"), pendant, 2.5).z0).toBeCloseTo(2.5 - 0.25 - 0.25);
+    expect(fixtureBox(fx("pendant", { drop: 1 }), pendant, 2.5).z0).toBeCloseTo(2.5 - 1 - 0.25);
+    expect(fixtureBox(fx("pendant"), pendant).z0).toBeCloseTo(2.4 - 0.25 - 0.25);
+    expect(fixtureBox(fx("flush-light"), byId("flush-light")!, 2.4).z0).toBeCloseTo(2.31);
   });
 });

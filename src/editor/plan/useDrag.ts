@@ -1,18 +1,20 @@
 import { useRef, useState, type RefObject } from "react";
-import { byId, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, isElectricalItem, type CatalogueItem } from "../../lib/catalogue";
+import { pointKind } from "../../lib/electrics";
+import { toggleLinkInModel } from "./linking";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, snapShift } from "../../lib/canopy";
 import { insertCorner, removeCorner } from "../../lib/featureWalls";
 import { expandToGroups, fixturesInRect, moveFixtures, rotateFixtures, selectionBounds, type Rect } from "../../lib/fixtureGroups";
 import { EXT_WALL_T, pointInPolygon } from "../../lib/geometry";
 import { pickInPlan } from "../../lib/decorPick";
 import { alignGuides, alignSnap, boxRect, type Guide } from "../../lib/planGuides";
-import { nextUnder, type HitSolid } from "../../lib/planHit";
+import { fixtureSelectable, nextUnder, snapKind, type HitSolid } from "../../lib/planHit";
 import { lockToNormal, snapPoint, SNAP_PX } from "../../lib/polygonEdit";
 import { dist, fixtureBox, nearestSegment, openingsOnEdge, segOrientation, snapToWall, type Placement, type Seg } from "../../lib/planMath";
 import { pieceFixtureFields } from "../../lib/myFurniture";
 import { tidyJoinery } from "../../lib/joinery";
 import { knockThroughNeighbours } from "../../lib/mergeRooms";
-import type { Mode } from "../../lib/modes";
+import { editsFixtures, type Mode } from "../../lib/modes";
 import { usePanelPrefs } from "../../components/panelPrefs";
 import { useStore } from "../../store";
 import { uid, type Fixture, type Floor, type JoineryConfig, type Opening, type Pt, type Room, type VariantKey, type Wall } from "../../types";
@@ -32,7 +34,7 @@ export interface PlanGeo {
   hitShapes: HitSolid[];
   faceLines: Parameters<typeof snapToWall>[3];
   fitPlacing(c: Pt, item: CatalogueItem, free: boolean): (Placement & { w: number; d?: number; h?: number; joinery?: JoineryConfig }) | null;
-  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number }, rot: number, free: boolean, exclude?: string): Placement | null;
+  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string, how?: "furniture" | "wall" | "none"): Placement | null;
 }
 
 export interface PlanDragArgs {
@@ -109,7 +111,7 @@ export function usePlanDrag(args: PlanDragArgs) {
   // ---- The background: a marquee in Furnish, otherwise a pan; a pan released in place is the old canvas click.
   const background = (p: Press): DragSpec | null => {
     const a = L.current;
-    if (!(a.mode === "furnish" && a.tools.tool === "select" && p.shift && p.pointerType === "mouse")) return null;
+    if (!(editsFixtures(a.mode) && a.tools.tool === "select" && p.shift && p.pointerType === "mouse")) return null;
     return {
       kind: "marquee",
       data: { a: p.at },
@@ -122,7 +124,7 @@ export function usePlanDrag(args: PlanDragArgs) {
         setMarquee(null);
         if (m.lost) return;
         const A = L.current;
-        const hit = expandToGroups(fixturesInRect(A.sel.allFixtures.filter((f) => byId(f.type)), { x0: origin.x, y0: origin.y, x1: m.at.x, y1: m.at.y }), A.sel.allFixtures);
+        const hit = expandToGroups(fixturesInRect(A.sel.allFixtures.filter((f) => { const it = byId(f.type); return !!it && fixtureSelectable(A.mode, it); }), { x0: origin.x, y0: origin.y, x1: m.at.x, y1: m.at.y }), A.sel.allFixtures);
         if (hit.length) A.sel.select({ fixtures: [...new Set([...A.sel.liveIds, ...hit])] });
       },
       cancelled() {
@@ -138,7 +140,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     const { select, canopies } = sel;
     const build = mode === "build";
     const decorate = mode === "decorate";
-    const furnish = mode === "furnish";
+    const furnish = editsFixtures(mode);
     const ppm = floor.pxPerM;
     const raw = m.at;
     const t = tol();
@@ -149,7 +151,7 @@ export function usePlanDrag(args: PlanDragArgs) {
         sel.setFixtures((all) => [...all, { ...fx, ...fitted, joinery: tidyJoinery({ ...fx.joinery, ...fitted.joinery }) }]);
         return;
       }
-      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, m.alt);
+      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0, ceiling: isCeilingItem(placing.item) }, placing.rot, m.alt, undefined, snapKind(placing.item));
       sel.setFixtures((all) => [...all, { ...fx, ...snapped }]);
       return; // stay in place mode for the next one
     }
@@ -221,6 +223,11 @@ export function usePlanDrag(args: PlanDragArgs) {
       }
     } else if (furnish) {
       if (!m.shift) {
+        // Tapping empty plan ends linking (the switch stays selected).
+        if (useStore.getState().linkSwitchId) {
+          useStore.getState().setUi({ linkSwitchId: null, linkGang: 0 });
+          return;
+        }
         select({});
         lowerSheet();
       }
@@ -462,8 +469,29 @@ export function usePlanDrag(args: PlanDragArgs) {
   const fixtureDown = (e: React.PointerEvent, fx: Fixture) => {
     const A = L.current;
     const { sel } = A;
-    if (A.mode !== "furnish" || A.tools.tool !== "select") return;
+    if (!editsFixtures(A.mode) || A.tools.tool !== "select") return;
     if (!isMousePrimary(e)) return;
+    const fxItem = byId(fx.type);
+    if (!fxItem || !fixtureSelectable(A.mode, fxItem)) return;
+    // Linking: a tap on a light toggles it in the switch's controls; any other tap does nothing (and never selects or drags).
+    const linkId = A.mode === "electrics" ? useStore.getState().linkSwitchId : null;
+    if (linkId) {
+      e.stopPropagation();
+      drag.begin(e, {
+        kind: "link",
+        data: null,
+        undo: false,
+        tap: () => {
+          if (pointKind(fxItem) !== "light") return;
+          const st = useStore.getState();
+          const m = st.variants[L.current.variant];
+          if (!m) return;
+          const next = toggleLinkInModel(m, linkId, fx.id, useStore.getState().linkGang);
+          if (next !== m) st.updateModel(L.current.variant, { floors: next.floors });
+        },
+      });
+      return;
+    }
     if (e.shiftKey && !(e.ctrlKey || e.metaKey)) {
       // Shift+click: toggle this item's whole group in or out of the selection.
       e.stopPropagation();
@@ -498,7 +526,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     // The other furniture's boxes, once, for the alignment guides.
     const others: Rect[] = (f0.fixtures ?? []).flatMap((o) => {
       const oi = ids.includes(o.id) ? undefined : byId(o.type);
-      if (!oi) return [];
+      if (!oi || isElectricalItem(oi)) return [];
       const ob = fixtureBox(o, oi);
       return [boxRect(o, ob.w * ppm, ob.d * ppm, o.rot)];
     });
@@ -532,10 +560,11 @@ export function usePlanDrag(args: PlanDragArgs) {
           return;
         }
         const b = fixtureBox(cur, item);
-        const snapped = B.geo.snapFixture(target, b, cur.rot, m.alt, cur.id);
+        const snapped = B.geo.snapFixture(target, { ...b, ceiling: isCeilingItem(item) }, cur.rot, m.alt, cur.id, snapKind(item));
         let pos: { x: number; y: number; rot?: number } = snapped ?? target;
-        if (m.alt) setGuides([]);
-        else {
+        // Electrical points sit on a wall face or free; they never align to furniture.
+        if (m.alt || isElectricalItem(item)) setGuides([]);
+        else if (!isElectricalItem(item)) {
           const reach = Math.max(t * 1.5, 0.1 * ppm);
           const onWall = snapped ? snapToWall(target, b.w * ppm, b.d * ppm, B.geo.faceLines, reach, cur.rot) : null;
           // Abutting a neighbour already placed it exactly; only wall-snapped and free positions get aligned.

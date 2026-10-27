@@ -49,3 +49,28 @@ export function lightGlow(altitude: number | null): number {
   const s = t * t * (3 - 2 * t);
   return GLOW_MIN + (1 - GLOW_MIN) * (1 - s);
 }
+
+/** Sun altitude (degrees) the "Night" preset aims for: well below the horizon, past civil twilight, so the house reads by its own lights. */
+export const NIGHT_PRESET_ALTITUDE = -8;
+/** Latest clock hour the Night preset picks (a midsummer night that never gets that dark). */
+const NIGHT_LATEST = 23.75;
+
+/**
+ * UK clock hour (BST aware) on day `doy` of `year` when the evening sun has dropped to NIGHT_PRESET_ALTITUDE at
+ * the site: bisection between sunset and NIGHT_LATEST. If the sun never gets that low (or never sets), NIGHT_LATEST.
+ */
+export function nightHour(site: Pick<Site, "latitude" | "longitude">, year: number, doy: number): number {
+  const { latitude: lat, longitude: lon } = site;
+  const t = sunTimes(lat, lon, year, doy);
+  const alt = (h: number) => solarPosition(lat, lon, year, doy, h).altitude;
+  if (t.sunset === null || t.sunset >= NIGHT_LATEST) return NIGHT_LATEST;
+  let lo = t.sunset;
+  let hi = NIGHT_LATEST;
+  if (alt(hi) > NIGHT_PRESET_ALTITUDE) return hi;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (alt(mid) > NIGHT_PRESET_ALTITUDE) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}

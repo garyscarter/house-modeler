@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "select" | "rect" | "polygon" | "wall" | "canopy" | "door" | "window" | "gap" | "measure" | "image" | "walls"
   | "zoomIn" | "zoomOut" | "fit" | "fitImage" | "undo" | "redo" | "search" | "help" | "sun" | "eye" | "compare"
-  | "chevronDown" | "chevronRight" | "close" | "circle" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil" | "brush" | "sofa" | "tree" | "clipboard" | "keyboard" | "flower" | "compass";
+  | "chevronDown" | "chevronRight" | "close" | "circle" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil" | "brush" | "sofa" | "tree" | "clipboard" | "keyboard" | "flower" | "compass" | "plug";
 
 /** Inline 24-viewBox stroke icons; they take their colour from the text (currentColor). */
 const PATHS: Record<IconName, ReactNode> = {
@@ -45,6 +45,7 @@ const PATHS: Record<IconName, ReactNode> = {
   clipboard: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9z" /><path d="M9 12h6M9 16h4" /></>,
   flower: <><circle cx="12" cy="9" r="2" /><path d="M12 7a2.5 2.5 0 112.4 3.3M14.4 10.3a2.5 2.5 0 11-1.5 3.6M10.9 13.9a2.5 2.5 0 11-1.3-3.6M9.6 10.3A2.5 2.5 0 1112 7" /><path d="M12 13v8M12 18c-2 0-3.5-1-4-3M12 17c2 0 3.5-1 4-3" /></>,
   compass: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2" /></>,
+  plug: <><path d="M9 3v4M15 3v4" /><path d="M6 7h12v4a6 6 0 01-12 0z" /><path d="M12 17v4" /></>,
   keyboard: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" /></>,
   more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
 };

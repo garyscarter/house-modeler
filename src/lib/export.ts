@@ -71,6 +71,25 @@ export interface PlanSvgOptions {
   extent?: Extent;
   /** First line of the title block. */
   title?: string;
+  /**
+   * Extra drawing over the plan in the same frame (the wiring guide's electrical layer, lib/wiringGuide.ts): called
+   * once with the frame and its SVG inserted above the room labels, below the north arrow and the title block.
+   */
+  overlay?: (frame: PlanFrame) => string;
+}
+
+/** The paper frame of one planSvg drawing: paper mm per world metre and world-to-paper mapping. */
+export interface PlanFrame {
+  /** Scale denominator (100 = 1:100). */
+  scale: number;
+  /** Paper mm per world metre. */
+  k: number;
+  /** Paper mm of a world point (x right, y = plan y towards the front). */
+  x: (p: V2) => number;
+  y: (p: V2) => number;
+  /** Drawing size, paper mm. */
+  width: number;
+  height: number;
 }
 
 const INK = "#1f2937";
@@ -155,6 +174,8 @@ export function planSvg(model: HouseModel, floor: Floor, opts: PlanSvgOptions): 
   const avoid = floor.stairs ? [stairsFrame(floor).corners] : [];
   floor.rooms.forEach((room, i) => out.push(roomLabel(floor, room, polys[i], k, avoid, X, Y)));
   out.push(`</g>`);
+
+  if (opts.overlay) out.push(opts.overlay({ scale, k, x: (p) => ox + p.x * k, y: (p) => oy + p.y * k, width: W, height: H }));
 
   // North arrow at the top right of the drawing.
   if (opts.site) out.push(northArrow(opts.site.frontBearing, W - M - 8, M + 8));

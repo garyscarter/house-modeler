@@ -34,6 +34,17 @@ describe("planSvg", () => {
   const site = listingSite();
   const ground = model.floors.find((f) => f.level === 0)!;
 
+  it("inserts the overlay inside the svg, before the title block", () => {
+    let frame: { k: number } | undefined;
+    const svg = planSvg(model, ground, { variant: "As listed", date: "d", title: "Wiring guide", overlay: (f) => ((frame = f), `<g id="overlay-marker"/>`) });
+    assertWellFormed(svg);
+    expect(frame!.k).toBeGreaterThan(0);
+    const at = svg.indexOf("overlay-marker");
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(svg.indexOf("Wiring guide"));
+    expect(at).toBeLessThan(svg.lastIndexOf("</svg>"));
+  });
+
   it("draws a valid, scaled plan with room names, a scale bar and a title block", () => {
     const svg = planSvg(model, ground, { variant: "As listed", date: "15 October 2026", site });
     assertWellFormed(svg);

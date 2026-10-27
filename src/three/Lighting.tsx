@@ -30,7 +30,19 @@ const DUSK_SKY = new THREE.Color("#5d6f9c");
 const GROUND_BOUNCE = new THREE.Color("#8d8270");
 const MOON = new THREE.Color("#9db4ff");
 /** Below this sun altitude (degrees) it is night: the physical sky gives way to a gradient, windows light up. */
-const NIGHT_ALTITUDE = -4;
+export const NIGHT_ALTITUDE = -4;
+/**
+ * How far into the night it is, 0 (twilight, 2 degrees above NIGHT_ALTITUDE) to 1 (2 degrees below): the ambient
+ * light fades over that band so a room with its lights off goes dark. `altitude` null = the sun study is off (day).
+ */
+export function nightDark(altitude: number | null): number {
+  return altitude === null ? 0 : 1 - THREE.MathUtils.smoothstep(altitude, NIGHT_ALTITUDE - 2, NIGHT_ALTITUDE + 2);
+}
+/** Sky level (environment and hemisphere light) in the dead of night: a trace, so dark rooms read dark, not black. */
+const NIGHT_SKY = 0.03;
+/** Faint cool hemisphere fill at night, so the outside still reads under the moon. */
+const NIGHT_HEMI = 0.04;
+const NIGHT_FILL = new THREE.Color("#5d6f9c");
 // Scratch objects for fitting the shadow camera, which runs every frame while the sun study plays.
 const _target = new THREE.Vector3();
 const _sphere = new THREE.Sphere();
@@ -58,7 +70,8 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   const day = daylight(altitude);
   const night = active && altitude < NIGHT_ALTITUDE;
   const low = active ? 1 - THREE.MathUtils.smoothstep(altitude, 0, 6) : 0;
-  const skyLevel = active ? day.sky * (1 - DUSK_DIM * low) : 1;
+  const dark = nightDark(active ? altitude : null);
+  const skyLevel = active ? THREE.MathUtils.lerp(day.sky * (1 - DUSK_DIM * low), NIGHT_SKY, dark) : 1;
   useSkyEnvironment(active && !night ? sun!.vector : null, altitude, skyLevel);
   const dir = useMemo(() => (active ? new THREE.Vector3(...sun!.vector) : DEFAULT_DIR.clone()), [active, sun]);
 
@@ -132,11 +145,11 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   const dusk = active ? THREE.MathUtils.smoothstep(altitude, -1.5, 0.5) * (1 - THREE.MathUtils.smoothstep(altitude, 3, 8)) : 0;
   const keyIntensity = active ? KEY_SUN * day.sun + DUSK_KEY * dusk : KEY_DEFAULT;
   const keyColor = useMemo(() => (active ? WHITE_SUN.clone().lerp(LOW_SUN, day.warmth) : WHITE_SUN.clone()), [active, day.warmth]);
-  const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1), [active, day.sky]);
+  const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1).lerp(NIGHT_FILL, dark), [active, day.sky, dark]);
 
   return (
     <>
-      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={Math.max(skyLevel * 0.15, 0.35 * dusk)} />
+      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={THREE.MathUtils.lerp(Math.max(skyLevel * 0.15, 0.35 * dusk), NIGHT_HEMI, dark)} />
       <directionalLight position={[-0.3, 0.8, 0.5]} color={MOON} intensity={night ? 0.3 : 0} />
       {/* Always casts, even at night, so the sun setting doesn't recompile every material. */}
       <directionalLight ref={light} intensity={keyIntensity} color={keyColor} castShadow />

@@ -3,7 +3,8 @@ import { byId } from "../../lib/catalogue";
 import { getClipboardFixtures } from "../../lib/clipboard";
 import { moveFixtures, rotateFixtures, ungroupFixtures } from "../../lib/fixtureGroups";
 import { ZOOM_STEP } from "../../lib/editorCore";
-import type { Mode } from "../../lib/modes";
+import { editsFixtures, type Mode } from "../../lib/modes";
+import { fixtureSelectable } from "../../lib/planHit";
 import { arrowDelta, slideOpening } from "../../lib/nudge";
 import { planKeyAction } from "../../lib/planKeys";
 import { imageForState, imageStateOf, nearestSegment, segOrientation, turn, type ImageState, type Seg } from "../../lib/planMath";
@@ -34,12 +35,13 @@ export function usePlanKeys(a: PlanKeyArgs) {
   const { liveIds, allFixtures, canopies } = sel;
   const build = mode === "build";
   const furnish = mode === "furnish";
+  const fixtureMode = editsFixtures(mode);
   const ppm = floor.pxPerM;
   const updateFloor = useStore.getState().updateFloor;
 
   /** Move the selection by (dx, dy) image px; false when nothing selected can move that way. */
   const nudgeSelection = (dx: number, dy: number): boolean => {
-    if (!build && !furnish) return false;
+    if (!build && !fixtureMode) return false;
     const { selectedCanopy, selectedOpeningId, selectedWallId, activeCorner } = sel;
     if (selectedCanopy !== null) {
       if (!canopies[selectedCanopy]) return false;
@@ -86,15 +88,19 @@ export function usePlanKeys(a: PlanKeyArgs) {
     } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixtures().length) {
       e.preventDefault();
       // Furniture only lives in Furnish: switch there, then paste.
-      if (!furnish) setMode("furnish");
+      if (!fixtureMode) setMode("furnish");
       sel.pasteFixtures();
     } else if (mod && e.key.toLowerCase() === "g" && furnish) {
       e.preventDefault();
       if (e.shiftKey) sel.setFixtures((all) => ungroupFixtures(all, liveIds));
       else sel.groupSelected(liveIds);
-    } else if (mod && e.key.toLowerCase() === "a" && furnish) {
+    } else if (mod && e.key.toLowerCase() === "a" && fixtureMode) {
       e.preventDefault();
-      sel.select({ fixtures: allFixtures.filter((f) => byId(f.type)).map((f) => f.id) });
+      sel.select({ fixtures: allFixtures.filter((f) => { const it = byId(f.type); return !!it && fixtureSelectable(mode, it); }).map((f) => f.id) });
+    } else if (e.key === "Escape" && !e.defaultPrevented && useStore.getState().linkSwitchId) {
+      // Esc ends linking first; the switch stays selected.
+      e.preventDefault();
+      setUi({ linkSwitchId: null, linkGang: 0 });
     } else if (e.key === "Escape" && !e.defaultPrevented) {
       tools.setDraft([]);
       tools.setCalib([]);
@@ -117,7 +123,7 @@ export function usePlanKeys(a: PlanKeyArgs) {
       else if ("zoom" in act) camera.zoomBy(act.zoom > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
       else if ("fit" in act) camera.fit();
       else if ("add" in act) a.setAddOpen(true);
-    } else if ((e.key === "Delete" || e.key === "Backspace") && (build || furnish)) {
+    } else if ((e.key === "Delete" || e.key === "Backspace") && (build || fixtureMode)) {
       sel.removeSelected();
     }
   });

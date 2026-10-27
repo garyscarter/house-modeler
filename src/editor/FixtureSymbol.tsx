@@ -1,6 +1,11 @@
 import { createElement, memo, type ReactNode } from "react";
-import { burners, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { RUG_SPOTS, rugPattern } from "../lib/rugs";
+import { burners, chaiseSizes, pitchOf, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { gridPoints } from "../lib/lights";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
+import { hasElectricSymbol, ELECTRIC_GLYPH_M } from "../lib/electricSymbols";
+import { isWallPoint } from "../lib/electrics";
+import { ElectricGlyph } from "./ElectricGlyph";
 import type { Fixture } from "../types";
 
 /**
@@ -32,13 +37,13 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   clash?: boolean;
   ghost?: boolean;
   /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
-  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front" | "endBack" | "endSide">;
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front" | "endBack" | "endSide" | "pitch" | "rug">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);
   const fill = ghost ? "#16a34a" : clash ? "#fca5a5" : color ?? item.color;
   // Wall-hung items above worktop height are dashed, as on architects' plans.
-  const high = (item.mount ?? 0) >= 1;
+  const high = (item.mount ?? 0) >= 1 && !LIGHT_SYMBOLS.has(item.symbol);
   const fo = ghost ? 0.25 : high ? 0.35 : 0.85;
   const dash = high ? `${stroke * 5} ${stroke * 3}` : undefined;
   const r = Math.min(w, d) * 0.06;
@@ -69,6 +74,21 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   const j = isJoinery(item) ? joineryOf(fixture ?? {}, item, { w: w / m, d: d / m, h: fixture?.h ?? item.h }) : undefined;
   /** Door joints along the front strip, one per bay boundary. */
   const joints = (xs: number[], inset: number) => xs.slice(1, -1).map((x) => <line key={`j${x}`} x1={x} y1={y1 - inset} x2={x} y2={y1} {...thin} />);
+
+  if (item.category === "Electrics" && hasElectricSymbol(item.symbol)) {
+    const ink = outline;
+    const paper = ghost ? "#f0fdf4" : clash ? "#fee2e2" : "var(--plan-chip-bg, #fff)";
+    const gsw = sw * 0.8;
+    const base = ELECTRIC_GLYPH_M * m;
+    const size = Math.max(Math.min(w, d), base);
+    const oy = isWallPoint(item) ? (size - d) / 2 : 0;
+    return g(
+      <rect key="hit" x={-size / 2} y={oy - size / 2} width={size} height={size} fill="transparent" stroke="none" />,
+      <g key="g" transform={`translate(0 ${oy})`}>
+        <ElectricGlyph symbol={item.symbol} size={size} stroke={gsw} ink={ink} paper={paper} />
+      </g>,
+    );
+  }
 
   switch (item.symbol) {
     case "bed": {
@@ -264,9 +284,22 @@ export const FixtureSymbol = memo(function FixtureSymbol({
       return g(body(0), ...dividers(0.6), front(Math.min(0.03 * m, d * 0.1)));
     case "rug": {
       const inset = Math.min(0.12 * m, w * 0.08, d * 0.08);
+      const pat = fixture ? rugPattern(fixture) : undefined;
+      const spots = pat
+        ? RUG_SPOTS[pat].length
+          ? Array.from({ length: 10 }, (_, i) => {
+              // A fixed scatter inside the inner rectangle; sizes and colours cycle.
+              const u = ((i * 37) % 100) / 100;
+              const v = ((i * 53 + 17) % 100) / 100;
+              const r = Math.min(w, d) * (i % 3 === 0 ? 0.07 : 0.04);
+              return <circle key={`s${i}`} cx={x0 + inset + r + u * (w - 2 * inset - 2 * r)} cy={y0 + inset + r + v * (d - 2 * inset - 2 * r)} r={r} fill={RUG_SPOTS[pat][i % 3 === 2 ? 3 : i % 3]} fillOpacity={0.85} />;
+            })
+          : []
+        : [];
       return g(
         <rect key="o" x={x0} y={y0} width={w} height={d} fill={fill} fillOpacity={ghost ? fo : 0.45} stroke={outline} strokeWidth={sw * 0.6} />,
         <rect key="i" x={x0 + inset} y={y0 + inset} width={w - inset * 2} height={d - inset * 2} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        ...spots,
       );
     }
     case "table":
@@ -632,10 +665,78 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <rect key="f" x={-fw / 2} y={y0 + 0.02 * m} width={fw} height={0.1 * m} fill={ghost || clash ? fill : "#c8a24a"} fillOpacity={fo} stroke={outline} strokeWidth={sw * 0.6} />,
       );
     }
+    case "pendant":
+    case "pendant-multi":
+    case "flush-light":
+    case "downlight":
+    case "downlight-grid":
+    case "spot-bar":
+    case "wall-light":
+    case "strip-light": {
+      // Electrical symbols, outline only: no body. The transparent rect keeps the footprint clickable.
+      const hit = <rect key="hit" x={x0} y={y0} width={w} height={d} fill="transparent" stroke="none" />;
+      const ls = ghost || clash || selected ? line : { ...line, strokeWidth: sw * 1.1 };
+      const ring = (cx: number, cy: number, rr: number, key: string) => [
+        <circle key={`${key}c`} cx={cx} cy={cy} r={rr} {...ls} />,
+        <line key={`${key}a`} x1={cx - rr * 0.707} y1={cy - rr * 0.707} x2={cx + rr * 0.707} y2={cy + rr * 0.707} {...ls} />,
+        <line key={`${key}b`} x1={cx + rr * 0.707} y1={cy - rr * 0.707} x2={cx - rr * 0.707} y2={cy + rr * 0.707} {...ls} />,
+      ];
+      const dl = (cx: number, cy: number, rr: number, key: string) => [
+        <circle key={`${key}r`} cx={cx} cy={cy} r={rr} {...ls} />,
+        <circle key={`${key}d`} cx={cx} cy={cy} r={rr * 0.4} fill={outline} stroke="none" />,
+      ];
+      const rr = Math.min(w, d) / 2;
+      switch (item.symbol) {
+        case "pendant":
+          return g(hit, ...ring(0, 0, rr, "p"), <circle key="dot" cx={0} cy={0} r={Math.max(stroke * 1.5, rr * 0.1)} fill={outline} stroke="none" />);
+        case "pendant-multi": {
+          const r3 = Math.min(d / 2, w / 8);
+          return g(hit, <line key="bar" x1={-w / 2 + r3 * 0.5} y1={0} x2={w / 2 - r3 * 0.5} y2={0} {...ls} />, ...[-w / 3, 0, w / 3].flatMap((cx, i) => ring(cx, 0, r3, `m${i}`)));
+        }
+        case "flush-light":
+          return g(hit, ...ring(0, 0, rr, "f"), <circle key="in" cx={0} cy={0} r={rr * 0.35} fill={outline} stroke="none" />);
+        case "downlight": {
+          const r1 = Math.max(rr, 0.06 * m);
+          return g(hit, ...dl(0, 0, r1, "d"));
+        }
+        case "downlight-grid": {
+          const r1 = Math.max(0.06 * m, stroke * 3);
+          return g(
+            hit,
+            <rect key="area" x={x0} y={y0} width={w} height={d} {...thin} strokeDasharray={`${stroke * 5} ${stroke * 3}`} />,
+            ...gridPoints(w / m, d / m, pitchOf(fixture ?? {}, item), 0).flatMap(([gx, , gz], i) => dl(gx * m, gz * m, r1, `g${i}`)),
+          );
+        }
+        case "spot-bar": {
+          const r3 = Math.min(d / 2, w / 8);
+          const ar = r3 * 0.6;
+          return g(
+            hit,
+            <line key="bar" x1={x0 + r3 * 0.5} y1={0} x2={x1 - r3 * 0.5} y2={0} {...ls} />,
+            ...[-w / 3, 0, w / 3].flatMap((cx, i) => [
+              <circle key={`s${i}`} cx={cx} cy={0} r={r3} {...ls} />,
+              // Arrow towards the front (down the page).
+              <path key={`a${i}`} d={`M${cx} ${-ar} L${cx} ${ar} M${cx - ar * 0.5} ${ar * 0.4} L${cx} ${ar} L${cx + ar * 0.5} ${ar * 0.4}`} {...ls} />,
+            ]),
+          );
+        }
+        case "wall-light": {
+          // Half circle against the back edge (the wall), flat side on the wall.
+          const hr = Math.min(w / 2, d);
+          return g(hit, <path key="h" d={`M${-hr} ${y0} A${hr} ${hr} 0 0 0 ${hr} ${y0} Z`} {...ls} />, <line key="a" x1={-hr * 0.5} y1={y0 + hr * 0.2} x2={hr * 0.5} y2={y0 + hr * 0.8} {...ls} />, <line key="b" x1={hr * 0.5} y1={y0 + hr * 0.2} x2={-hr * 0.5} y2={y0 + hr * 0.8} {...ls} />);
+        }
+        default:
+          // strip-light: a thin bar with a dashed centre line.
+          return g(hit, <rect key="r" x={x0} y={y0} width={w} height={d} {...ls} />, <line key="c" x1={x0} y1={0} x2={x1} y2={0} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />);
+      }
+    }
     default:
       return body();
   }
 });
+
+/** Light fittings drawn as outline-only electrical symbols. */
+const LIGHT_SYMBOLS = new Set(["pendant", "pendant-multi", "flush-light", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light"]);
 
 /** Whether a #rrggbb colour is dark enough to need light detail drawn on it. */
 function isDark(hex: string): boolean {

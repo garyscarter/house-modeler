@@ -30,11 +30,11 @@
 .side .feature-walls .wall-finish input[type="color"] { flex: none; width: 40px; height: 30px; margin: 0; padding: 2px; }
 
 /* Quick paint colours (ColourSwatches). */
+.side .swatch-label { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
 .side .swatches { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0 8px; }
 .side .swatches .swatch { flex: none; width: 22px; min-width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.25); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
 .side .swatches .swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
-.side .swatch-label { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
-
 .side .decorate-panel .decor-head { margin: 0 0 2px; font-size: 15px; }
 .side .decorate-wall .feature-walls { margin: 6px 0; }
 .side .decorate-wall .whole-room { margin-top: 4px; }
@@ -173,3 +173,8 @@
 .deco-block fieldset.linked { opacity: 0.55; pointer-events: none; }
 .app[data-touch] .deco-link select { min-height: 38px; }
 .dulux-picker .dulux-item .dulux-chip { margin: 0 var(--sp-2) 0 0; }
+
+/* Electrical points: the switch's linked lights. */
+.inspector .link-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
+.inspector .link-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.app[data-touch] .inspector .link-list .link { min-width: 36px; min-height: 36px; }

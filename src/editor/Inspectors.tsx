@@ -6,10 +6,11 @@ import { knockThroughNeighbours } from "../lib/mergeRooms";
 import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, printedChip, shapeSummary, stairsSummary } from "../lib/modeSummary";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
-import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
+import type { Fixture, Floor, LightWarmth, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
 import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../lib/art";
-import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
+import { RUG_PATTERNS, rugPattern } from "../lib/rugs";
+import { DEFAULT_WORKTOP, MIN_SEAT, dropOf, isCeilingItem, pitchOf, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -19,6 +20,9 @@ import { openingSides } from "../lib/openingSides";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
+import { WARMTHS, WARMTH_LABEL, dimOf, isLightItem, switchedOn, warmthOf } from "../lib/lights";
+import { assignToCircuit, centreHeight, circuitOf, isSwitchItem, isWallPoint, mountForCentre, gangCount, gangLabel, gangOf, numberPoints, pointKind, setGang, toggleLink } from "../lib/electrics";
+import type { Circuit } from "../types";
 import { floorDisplayName } from "../lib/studio";
 import { requestPlanTool } from "./planTool";
 import {
@@ -686,7 +690,7 @@ export function WallInspector({
       </label>
       )}
       {mode === "decorate" && (
-        <SwatchField label="Colour" value={wall.color ?? "#f4f1ea"} isSet={!!wall.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+        <SwatchField dulux label="Colour" value={wall.color ?? "#f4f1ea"} isSet={!!wall.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
       )}
       {mode !== "decorate" && (
         <>
@@ -713,9 +717,12 @@ export function FixtureInspector({
   onRefit,
   misfit,
   ceiling,
+  variant,
 }: {
   fixture: Fixture;
   item: CatalogueItem;
+  /** The layout the fixture is in: enables the circuit field of electrical points. */
+  variant?: VariantKey;
   /** The room's ceiling height, for floor-to-ceiling items. */
   ceiling?: number;
   clash: boolean;
@@ -834,7 +841,7 @@ export function FixtureInspector({
           )}
         </div>
       )}
-      {item.mount !== undefined && (
+      {item.mount !== undefined && !isCeilingItem(item) && !pointKind(item) && (
         <div className="field">
           <span className="field-label">Height above floor (m)</span>
           <NumberField value={mountOf(fixture, item)} label="Height above floor" min={-0.001} onCommit={(mount) => onChange({ mount: Math.max(0, mount) })} />
@@ -845,8 +852,67 @@ export function FixtureInspector({
           )}
         </div>
       )}
-      <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
-      {isJoinery(item) && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
+      {isCeilingItem(item) && (
+        <div className="field">
+          <span className="field-label">Drop below ceiling (m)</span>
+          <NumberField value={dropOf(fixture, item)} label="Drop below ceiling" min={0} onCommit={(drop) => onChange({ drop: Math.max(0, drop) })} />
+          {fixture.drop !== undefined && fixture.drop !== dropOf({}, item) && (
+            <button className="link" onClick={() => onChange({ drop: undefined })}>
+              Reset to {dropOf({}, item).toFixed(2)} m
+            </button>
+          )}
+        </div>
+      )}
+      {item.symbol === "downlight-grid" && (
+        <div className="field">
+          <span className="field-label">Spacing (m)</span>
+          <NumberField value={pitchOf(fixture, item)} label="Spacing" min={0.3} onCommit={(pitch) => onChange({ pitch: Math.max(0.3, pitch) })} />
+        </div>
+      )}
+      {pointKind(item) && <PointFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} variant={variant} onChange={onChange} />}
+      {(isLightItem(item) || isSwitchItem(item)) && (
+        <div className="row check-row">
+          <label className="check">
+            <input type="checkbox" checked={switchedOn(fixture)} onChange={(e) => onChange({ on: e.target.checked ? undefined : false })} /> Switched on
+          </label>
+          <Info>{isSwitchItem(item) ? "A switch that is off darkens the lights it controls." : "Lit when the sun study's Lights master allows: Auto lights it from dusk, On always."}</Info>
+        </div>
+      )}
+      {isLightItem(item) && (
+        <>
+          <label>
+            Warmth
+            <select value={warmthOf(fixture)} disabled={locked} onChange={(e) => { const v = parseInt(e.target.value); onChange({ warmth: v === 2700 ? undefined : (v as LightWarmth) }); }}>
+              {WARMTHS.map((k) => (
+                <option key={k} value={k}>
+                  {WARMTH_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dimmer {Math.round(dimOf(fixture) * 100)}%
+            <input type="range" min={10} max={100} step={5} disabled={locked} value={Math.round(dimOf(fixture) * 100)} onChange={(e) => { const v = parseInt(e.target.value); onChange({ dim: v === 100 ? undefined : v }); }} />
+          </label>
+        </>
+      )}
+      {item.symbol === "rug" && (
+        <label>
+          Pattern
+          <select value={rugPattern(fixture) ?? ""} disabled={locked} onChange={(e) => onChange({ rug: e.target.value || undefined })}>
+            <option value="">Plain</option>
+            {RUG_PATTERNS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!(item.symbol === "rug" && rugPattern(fixture)) && (
+        <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+      )}
+      {(isJoinery(item) || item.symbol === "shaker-wardrobe") && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
         <SwatchField
           label="Worktop colour"
@@ -887,6 +953,103 @@ export function FixtureInspector({
   );
 }
 
+const CEILING_DEFAULT = 2.4;
+
+/** Circuit choice for one or more points; "Mixed" when they differ. */
+function CircuitSelect({ variant, ids }: { variant: VariantKey; ids: string[] }) {
+  const circuits = useStore((s) => s.variants[variant]?.circuits);
+  const updateModel = useStore((s) => s.updateModel);
+  const current = new Set(ids.map((id) => circuitOf(circuits, id)?.id ?? ""));
+  const value = current.size === 1 ? [...current][0] : "mixed";
+  return (
+    <label>
+      Circuit
+      <select
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === "mixed") return;
+          updateModel(variant, { circuits: assignToCircuit(circuits, e.target.value || null, ids) });
+        }}
+      >
+        {value === "mixed" && <option value="mixed">Mixed</option>}
+        <option value="">None</option>
+        {(circuits ?? []).map((c: Circuit) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Settings of an electrical point: centre height, switch links and circuit. */
+function PointFields({ fixture, item, ceiling, locked, variant, onChange }: { fixture: Fixture; item: CatalogueItem; ceiling?: number; locked: boolean; variant?: VariantKey; onChange: (p: Partial<Fixture>) => void }) {
+  const model = useModel();
+  const linkSwitchId = useStore((s) => s.linkSwitchId);
+  const setUi = useStore((s) => s.setUi);
+  const wall = isWallPoint(item) && item.mount !== undefined;
+  const centre = centreHeight(fixture, item, ceiling ?? CEILING_DEFAULT);
+  const defaultCentre = (item.mount ?? 0) + item.h / 2;
+  const linkGang = useStore((s) => s.linkGang);
+  const gangs = isSwitchItem(item) ? gangCount(item) : 0;
+  const labels = useMemo(() => {
+    if (!isSwitchItem(item) || !model) return new Map<string, string>();
+    return new Map(numberPoints(model).map((p) => [p.fx.id, `${p.room.name} ${p.label}`]));
+  }, [model, item]);
+  const unlink = (lightId: string, g: number) => onChange(toggleLink(fixture, lightId, g));
+  const gangBlock = (g: number, heading: boolean) => {
+    const linking = linkSwitchId === fixture.id && linkGang === g;
+    const lights = gangOf(fixture, g).controls.flatMap((id) => (labels.has(id) ? [{ id, label: labels.get(id)! }] : []));
+    return (
+      <div className="field" key={g}>
+        <span className="field-label">{heading ? gangLabel(g) : "Lights"}</span>
+        {heading && (
+          <label className="check">
+            <input type="checkbox" checked={gangOf(fixture, g).on} disabled={locked} onChange={(e) => onChange(setGang(fixture, g, { on: e.target.checked }))} />
+            Switched on
+          </label>
+        )}
+        {lights.length === 0 ? (
+          <p className="muted small">No lights linked yet.</p>
+        ) : (
+          <ul className="multi-list small link-list">
+            {lights.map((l) => (
+              <li key={l.id}>
+                {l.label}{" "}
+                <button className="link" aria-label={`Unlink ${l.label}`} title="Unlink" onClick={() => unlink(l.id, g)}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button className={linking ? "active" : ""} aria-pressed={linking} onClick={() => setUi(linking ? { linkSwitchId: null, linkGang: 0 } : { linkSwitchId: fixture.id, linkGang: g })}>
+          {linking ? "Done" : "Link lights"}
+        </button>
+        {linking && <p className="muted small">{heading ? "Tap lights on the plan to put them on this rocker, or tap again to take them off." : "Tap lights on the plan to link or unlink them."}</p>}
+      </div>
+    );
+  };
+  return (
+    <>
+      {wall && (
+        <div className="field">
+          <span className="field-label">Centre height (m)</span>
+          <NumberField value={Math.round(centre * 1000) / 1000} label="Centre height" min={-0.001} disabled={locked} onCommit={(c) => onChange({ mount: mountForCentre(c, fixture, item) })} />
+          {Math.abs(centre - defaultCentre) > 0.0005 && (
+            <button className="link" disabled={locked} onClick={() => onChange({ mount: undefined })}>
+              Reset to {defaultCentre.toFixed(2)} m
+            </button>
+          )}
+        </div>
+      )}
+      {Array.from({ length: gangs }, (_, g) => gangBlock(g, gangs > 1))}
+      {variant && <CircuitSelect variant={variant} ids={[fixture.id]} />}
+    </>
+  );
+}
+
 const FRONT_OPTIONS = Object.keys(JOINERY_FRONT_LABEL) as JoineryFront[];
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -911,7 +1074,7 @@ function JoineryFields({
   const set = (p: Parameters<typeof patchJoinery>[1]) => onChange(patchJoinery(fixture, p));
   const sym = item.symbol;
   const colourField = (label: string, value: string, isSet: boolean, change: (c: string) => void, reset: () => void) => (
-    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} />
+    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} dulux />
   );
   const frontSelect = (label: string, value: JoineryFront, change: (v: JoineryFront) => void, openLabel?: string) => (
     <label>
@@ -935,6 +1098,12 @@ function JoineryFields({
         </button>
       )}
     </div>
+  );
+  const shakerColours = (
+    <>
+      {colourField("Trim colour", j.trim ?? fixture.color ?? item.color, j.trim !== undefined, (c) => set({ trim: c }), () => set({ trim: undefined }))}
+      {colourField("Panel colour", j.panel ?? fixture.color ?? item.color, j.panel !== undefined, (c) => set({ panel: c }), () => set({ panel: undefined }))}
+    </>
   );
   const toCeiling = fixture.h === undefined || (ceiling !== undefined && fixture.h >= ceiling);
   const refitLabel =
@@ -989,9 +1158,11 @@ function JoineryFields({
             </label>
           )}
           {colourField("Carcass colour", j.carcass, fixture.joinery?.carcass !== undefined, (c) => set({ carcass: c }), () => set({ carcass: undefined }))}
+          {(j.baseFront === "shaker" || j.upperFront === "shaker") && shakerColours}
           {j.top && colourField("Top colour", j.topColor, fixture.worktop !== undefined, (c) => onChange({ worktop: c }), () => onChange({ worktop: undefined }))}
         </>
       )}
+      {sym === "shaker-wardrobe" && shakerColours}
       {sym === "window-seat" && (
         <>
           <label>
@@ -1071,7 +1242,10 @@ export function MultiFixtureInspector({
   onRemove,
   onColour,
   onLock,
+  variant,
 }: {
+  /** The layout the items are in: enables the circuit field when every item is an electrical point. */
+  variant?: VariantKey;
   fixtures: Fixture[];
   /** The selection is exactly one group. */
   isGroup: boolean;
@@ -1102,6 +1276,7 @@ export function MultiFixtureInspector({
         ))}
       </ul>
       <SwatchField label="Colour" value={first?.color ?? firstItem?.color ?? "#cccccc"} isSet={!!first?.color} onChange={onColour} />
+      {variant && fixtures.length > 0 && fixtures.every((f) => { const it = byId(f.type); return !!it && !!pointKind(it); }) && <CircuitSelect variant={variant} ids={fixtures.map((f) => f.id)} />}
       <div className="row">
         {!isGroup && (
           <button onClick={onGroup} title="Ctrl+G or Cmd+G">

@@ -50,8 +50,9 @@ describe("planKeyAction", () => {
       expect(planKeyAction(key("-"), c)).toEqual({ zoom: -1 });
     }
   });
-  it("A opens Add only in Furnish", () => {
+  it("A opens Add in Furnish and Electrics only", () => {
     expect(planKeyAction(key("a"), furnish)).toEqual({ add: true });
+    expect(planKeyAction(key("a"), { ...furnish, mode: "electrics" })).toEqual({ add: true });
     expect(planKeyAction(key("a"), build)).toBeNull();
   });
 });

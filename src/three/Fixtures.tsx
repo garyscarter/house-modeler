@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -8,22 +9,28 @@ import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, ch
 import { fixtureBox } from "../lib/planMath";
 import { FRAME_COLOUR, FRAME_W, isPicture, type PictureFrame } from "../lib/art";
 import { artTexture } from "./artTextures";
+import { RUG_GROUND, rugPattern } from "../lib/rugs";
+import { rugTexture } from "./rugTextures";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
 import { FLOOR_SURFACE, shade } from "./shell";
+import { LIGHT_CAP, SHADOW_CAP, coneGain, dimOf, gridPoints, isLightItem, lampOf, lampPitch, lightColor, pickLights, switchedOn, type LampLight } from "../lib/lights";
+import { useStore } from "../store";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
  * A floor's fixtures are a few hundred small parts, so they are merged into one mesh per material (see
  * buildFixtureMeshes) rather than drawn one mesh each. Fixtures have no 3D click handling, so nothing is lost.
  */
-export function Fixtures({ floor, ceiling }: { floor: Floor; ceiling: number }) {
-  // Rebuilt only when the fixtures, the floor's placement or the ceiling change: not for a room colour or a wall.
+export function Fixtures({ floor, ceiling, lightsOn = false, blocked = NONE }: { floor: Floor; ceiling: number; lightsOn?: boolean; /** Lights a wall switch that is off keeps dark. */ blocked?: ReadonlySet<string> }) {
+  // Which lamps are lit: a switch or the master changing rebuilds the meshes (a lit shade glows, an unlit one is matt).
+  const litSig = lightsOn ? (floor.fixtures ?? []).filter((f) => switchedOn(f) && !blocked.has(f.id) && isLitType(f.type)).map((f) => f.id).join() : "";
+  // Rebuilt only when the fixtures, the floor's placement, the ceiling or the lit lamps change: not for a room colour or a wall.
   const meshes = useMemo(
-    () => buildFixtureMeshes(floor, ceiling),
+    () => buildFixtureMeshes(floor, ceiling, lightsOn, blocked),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [floor.fixtures, floor.origin, floor.offset, floor.pxPerM, ceiling],
+    [floor.fixtures, floor.origin, floor.offset, floor.pxPerM, ceiling, litSig],
   );
   useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
   return (
@@ -33,7 +40,9 @@ export function Fixtures({ floor, ceiling }: { floor: Floor; ceiling: number }) 
       ))}
       {(floor.fixtures ?? []).map((f) => {
         const item = byId(f.type);
-        return item && isPicture(item) ? <PrintFace key={f.id} floor={floor} fixture={f} item={item} ceiling={ceiling} /> : null;
+        if (item && isPicture(item)) return <PrintFace key={f.id} floor={floor} fixture={f} item={item} ceiling={ceiling} />;
+        if (item && item.symbol === "rug" && rugPattern(f)) return <RugFace key={f.id} floor={floor} fixture={f} item={item} />;
+        return null;
       })}
     </group>
   );
@@ -59,6 +68,25 @@ function PrintFace({ floor, fixture: f, item, ceiling }: { floor: Floor; fixture
   );
 }
 
+/** The printed top of a patterned rug: a textured plane just above its pile. */
+function RugFace({ floor, fixture: f, item }: { floor: Floor; fixture: Fixture; item: CatalogueItem }) {
+  const p = toWorld(floor, { x: f.x, y: f.y });
+  const w = f.w ?? item.w;
+  const d = f.d ?? item.d;
+  const h = f.h ?? item.h;
+  const id = rugPattern(f) ?? "leopard";
+  const texture = useMemo(() => rugTexture(id, w, d), [id, w, d]);
+  const geometry = useMemo(() => new THREE.PlaneGeometry(w, d), [w, d]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.95 }), [texture]);
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <group position={[p.x, FLOOR_SURFACE + h + 0.002, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
+      <mesh geometry={geometry} material={material} rotation={[-Math.PI / 2, 0, 0]} receiveShadow />
+    </group>
+  );
+}
+
 interface FixtureMesh {
   key: string;
   geometry: THREE.BufferGeometry;
@@ -75,24 +103,40 @@ const _scale = new THREE.Vector3();
 const _yaw = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 
-/** Every part of every fixture on the floor in world space, merged into one geometry per material. */
-function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
-  const groups = new Map<string, { color: string; finish: Finish; geoms: THREE.BufferGeometry[] }>();
+const NONE: ReadonlySet<string> = new Set();
+const isLitType = (type: string) => {
+  const item = byId(type);
+  return !!item && isLightItem(item);
+};
+
+/** Every part of every fixture on the floor in world space, merged into one geometry per material. `lightsOn`: the master lets lamps be lit. */
+function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean, blocked: ReadonlySet<string>): FixtureMesh[] {
+  const groups = new Map<string, { color: string; emissive?: string; finish: Finish; light: boolean; geoms: THREE.BufferGeometry[] }>();
   for (const f of floor.fixtures ?? []) {
     const item = byId(f.type);
     if (!item) continue;
     const p = toWorld(floor, { x: f.x, y: f.y });
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
-    const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
-    const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : (f.color ?? item.color);
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame)) {
+    const j = isJoinery(item) || item.symbol === "shaker-wardrobe" ? joineryOf(f, item, b) : undefined;
+    const pat = item.symbol === "rug" ? rugPattern(f) : undefined;
+    const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : pat ? RUG_GROUND[pat] : (f.color ?? item.color);
+    const lamp = lampOf(item);
+    // Lit: the master allows, its own switch is on and no switch controlling it is off (see lib/lights.ts).
+    const lit = lightsOn && switchedOn(f) && !blocked.has(f.id);
+    // A ceiling fitting hangs `drop` below the ceiling: the gap from its top to the ceiling as placed.
+    const drop = item.ceiling ? Math.max(0, ceiling - b.z0 - b.h) : 0;
+    const light = lit && lamp ? { color: lightColor(f, lamp), dim: dimOf(f) } : undefined;
+    const parts = fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lit, !!pat, drop, lamp ? lampPitch(f, item) : 1.2, light);
+    for (const pt of parts) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
-      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
+      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, pt.rotZ ?? 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, pt.g === "soft" ? _scale.set(1, 1, 1) : _scale.set(pt.s[0], pt.s[1], pt.s[2]));
       const g = (pt.g === "soft" ? softGeometry(pt.s[0], pt.s[1], pt.s[2]) : GEOMETRY[pt.g]).clone().applyMatrix4(_part.premultiply(_place));
-      const key = pt.c + pt.f;
-      const group = groups.get(key) ?? { color: pt.c, finish: pt.f, geoms: [] };
+      // Light fittings cast no shadows: a lamp's own spot light would be shut in by its shade. The finish stays last
+      // in the key (setLampGlow finds lit materials by it).
+      const key = (lamp ? "L|" : "") + pt.c + (pt.e ?? "") + pt.f;
+      const group = groups.get(key) ?? { color: pt.c, emissive: pt.e, finish: pt.f, light: !!lamp, geoms: [] };
       group.geoms.push(g);
       groups.set(key, group);
     }
@@ -103,7 +147,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     const geoms = g.geoms.some((x) => !x.index) ? g.geoms.map((x) => (x.index ? x.toNonIndexed() : x)) : g.geoms;
     const merged = mergeGeometries(geoms);
     g.geoms.forEach((x) => x.dispose());
-    if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish), castShadow: g.finish !== "glass" });
+    if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish, g.emissive), castShadow: g.finish !== "glass" && !g.light });
   }
   return out;
 }
@@ -162,15 +206,37 @@ export function softGeometry(sx: number, sy: number, sz: number): THREE.BufferGe
 const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
-type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror" | "glow";
+/**
+ * "glow" is a fixed glow (an appliance display); "lamp" is a lit lamp's bulb or the inside of its shade, and "shade"
+ * the fabric of a lit shade with the light coming through it, both as bright as setLampGlow says.
+ */
+type Finish = "matt" | "satin" | "gloss" | "metal" | "glass" | "mirror" | "glow" | "lamp" | "shade";
+
+/** Emissive of a lit lamp's bulb and inner shade at full glow, and of the shade's fabric. */
+const LAMP_EMISSIVE = 1.2;
+const SHADE_EMISSIVE = 0.45;
+let lampLevel = 1;
+/**
+ * Brightness of every lit lamp's glowing parts, 0 to 1 (lampGlow): dimmer by day so a forced-on lamp shows without
+ * looking like a hole in the scene. Returns whether anything changed, for the caller to invalidate the frame.
+ */
+export function setLampGlow(level: number): boolean {
+  if (level === lampLevel) return false;
+  lampLevel = level;
+  for (const [key, m] of materials) {
+    if (key.endsWith("lamp")) (m as THREE.MeshStandardMaterial).emissiveIntensity = LAMP_EMISSIVE * level;
+    else if (key.endsWith("shade")) (m as THREE.MeshStandardMaterial).emissiveIntensity = SHADE_EMISSIVE * level;
+  }
+  return true;
+}
 /**
  * Materials by colour and finish, least recently used first. Colours are free-form (every colour-picker step makes
  * a new one), so the cache is bounded and an evicted material is disposed, unless a tracked scene still draws it.
  */
 const MATERIAL_LIMIT = 96;
 const materials = new Map<string, THREE.Material>();
-function material(color: string, finish: Finish): THREE.Material {
-  const key = color + finish;
+function material(color: string, finish: Finish, emissive = color): THREE.Material {
+  const key = color + (emissive === color ? "" : emissive) + finish;
   let m = materials.get(key);
   if (m) {
     materials.delete(key);
@@ -178,6 +244,8 @@ function material(color: string, finish: Finish): THREE.Material {
   } else {
     if (finish === "glass") m = glassMaterial(color);
     else if (finish === "glow") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.6 });
+    else if (finish === "lamp") m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: LAMP_EMISSIVE * lampLevel, roughness: 0.6 });
+    else if (finish === "shade") m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: SHADE_EMISSIVE * lampLevel, roughness: 0.85 });
     else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
     else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
@@ -204,12 +272,16 @@ interface Part {
   s: [number, number, number];
   c: string;
   f: Finish;
+  /** Emissive colour of a "lamp" or "shade" part, when not its own colour (a light fitting's light colour, dimmed). */
+  e?: string;
   /** Axis of a cylinder (default standing, along y). */
   axis?: "x" | "z";
   /** Lean about the x axis, radians, after scaling; negative tips the top back and the front up. */
   tilt?: number;
-  /** Turn about the y axis, radians, applied with tilt as rotation [tilt, rotY, 0]. */
+  /** Turn about the y axis, radians, applied with tilt as rotation [tilt, rotY, rotZ]. */
   rotY?: number;
+  /** Roll about the z axis, radians: positive swings the bottom towards +x. */
+  rotZ?: number;
 }
 
 const WHITE = "#f5f5f5";
@@ -224,6 +296,8 @@ const MARBLE = "#ece6da";
 const BRASS = "#c8a24a";
 const MIRROR = "#e4ecf0";
 const GLOW = "#fff1d6";
+/** An unlit bulb or lit-mirror edge: frosted white, no glow. */
+const BULB_OFF = "#d9d5cc";
 
 /**
  * The parts of a fixture in its local frame: origin at the centre of its
@@ -243,8 +317,17 @@ function fixtureParts(
   front?: "flat" | "curved",
   ends = { endBack: 0, endSide: 0 },
   frame?: PictureFrame,
+  lit = false,
+  patterned = false,
+  /** Ceiling fittings: the gap from the fitting's top up to the ceiling (flexes, roses); grids: the spacing. */
+  drop = 0,
+  pitch = 1.2,
+  /** A lit light fitting's light colour and dimmer (0-1): its glowing parts glow in that colour, dimmed. */
+  light?: { color: string; dim: number },
 ): Part[] {
   const out: Part[] = [];
+  /** A lamp's glowing part: the warm glow when lit, else `off` (the shade's own fabric in shadow, or a frosted bulb), matt. */
+  const lamp = (off: string): [string, Finish] => (lit ? [GLOW, "lamp"] : [off, "matt"]);
   const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], c, f });
   const cyl = (x: number, y: number, z: number, dia: number, len: number, c: string, f: Finish = "matt", axis?: "x" | "z") =>
@@ -294,7 +377,7 @@ function fixtureParts(
    * Door fronts across bay [x0, x1] in band [y0, y1], faces at zFront: two leaves when the bay is over 0.55 m wide
    * (one when `single`), 4 mm gaps, in the given style.
    */
-  const fronts = (x0: number, x1: number, y0: number, y1: number, zFront: number, style: JoineryFront, c = color, single = false, knob = true) => {
+  const fronts = (x0: number, x1: number, y0: number, y1: number, zFront: number, style: JoineryFront, c = color, single = false, knob = true, trim?: string, panel?: string) => {
     if (style === "open" || y1 - y0 < 0.03) return;
     const t = 0.018;
     const gap = 0.004;
@@ -322,7 +405,8 @@ function fixtureParts(
           const bw = fw - 2 * rail;
           const bh = hh - 2 * rail;
           if (bw > 0.05 && bh > 0.05) {
-            const bead = shade(c, 0.93);
+            const bead = trim ?? shade(c, 0.93);
+            if (panel) box(cx, yc, zFront + 0.001, bw, bh, 0.004, panel, "satin");
             for (const sy of [-1, 1]) box(cx, yc + (sy * bh) / 2, zFront + 0.003, bw, 0.009, 0.006, bead, "satin");
             for (const sx of [-1, 1]) box(cx + (sx * bw) / 2, yc, zFront + 0.003, 0.009, bh, 0.006, bead, "satin");
           }
@@ -442,7 +526,7 @@ function fixtureParts(
       const t = 0.012;
       box(0, h / 2, 0, w, h, d, color, "metal");
       if (symbol === "mirror-lit") {
-        box(0, h / 2, -d / 2 + 0.004, w + 0.04, h + 0.04, 0.008, GLOW, "glow");
+        box(0, h / 2, -d / 2 + 0.004, w + 0.04, h + 0.04, 0.008, ...lamp(BULB_OFF));
         box(0, h / 2, d / 2 + 0.001, w - t * 2, h - t * 2, 0.002, MIRROR, "mirror");
       } else box(0, h / 2, d / 2 + 0.001, w - t * 2, h - t * 2, 0.002, MIRROR, "mirror");
       break;
@@ -704,8 +788,8 @@ function fixtureParts(
       const shadeD = Math.min(w, d);
       drum(0, 0.025, shadeD * 0.7, shadeD * 0.7, DARK, "metal");
       cyl(0, (h - 0.3) / 2, 0, 0.022, h - 0.3, DARK, "metal");
-      drum(h - 0.33, h, shadeD, shadeD, color);
-      drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      drum(h - 0.33, h, shadeD, shadeD, color, lit ? "shade" : "matt");
+      drum(h - 0.335, h - 0.325, shadeD * 0.9, shadeD * 0.9, ...lamp(shade(color, 0.7)));
       break;
     }
     case "picture": {
@@ -727,8 +811,8 @@ function fixtureParts(
       drum(0, 0.02, shadeD * 0.5, shadeD * 0.5, DARK, "metal");
       drum(0.02, 0.06, shadeD * 0.3, shadeD * 0.3, "#8a7a5a", "satin");
       cyl(0, 0.06 + (h - shadeH - 0.06) / 2, 0, 0.03, h - shadeH - 0.06, "#8a7a5a", "satin");
-      drum(h - shadeH, h, shadeD, shadeD, color);
-      drum(h - shadeH + 0.003, h - shadeH + 0.012, shadeD * 0.9, shadeD * 0.9, GLOW, "glow");
+      drum(h - shadeH, h, shadeD, shadeD, color, lit ? "shade" : "matt");
+      drum(h - shadeH + 0.003, h - shadeH + 0.012, shadeD * 0.9, shadeD * 0.9, ...lamp(shade(color, 0.7)));
       break;
     }
     case "desk-lamp": {
@@ -738,9 +822,19 @@ function fixtureParts(
       lean(0, 0.015 + armH * 0.5 * 0.5, -d / 2 + d * 0.25 + d * 0.12, 0.014, armH * 0.55, 0.014, 0.35, color, "metal");
       lean(0, 0.015 + armH * 0.5 + armH * 0.45 * 0.5, d * 0.1, 0.014, armH * 0.5, 0.014, -0.9, color, "metal");
       out.push({ g: "cyl", p: [0, h - 0.06, d / 2 - d * 0.2], s: [0.12, 0.08, 0.12], c: color, f: "metal", tilt: 0.3 });
-      out.push({ g: "cyl", p: [0, h - 0.095, d / 2 - d * 0.2], s: [0.08, 0.004, 0.08], c: GLOW, f: "glow", tilt: 0.3 });
+      out.push({ g: "cyl", p: [0, h - 0.095, d / 2 - d * 0.2], s: [0.08, 0.004, 0.08], c: lamp(BULB_OFF)[0], f: lamp(BULB_OFF)[1], tilt: 0.3 });
       break;
     }
+    case "pendant":
+    case "pendant-multi":
+    case "flush-light":
+    case "downlight":
+    case "downlight-grid":
+    case "spot-bar":
+    case "wall-light":
+    case "strip-light":
+      out.push(...lightFittingParts(symbol, w, d, h, color, drop, pitch, light));
+      break;
     case "tv-wall": {
       box(0, h / 2, -d / 2 + 0.015, 0.2, 0.3, 0.03, DARK, "metal");
       box(0, h / 2, d / 2 - 0.015, w, h, 0.03, color, "gloss");
@@ -768,6 +862,7 @@ function fixtureParts(
       // Lies on the room's floor surface (not the storey base, which the floor finish covers), with a border.
       const y = FLOOR_SURFACE;
       box(0, y + h / 2, 0, w, h, d, color);
+      if (patterned) break; // the printed face replaces the border
       box(0, y + h + 0.001, 0, w - Math.min(0.24, w * 0.16), 0.002, d - Math.min(0.24, d * 0.16), shade(color, 0.88));
       break;
     }
@@ -1036,7 +1131,7 @@ function fixtureParts(
         for (const x of inner) box(x, (b0 + b1) / 2, 0, t, b1 - b0, d - 0.01, cc, "satin");
         for (const [x0, x1] of bays) {
           if (j.baseFront === "open") box((x0 + x1) / 2, (b0 + b1) / 2, 0, x1 - x0, t, d - 0.04, cc, "satin");
-          else fronts(x0, x1, b0, b1, f, j.baseFront);
+          else fronts(x0, x1, b0, b1, f, j.baseFront, color, false, true, j.trim, j.panel);
         }
       }
       if (L.top) box(0, (L.top[0] + L.top[1]) / 2, 0.01, w, TOP_T, d + 0.02, j.topColor, "satin");
@@ -1061,14 +1156,14 @@ function fixtureParts(
           }
         } else {
           for (const y of L.shelfYs) box(0, y, uz, w - 2 * t, 0.022, ud, cc, "satin");
-          for (const [x0, x1] of bays) fronts(x0, x1, u0, u1, -d / 2 + ud, j.upperFront);
+          for (const [x0, x1] of bays) fronts(x0, x1, u0, u1, -d / 2 + ud, j.upperFront, color, false, true, j.trim, j.panel);
         }
       }
       if (L.topBox) {
         const [y0, y1] = L.topBox;
         box(0, y0 + t / 2, 0, w - 2 * t, t, d - 0.01, cc, "satin");
         const style: JoineryFront = j.upperFront !== "open" ? j.upperFront : j.baseFront !== "open" ? j.baseFront : "slab";
-        for (const [x0, x1] of bays) fronts(x0, x1, y0 + t, y1, f, style);
+        for (const [x0, x1] of bays) fronts(x0, x1, y0 + t, y1, f, style, color, false, true, j.trim, j.panel);
       }
       break;
     }
@@ -1251,7 +1346,7 @@ function fixtureParts(
       const skirt = 0.08;
       const zd = d / 2 - t / 2;
       const front = d / 2;
-      const bead = shade(color, 1.2);
+      const bead = j?.trim ?? shade(color, 1.2);
       box(0, h / 2, -t / 2, w, h, d - t, shade(color, 0.9), "satin");
       box(0, skirt / 2, zd, w, skirt, t, shade(color, 0.85), "satin");
       // A dark backer just behind the door fronts, so the joints between doors read as solid shadow gaps.
@@ -1275,6 +1370,7 @@ function fixtureParts(
         ]) {
           const bh = by1 - by0;
           const bc = (by0 + by1) / 2;
+          if (j?.panel) box(x, bc, front + 0.001, bw, bh, 0.004, j.panel, "satin");
           for (const sy of [by0, by1]) box(x, sy, front + 0.003, bw, 0.009, 0.006, bead, "satin");
           for (const sx of [-1, 1]) box(x + (sx * bw) / 2, bc, front + 0.003, 0.009, bh, 0.006, bead, "satin");
         }
@@ -1370,9 +1466,353 @@ function fixtureParts(
       box(0, 0.08, d / 2 + 0.005, w - 0.06, 0.1, 0.01, "#4b5563", "satin");
       cyl(0, h + 0.1, -d / 2 + 0.1, 0.1, 0.2, "#e5e7eb", "satin");
       break;
+
+    // ---- Electrical points: thin plates on the wall (back at -z), or on the ceiling.
+    case "switch-1g":
+    case "switch-2g":
+    case "switch-2way":
+    case "switch-dimmer": {
+      const t = 0.008;
+      box(0, h / 2, -d / 2 + t / 2, w, h, t, color, "satin");
+      const rocker = shade(color, 0.9);
+      const rz = -d / 2 + t + (d - t) / 2;
+      if (symbol === "switch-dimmer") {
+        out.push({ g: "cyl", p: [0, h / 2, -d / 2 + t + (d - t) / 2], s: [h * 0.55, d - t, h * 0.55], c: rocker, f: "satin", axis: "z" });
+      } else if (symbol === "switch-2g") {
+        for (const sx of [-1, 1]) box(sx * w * 0.24, h / 2, rz, w * 0.4, h * 0.7, d - t, rocker, "satin");
+      } else box(0, h / 2, rz, w * 0.65, h * 0.7, d - t, rocker, "satin");
+      break;
+    }
+    case "switch-pull": {
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      cyl(w * 0.2, -0.15, 0, 0.004, 0.3, "#d8d4cc", "matt");
+      out.push({ g: "ball", p: [w * 0.2, -0.31, 0], s: [0.02, 0.02, 0.02], c: "#d8d4cc", f: "satin" });
+      break;
+    }
+    case "socket-1":
+    case "socket-2":
+    case "socket-usb": {
+      const t = 0.01;
+      box(0, h / 2, -d / 2 + t / 2, w, h, t, color, "satin");
+      const n = symbol === "socket-1" ? 1 : 2;
+      const cw = w / n;
+      for (let i = 0; i < n; i++) {
+        const cx = -w / 2 + cw * (i + 0.5);
+        box(cx, h / 2, -d / 2 + t + 0.004, cw * 0.62, h * 0.62, 0.008, shade(color, 0.93), "satin");
+        for (const sx of [-1, 1]) box(cx + sx * 0.012, h / 2 - 0.009, -d / 2 + t + 0.009, 0.005, 0.012, 0.004, DARK);
+        box(cx, h / 2 + 0.012, -d / 2 + t + 0.009, 0.005, 0.012, 0.004, DARK);
+      }
+      if (symbol === "socket-usb") for (const sx of [-1, 1]) box(sx * w * 0.24, h * 0.18, -d / 2 + t + 0.005, 0.014, 0.006, 0.004, DARK);
+      break;
+    }
+    case "socket-floor": {
+      box(0, h / 2, 0, w, h, d, color, "metal");
+      box(0, h + 0.002, 0, w * 0.55, 0.004, d * 0.55, DARK, "metal");
+      break;
+    }
+    case "socket-outdoor": {
+      box(0, h / 2, -d / 2 + 0.01, w, h, 0.02, color, "satin");
+      box(0, h * 0.55, 0, w * 0.75, h * 0.7, d - 0.02, shade(color, 1.25), "satin");
+      break;
+    }
+    case "shaver-socket": {
+      box(0, h / 2, -d / 2 + 0.008, w, h, 0.016, color, "satin");
+      box(0, h / 2, 0.0, w * 0.5, h * 0.5, d - 0.016, "#e9e6df", "satin");
+      box(0, h / 2, d / 2 - 0.004, w * 0.2, h * 0.14, 0.004, DARK);
+      break;
+    }
+    case "fused-spur":
+    case "cooker-outlet":
+    case "cooker-switch": {
+      const t = 0.01;
+      box(0, h / 2, -d / 2 + t / 2, w, h, t, color, "satin");
+      if (symbol === "cooker-switch") {
+        box(0, h * 0.55, -d / 2 + t + 0.006, w * 0.5, h * 0.35, 0.012, "#b8222a", "satin");
+        box(0, h * 0.2, -d / 2 + t + 0.003, w * 0.18, h * 0.08, 0.006, DARK);
+      } else {
+        box(0, h / 2, -d / 2 + t + 0.005, w * 0.62, h * 0.62, 0.01, shade(color, 0.93), "satin");
+        if (symbol === "fused-spur") box(0, h / 2 + h * 0.18, -d / 2 + t + 0.012, w * 0.14, h * 0.14, 0.006, "#b8222a", "satin");
+        else cyl(0, h / 2, -d / 2 + t + 0.01, h * 0.28, 0.01, DARK, "metal", "z");
+      }
+      break;
+    }
+    case "shower-point": {
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      box(0, h * 0.78, d / 2 + 0.001, w * 0.8, h * 0.12, 0.004, "#2a3340", "gloss");
+      out.push({ g: "cyl", p: [0, h * 0.5, d / 2 + 0.008], s: [0.07, 0.016, 0.07], c: CHROME, f: "metal", axis: "z" });
+      break;
+    }
+    case "extractor-fan": {
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, color, "satin");
+      out.push({ g: "cyl", p: [0, h / 2, -d / 2 + 0.012], s: [Math.min(w, h) * 0.8, 0.02, Math.min(w, h) * 0.8], c: shade(color, 0.92), f: "satin", axis: "z" });
+      out.push({ g: "cyl", p: [0, h / 2, -d / 2 + 0.023], s: [Math.min(w, h) * 0.55, 0.004, Math.min(w, h) * 0.55], c: DARK, f: "matt", axis: "z" });
+      break;
+    }
+    case "thermostat": {
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, color, "satin");
+      box(0, h * 0.55, -d / 2 + 0.012, w * 0.6, h * 0.35, 0.006, "#2a3340", "gloss");
+      box(0, h * 0.2, -d / 2 + 0.012, w * 0.4, h * 0.08, 0.006, shade(color, 0.85));
+      break;
+    }
+    case "bell-push": {
+      box(0, h / 2, -d / 2 + 0.005, w, h, 0.01, color, "metal");
+      out.push({ g: "cyl", p: [0, h / 2, -d / 2 + 0.014], s: [w * 0.55, 0.008, w * 0.55], c: "#e9e6df", f: "gloss", axis: "z" });
+      break;
+    }
+    case "bell-chime": {
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      for (let i = 0; i < 4; i++) box(0, h * 0.25 + i * h * 0.15, d / 2 + 0.001, w * 0.7, 0.01, 0.003, shade(color, 0.8));
+      break;
+    }
+    case "smoke-alarm":
+    case "heat-alarm": {
+      drum(0, h, w, d, color, "satin");
+      drum(0.0, 0.006, w * 0.55, d * 0.55, shade(color, 0.9), "satin");
+      out.push({ g: "ball", p: [w * 0.3, 0, 0], s: [0.01, 0.006, 0.01], c: symbol === "smoke-alarm" ? "#3fae5a" : "#c84a3a", f: "glow" });
+      break;
+    }
+    case "co-alarm": {
+      box(0, h / 2, -d / 2 + 0.015, w, h, 0.03, color, "satin");
+      box(0, h * 0.62, -d / 2 + 0.032, w * 0.6, h * 0.25, 0.006, "#2a3340", "gloss");
+      out.push({ g: "ball", p: [w * 0.3, h * 0.22, -d / 2 + 0.032], s: [0.012, 0.012, 0.008], c: "#3fae5a", f: "glow" });
+      break;
+    }
+    case "tv-point":
+    case "data-point": {
+      const t = 0.01;
+      box(0, h / 2, -d / 2 + t / 2, w, h, t, color, "satin");
+      if (symbol === "tv-point") out.push({ g: "cyl", p: [0, h / 2, -d / 2 + t + 0.004], s: [0.022, 0.008, 0.022], c: CHROME, f: "metal", axis: "z" });
+      else box(0, h / 2, -d / 2 + t + 0.003, 0.016, 0.014, 0.006, DARK);
+      break;
+    }
+    case "ev-charger": {
+      box(0, h / 2, 0, w, h, d, color, "gloss");
+      box(0, h * 0.72, d / 2 + 0.001, w * 0.7, h * 0.22, 0.004, "#2a3340", "gloss");
+      box(0, h * 0.35, d / 2 + 0.001, w * 0.5, 0.012, 0.004, "#3fae5a", "glow");
+      cyl(w * 0.25, h * 0.05, d / 2 + 0.01, 0.03, 0.14, DARK, "matt");
+      break;
+    }
+    case "consumer-unit": {
+      box(0, h / 2, 0, w, h, d, color, "satin");
+      box(0, h / 2, d / 2 + 0.003, w - 0.03, h - 0.03, 0.008, shade(color, 0.96), "satin");
+      box(0, h * 0.62, d / 2 + 0.009, w - 0.07, 0.003, 0.004, DARK);
+      const n = 8;
+      for (let i = 0; i < n; i++) box(-w / 2 + 0.06 + ((w - 0.12) * (i + 0.5)) / n, h * 0.4, d / 2 + 0.01, (w - 0.12) / n - 0.008, 0.07, 0.01, i === 0 ? "#b8222a" : "#26292e", "satin");
+      break;
+    }
     default:
       box(0, h / 2, 0, w, h, d, color, "satin");
   }
   return out;
 }
 
+
+/** Dimmer steps for a glow colour, so a dimmer drag mints at most ten materials per colour. */
+const DIM_STEPS = 10;
+
+/**
+ * The parts of a ceiling or wall light fitting (see fixtureParts for the frame: y up from the bottom of the fitting,
+ * the ceiling at h + drop). `light` is set when it is lit: the bulb, lens and diffuser parts then glow in its light
+ * colour scaled by the dimmer; unlit they show the fitting's own colour, matt.
+ */
+function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, color: string, drop: number, pitch: number, light?: { color: string; dim: number }): Part[] {
+  const out: Part[] = [];
+  const top = h + drop;
+  const glowE = light ? "#" + new THREE.Color(light.color).multiplyScalar(Math.max(1, Math.round(light.dim * DIM_STEPS)) / DIM_STEPS).getHexString() : undefined;
+  /** A bulb or lens: the light colour when lit, else `off`. */
+  const bulb = (off: string): Pick<Part, "c" | "f" | "e"> => (light ? { c: light.color, f: "lamp", e: glowE } : { c: off, f: "matt" });
+  /** A diffuser or shade fabric the light comes through: its own colour, glowing in the light's colour when lit. */
+  const fabric = (c: string): Pick<Part, "c" | "f" | "e"> => (light ? { c, f: "shade", e: glowE } : { c, f: "matt" });
+  const look = (c: string, f: Finish): Pick<Part, "c" | "f"> => ({ c, f });
+  /** An upright cylinder of diameters sw × sd at (x, z) from y0 to y1. */
+  const can = (x: number, z: number, y0: number, y1: number, sw: number, sd: number, l: Pick<Part, "c" | "f" | "e">, rotZ?: number) =>
+    out.push({ g: "cyl", p: [x, (y0 + y1) / 2, z], s: [sw, Math.max(y1 - y0, 0.001), sd], ...l, rotZ });
+  const block = (x: number, y: number, z: number, sx: number, sy: number, sz: number, l: Pick<Part, "c" | "f" | "e">) =>
+    out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], ...l });
+  /** A 4 mm flex from y0 up to the ceiling at x. */
+  const flex = (x: number, y0: number) => {
+    if (top - y0 > 0.005) can(x, 0, y0, top, 0.004, 0.004, look(DARK, "satin"));
+  };
+  switch (symbol) {
+    case "pendant": {
+      // A drum shade, open underneath (the glowing ring inside its rim), on a flex from a ceiling rose.
+      can(0, 0, 0, h, w, d, fabric(color));
+      can(0, 0, -0.002, 0.004, w * 0.92, d * 0.92, bulb(shade(color, 0.7)));
+      can(0, 0, h, h + 0.006, w * 0.3, d * 0.3, look(DARK, "satin"));
+      flex(0, h + 0.006);
+      can(0, 0, top - 0.025, top, 0.1, 0.1, look(WHITE, "satin"));
+      break;
+    }
+    case "pendant-multi": {
+      // A slim bar at the ceiling and three small shades hanging from it.
+      const barH = Math.min(0.03, drop);
+      if (barH > 0.002) block(0, top - barH / 2, 0, w, barH, Math.min(0.04, d), look(color, "satin"));
+      const sd = Math.min(w / 5, Math.max(d, 0.08));
+      for (const x of [-w / 3, 0, w / 3]) {
+        can(x, 0, 0, h, w / 5, sd, fabric(color));
+        can(x, 0, -0.002, 0.004, (w / 5) * 0.88, sd * 0.88, bulb(shade(color, 0.7)));
+        flex(x, h);
+      }
+      break;
+    }
+    case "flush-light": {
+      // A shallow diffuser disc on a thin backplate against the ceiling.
+      const plate = Math.min(0.012, h * 0.2);
+      can(0, 0, h - plate, top, w * 0.85, d * 0.85, look(WHITE, "satin"));
+      can(0, 0, h * 0.25, h - plate, w, d, fabric(color));
+      can(0, 0, 0, h * 0.25, w * 0.8, d * 0.8, fabric(color));
+      break;
+    }
+    case "downlight":
+    case "downlight-grid": {
+      // A ring bezel 1 cm proud of the ceiling round a lens; a grid is that ring at every point and nothing else.
+      const pts: [number, number, number][] = symbol === "downlight" ? [[0, 0, 0]] : gridPoints(w, d, pitch, 0);
+      const ring = symbol === "downlight" ? Math.min(w, d) : 0.09;
+      for (const [x, , z] of pts) {
+        can(x, z, top - 0.01, top, ring, ring, look(color, "satin"));
+        can(x, z, top - 0.0115, top - 0.009, ring * 0.65, ring * 0.65, bulb(BULB_OFF));
+      }
+      break;
+    }
+    case "spot-bar": {
+      // A bar on the ceiling and three cylindrical heads on short stems, the outer two tilted 25° outward.
+      block(0, top - 0.015, 0, w, 0.03, 0.03, look(color, "satin"));
+      const len = 0.09;
+      const yc = Math.max(0.05, top - 0.03 - 0.02 - len / 2);
+      for (const [x, tilt] of [[-w / 3, -25], [0, 0], [w / 3, 25]] as const) {
+        const t = (tilt * Math.PI) / 180;
+        can(x, 0, yc + len / 2 - 0.005, top - 0.03, 0.012, 0.012, look(color, "metal"));
+        can(x, 0, yc - len / 2, yc + len / 2, 0.05, 0.05, look(color, "satin"), t);
+        // The lens at the head's lower end, which swings towards +x by sin t.
+        const lx = x + Math.sin(t) * (len / 2 + 0.001);
+        const ly = yc - Math.cos(t) * (len / 2 + 0.001);
+        can(lx, 0, ly - 0.002, ly + 0.002, 0.042, 0.042, bulb(BULB_OFF), t);
+      }
+      break;
+    }
+    case "wall-light": {
+      // A backplate on the wall and a round shade open top and bottom (an up-and-down washer): its rims glow when lit.
+      block(0, h / 2, -d / 2 + 0.006, Math.min(0.08, w), Math.min(0.14, h), 0.012, look(color, "metal"));
+      const dia = Math.max(0.04, Math.min(w, d - 0.016));
+      const zc = d / 2 - dia / 2;
+      block(0, h / 2, (-d / 2 + 0.012 + zc - dia / 2) / 2, 0.02, 0.02, Math.max(0.002, zc - dia / 2 + d / 2 - 0.012), look(color, "metal"));
+      can(0, zc, 0, h, dia, dia, look(color, "metal"));
+      can(0, zc, h, h + 0.003, dia * 0.86, dia * 0.86, bulb(shade(color, 0.6)));
+      can(0, zc, -0.003, 0, dia * 0.86, dia * 0.86, bulb(shade(color, 0.6)));
+      break;
+    }
+    case "strip-light":
+      // A slim aluminium bar with a diffuser along its underside.
+      block(0, h / 2 + 0.002, 0, w, h - 0.004, d, look(color, "satin"));
+      block(0, 0.002, 0, w - 0.01, 0.004, d * 0.7, bulb(BULB_OFF));
+      break;
+  }
+  return out;
+}
+
+/** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
+export const LAMP_SCALE = 0.06;
+/**
+ * Spot light intensity per candela of the bulb's even-sphere candela (lights.ts), before the cone gain (see
+ * spotIntensity). Tuned so a 450 lm downlight from a 2.25 m ceiling makes a soft pool about 1.5 m across.
+ */
+export const SPOT_SCALE = 0.03;
+/** Re-pick the nearest lamps once the camera has moved this far (metres). */
+const REPICK_M = 1;
+
+/**
+ * A spot light's intensity: brighter than a bare bulb as its output is gathered into the cone, by the square root of
+ * the flux-keeping gain (coneGain), so a tight spot bar does not burn out next to a wide pendant once tone-mapped.
+ */
+export const spotIntensity = (l: Pick<LampLight, "candela" | "spot">): number => l.candela * SPOT_SCALE * Math.sqrt(coneGain(l.spot?.angle));
+
+/**
+ * The lit lamps of every shown floor as point lights, or spot lights aimed straight down for fittings with a cone,
+ * the nearest LIGHT_CAP[quality] to the camera: the rest only glow. The nearest SHADOW_CAP[quality] spot lights cast
+ * shadows; point lights never do. The pick runs when the lamps change or the camera has moved a metre, so orbiting
+ * costs no React renders.
+ */
+/** Lit lamp lights in use and the cap, for the dev hook window.__houseLights. */
+export const lampStats = { active: 0, pool: 0 };
+export function LampLights({ lamps }: { lamps: LampLight[] }) {
+  const quality = useStore((s) => s.settings.quality);
+  const cap = LIGHT_CAP[quality];
+  const shadows = SHADOW_CAP[quality];
+  const camera = useThree((s) => s.camera);
+  const invalidate = useThree((s) => s.invalidate);
+  const [picked, setPicked] = useState<{ lights: LampLight[]; casters: ReadonlySet<string> }>({ lights: [], casters: new Set() });
+  const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; cap: number; shadows: number }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, cap, shadows });
+  const repick = () => {
+    const l = last.current;
+    const eye = camera.position;
+    if (l.lamps === lamps && l.cap === cap && l.shadows === shadows && l.eye.distanceTo(eye) < REPICK_M) return;
+    l.eye.copy(eye);
+    l.lamps = lamps;
+    l.cap = cap;
+    l.shadows = shadows;
+    const at: [number, number, number] = [eye.x, eye.y, eye.z];
+    const next = lamps.length <= cap ? lamps : pickLights(lamps, at, cap);
+    const casters = new Set(shadows > 0 ? pickLights(next.filter((x) => x.spot), at, shadows).map((x) => x.id) : []);
+    setPicked((prev) =>
+      prev.lights.length === next.length && prev.lights.every((p, i) => p === next[i]) && prev.casters.size === casters.size && [...casters].every((id) => prev.casters.has(id))
+        ? prev
+        : { lights: next, casters },
+    );
+  };
+  useEffect(repick);
+  useFrame(repick);
+  useEffect(() => invalidate(), [picked, invalidate]);
+  // For the dev hook window.__houseLights: lights in use and the cap.
+  useEffect(() => {
+    lampStats.active = picked.lights.length;
+    lampStats.pool = cap;
+  }, [picked, cap]);
+  return (
+    <>
+      {picked.lights.map((l) =>
+        l.spot ? (
+          <DownSpot key={l.id} light={l} cast={picked.casters.has(l.id)} />
+        ) : (
+          <pointLight key={l.id} position={l.pos} color={l.color} intensity={l.candela * LAMP_SCALE} decay={2} distance={l.reach} castShadow={false} />
+        ),
+      )}
+    </>
+  );
+}
+
+/** A spot light aimed straight down from the bulb; its target sits a metre below (outside the scene, so placed by hand). */
+function DownSpot({ light: l, cast }: { light: LampLight; cast: boolean }) {
+  const ref = useRef<THREE.SpotLight>(null);
+  useLayoutEffect(() => {
+    const s = ref.current;
+    if (!s) return;
+    s.target.position.set(l.pos[0], l.pos[1] - 1, l.pos[2]);
+    s.target.updateMatrixWorld();
+  }, [l.pos]);
+  // Shadow maps are redrawn only on demand (see ShadowUpdates): a spot that starts casting, or moves, needs one drawn.
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+  // A layout effect, so the next frame (the first that samples the new map) draws it first.
+  useLayoutEffect(() => {
+    if (!cast) return;
+    gl.shadowMap.needsUpdate = true;
+    invalidate();
+  }, [cast, l.pos, gl, invalidate]);
+  return (
+    <spotLight
+      ref={ref}
+      position={l.pos}
+      color={l.color}
+      intensity={spotIntensity(l)}
+      angle={l.spot!.angle}
+      penumbra={l.spot!.penumbra}
+      decay={2}
+      distance={l.reach}
+      castShadow={cast}
+      shadow-mapSize={[512, 512]}
+      shadow-bias={-0.0005}
+      shadow-camera-near={0.1}
+      shadow-camera-far={l.reach}
+    />
+  );
+}

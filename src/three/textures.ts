@@ -1459,6 +1459,7 @@ export type MatSpec =
   | { kind: "paint"; color: string }
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
   | { kind: "plain"; color: string; roughness?: number; metalness?: number }
+  /** Window glass; a pane's faces glow at night by their `glow` vertex attribute (see buildShell). */
   | { kind: "glass" }
   | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
 
@@ -1499,8 +1500,19 @@ let glassLit = false;
 const GLASS_TINT = "#e4ecea";
 const GLASS_GLOW = new THREE.Color("#ffd9a0");
 
-/** Fresnel alpha for the film glass: nearly clear face-on, a mirror at grazing angles. */
-function glassFresnel(shader: { fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+/**
+ * The glass shader: the emissive glow is scaled by the per-vertex `glow` attribute (1 on a face that looks into a lit
+ * room from the other side, 0 elsewhere; geometry without the attribute reads 0), and only on the face's front, so a
+ * double-sided film pane does not show the outer face's glow from inside. The film variant also gets a Fresnel alpha:
+ * nearly clear face-on, a mirror at grazing angles.
+ */
+function glassShader(shader: { vertexShader: string; fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;")
+    .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nvarying float vGlow;")
+    .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= gl_FrontFacing ? vGlow : 0.0;");
   if (m.transmission > 0) return;
   shader.fragmentShader = shader.fragmentShader.replace(
     "#include <opaque_fragment>",
@@ -1530,10 +1542,13 @@ function styleGlass(m: THREE.MeshPhysicalMaterial) {
   m.needsUpdate = true;
 }
 
-/** Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. */
+/**
+ * Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. At night (see setGlassMode) the faces
+ * whose `glow` attribute is 1 glow warm: the shell sets it on a pane's face that looks into a lit room.
+ */
 export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
-  m.onBeforeCompile = (shader) => glassFresnel(shader, m);
+  m.onBeforeCompile = (shader) => glassShader(shader, m);
   m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
   glassMaterials.add(m);
   styleGlass(m);
@@ -1541,7 +1556,7 @@ export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
   return m;
 }
 
-/** Switch every glass pane between real transmission (high quality) and the film, and light it up at night. */
+/** Switch every glass pane between real transmission (high quality) and the film, and light up the lit rooms' panes at night. */
 export function setGlassMode(high: boolean, lit: boolean) {
   if (high === glassHigh && lit === glassLit) return;
   glassHigh = high;

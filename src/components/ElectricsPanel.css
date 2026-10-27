@@ -1,0 +1,15 @@
+/* Electrics mode's panel: counts, links, circuits and the wiring guide buttons. Colours and spacing are tokens. */
+.electrics-panel { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
+.electrics-counts { width: 100%; border-collapse: collapse; font-size: 13px; }
+.electrics-counts th, .electrics-counts td { padding: 3px 4px; text-align: right; font-weight: 400; }
+.electrics-counts thead th { color: var(--muted); font-size: 11px; }
+.electrics-counts tbody th { text-align: left; }
+.electrics-counts td { font-family: var(--mono, ui-monospace, monospace); }
+.electrics-circuits { list-style: none; margin: 0 0 var(--sp-2, 8px); padding: 0; display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
+.electrics-circuits li { display: flex; align-items: center; gap: var(--sp-2, 8px); flex-wrap: wrap; }
+.electrics-circuits li > :first-child { flex: 1 1 8em; min-width: 0; }
+.electrics-add-circuit, .electrics-link-pick { gap: var(--sp-2, 8px); }
+.electrics-add-circuit select, .electrics-link-pick select { flex: 1; min-width: 0; }
+.electrics-linking { display: flex; flex-direction: column; gap: var(--sp-2, 8px); align-items: flex-start; }
+.electrics-problem { color: var(--danger); }
+.app[data-touch] .electrics-circuits button, .app[data-touch] .electrics-panel .row button { min-height: 44px; }

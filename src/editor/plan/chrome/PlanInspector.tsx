@@ -6,7 +6,8 @@ import { exactGroup, expandToGroups, rotateFixtures, ungroupFixtures } from "../
 import { DOUBLE_DOOR_M, outsideSide } from "../../../lib/planMath";
 import { byId } from "../../../lib/catalogue";
 import type { Fixture, Floor, Room, VariantKey } from "../../../types";
-import type { Mode } from "../../../lib/modes";
+import { editsFixtures, type Mode } from "../../../lib/modes";
+import { ElectricsPanel } from "../../../components/ElectricsPanel";
 import { useStore } from "../../../store";
 import { DecoratePanel } from "../../DecoratePanel";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../Inspectors";
@@ -52,9 +53,10 @@ export function PlanInspector({
   const paste = clipboardCount ? pasteFixtures : undefined;
   return (
     <InspectorCard className="side">
-      {mode === "furnish" ? (
+      {editsFixtures(mode) ? (
         liveIds.length >= 2 ? (
           <MultiFixtureInspector
+            variant={variant}
             fixtures={allFixtures.filter((x) => liveIds.includes(x.id))}
             isGroup={exactGroup(allFixtures, liveIds) !== null}
             onPick={(id) => select({ fixtures: [id] })}
@@ -69,6 +71,7 @@ export function PlanInspector({
           />
         ) : selectedFixture && selectedFixtureItem ? (
           <FixtureInspector
+            variant={variant}
             fixture={selectedFixture}
             item={selectedFixtureItem}
             ceiling={ceilingHeight}
@@ -83,6 +86,8 @@ export function PlanInspector({
             onPaste={paste}
             onRemove={removeSelected}
           />
+        ) : mode === "electrics" ? (
+          <ElectricsPanel variant={variant} floor={floor} onAdd={onAdd} />
         ) : (
           <FurnishSummary floor={floor} clashes={clashes.size} onAdd={onAdd} onPaste={paste} />
         )

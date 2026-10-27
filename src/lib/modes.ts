@@ -5,12 +5,13 @@ import type { IconName } from "../components/icons";
 /** editFloorId value that opens the site editor instead of a floor (re-exported by the store). */
 export const SITE_EDIT_ID = "site";
 
-export type Mode = "build" | "decorate" | "furnish" | "garden" | "plot" | "review";
-export const MODES: Mode[] = ["build", "decorate", "furnish", "garden", "plot", "review"];
+export type Mode = "build" | "decorate" | "furnish" | "electrics" | "garden" | "plot" | "review";
+export const MODES: Mode[] = ["build", "decorate", "furnish", "electrics", "garden", "plot", "review"];
 export const MODE_LABEL: Record<Mode, string> = {
   build: "Build",
   decorate: "Decorate",
   furnish: "Furnish",
+  electrics: "Electrics",
   garden: "Garden",
   plot: "Plot",
   review: "Review",
@@ -20,6 +21,7 @@ export const MODE_ICON: Record<Mode, IconName> = {
   build: "house",
   decorate: "brush",
   furnish: "sofa",
+  electrics: "plug",
   garden: "flower",
   plot: "compass",
   review: "clipboard",
@@ -29,6 +31,7 @@ export const MODE_SUBTITLE: Record<Mode, string> = {
   build: "Rooms, walls, doors and stairs",
   decorate: "Floors, walls and colours",
   furnish: "Place furniture",
+  electrics: "Lights, switches, sockets and circuits",
   garden: "Surfaces, planting, furniture and lights",
   plot: "Boundaries, neighbours, orientation and roof",
   review: "Areas, costs and planning",
@@ -42,6 +45,8 @@ export const PLAN_TOOLS: Record<Mode, Tool[]> = {
   build: ["select", "rect", "canopy", "room", "door", "window", "gap", "wall", "measure", "calibrate"],
   decorate: [],
   furnish: ["select", "measure"],
+  // "place" is armed by the Add button (as in Furnish), never drawn as a rail button.
+  electrics: ["select", "measure", "place"],
   garden: [],
   review: ["select", "measure"],
   plot: [],
@@ -52,6 +57,8 @@ const SELECTABLE: Record<Mode, SelKind[]> = {
   build: ["room", "opening", "wall", "canopy", "corner"],
   decorate: ["room", "edge", "wall"],
   furnish: ["fixture"],
+  // Only electrical points (lib/electrics.ts isElectricalItem): the plan filters the fixtures it hit-tests.
+  electrics: ["fixture"],
   garden: [],
   plot: [],
   review: [],
@@ -87,7 +94,14 @@ export interface ModeUi {
   selectedEdge: EdgePick | null;
   /** Garden: the ids of the selected garden items (cleared on every mode switch). */
   gardenSel?: string[];
+  /** Electrics: the switch whose lights are being linked (clicking a light toggles it in the switch's `controls`); null = not linking. */
+  linkSwitchId?: string | null;
+  /** Electrics: which rocker (gang, 0-based) of the linking switch the tapped lights go on. */
+  linkGang?: number;
 }
+
+/** Modes whose plan places, selects and moves fixtures (Furnish: furniture and lights; Electrics: electrical points and lights). */
+export const editsFixtures = (m: Mode) => m === "furnish" || m === "electrics";
 
 /** Tapping a room's floor selects it in these modes. */
 export const roomTapSelects = (m: Mode) => m === "build" || m === "decorate";
@@ -102,7 +116,7 @@ export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> 
 
 /** The UI fields that change when the mode does. Selections the new mode cannot hold are cleared. */
 export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
-  const patch: Partial<ModeUi> = { mode: next, gardenSel: [] };
+  const patch: Partial<ModeUi> = { mode: next, gardenSel: [], linkSwitchId: null, linkGang: 0 };
   if (!roomTapSelects(next)) patch.selectedRoomId = null;
   if (next !== "decorate") patch.selectedEdge = null;
   if (editsSite(next)) {

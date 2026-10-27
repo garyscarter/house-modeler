@@ -6,6 +6,7 @@ import { DecoratePanel } from "../editor/DecoratePanel";
 import { BuildRoomPanel } from "../editor/Inspectors";
 import { PlotPanel } from "./PlotPanel";
 import { GardenPanel } from "./GardenPanel";
+import { ElectricsPanel } from "./ElectricsPanel";
 import { requestAddPicker } from "../editor/addPicker";
 
 /**
@@ -37,6 +38,8 @@ export function ModePanel() {
     if (mode === "review") return null;
     if (!model || !floor) return <p className="muted small">Load a house to start.</p>;
     switch (mode) {
+      case "electrics":
+        return <ElectricsPanel variant={variant} floor={floor} />;
       case "build":
         return room && roomFloor ? (
           <BuildRoomPanel key={room.id} variant={variant} floor={roomFloor} room={room} onChange={(p) => updateRoom(variant, roomFloor.id, room.id, p)} />
