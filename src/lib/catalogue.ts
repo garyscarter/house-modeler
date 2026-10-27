@@ -585,6 +585,24 @@ export function pitchOf(fx: { pitch?: number }, item: Pick<CatalogueItem, "pitch
   const p = fx.pitch ?? item.pitch ?? 1.2;
   return Number.isFinite(p) && p >= 0.3 ? p : item.pitch ?? 1.2;
 }
+
+/** How a downlight grid is laid out: the spacing, and a set number across and down when the owner chose one. */
+export interface GridLayout {
+  pitch: number;
+  cols?: number;
+  rows?: number;
+}
+/** Most downlights across or down a grid. */
+export const MAX_GRID = 24;
+const gridCount = (n: number | undefined): number | undefined => (n !== undefined && Number.isFinite(n) && n >= 1 ? Math.min(MAX_GRID, Math.round(n)) : undefined);
+/** A fixture's grid layout (see GridLayout); for anything but a grid, just the default spacing. */
+export function gridOf(fx: { pitch?: number; cols?: number; rows?: number }, item: Pick<CatalogueItem, "pitch">): GridLayout {
+  const out: GridLayout = { pitch: pitchOf(fx, item) };
+  const cols = gridCount(fx.cols), rows = gridCount(fx.rows);
+  if (cols !== undefined) out.cols = cols;
+  if (rows !== undefined) out.rows = rows;
+  return out;
+}
 export const isCeilingItem = (item: Pick<CatalogueItem, "ceiling">): boolean => !!item.ceiling;
 
 export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount">): number {

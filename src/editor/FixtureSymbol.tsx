@@ -1,6 +1,6 @@
 import { createElement, memo, type ReactNode } from "react";
 import { RUG_SPOTS, rugPattern } from "../lib/rugs";
-import { burners, chaiseSizes, pitchOf, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
+import { burners, chaiseSizes, gridOf, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { gridPoints } from "../lib/lights";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
 import { hasElectricSymbol, ELECTRIC_GLYPH_M } from "../lib/electricSymbols";
@@ -704,7 +704,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
           return g(
             hit,
             <rect key="area" x={x0} y={y0} width={w} height={d} {...thin} strokeDasharray={`${stroke * 5} ${stroke * 3}`} />,
-            ...gridPoints(w / m, d / m, pitchOf(fixture ?? {}, item), 0).flatMap(([gx, , gz], i) => dl(gx * m, gz * m, r1, `g${i}`)),
+            ...gridPoints(w / m, d / m, gridOf(fixture ?? {}, item), 0).flatMap(([gx, , gz], i) => dl(gx * m, gz * m, r1, `g${i}`)),
           );
         }
         case "spot-bar": {

@@ -10,7 +10,7 @@ import type { Fixture, Floor, LightWarmth, Opening, OpeningKind, Pt, Room, Varia
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
 import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../lib/art";
 import { RUG_PATTERNS, rugPattern } from "../lib/rugs";
-import { DEFAULT_WORKTOP, MIN_SEAT, dropOf, isCeilingItem, pitchOf, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, MAX_GRID, MIN_SEAT, dropOf, gridOf, isCeilingItem, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -20,7 +20,7 @@ import { openingSides } from "../lib/openingSides";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
-import { WARMTHS, WARMTH_LABEL, dimOf, isLightItem, switchedOn, warmthOf } from "../lib/lights";
+import { WARMTHS, WARMTH_LABEL, dimOf, isLightItem, switchedOn, warmthOf, gridCounts } from "../lib/lights";
 import { assignToCircuit, centreHeight, circuitOf, isSwitchItem, isWallPoint, mountForCentre, gangCount, gangLabel, gangOf, numberPoints, pointKind, setGang, toggleLink } from "../lib/electrics";
 import type { Circuit } from "../types";
 import { floorDisplayName } from "../lib/studio";
@@ -863,12 +863,7 @@ export function FixtureInspector({
           )}
         </div>
       )}
-      {item.symbol === "downlight-grid" && (
-        <div className="field">
-          <span className="field-label">Spacing (m)</span>
-          <NumberField value={pitchOf(fixture, item)} label="Spacing" min={0.3} onCommit={(pitch) => onChange({ pitch: Math.max(0.3, pitch) })} />
-        </div>
-      )}
+      {item.symbol === "downlight-grid" && <GridFields fixture={fixture} item={item} onChange={onChange} />}
       {pointKind(item) && <PointFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} variant={variant} onChange={onChange} />}
       {(isLightItem(item) || isSwitchItem(item)) && (
         <div className="row check-row">
@@ -1465,5 +1460,40 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
       )}
       </Section>
     </div>
+  );
+}
+
+/**
+ * A downlight grid's layout: how many across and down (blank = as many as the spacing fits, the placeholder says how
+ * many that is), and the spacing, which is set by hand until a count is given and then follows from the grid's size.
+ */
+function GridFields({ fixture, item, onChange }: { fixture: Fixture; item: CatalogueItem; onChange: (patch: Partial<Fixture>) => void }) {
+  const grid = gridOf(fixture, item);
+  const w = fixture.w ?? item.w, d = fixture.d ?? item.d;
+  const auto = gridCounts(w, d, { pitch: grid.pitch });
+  const counted = grid.cols !== undefined || grid.rows !== undefined;
+  const { cols, rows } = gridCounts(w, d, grid);
+  const count = (key: "cols" | "rows") => (v: number) => onChange({ [key]: Math.min(MAX_GRID, Math.max(1, Math.round(v))) });
+  return (
+    <>
+      <div className="field">
+        <span className="field-label">Downlights (across × down)</span>
+        <div className="row">
+          <NumberField value={grid.cols} placeholder={String(auto.cols)} label="Across" step={1} min={0} max={MAX_GRID} onCommit={count("cols")} onClear={() => onChange({ cols: undefined })} />
+          <span className="muted">×</span>
+          <NumberField value={grid.rows} placeholder={String(auto.rows)} label="Down" step={1} min={0} max={MAX_GRID} onCommit={count("rows")} onClear={() => onChange({ rows: undefined })} />
+        </div>
+      </div>
+      <div className="field">
+        <span className="field-label">Spacing (m)</span>
+        {counted ? (
+          <span className="muted small">
+            {(w / cols).toFixed(2)} across, {(d / rows).toFixed(2)} down, from the count and the grid's size
+          </span>
+        ) : (
+          <NumberField value={grid.pitch} label="Spacing" min={0.3} onCommit={(pitch) => onChange({ pitch: Math.max(0.3, pitch) })} />
+        )}
+      </div>
+    </>
   );
 }

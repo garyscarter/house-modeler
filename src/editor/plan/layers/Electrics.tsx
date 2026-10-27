@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { ELECTRIC_GLYPH_M } from "../../../lib/electricSymbols";
 import { glyphOffset, isWallPoint, type Link, type NumberedPoint } from "../../../lib/electrics";
-import { lampOf, lampPitch } from "../../../lib/lights";
+import { lampOf, lampGrid } from "../../../lib/lights";
 import { ElectricGlyph } from "../../ElectricGlyph";
 import type { Fixture } from "../../../types";
 import { halo } from "./shared";
@@ -103,7 +103,7 @@ export const ElectricsLayer = memo(function ElectricsLayer({
         const { fx, item } = q.p;
         const sel = selectedIds.includes(fx.id);
         const ink = sel ? "var(--plan-sel)" : "var(--text)";
-        const bulbs = item.symbol === "downlight-grid" ? (lampOf(item)?.bulbs({ w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h }, lampPitch(fx, item)) ?? []) : [];
+        const bulbs = item.symbol === "downlight-grid" ? (lampOf(item)?.bulbs({ w: fx.w ?? item.w, d: fx.d ?? item.d, h: fx.h ?? item.h }, lampGrid(fx, item)) ?? []) : [];
         const gs = bulbs.length > 1 ? size * 0.7 : size;
         const lx = q.n ? q.x + q.n.x * (size / 2 + px * 9) : q.x + size / 2 + px * 4;
         const ly = q.n ? q.y + q.n.y * (size / 2 + px * 9) : q.y;

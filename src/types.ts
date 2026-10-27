@@ -447,6 +447,9 @@ export interface Fixture {
   dim?: number;
   /** Downlight grids: spacing between downlights, metres (default from the catalogue). */
   pitch?: number;
+  /** Downlight grids: downlights across and down, spread evenly over the grid (absent = as many as the spacing fits). */
+  cols?: number;
+  rows?: number;
 }
 
 export type CircuitKind = "lighting" | "ring" | "radial" | "cooker" | "shower" | "ev" | "other";

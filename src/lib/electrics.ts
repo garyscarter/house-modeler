@@ -1,6 +1,6 @@
 import type { Circuit, CircuitKind, Fixture, Floor, HouseModel, Pt, SwitchGang } from "../types";
-import { byId, isElectricalItem, isFittedLight, pitchOf, type CatalogueItem, type Symbol } from "./catalogue";
-import { gridPoints } from "./lights";
+import { byId, gridOf, isElectricalItem, isFittedLight, type CatalogueItem, type Symbol } from "./catalogue";
+import { gridCounts, gridPoints } from "./lights";
 import { pointInPolygon, toWorld } from "./geometry";
 import { fixtureBox } from "./planMath";
 
@@ -75,9 +75,9 @@ export const isElectricalFixture = (fx: Pick<Fixture, "type">): boolean => {
 };
 
 /** How many of the point there are for counts and costs: a downlight grid counts every bulb, anything else 1. */
-export function pointQuantity(fx: Pick<Fixture, "w" | "d" | "pitch">, item: Pick<CatalogueItem, "symbol" | "w" | "d" | "pitch">): number {
+export function pointQuantity(fx: Pick<Fixture, "w" | "d" | "pitch" | "cols" | "rows">, item: Pick<CatalogueItem, "symbol" | "w" | "d" | "pitch">): number {
   if (item.symbol !== "downlight-grid") return 1;
-  return Math.max(1, gridPoints(fx.w ?? item.w, fx.d ?? item.d, pitchOf(fx, item), 0).length);
+  return Math.max(1, gridPoints(fx.w ?? item.w, fx.d ?? item.d, gridOf(fx, item), 0).length);
 }
 
 /**
@@ -496,8 +496,12 @@ export function pointRows(model: HouseModel, numbered: NumberedPoint[] = numberP
       if (sws.length) notes.push(`On ${sws.join(", ")}`);
     }
     if (p.item.symbol === "downlight-grid") {
-      const pitch = pitchOf(p.fx, p.item);
-      notes.push(`${Math.max(1, Math.round((p.fx.w ?? p.item.w) / pitch))} × ${Math.max(1, Math.round((p.fx.d ?? p.item.d) / pitch))} at ${fmtPitch(pitch)}`);
+      const grid = gridOf(p.fx, p.item);
+      const w = p.fx.w ?? p.item.w, d = p.fx.d ?? p.item.d;
+      const { cols, rows } = gridCounts(w, d, grid);
+      // A set count spreads over the grid: its spacing each way, where the two differ.
+      const sx = grid.cols || grid.rows ? w / cols : grid.pitch, sy = grid.cols || grid.rows ? d / rows : grid.pitch;
+      notes.push(`${cols} × ${rows} at ${fmtPitch(sx)}${Math.abs(sx - sy) > 0.05 ? ` × ${fmtPitch(sy)}` : ""}`);
     }
     return {
       id: p.fx.id,

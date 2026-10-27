@@ -4,7 +4,7 @@ import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferG
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { Fixture, Floor } from "../types";
 import { toWorld } from "../lib/geometry";
-import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, type CatalogueItem, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
+import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, type CatalogueItem, type GridLayout, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
 import { fixtureBox } from "../lib/planMath";
 import { FRAME_COLOUR, FRAME_W, isPicture, type PictureFrame } from "../lib/art";
 import { artTexture } from "./artTextures";
@@ -14,7 +14,7 @@ import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
 import { FLOOR_SURFACE, shade } from "./shell";
-import { dimOf, gridPoints, lampOf, lampPitch, lightColor, switchedOn } from "../lib/lights";
+import { dimOf, gridPoints, lampOf, lampGrid, lightColor, switchedOn } from "../lib/lights";
 import { litLook, fixtureGeometryKey, type GlowRole } from "../lib/fixtureGlow";
 
 /**
@@ -149,7 +149,7 @@ export function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[]
     const lamp = lampOf(item);
     // A ceiling fitting hangs `drop` below the ceiling: the gap from its top to the ceiling as placed.
     const drop = item.ceiling ? Math.max(0, ceiling - b.z0 - b.h) : 0;
-    const parts = fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, !!pat, drop, lamp ? lampPitch(f, item) : 1.2);
+    const parts = fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, !!pat, drop, lamp ? lampGrid(f, item) : undefined);
     for (const pt of parts) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, pt.rotZ ?? 0));
@@ -343,9 +343,9 @@ function fixtureParts(
   ends = { endBack: 0, endSide: 0 },
   frame?: PictureFrame,
   patterned = false,
-  /** Ceiling fittings: the gap from the fitting's top up to the ceiling (flexes, roses); grids: the spacing. */
+  /** Ceiling fittings: the gap from the fitting's top up to the ceiling (flexes, roses); grids: their layout. */
   drop = 0,
-  pitch = 1.2,
+  grid: GridLayout = { pitch: 1.2 },
 ): Part[] {
   const out: Part[] = [];
   /** A lamp's glowing bulb: `off` (a frosted bulb), matt, until lit. */
@@ -855,7 +855,7 @@ function fixtureParts(
     case "spot-bar":
     case "wall-light":
     case "strip-light":
-      out.push(...lightFittingParts(symbol, w, d, h, color, drop, pitch));
+      out.push(...lightFittingParts(symbol, w, d, h, color, drop, grid));
       break;
     case "tv-wall": {
       box(0, h / 2, -d / 2 + 0.015, 0.2, 0.3, 0.03, DARK, "metal");
@@ -1634,7 +1634,7 @@ function fixtureParts(
  * the ceiling at h + drop). The bulb, lens and diffuser parts are glow parts: unlit they show the fitting's own colour,
  * matt, and lit they glow in its light colour scaled by the dimmer (see litLook).
  */
-function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, color: string, drop: number, pitch: number): Part[] {
+function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, color: string, drop: number, grid: GridLayout): Part[] {
   const out: Part[] = [];
   const top = h + drop;
   /** A bulb or lens: the fitting's own `off` colour, matt, until lit. */
@@ -1684,7 +1684,7 @@ function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, colo
     case "downlight":
     case "downlight-grid": {
       // A ring bezel 1 cm proud of the ceiling round a lens; a grid is that ring at every point and nothing else.
-      const pts: [number, number, number][] = symbol === "downlight" ? [[0, 0, 0]] : gridPoints(w, d, pitch, 0);
+      const pts: [number, number, number][] = symbol === "downlight" ? [[0, 0, 0]] : gridPoints(w, d, grid, 0);
       const ring = symbol === "downlight" ? Math.min(w, d) : 0.09;
       for (const [x, , z] of pts) {
         can(x, z, top - 0.01, top, ring, ring, look(color, "satin"));

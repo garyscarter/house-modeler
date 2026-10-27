@@ -19,7 +19,7 @@ Every builder starts from this commit. These names are the contract: do not rena
 
 | File | What is there |
 |---|---|
-| `src/types.ts` | `Fixture.controls?` (Chunk 0) beside upstream's `drop?`, `warmth?: LightWarmth`, `dim?`, `pitch?` (no cols/rows: a grid is sized by its w, d and pitch); `LightWarmth = 2700 \| 3000 \| 4000`; `CircuitKind`; `Circuit { id, name, kind, points }`; `HouseModel.circuits?` |
+| `src/types.ts` | `Fixture.controls?` (Chunk 0) beside upstream's `drop?`, `warmth?: LightWarmth`, `dim?`, `pitch?`, and later `cols?` / `rows?` (a grid is sized by its w, d and pitch unless a count across and down is set); `LightWarmth = 2700 \| 3000 \| 4000`; `CircuitKind`; `Circuit { id, name, kind, points }`; `HouseModel.circuits?` |
 | `src/lib/catalogue.ts` | `CatalogueItem.outdoor?` beside upstream's `ceiling?`, `drop?`, `pitch?`; 34 new `Symbol` members; upstream's 8 `Lighting` entries plus `outside-light`, and 26 `Electrics` entries (section 2); `LIGHTING`, `ELECTRICS`, `PickerScope`, `SCOPE_CATEGORIES`, `isFittedLight`, `isElectricalItem`, `gridOf`, `dropOf`, `DOWNLIGHT_D`; `filterCatalogue(query, category, extra, scope = "furnish")` (Furnish never lists Electrics) |
 | `src/lib/planMath.ts` | `fixtureBox`: ceiling items' `z0 = ceiling - drop - h` (ceiling defaults to `DEFAULT_CEILING` 2.4 when not given); upstream's version |
 | `src/lib/lights.ts` | `LampDef.spot?`; LAMPS for `pendant pendant-multi flush-light downlight downlight-grid spot-bar wall-light strip-light` (lumens per bulb); `WARMTH_COLOR`, `WARMTHS`, `WARMTH_LABEL`; `lampBulbs(fx, item, box)`; `lampOutput(fx, item)`; `fixtureLit(fx, item, master, altitude, controllers = [])` |

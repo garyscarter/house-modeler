@@ -46,7 +46,7 @@ describe("light fixtures", () => {
     for (const [symbol, lamp] of Object.entries(LAMPS)) {
       const item = CATALOGUE.find((c) => c.symbol === symbol)!;
       const box = { w: item.w, d: item.d, h: item.h };
-      const bulbs = lamp!.bulbs(box, 1.2);
+      const bulbs = lamp!.bulbs(box, { pitch: 1.2 });
       expect(bulbs.length, symbol).toBeGreaterThan(0);
       for (const [x, y, z] of bulbs) {
         expect(Math.abs(x), symbol).toBeLessThanOrEqual(box.w / 2);
@@ -69,10 +69,23 @@ describe("light fixtures", () => {
   });
   it("lays downlights out on a grid at the pitch", () => {
     expect(gridPoints(2.4, 2.4, 1.2, 0)).toHaveLength(4);
+    // A set count spreads over the grid whatever the spacing says.
+    expect(gridPoints(2.4, 2.4, { pitch: 1.2, cols: 3, rows: 2 }, 0)).toHaveLength(6);
+    expect(gridPoints(2.4, 1.2, { pitch: 1.2, cols: 4 }, 0).map((p) => p[0])).toEqual([-0.9, -0.3, 0.3, 0.9].map((x) => expect.closeTo(x, 9)));
+    expect(gridPoints(2.4, 1.2, { pitch: 1.2, cols: 4 }, 0)).toHaveLength(4);
     expect(gridPoints(0.5, 0.5, 1.2, 0)).toEqual([[0, 0, 0]]);
     const pts = gridPoints(3.6, 1.2, 1.2, 0);
     expect(pts).toHaveLength(3);
     pts.map((p) => p[0]).forEach((x, i) => expect(x).toBeCloseTo([-1.2, 0, 1.2][i], 9));
+  });
+  it("lays a grid out by its set count, and counts them for the pool", () => {
+    const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("downlight-grid", { id: "dg", cols: 3, rows: 2 })] } as unknown as Floor;
+    expect(bulbsWorld(floor, floor.fixtures![0], byId("downlight-grid")!, 2.4, 0)).toHaveLength(6);
+    expect(floorLamps(floor, 2.4, 0, () => true)).toHaveLength(6);
+    expect(poolFor({ floors: [floor], ceilingHeight: 2.4 }, POOL.high)).toEqual({ point: 0, spot: 6, casters: 4 });
+    // Nonsense counts fall back to the spacing.
+    const odd = { ...floor, fixtures: [fx("downlight-grid", { id: "dg", cols: 0, rows: NaN })] } as unknown as Floor;
+    expect(floorLamps(odd, 2.4, 0, () => true)).toHaveLength(4);
   });
   it("merges a pendant bar's three drops into one dimmed light at their centre, with a wider cone", () => {
     const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("pendant-multi", { id: "pm", dim: 50 })] } as unknown as Floor;

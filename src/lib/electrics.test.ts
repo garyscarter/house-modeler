@@ -70,6 +70,8 @@ describe("heights", () => {
     expect(centreHeight(fx("a", "socket-double", 0, 0), item, 2.4)).toBeCloseTo(0.45, 3);
     expect(mountForCentre(1.1, fx("a", "socket-double", 0, 0), item)).toBeCloseTo(1.1 - 0.043, 3);
     expect(pointQuantity({}, byId("downlight-grid")!)).toBe(4);
+    expect(pointQuantity({ cols: 3, rows: 2 }, byId("downlight-grid")!)).toBe(6);
+    expect(pointQuantity({ cols: 30 }, byId("downlight-grid")!)).toBe(48);
     expect(pointQuantity({ w: 3.6, d: 2.4, pitch: 1.2 }, byId("downlight-grid")!)).toBe(6);
     expect(pointQuantity({}, byId("pendant")!)).toBe(1);
   });

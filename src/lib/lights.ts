@@ -1,5 +1,5 @@
 import type { Fixture, Floor, HouseModel, LightWarmth } from "../types";
-import { byId, pitchOf, type CatalogueItem, type Symbol } from "./catalogue";
+import { byId, gridOf, type CatalogueItem, type GridLayout, type Symbol } from "./catalogue";
 import { pointInPolygon, toWorld } from "./geometry";
 import { fixtureBox } from "./planMath";
 import { lightGlow } from "./dusk";
@@ -44,9 +44,9 @@ export interface LampDef {
   lumens: number;
   /**
    * Bulb centres in the fixture's frame (x right, y up from the base, z towards the front), from its box w, d, h and,
-   * for grids, the fixture's pitch. The 3D view places them with the fixture's position and rotation.
+   * for grids, the fixture's layout (gridOf). The 3D view places them with the fixture's position and rotation.
    */
-  bulbs: (box: { w: number; d: number; h: number }, pitch: number) => [number, number, number][];
+  bulbs: (box: { w: number; d: number; h: number }, grid: GridLayout) => [number, number, number][];
   /** How far the light reaches (metres); beyond it the light is cut off. */
   reach: number;
   /**
@@ -64,10 +64,14 @@ const COOL_WHITE = "#eef3ff";
 const one = (p: [number, number, number]): [number, number, number][] => [p];
 const DEG = Math.PI / 180;
 
-/** Downlight centres over a w × d area at `pitch` spacing, centred, at least one each way, in the fixture's frame at height y. */
-export function gridPoints(w: number, d: number, pitch: number, y: number): [number, number, number][] {
-  const cols = Math.max(1, Math.round(w / pitch));
-  const rows = Math.max(1, Math.round(d / pitch));
+/** Downlights across and down a w × d grid: a set count where given, else as many as `pitch` fits, at least one each way. */
+export function gridCounts(w: number, d: number, grid: GridLayout): { cols: number; rows: number } {
+  return { cols: grid.cols ?? Math.max(1, Math.round(w / grid.pitch)), rows: grid.rows ?? Math.max(1, Math.round(d / grid.pitch)) };
+}
+
+/** Downlight centres over a w × d area, spread evenly (gridCounts), in the fixture's frame at height y. */
+export function gridPoints(w: number, d: number, grid: GridLayout | number, y: number): [number, number, number][] {
+  const { cols, rows } = gridCounts(w, d, typeof grid === "number" ? { pitch: grid } : grid);
   const out: [number, number, number][] = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out.push([((c + 0.5) / cols - 0.5) * w, y, ((r + 0.5) / rows - 0.5) * d]);
   return out;
@@ -89,7 +93,7 @@ export const LAMPS: Partial<Record<Symbol, LampDef>> = {
   "pendant-multi": { lumens: 1200, reach: 4, spot: { angle: 60 * DEG, penumbra: 0.6 }, bulbs: ({ w, h }) => [-w / 3, 0, w / 3].map((x) => [x, h * 0.4, 0] as [number, number, number]) },
   "flush-light": { lumens: 1200, reach: 6, spot: { angle: 80 * DEG, penumbra: 0.7 }, bulbs: ({ h }) => one([0, h * 0.5, 0]) },
   downlight: { lumens: 450, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: () => one([0, 0, 0]) },
-  "downlight-grid": { lumens: 450, perBulb: true, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: ({ w, d }, pitch) => gridPoints(w, d, pitch, 0) },
+  "downlight-grid": { lumens: 450, perBulb: true, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: ({ w, d }, grid) => gridPoints(w, d, grid, 0) },
   "spot-bar": { lumens: 1050, reach: 4.5, spot: { angle: 30 * DEG, penumbra: 0.4 }, bulbs: ({ w }) => [-w / 3, 0, w / 3].map((x) => [x, 0.04, 0] as [number, number, number]) },
   // Wall fittings: an up-and-down washer on the wall, and a strip under a wall unit lighting the worktop.
   "wall-light": { lumens: 500, reach: 3.5, bulbs: ({ d, h }) => one([0, h / 2, d / 2]) },
@@ -106,8 +110,8 @@ export const warmthOf = (fx: Pick<Fixture, "warmth">): LightWarmth => (fx.warmth
 export const dimOf = (fx: Pick<Fixture, "dim">): number => (fx.dim !== undefined && Number.isFinite(fx.dim) ? Math.min(1, Math.max(0.01, fx.dim / 100)) : 1);
 /** The colour a fixture's light is: the fitting's fixed colour, else its warmth. */
 export const lightColor = (fx: Pick<Fixture, "warmth">, lamp: Pick<LampDef, "color">): string => lamp.color ?? WARMTH_COLOR[warmthOf(fx)];
-/** Grids: the downlight spacing to use for a fixture. */
-export const lampPitch = (fx: Pick<Fixture, "pitch">, item: Pick<CatalogueItem, "pitch">): number => pitchOf(fx, item);
+/** Grids: a fixture's downlight layout (spacing, and a set count across and down). */
+export const lampGrid = (fx: Pick<Fixture, "pitch" | "cols" | "rows">, item: Pick<CatalogueItem, "pitch">): GridLayout => gridOf(fx, item);
 
 export const isLightItem = (item: Pick<CatalogueItem, "symbol">): boolean => item.symbol in LAMPS;
 export const lampOf = (item: Pick<CatalogueItem, "symbol">): LampDef | undefined => LAMPS[item.symbol];
@@ -289,7 +293,7 @@ export function bulbsWorld(floor: Floor, fx: Fixture, item: CatalogueItem, ceili
   const t = (-fx.rot * Math.PI) / 180;
   const c = Math.cos(t), s = Math.sin(t);
   const p = toWorld(floor, { x: fx.x, y: fx.y });
-  return lamp.bulbs(b, lampPitch(fx, item)).map(([lx, ly, lz]) => [p.x + lx * c + lz * s, baseY + b.z0 + ly, p.y - lx * s + lz * c]);
+  return lamp.bulbs(b, lampGrid(fx, item)).map(([lx, ly, lz]) => [p.x + lx * c + lz * s, baseY + b.z0 + ly, p.y - lx * s + lz * c]);
 }
 
 /** The first bulb of a light fixture in world space (see bulbsWorld), or null for anything that is not a light. */

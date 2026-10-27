@@ -43,10 +43,10 @@ Foundation on main (keep these; add beside them):
 
 | Where | What |
 |---|---|
-| `src/types.ts` | `Fixture.drop?`, `.warmth?: LightWarmth` (2700 \| 3000 \| 4000), `.dim?` (1-100), `.pitch?` |
-| `src/lib/catalogue.ts` | `CatalogueItem.ceiling?`, `.drop?`, `.pitch?`; symbols `pendant`, `pendant-multi`, `flush-light`, `downlight`, `downlight-grid`, `spot-bar`, `wall-light`, `strip-light`; category "Lighting" (8 entries); `dropOf`, `pitchOf`, `isCeilingItem`, `DEFAULT_CEILING` |
+| `src/types.ts` | `Fixture.drop?`, `.warmth?: LightWarmth` (2700 \| 3000 \| 4000), `.dim?` (1-100), `.pitch?`, `.cols?` / `.rows?` (a set count across and down, spread over the grid) |
+| `src/lib/catalogue.ts` | `CatalogueItem.ceiling?`, `.drop?`, `.pitch?`; symbols `pendant`, `pendant-multi`, `flush-light`, `downlight`, `downlight-grid`, `spot-bar`, `wall-light`, `strip-light`; category "Lighting" (8 entries); `dropOf`, `pitchOf`, `gridOf` (`GridLayout`: pitch, cols?, rows?), `isCeilingItem`, `DEFAULT_CEILING` |
 | `src/lib/planMath.ts` | `fixtureBox`: a ceiling item's `z0 = ceiling - drop - h` (ceiling defaults to 2.4 when not given) |
-| `src/lib/lights.ts` | `LampDef.bulbs(box, pitch)` (several bulbs per fitting), `.spot` (cone aimed down), `gridPoints`; `WARMTHS`, `WARMTH_LABEL`, `WARMTH_COLOR`, `warmthOf`, `dimOf`, `lightColor`, `lampPitch`; `LampLight.spot`; `bulbsWorld`, `floorLamps` (one light per bulb, lumens split, dimmed; bulbs within `CLUSTER_M` of each other merge into one light, `clusterBulbs`); `POOL[quality].casters` (4 shadowed spots on high) |
+| `src/lib/lights.ts` | `LampDef.bulbs(box, grid)` (several bulbs per fitting), `.spot` (cone aimed down), `gridPoints`, `gridCounts`; `WARMTHS`, `WARMTH_LABEL`, `WARMTH_COLOR`, `warmthOf`, `dimOf`, `lightColor`, `lampGrid`; `LampLight.spot`; `bulbsWorld`, `floorLamps` (one light per bulb, lumens split, dimmed; bulbs within `CLUSTER_M` of each other merge into one light, `clusterBulbs`); `POOL[quality].casters` (4 shadowed spots on high) |
 
 - **Plan** (`editor/FixtureSymbol.tsx`, `editor/plan/layers/Fixtures.tsx`): BS EN 60617 style symbols. Pendant: circle with a cross through it. Multi-pendant: a bar with three such circles. Flush light: circle with a cross and a filled centre. Downlight: small filled circle in a ring; a grid draws one per `gridPoints`. Spot bar: a bar of three arrows-in-circles. Wall light: a half circle on the wall with a cross. Strip: a thin bar with a dashed centre line. Ceiling items are drawn above furniture, outline only (no filled body), in the plan's ink colour; lamps keep their furniture symbols.
 - **Placement** (`editor/plan/useGeometry.ts`, `useDrag.ts`): ceiling items never snap to a wall and never abut neighbours; they place freely (grid snap only).
