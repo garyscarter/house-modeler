@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, LIGHTS_AUTO_ALTITUDE, bulbWorld, candela, floorLamps, fixtureLit, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights } from "./lights";
-import { byId } from "./catalogue";
+import { LAMPS, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
+import { CATALOGUE, byId, dropOf } from "./catalogue";
+import { fixtureBox } from "./planMath";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
 import { dayOfYear, solarPosition, sunTimes } from "./sun";
 import { listingSite } from "./houses/listing91770873";
@@ -42,14 +43,52 @@ describe("light fixtures", () => {
     expect(fixtureLit(fx("sofa-3"), byId("sofa-3")!, "on", null)).toBe(false);
   });
   it("puts every bulb inside its fixture's box", () => {
-    const box = { w: 0.4, d: 0.4, h: 1.6 };
     for (const [symbol, lamp] of Object.entries(LAMPS)) {
-      const [x, y, z] = lamp!.bulb(box);
-      expect(Math.abs(x), symbol).toBeLessThanOrEqual(box.w / 2);
-      expect(y, symbol).toBeGreaterThan(0);
-      expect(y, symbol).toBeLessThanOrEqual(box.h);
-      expect(Math.abs(z), symbol).toBeLessThanOrEqual(box.d / 2 + 0.05);
+      const item = CATALOGUE.find((c) => c.symbol === symbol)!;
+      const box = { w: item.w, d: item.d, h: item.h };
+      const bulbs = lamp!.bulbs(box, 1.2);
+      expect(bulbs.length, symbol).toBeGreaterThan(0);
+      for (const [x, y, z] of bulbs) {
+        expect(Math.abs(x), symbol).toBeLessThanOrEqual(box.w / 2);
+        expect(y, symbol).toBeGreaterThanOrEqual(0);
+        expect(y, symbol).toBeLessThanOrEqual(box.h);
+        expect(Math.abs(z), symbol).toBeLessThanOrEqual(box.d / 2 + 0.05);
+      }
     }
+  });
+  it("every Lighting catalogue entry is a light, ceiling ones hang from the ceiling", () => {
+    for (const c of CATALOGUE.filter((c) => c.category === "Lighting")) {
+      expect(isLightItem(c), c.id).toBe(true);
+      const b = fixtureBox(fx(c.id), c, 2.4);
+      if (c.ceiling) expect(b.z0 + b.h + dropOf({}, c), c.id).toBeCloseTo(2.4, 5);
+      else expect(b.z0, c.id).toBe(c.mount);
+    }
+    // Without a ceiling height the default stands in, and a drop can't push a fitting below the floor.
+    expect(fixtureBox(fx("pendant"), byId("pendant")!).z0).toBeCloseTo(2.4 - 0.25 - 0.25, 5);
+    expect(fixtureBox(fx("pendant", { drop: 9 }), byId("pendant")!, 2.4).z0).toBe(0);
+  });
+  it("lays downlights out on a grid at the pitch", () => {
+    expect(gridPoints(2.4, 2.4, 1.2, 0)).toHaveLength(4);
+    expect(gridPoints(0.5, 0.5, 1.2, 0)).toEqual([[0, 0, 0]]);
+    const pts = gridPoints(3.6, 1.2, 1.2, 0);
+    expect(pts).toHaveLength(3);
+    pts.map((p) => p[0]).forEach((x, i) => expect(x).toBeCloseTo([-1.2, 0, 1.2][i], 9));
+  });
+  it("splits a fitting's lumens over its bulbs and dims them", () => {
+    const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("pendant-multi", { id: "pm", dim: 50 })] } as unknown as Floor;
+    const lights = floorLamps(floor, 2.4, 0, () => true);
+    expect(lights).toHaveLength(3);
+    expect(lights[0].candela).toBeCloseTo((candela(1200) * 0.5) / 3, 5);
+    expect(lights[0].spot).toBeDefined();
+    expect(lights[0].color).toBe(WARMTH_COLOR[2700]);
+    expect(lights.map((l) => l.id)).toEqual(["g:pm:0", "g:pm:1", "g:pm:2"]);
+  });
+  it("warmth and dimmer fall back sensibly", () => {
+    expect(warmthOf({})).toBe(2700);
+    expect(warmthOf({ warmth: 4000 })).toBe(4000);
+    expect(dimOf({})).toBe(1);
+    expect(dimOf({ dim: 25 })).toBe(0.25);
+    expect(dimOf({ dim: 0 })).toBe(0.01);
   });
   it("glows nothing when unlit, fully at night and visibly by day when lit", () => {
     expect(lampGlow(false, -10)).toBe(0);
@@ -110,7 +149,7 @@ describe("bulbWorld and floorLamps", () => {
   it("lists the lit lamps only, with their candela and reach", () => {
     const f = { ...floor, fixtures: [fx("floor-lamp", { id: "a" }), fx("table-lamp", { id: "b", on: false }), fx("sofa-3", { id: "c" })] } as Floor;
     const lamps = floorLamps(f, 2.4, 0, (x, item) => fixtureLit(x, item, "on", null));
-    expect(lamps.map((l) => l.id)).toEqual(["g:a"]);
+    expect(lamps.map((l) => l.id)).toEqual(["g:a:0"]);
     expect(lamps[0].candela).toBeCloseTo(candela(LAMPS["floor-lamp"]!.lumens));
     expect(lamps[0].reach).toBe(LAMPS["floor-lamp"]!.reach);
   });

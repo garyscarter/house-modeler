@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import { cornerEnds, isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
+import { DEFAULT_CEILING, cornerEnds, dropOf, isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
 import { EXT_WALL_T, WALL_T, polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -563,7 +563,9 @@ export const turn = (rot: number, delta: number) => Math.round(normDeg(rot + del
  */
 export function fixtureBox(fx: Fixture, item: CatalogueItem, ceiling?: number): { w: number; d: number; h: number; z0: number } {
   const h = item.toCeiling && ceiling ? Math.min(fx.h ?? ceiling, ceiling) : fx.h ?? item.h;
-  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h, z0: mountOf(fx, item) };
+  // A ceiling item hangs from the ceiling: its top sits `drop` below it, and never lower than the floor.
+  const z0 = item.ceiling ? Math.max(0, (ceiling ?? DEFAULT_CEILING) - dropOf(fx, item) - h) : mountOf(fx, item);
+  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h, z0 };
 }
 
 /** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids and rugs are skipped. */

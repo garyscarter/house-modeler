@@ -401,7 +401,18 @@ export interface Fixture {
   joinery?: JoineryConfig;
   /** Lights (lamps, lit mirrors, ceiling lights): switched on. Absent = on; the Lights master in the sun study still decides whether it is lit (see lib/lights.ts). */
   on?: boolean;
+  /** Ceiling lights: how far the top of the fitting hangs below the ceiling, metres (default from the catalogue; 0 for flush fittings). */
+  drop?: number;
+  /** Lights: colour temperature in kelvin, 2700 (warm), 3000 (soft) or 4000 (cool). Default from lib/lights.ts. */
+  warmth?: LightWarmth;
+  /** Lights: dimmer setting, 1-100 percent (absent = 100). */
+  dim?: number;
+  /** Downlight grids: spacing between downlights, metres (default from the catalogue). */
+  pitch?: number;
 }
+
+/** Light colour temperatures offered, kelvin. */
+export type LightWarmth = 2700 | 3000 | 4000;
 
 export interface Floor {
   id: string;
