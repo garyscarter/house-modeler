@@ -68,7 +68,7 @@ describe("floor summaries", () => {
     const pts = floor([rect("Kitchen", 0, 0, 400, 300)], [], {
       fixtures: [
         { id: "a", type: "socket-double", x: 100, y: 296, rot: 0 },
-        { id: "b", type: "light-pendant", x: 100, y: 150, rot: 0 },
+        { id: "b", type: "pendant", x: 100, y: 150, rot: 0 },
         { id: "c", type: "sofa-3", x: 200, y: 100, rot: 0 },
       ],
     });

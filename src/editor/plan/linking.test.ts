@@ -4,7 +4,7 @@ import type { Fixture, HouseModel } from "../../types";
 import { pruneDeleted, toggleLinkInModel } from "./linking";
 
 const fx = (id: string, type: string, extra: Partial<Fixture> = {}): Fixture => ({ id, type, x: 100, y: 100, rot: 0, ...extra });
-const ground = floor([rect("Kitchen", 0, 0, 400, 300)], [], { fixtures: [fx("sw", "switch-1g", { controls: ["k1"] }), fx("k1", "light-pendant"), fx("k2", "light-pendant")] });
+const ground = floor([rect("Kitchen", 0, 0, 400, 300)], [], { fixtures: [fx("sw", "switch-1g", { controls: ["k1"] }), fx("k1", "pendant"), fx("k2", "pendant")] });
 const model: HouseModel = { floors: [ground], ceilingHeight: 2.4, slabThickness: 0.25, circuits: [{ id: "c", name: "Lights", kind: "lighting", points: ["k1", "k2", "sw"] }] };
 
 describe("toggleLinkInModel", () => {

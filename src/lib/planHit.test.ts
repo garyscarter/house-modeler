@@ -34,7 +34,7 @@ describe("planTargetAt", () => {
     expect(snapKind(byId("sofa-3")!)).toBe("furniture");
     expect(snapKind(byId("socket-double")!)).toBe("wall");
     expect(snapKind(byId("switch-1g")!)).toBe("wall");
-    expect(snapKind(byId("light-pendant")!)).toBe("none");
+    expect(snapKind(byId("pendant")!)).toBe("none");
     expect(snapKind(byId("socket-floor")!)).toBe("none");
   });
   it("finds an opening near its centre line in Build only", () => {

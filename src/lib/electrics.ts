@@ -1,5 +1,6 @@
 import type { Circuit, CircuitKind, Fixture, Floor, HouseModel, Pt } from "../types";
-import { byId, isElectricalItem, isFittedLight, gridOf, type CatalogueItem, type Symbol } from "./catalogue";
+import { byId, isElectricalItem, isFittedLight, pitchOf, type CatalogueItem, type Symbol } from "./catalogue";
+import { gridPoints } from "./lights";
 import { pointInPolygon, toWorld } from "./geometry";
 import { fixtureBox } from "./planMath";
 
@@ -74,9 +75,9 @@ export const isElectricalFixture = (fx: Pick<Fixture, "type">): boolean => {
 };
 
 /** How many of the point there are for counts and costs: a downlight grid counts every bulb, anything else 1. */
-export function pointQuantity(fx: Pick<Fixture, "cols" | "rows" | "pitch">, item: Pick<CatalogueItem, "grid">): number {
-  const g = gridOf(fx, item);
-  return g ? g.cols * g.rows : 1;
+export function pointQuantity(fx: Pick<Fixture, "w" | "d" | "pitch">, item: Pick<CatalogueItem, "symbol" | "w" | "d" | "pitch">): number {
+  if (item.symbol !== "downlight-grid") return 1;
+  return Math.max(1, gridPoints(fx.w ?? item.w, fx.d ?? item.d, pitchOf(fx, item), 0).length);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { byId, isElectricalItem, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, isElectricalItem, type CatalogueItem } from "../../lib/catalogue";
 import { pointKind } from "../../lib/electrics";
 import { toggleLinkInModel } from "./linking";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, snapShift } from "../../lib/canopy";
@@ -34,7 +34,7 @@ export interface PlanGeo {
   hitShapes: HitSolid[];
   faceLines: Parameters<typeof snapToWall>[3];
   fitPlacing(c: Pt, item: CatalogueItem, free: boolean): (Placement & { w: number; d?: number; h?: number; joinery?: JoineryConfig }) | null;
-  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number }, rot: number, free: boolean, exclude?: string, how?: "furniture" | "wall" | "none"): Placement | null;
+  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string, how?: "furniture" | "wall" | "none"): Placement | null;
 }
 
 export interface PlanDragArgs {
@@ -151,7 +151,7 @@ export function usePlanDrag(args: PlanDragArgs) {
         sel.setFixtures((all) => [...all, { ...fx, ...fitted, joinery: tidyJoinery({ ...fx.joinery, ...fitted.joinery }) }]);
         return;
       }
-      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, m.alt, undefined, snapKind(placing.item));
+      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0, ceiling: isCeilingItem(placing.item) }, placing.rot, m.alt, undefined, snapKind(placing.item));
       sel.setFixtures((all) => [...all, { ...fx, ...snapped }]);
       return; // stay in place mode for the next one
     }
@@ -560,7 +560,7 @@ export function usePlanDrag(args: PlanDragArgs) {
           return;
         }
         const b = fixtureBox(cur, item);
-        const snapped = B.geo.snapFixture(target, b, cur.rot, m.alt, cur.id, snapKind(item));
+        const snapped = B.geo.snapFixture(target, { ...b, ceiling: isCeilingItem(item) }, cur.rot, m.alt, cur.id, snapKind(item));
         let pos: { x: number; y: number; rot?: number } = snapped ?? target;
         // Electrical points sit on a wall face or free; they never align to furniture.
         if (m.alt || isElectricalItem(item)) setGuides([]);

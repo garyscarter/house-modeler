@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { byId, isElectricalItem, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, isElectricalItem, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
 import { ELECTRIC_GLYPH_M } from "../../lib/electricSymbols";
 import { glyphOffset } from "../../lib/electrics";
 import type { Mode } from "../../lib/modes";
@@ -73,7 +73,10 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number,
   // Rugs draw under everything, and wall-hung and worktop items over the units below them, whatever order they were placed in.
   const drawOrder = useMemo(() => {
     const mountedAt = (fx: Fixture) => { const it = byId(fx.type); return !it ? 0 : isFloorCovering(it) ? -1 : mountOf(fx, it); };
-    return [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b));
+    const sorted = [...(floor.fixtures ?? [])].sort((a, b) => mountedAt(a) - mountedAt(b));
+    // Ceiling fittings draw last (stable partition) so no table or bed hides them.
+    const isCeil = (fx: Fixture) => { const it = byId(fx.type); return !!it && isCeilingItem(it); };
+    return [...sorted.filter((f) => !isCeil(f)), ...sorted.filter(isCeil)];
   }, [floor.fixtures]);
   // What the pointer can pick in this mode: furniture boxes, or in Electrics the points' symbol squares (easy to hit).
   const hitShapes = useMemo(
@@ -108,8 +111,9 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number,
    * no wall is near or Alt is held. `how` "wall" (an electrical point on a wall) only sits its back on the wall face,
    * never abutting furniture; "none" (a ceiling point or floor socket) never snaps.
    */
-  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number }, rot: number, free: boolean, exclude?: string, how: "furniture" | "wall" | "none" = "furniture"): Placement | null => {
-    if (free || how === "none") return null;
+  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string, how: "furniture" | "wall" | "none" = "furniture"): Placement | null => {
+    // Ceiling fittings place freely: no wall to back onto, no neighbours to abut.
+    if (free || b.ceiling || how === "none") return null;
     // Reach: a little more than for corners, and never under 10 cm when zoomed right in.
     const reach = Math.max(snapTol * 1.5, 0.1 * ppm);
     const onWall = snapToWall(c, b.w * ppm, b.d * ppm, faceLines, reach, rot);
