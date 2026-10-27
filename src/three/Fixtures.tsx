@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -13,7 +13,7 @@ import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
 import { FLOOR_SURFACE, shade } from "./shell";
-import { LIGHT_CAP, isLightItem, pickLights, switchedOn, type LampLight } from "../lib/lights";
+import { LIGHT_CAP, SHADOW_CAP, coneGain, dimOf, gridPoints, isLightItem, lampOf, lampPitch, lightColor, pickLights, switchedOn, type LampLight } from "../lib/lights";
 import { useStore } from "../store";
 
 /**
@@ -87,7 +87,7 @@ const isLitType = (type: string) => {
 
 /** Every part of every fixture on the floor in world space, merged into one geometry per material. `lightsOn`: the master lets lamps be lit. */
 function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean): FixtureMesh[] {
-  const groups = new Map<string, { color: string; finish: Finish; geoms: THREE.BufferGeometry[] }>();
+  const groups = new Map<string, { color: string; emissive?: string; finish: Finish; light: boolean; geoms: THREE.BufferGeometry[] }>();
   for (const f of floor.fixtures ?? []) {
     const item = byId(f.type);
     if (!item) continue;
@@ -96,13 +96,21 @@ function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean): F
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) ? joineryOf(f, item, b) : undefined;
     const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : (f.color ?? item.color);
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lightsOn && switchedOn(f))) {
+    const lamp = lampOf(item);
+    const lit = lightsOn && switchedOn(f);
+    // A ceiling fitting hangs `drop` below the ceiling: the gap from its top to the ceiling as placed.
+    const drop = item.ceiling ? Math.max(0, ceiling - b.z0 - b.h) : 0;
+    const light = lit && lamp ? { color: lightColor(f, lamp), dim: dimOf(f) } : undefined;
+    const parts = fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lit, drop, lamp ? lampPitch(f, item) : 1.2, light);
+    for (const pt of parts) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
-      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
+      _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, pt.rotZ ?? 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, pt.g === "soft" ? _scale.set(1, 1, 1) : _scale.set(pt.s[0], pt.s[1], pt.s[2]));
       const g = (pt.g === "soft" ? softGeometry(pt.s[0], pt.s[1], pt.s[2]) : GEOMETRY[pt.g]).clone().applyMatrix4(_part.premultiply(_place));
-      const key = pt.c + pt.f;
-      const group = groups.get(key) ?? { color: pt.c, finish: pt.f, geoms: [] };
+      // Light fittings cast no shadows: a lamp's own spot light would be shut in by its shade. The finish stays last
+      // in the key (setLampGlow finds lit materials by it).
+      const key = (lamp ? "L|" : "") + pt.c + (pt.e ?? "") + pt.f;
+      const group = groups.get(key) ?? { color: pt.c, emissive: pt.e, finish: pt.f, light: !!lamp, geoms: [] };
       group.geoms.push(g);
       groups.set(key, group);
     }
@@ -113,7 +121,7 @@ function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean): F
     const geoms = g.geoms.some((x) => !x.index) ? g.geoms.map((x) => (x.index ? x.toNonIndexed() : x)) : g.geoms;
     const merged = mergeGeometries(geoms);
     g.geoms.forEach((x) => x.dispose());
-    if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish), castShadow: g.finish !== "glass" });
+    if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish, g.emissive), castShadow: g.finish !== "glass" && !g.light });
   }
   return out;
 }
@@ -201,8 +209,8 @@ export function setLampGlow(level: number): boolean {
  */
 const MATERIAL_LIMIT = 96;
 const materials = new Map<string, THREE.Material>();
-function material(color: string, finish: Finish): THREE.Material {
-  const key = color + finish;
+function material(color: string, finish: Finish, emissive = color): THREE.Material {
+  const key = color + (emissive === color ? "" : emissive) + finish;
   let m = materials.get(key);
   if (m) {
     materials.delete(key);
@@ -210,8 +218,8 @@ function material(color: string, finish: Finish): THREE.Material {
   } else {
     if (finish === "glass") m = glassMaterial(color);
     else if (finish === "glow") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.6 });
-    else if (finish === "lamp") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: LAMP_EMISSIVE * lampLevel, roughness: 0.6 });
-    else if (finish === "shade") m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: SHADE_EMISSIVE * lampLevel, roughness: 0.85 });
+    else if (finish === "lamp") m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: LAMP_EMISSIVE * lampLevel, roughness: 0.6 });
+    else if (finish === "shade") m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: SHADE_EMISSIVE * lampLevel, roughness: 0.85 });
     else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
     else m = new THREE.MeshStandardMaterial({ color, roughness: finish === "matt" ? 0.85 : finish === "satin" ? 0.5 : 0.2 });
@@ -238,12 +246,16 @@ interface Part {
   s: [number, number, number];
   c: string;
   f: Finish;
+  /** Emissive colour of a "lamp" or "shade" part, when not its own colour (a light fitting's light colour, dimmed). */
+  e?: string;
   /** Axis of a cylinder (default standing, along y). */
   axis?: "x" | "z";
   /** Lean about the x axis, radians, after scaling; negative tips the top back and the front up. */
   tilt?: number;
-  /** Turn about the y axis, radians, applied with tilt as rotation [tilt, rotY, 0]. */
+  /** Turn about the y axis, radians, applied with tilt as rotation [tilt, rotY, rotZ]. */
   rotY?: number;
+  /** Roll about the z axis, radians: positive swings the bottom towards +x. */
+  rotZ?: number;
 }
 
 const WHITE = "#f5f5f5";
@@ -280,6 +292,11 @@ function fixtureParts(
   ends = { endBack: 0, endSide: 0 },
   frame?: PictureFrame,
   lit = false,
+  /** Ceiling fittings: the gap from the fitting's top up to the ceiling (flexes, roses); grids: the spacing. */
+  drop = 0,
+  pitch = 1.2,
+  /** A lit light fitting's light colour and dimmer (0-1): its glowing parts glow in that colour, dimmed. */
+  light?: { color: string; dim: number },
 ): Part[] {
   const out: Part[] = [];
   /** A lamp's glowing part: the warm glow when lit, else `off` (the shade's own fabric in shadow, or a frosted bulb), matt. */
@@ -780,6 +797,16 @@ function fixtureParts(
       out.push({ g: "cyl", p: [0, h - 0.095, d / 2 - d * 0.2], s: [0.08, 0.004, 0.08], c: lamp(BULB_OFF)[0], f: lamp(BULB_OFF)[1], tilt: 0.3 });
       break;
     }
+    case "pendant":
+    case "pendant-multi":
+    case "flush-light":
+    case "downlight":
+    case "downlight-grid":
+    case "spot-bar":
+    case "wall-light":
+    case "strip-light":
+      out.push(...lightFittingParts(symbol, w, d, h, color, drop, pitch, light));
+      break;
     case "tv-wall": {
       box(0, h / 2, -d / 2 + 0.015, 0.2, 0.3, 0.03, DARK, "metal");
       box(0, h / 2, d / 2 - 0.015, w, h, 0.03, color, "gloss");
@@ -1416,40 +1443,205 @@ function fixtureParts(
 }
 
 
+/** Dimmer steps for a glow colour, so a dimmer drag mints at most ten materials per colour. */
+const DIM_STEPS = 10;
+
+/**
+ * The parts of a ceiling or wall light fitting (see fixtureParts for the frame: y up from the bottom of the fitting,
+ * the ceiling at h + drop). `light` is set when it is lit: the bulb, lens and diffuser parts then glow in its light
+ * colour scaled by the dimmer; unlit they show the fitting's own colour, matt.
+ */
+function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, color: string, drop: number, pitch: number, light?: { color: string; dim: number }): Part[] {
+  const out: Part[] = [];
+  const top = h + drop;
+  const glowE = light ? "#" + new THREE.Color(light.color).multiplyScalar(Math.max(1, Math.round(light.dim * DIM_STEPS)) / DIM_STEPS).getHexString() : undefined;
+  /** A bulb or lens: the light colour when lit, else `off`. */
+  const bulb = (off: string): Pick<Part, "c" | "f" | "e"> => (light ? { c: light.color, f: "lamp", e: glowE } : { c: off, f: "matt" });
+  /** A diffuser or shade fabric the light comes through: its own colour, glowing in the light's colour when lit. */
+  const fabric = (c: string): Pick<Part, "c" | "f" | "e"> => (light ? { c, f: "shade", e: glowE } : { c, f: "matt" });
+  const look = (c: string, f: Finish): Pick<Part, "c" | "f"> => ({ c, f });
+  /** An upright cylinder of diameters sw × sd at (x, z) from y0 to y1. */
+  const can = (x: number, z: number, y0: number, y1: number, sw: number, sd: number, l: Pick<Part, "c" | "f" | "e">, rotZ?: number) =>
+    out.push({ g: "cyl", p: [x, (y0 + y1) / 2, z], s: [sw, Math.max(y1 - y0, 0.001), sd], ...l, rotZ });
+  const block = (x: number, y: number, z: number, sx: number, sy: number, sz: number, l: Pick<Part, "c" | "f" | "e">) =>
+    out.push({ g: "box", p: [x, y, z], s: [Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001)], ...l });
+  /** A 4 mm flex from y0 up to the ceiling at x. */
+  const flex = (x: number, y0: number) => {
+    if (top - y0 > 0.005) can(x, 0, y0, top, 0.004, 0.004, look(DARK, "satin"));
+  };
+  switch (symbol) {
+    case "pendant": {
+      // A drum shade, open underneath (the glowing ring inside its rim), on a flex from a ceiling rose.
+      can(0, 0, 0, h, w, d, fabric(color));
+      can(0, 0, -0.002, 0.004, w * 0.92, d * 0.92, bulb(shade(color, 0.7)));
+      can(0, 0, h, h + 0.006, w * 0.3, d * 0.3, look(DARK, "satin"));
+      flex(0, h + 0.006);
+      can(0, 0, top - 0.025, top, 0.1, 0.1, look(WHITE, "satin"));
+      break;
+    }
+    case "pendant-multi": {
+      // A slim bar at the ceiling and three small shades hanging from it.
+      const barH = Math.min(0.03, drop);
+      if (barH > 0.002) block(0, top - barH / 2, 0, w, barH, Math.min(0.04, d), look(color, "satin"));
+      const sd = Math.min(w / 5, Math.max(d, 0.08));
+      for (const x of [-w / 3, 0, w / 3]) {
+        can(x, 0, 0, h, w / 5, sd, fabric(color));
+        can(x, 0, -0.002, 0.004, (w / 5) * 0.88, sd * 0.88, bulb(shade(color, 0.7)));
+        flex(x, h);
+      }
+      break;
+    }
+    case "flush-light": {
+      // A shallow diffuser disc on a thin backplate against the ceiling.
+      const plate = Math.min(0.012, h * 0.2);
+      can(0, 0, h - plate, top, w * 0.85, d * 0.85, look(WHITE, "satin"));
+      can(0, 0, h * 0.25, h - plate, w, d, fabric(color));
+      can(0, 0, 0, h * 0.25, w * 0.8, d * 0.8, fabric(color));
+      break;
+    }
+    case "downlight":
+    case "downlight-grid": {
+      // A ring bezel 1 cm proud of the ceiling round a lens; a grid is that ring at every point and nothing else.
+      const pts: [number, number, number][] = symbol === "downlight" ? [[0, 0, 0]] : gridPoints(w, d, pitch, 0);
+      const ring = symbol === "downlight" ? Math.min(w, d) : 0.09;
+      for (const [x, , z] of pts) {
+        can(x, z, top - 0.01, top, ring, ring, look(color, "satin"));
+        can(x, z, top - 0.0115, top - 0.009, ring * 0.65, ring * 0.65, bulb(BULB_OFF));
+      }
+      break;
+    }
+    case "spot-bar": {
+      // A bar on the ceiling and three cylindrical heads on short stems, the outer two tilted 25° outward.
+      block(0, top - 0.015, 0, w, 0.03, 0.03, look(color, "satin"));
+      const len = 0.09;
+      const yc = Math.max(0.05, top - 0.03 - 0.02 - len / 2);
+      for (const [x, tilt] of [[-w / 3, -25], [0, 0], [w / 3, 25]] as const) {
+        const t = (tilt * Math.PI) / 180;
+        can(x, 0, yc + len / 2 - 0.005, top - 0.03, 0.012, 0.012, look(color, "metal"));
+        can(x, 0, yc - len / 2, yc + len / 2, 0.05, 0.05, look(color, "satin"), t);
+        // The lens at the head's lower end, which swings towards +x by sin t.
+        const lx = x + Math.sin(t) * (len / 2 + 0.001);
+        const ly = yc - Math.cos(t) * (len / 2 + 0.001);
+        can(lx, 0, ly - 0.002, ly + 0.002, 0.042, 0.042, bulb(BULB_OFF), t);
+      }
+      break;
+    }
+    case "wall-light": {
+      // A backplate on the wall and a round shade open top and bottom (an up-and-down washer): its rims glow when lit.
+      block(0, h / 2, -d / 2 + 0.006, Math.min(0.08, w), Math.min(0.14, h), 0.012, look(color, "metal"));
+      const dia = Math.max(0.04, Math.min(w, d - 0.016));
+      const zc = d / 2 - dia / 2;
+      block(0, h / 2, (-d / 2 + 0.012 + zc - dia / 2) / 2, 0.02, 0.02, Math.max(0.002, zc - dia / 2 + d / 2 - 0.012), look(color, "metal"));
+      can(0, zc, 0, h, dia, dia, look(color, "metal"));
+      can(0, zc, h, h + 0.003, dia * 0.86, dia * 0.86, bulb(shade(color, 0.6)));
+      can(0, zc, -0.003, 0, dia * 0.86, dia * 0.86, bulb(shade(color, 0.6)));
+      break;
+    }
+    case "strip-light":
+      // A slim aluminium bar with a diffuser along its underside.
+      block(0, h / 2 + 0.002, 0, w, h - 0.004, d, look(color, "satin"));
+      block(0, 0.002, 0, w - 0.01, 0.004, d * 0.7, bulb(BULB_OFF));
+      break;
+  }
+  return out;
+}
+
 /** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
 export const LAMP_SCALE = 0.06;
+/**
+ * Spot light intensity per candela of the bulb's even-sphere candela (lights.ts), before the cone gain (see
+ * spotIntensity). Tuned so a 450 lm downlight from a 2.25 m ceiling makes a soft pool about 1.5 m across.
+ */
+export const SPOT_SCALE = 0.03;
 /** Re-pick the nearest lamps once the camera has moved this far (metres). */
 const REPICK_M = 1;
 
 /**
- * The lit lamps of every shown floor as point lights, the nearest LIGHT_CAP[quality] to the camera: the rest only
- * glow. The pick runs when the lamps change or the camera has moved a metre, so orbiting costs no React renders.
+ * A spot light's intensity: brighter than a bare bulb as its output is gathered into the cone, by the square root of
+ * the flux-keeping gain (coneGain), so a tight spot bar does not burn out next to a wide pendant once tone-mapped.
+ */
+export const spotIntensity = (l: Pick<LampLight, "candela" | "spot">): number => l.candela * SPOT_SCALE * Math.sqrt(coneGain(l.spot?.angle));
+
+/**
+ * The lit lamps of every shown floor as point lights, or spot lights aimed straight down for fittings with a cone,
+ * the nearest LIGHT_CAP[quality] to the camera: the rest only glow. The nearest SHADOW_CAP[quality] spot lights cast
+ * shadows; point lights never do. The pick runs when the lamps change or the camera has moved a metre, so orbiting
+ * costs no React renders.
  */
 export function LampLights({ lamps }: { lamps: LampLight[] }) {
   const quality = useStore((s) => s.settings.quality);
   const cap = LIGHT_CAP[quality];
+  const shadows = SHADOW_CAP[quality];
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
-  const [picked, setPicked] = useState<LampLight[]>([]);
-  const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; cap: number }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, cap });
+  const [picked, setPicked] = useState<{ lights: LampLight[]; casters: ReadonlySet<string> }>({ lights: [], casters: new Set() });
+  const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; cap: number; shadows: number }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, cap, shadows });
   const repick = () => {
     const l = last.current;
     const eye = camera.position;
-    if (l.lamps === lamps && l.cap === cap && l.eye.distanceTo(eye) < REPICK_M) return;
+    if (l.lamps === lamps && l.cap === cap && l.shadows === shadows && l.eye.distanceTo(eye) < REPICK_M) return;
     l.eye.copy(eye);
     l.lamps = lamps;
     l.cap = cap;
-    const next = lamps.length <= cap ? lamps : pickLights(lamps, [eye.x, eye.y, eye.z], cap);
-    setPicked((prev) => (prev.length === next.length && prev.every((p, i) => p === next[i]) ? prev : next));
+    l.shadows = shadows;
+    const at: [number, number, number] = [eye.x, eye.y, eye.z];
+    const next = lamps.length <= cap ? lamps : pickLights(lamps, at, cap);
+    const casters = new Set(shadows > 0 ? pickLights(next.filter((x) => x.spot), at, shadows).map((x) => x.id) : []);
+    setPicked((prev) =>
+      prev.lights.length === next.length && prev.lights.every((p, i) => p === next[i]) && prev.casters.size === casters.size && [...casters].every((id) => prev.casters.has(id))
+        ? prev
+        : { lights: next, casters },
+    );
   };
   useEffect(repick);
   useFrame(repick);
   useEffect(() => invalidate(), [picked, invalidate]);
   return (
     <>
-      {picked.map((l) => (
-        <pointLight key={l.id} position={l.pos} color={l.color} intensity={l.candela * LAMP_SCALE} decay={2} distance={l.reach} castShadow={false} />
-      ))}
+      {picked.lights.map((l) =>
+        l.spot ? (
+          <DownSpot key={l.id} light={l} cast={picked.casters.has(l.id)} />
+        ) : (
+          <pointLight key={l.id} position={l.pos} color={l.color} intensity={l.candela * LAMP_SCALE} decay={2} distance={l.reach} castShadow={false} />
+        ),
+      )}
     </>
+  );
+}
+
+/** A spot light aimed straight down from the bulb; its target sits a metre below (outside the scene, so placed by hand). */
+function DownSpot({ light: l, cast }: { light: LampLight; cast: boolean }) {
+  const ref = useRef<THREE.SpotLight>(null);
+  useLayoutEffect(() => {
+    const s = ref.current;
+    if (!s) return;
+    s.target.position.set(l.pos[0], l.pos[1] - 1, l.pos[2]);
+    s.target.updateMatrixWorld();
+  }, [l.pos]);
+  // Shadow maps are redrawn only on demand (see ShadowUpdates): a spot that starts casting, or moves, needs one drawn.
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+  // A layout effect, so the next frame (the first that samples the new map) draws it first.
+  useLayoutEffect(() => {
+    if (!cast) return;
+    gl.shadowMap.needsUpdate = true;
+    invalidate();
+  }, [cast, l.pos, gl, invalidate]);
+  return (
+    <spotLight
+      ref={ref}
+      position={l.pos}
+      color={l.color}
+      intensity={spotIntensity(l)}
+      angle={l.spot!.angle}
+      penumbra={l.spot!.penumbra}
+      decay={2}
+      distance={l.reach}
+      castShadow={cast}
+      shadow-mapSize={[512, 512]}
+      shadow-bias={-0.0005}
+      shadow-camera-near={0.1}
+      shadow-camera-far={l.reach}
+    />
   );
 }

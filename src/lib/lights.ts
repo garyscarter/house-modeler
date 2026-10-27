@@ -53,6 +53,8 @@ export interface LampDef {
    * and penumbra 0-1. Ceiling fittings use this so their light stays on their own storey.
    */
   spot?: { angle: number; penumbra: number };
+  /** `lumens` is each bulb's rather than the whole fitting's (a downlight grid: every downlight is a full one). */
+  perBulb?: boolean;
   /** Fixed light colour (lit mirrors); absent means the fixture's warmth decides. */
   color?: string;
 }
@@ -86,7 +88,7 @@ export const LAMPS: Partial<Record<Symbol, LampDef>> = {
   "pendant-multi": { lumens: 1200, reach: 4, spot: { angle: 60 * DEG, penumbra: 0.6 }, bulbs: ({ w, h }) => [-w / 3, 0, w / 3].map((x) => [x, h * 0.4, 0] as [number, number, number]) },
   "flush-light": { lumens: 1200, reach: 6, spot: { angle: 80 * DEG, penumbra: 0.7 }, bulbs: ({ h }) => one([0, h * 0.5, 0]) },
   downlight: { lumens: 450, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: () => one([0, 0, 0]) },
-  "downlight-grid": { lumens: 450, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: ({ w, d }, pitch) => gridPoints(w, d, pitch, 0) },
+  "downlight-grid": { lumens: 450, perBulb: true, reach: 4, spot: { angle: 35 * DEG, penumbra: 0.5 }, bulbs: ({ w, d }, pitch) => gridPoints(w, d, pitch, 0) },
   "spot-bar": { lumens: 1050, reach: 4.5, spot: { angle: 30 * DEG, penumbra: 0.4 }, bulbs: ({ w }) => [-w / 3, 0, w / 3].map((x) => [x, 0.04, 0] as [number, number, number]) },
   // Wall fittings: an up-and-down washer on the wall, and a strip under a wall unit lighting the worktop.
   "wall-light": { lumens: 500, reach: 3.5, bulbs: ({ d, h }) => one([0, h / 2, d / 2]) },
@@ -133,6 +135,16 @@ export const SHADOW_CAP: Record<"high" | "balanced" | "low", number> = { high: 4
 
 /** Point light intensity in candela for a bulb's lumens (an even sphere of light: lm / 4π). */
 export const candela = (lumens: number): number => lumens / (4 * Math.PI);
+
+/**
+ * How much brighter a cone of half-angle `angle` (radians) is than the same bulb shining all round: 4π over the
+ * cone's solid angle, so the light's whole output lands in the cone. 1 with no cone (or a half-angle of π).
+ */
+export function coneGain(angle?: number): number {
+  if (angle === undefined || !Number.isFinite(angle)) return 1;
+  const a = Math.min(Math.PI, Math.max(0.05, angle));
+  return 2 / (1 - Math.cos(a));
+}
 
 /** Real point lights per rendering quality; the rest of the lit lamps only glow. */
 export const LIGHT_CAP: Record<"high" | "balanced" | "low", number> = { high: 16, balanced: 12, low: 8 };
@@ -191,7 +203,7 @@ export function bulbWorld(floor: Floor, fx: Fixture, item: CatalogueItem, ceilin
   return bulbsWorld(floor, fx, item, ceiling, baseY)[0] ?? null;
 }
 
-/** Every lit light on a floor as scene lights, one per bulb, dimmed by the fixture's dimmer (`lit` says which fixtures are lit, see fixtureLit). */
+/** Every lit light on a floor as scene lights, one per bulb (the fitting's lumens split over them unless perBulb), dimmed by the fixture's dimmer (`lit` says which fixtures are lit, see fixtureLit). */
 export function floorLamps(floor: Floor, ceiling: number, baseY: number, lit: (fx: Fixture, item: CatalogueItem) => boolean): LampLight[] {
   const out: LampLight[] = [];
   for (const fx of floor.fixtures ?? []) {
@@ -199,7 +211,7 @@ export function floorLamps(floor: Floor, ceiling: number, baseY: number, lit: (f
     const lamp = item && lampOf(item);
     if (!item || !lamp || !lit(fx, item)) continue;
     const bulbs = bulbsWorld(floor, fx, item, ceiling, baseY);
-    const cd = (candela(lamp.lumens) * dimOf(fx)) / Math.max(1, bulbs.length);
+    const cd = (candela(lamp.lumens) * dimOf(fx)) / (lamp.perBulb ? 1 : Math.max(1, bulbs.length));
     const color = lightColor(fx, lamp);
     bulbs.forEach((pos, i) => out.push({ id: `${floor.id}:${fx.id}:${i}`, pos, color, candela: cd, reach: lamp.reach, spot: lamp.spot }));
   }

@@ -1459,8 +1459,8 @@ export type MatSpec =
   | { kind: "paint"; color: string }
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
   | { kind: "plain"; color: string; roughness?: number; metalness?: number }
-  /** `lit`: a pane of a room with a lit light in it, which glows at night. */
-  | { kind: "glass"; lit?: boolean }
+  /** Window glass; a pane's faces glow at night by their `glow` vertex attribute (see buildShell). */
+  | { kind: "glass" }
   | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
 
 export function matKey(s: MatSpec): string {
@@ -1474,7 +1474,7 @@ export function matKey(s: MatSpec): string {
     case "plain":
       return `plain|${s.color}|${s.roughness ?? ""}|${s.metalness ?? ""}`;
     case "glass":
-      return s.lit ? "glass|lit" : "glass";
+      return "glass";
     case "floor":
       return `floor|${s.finish}|${s.color}|${s.selected ? 1 : 0}|${s.grout ?? ""}`;
   }
@@ -1500,8 +1500,19 @@ let glassLit = false;
 const GLASS_TINT = "#e4ecea";
 const GLASS_GLOW = new THREE.Color("#ffd9a0");
 
-/** Fresnel alpha for the film glass: nearly clear face-on, a mirror at grazing angles. */
-function glassFresnel(shader: { fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+/**
+ * The glass shader: the emissive glow is scaled by the per-vertex `glow` attribute (1 on a face that looks into a lit
+ * room from the other side, 0 elsewhere; geometry without the attribute reads 0), and only on the face's front, so a
+ * double-sided film pane does not show the outer face's glow from inside. The film variant also gets a Fresnel alpha:
+ * nearly clear face-on, a mirror at grazing angles.
+ */
+function glassShader(shader: { vertexShader: string; fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;")
+    .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nvarying float vGlow;")
+    .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= gl_FrontFacing ? vGlow : 0.0;");
   if (m.transmission > 0) return;
   shader.fragmentShader = shader.fragmentShader.replace(
     "#include <opaque_fragment>",
@@ -1527,18 +1538,17 @@ function styleGlass(m: THREE.MeshPhysicalMaterial) {
     m.side = THREE.DoubleSide;
   }
   m.emissive.copy(GLASS_GLOW);
-  m.emissiveIntensity = glassLit && m.userData.lit ? 0.6 : 0;
+  m.emissiveIntensity = glassLit ? 0.6 : 0;
   m.needsUpdate = true;
 }
 
 /**
- * Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. A `lit` pane belongs to a room with a
- * lit light in it and glows warm at night (see setGlassMode); the others stay dark.
+ * Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. At night (see setGlassMode) the faces
+ * whose `glow` attribute is 1 glow warm: the shell sets it on a pane's face that looks into a lit room.
  */
-export function glassMaterial(color = GLASS_TINT, lit = false): THREE.MeshPhysicalMaterial {
+export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
-  m.userData.lit = lit;
-  m.onBeforeCompile = (shader) => glassFresnel(shader, m);
+  m.onBeforeCompile = (shader) => glassShader(shader, m);
   m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
   glassMaterials.add(m);
   styleGlass(m);
@@ -1596,7 +1606,7 @@ function create(s: MatSpec): THREE.Material {
     case "plain":
       return new THREE.MeshStandardMaterial({ color: s.color, roughness: s.roughness ?? 0.8, metalness: s.metalness ?? 0 });
     case "glass":
-      return glassMaterial(undefined, !!s.lit);
+      return glassMaterial();
     case "floor": {
       if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : s.color, roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);
