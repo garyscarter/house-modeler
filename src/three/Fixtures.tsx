@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { Fixture, Floor } from "../types";
 import { toWorld } from "../lib/geometry";
 import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, type CatalogueItem, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
@@ -88,8 +89,8 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
     for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
-      _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, _scale.set(pt.s[0], pt.s[1], pt.s[2]));
-      const g = GEOMETRY[pt.g].clone().applyMatrix4(_part.premultiply(_place));
+      _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, pt.g === "soft" ? _scale.set(1, 1, 1) : _scale.set(pt.s[0], pt.s[1], pt.s[2]));
+      const g = (pt.g === "soft" ? softGeometry(pt.s[0], pt.s[1], pt.s[2]) : GEOMETRY[pt.g]).clone().applyMatrix4(_part.premultiply(_place));
       const key = pt.c + pt.f;
       const group = groups.get(key) ?? { color: pt.c, finish: pt.f, geoms: [] };
       group.geoms.push(g);
@@ -98,7 +99,9 @@ function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
   }
   const out: FixtureMesh[] = [];
   for (const [key, g] of groups) {
-    const merged = mergeGeometries(g.geoms);
+    // A rounded box comes without an index; mergeGeometries wants all indexed or none.
+    const geoms = g.geoms.some((x) => !x.index) ? g.geoms.map((x) => (x.index ? x.toNonIndexed() : x)) : g.geoms;
+    const merged = mergeGeometries(geoms);
     g.geoms.forEach((x) => x.dispose());
     if (merged) out.push({ key, geometry: merged, material: material(g.color, g.finish), castShadow: g.finish !== "glass" });
   }
@@ -134,6 +137,28 @@ const BLOB = (() => {
 })();
 const BALL = new THREE.SphereGeometry(0.5, 20, 14);
 const GEOMETRY = { box: BOX, cyl: CYL, quarter: QUARTER, shell: QUARTER_SHELL, wedge: WEDGE, blob: BLOB, ball: BALL };
+
+/** Rounded boxes for cushions, mattresses and arms, cached by size to the centimetre (real size, so the radius is not squashed). */
+const SOFT_LIMIT = 60;
+const softCache = new Map<string, THREE.BufferGeometry>();
+export function softGeometry(sx: number, sy: number, sz: number): THREE.BufferGeometry {
+  const q = (v: number) => Math.max(0.01, Math.round(v * 100) / 100);
+  const [x, y, z] = [q(sx), q(sy), q(sz)];
+  const key = `${x},${y},${z}`;
+  let g = softCache.get(key);
+  if (g) {
+    softCache.delete(key);
+  } else {
+    g = new RoundedBoxGeometry(x, y, z, 2, Math.min(0.035, 0.3 * Math.min(x, y, z)));
+    if (softCache.size >= SOFT_LIMIT) {
+      const oldest = softCache.keys().next().value as string;
+      softCache.get(oldest)?.dispose();
+      softCache.delete(oldest);
+    }
+  }
+  softCache.set(key, g);
+  return g;
+}
 const AXIS_X: [number, number, number] = [0, 0, Math.PI / 2];
 const AXIS_Z: [number, number, number] = [Math.PI / 2, 0, 0];
 
@@ -173,7 +198,7 @@ function material(color: string, finish: Finish): THREE.Material {
 }
 
 interface Part {
-  g: keyof typeof GEOMETRY;
+  g: keyof typeof GEOMETRY | "soft";
   /** Centre (for a quarter: the corner on its axis, at mid-height). */
   p: [number, number, number];
   s: [number, number, number];
@@ -230,6 +255,9 @@ function fixtureParts(
   /** A box turned about the y axis by `rotY` radians (see Part.rotY). */
   const turn = (x: number, y: number, z: number, sx: number, sy: number, sz: number, rotY: number, c = color, f: Finish = "matt") =>
     out.push({ g: "box", p: [x, y, z], s: [sx, sy, sz], c, f, rotY });
+  /** A rounded box (cushion, arm, mattress) of real size sx × sy × sz, optionally leaning back by `tilt`. */
+  const soft = (x: number, y: number, z: number, sx: number, sy: number, sz: number, c = color, f: Finish = "matt", tilt = 0) =>
+    out.push({ g: "soft", p: [x, y, z], s: [Math.max(sx, 0.01), Math.max(sy, 0.01), Math.max(sz, 0.01)], c, f, tilt });
   /** An upright elliptical drum filling w × d, from y0 to y1. */
   const drum = (y0: number, y1: number, sw: number, sd: number, c: string, f: Finish = "matt") =>
     out.push({ g: "cyl", p: [0, (y0 + y1) / 2, 0], s: [sw, Math.max(y1 - y0, 0.001), sd], c, f });
@@ -243,8 +271,8 @@ function fixtureParts(
     const cw = (x1 - x0) / n;
     for (let i = 0; i < n; i++) {
       const cx = x0 + (i + 0.5) * cw;
-      box(cx, y + 0.07, (z0 + z1) / 2, cw - 0.015, 0.14, z1 - z0 - 0.01);
-      if (backs) lean(cx, (y + 0.14 + h - 0.03) / 2, z0 + 0.09, cw - 0.03, h - 0.03 - y - 0.14, 0.16, -0.12, shade(color, 1.06));
+      soft(cx, y + 0.07, (z0 + z1) / 2, cw - 0.03, 0.14, z1 - z0 - 0.01);
+      if (backs) soft(cx, (y + 0.14 + h - 0.03) / 2, z0 + 0.09, cw - 0.04, h - 0.03 - y - 0.14, 0.16, shade(color, 1.06), "matt", -0.12);
     }
   };
   /** Door fronts with handles across a carcass face from y0 to y1, one per ~0.6 m. */
@@ -334,11 +362,29 @@ function fixtureParts(
 
   switch (symbol) {
     case "bed": {
-      box(0, 0.15, 0, w, 0.3, d, "#8a6d4b");
-      box(0, 0.4, d * 0.03, w - 0.06, 0.2, d - 0.12, color);
-      box(0, 0.53, -d / 2 + 0.22, w - 0.2, 0.1, 0.3, "#ffffff");
-      box(0, 0.51, d * 0.18, w - 0.04, 0.04, d * 0.6, shade(color, 0.85));
-      box(0, (h + 0.5) / 2, -d / 2 + 0.03, w, h + 0.5, 0.06, "#8a6d4b");
+      const wood = "#8a6d4b";
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(sx * (w / 2 - 0.06), 0.06, sz * (d / 2 - 0.06), 0.1, 0.12, 0.1, wood);
+      box(0, 0.21, 0, w, 0.18, d, wood);
+      const mw = w - 0.06;
+      const mz0 = -d / 2 + 0.06;
+      const md = d - 0.09;
+      soft(0, 0.4, mz0 + md / 2, mw, 0.2, md, "#f2efe8");
+      // Duvet over the foot 70 % of the mattress, hanging a little down each side.
+      const dl = md * 0.7;
+      const dz = mz0 + md - dl / 2;
+      soft(0, 0.5, dz, mw + 0.06, 0.05, dl, color);
+      for (const sx of [-1, 1]) soft(sx * (mw / 2 + 0.03), 0.42, dz, 0.025, 0.2, dl, shade(color, 0.92));
+      soft(0, 0.42, mz0 + md + 0.02, mw + 0.06, 0.2, 0.025, shade(color, 0.92));
+      soft(0, 0.515, dz - dl / 2 + 0.06, mw + 0.05, 0.05, 0.12, shade(color, 1.12));
+      // Pillows against the headboard.
+      const np = w >= 1.2 ? 2 : 1;
+      const pw = np === 2 ? (mw - 0.1) / 2 : mw - 0.2;
+      for (let i = 0; i < np; i++) soft((i - (np - 1) / 2) * (pw + 0.04), 0.56, mz0 + 0.29, pw, 0.12, 0.45, "#faf8f4", "matt", -0.08);
+      // A folded throw across the foot.
+      soft(0, 0.54, d / 2 - 0.28, mw + 0.04, 0.06, 0.35, shade(color, 0.75));
+      // Headboard: board plus padded panel.
+      box(0, (h + 0.5) / 2, -d / 2 + 0.03, w, h + 0.5, 0.06, wood);
+      soft(0, 0.62 + (h - 0.2) / 2 * 0.5, -d / 2 + 0.09, w - 0.1, (h + 0.5) * 0.45, 0.06, shade(color, 0.7));
       break;
     }
     case "cot": {
@@ -422,25 +468,39 @@ function fixtureParts(
     }
     case "sofa": {
       const back = Math.min(0.22, d * 0.3);
-      const arm = Math.min(0.2, w * 0.15);
-      box(0, 0.22, back / 2, w - arm * 2, 0.44, d - back, color);
-      box(0, (0.44 + h) / 2 - 0.1, -d / 2 + back / 2, w, h - 0.24, back, color);
-      box(0, 0.1, 0, w, 0.2, d, shade(color, 0.8));
-      for (const sx of [-1, 1]) box(sx * (w / 2 - arm / 2), 0.31, 0, arm, 0.62, d, color);
+      const arm = Math.min(0.16, w * 0.14);
+      const frame = shade(color, 0.85);
+      legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, d / 2 - 0.06], [w / 2 - 0.06, d / 2 - 0.06]]);
+      box(0, 0.18, 0, w, 0.16, d, frame);
+      for (const sx of [-1, 1]) soft(sx * (w / 2 - arm / 2), 0.36, 0, arm, 0.52, d, color);
+      soft(0, (0.26 + h) / 2, -d / 2 + back / 2, w - arm * 2, h - 0.26, back, color);
+      cushions(-w / 2 + arm, w / 2 - arm, -d / 2 + back, d / 2, 0.26, true);
       break;
     }
     case "corner-sofa": {
       // A run along the back and a return down the left, as on the plan.
       const { s, back, arm } = cornerSofaSizes(w, d, seat);
       const base = shade(color, 0.8);
-      box(0, 0.1, -d / 2 + s / 2, w, 0.2, s, base);
-      box(-w / 2 + s / 2, 0.1, s / 2, s, 0.2, d - s, base);
-      box((back - arm) / 2, 0.32, -d / 2 + (back + s) / 2, w - back - arm, 0.24, s - back, color);
-      box(-w / 2 + (back + s) / 2, 0.32, (s - arm) / 2, s - back, 0.24, d - s - arm, color);
-      box(0, (0.44 + h) / 2 - 0.1, -d / 2 + back / 2, w, h - 0.24, back, color);
-      box(-w / 2 + back / 2, (0.44 + h) / 2 - 0.1, back / 2, back, h - 0.24, d - back, color);
-      box(w / 2 - arm / 2, 0.31, -d / 2 + s / 2, arm, 0.62, s, color);
-      box(-w / 2 + s / 2, 0.31, d / 2 - arm / 2, s, 0.62, arm, color);
+      box(0, 0.14, -d / 2 + s / 2, w, 0.16, s, base);
+      box(-w / 2 + s / 2, 0.14, s / 2, s, 0.16, d - s, base);
+      legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, d / 2 - 0.06], [-w / 2 + s - 0.06, d / 2 - 0.06], [-w / 2 + s - 0.06, -d / 2 + s - 0.06]]);
+      cushions(-w / 2 + back, w / 2 - arm, -d / 2 + back, -d / 2 + s, 0.22, false);
+      // The return runs along z: lay its cushions out on a rotated frame by hand.
+      const rz0 = -d / 2 + s;
+      const rz1 = d / 2 - arm;
+      const rn = Math.max(1, Math.round((rz1 - rz0) / 0.75));
+      const rl = (rz1 - rz0) / rn;
+      for (let i = 0; i < rn; i++) soft(-w / 2 + (back + s) / 2, 0.29, rz0 + (i + 0.5) * rl, s - back - 0.01, 0.14, rl - 0.03);
+      const bn = Math.max(1, Math.round((w - back - arm) / 0.75));
+      const bl = (w - back - arm) / bn;
+      for (let i = 0; i < bn; i++) soft(-w / 2 + back + (i + 0.5) * bl, (0.36 + h - 0.03) / 2, -d / 2 + back + 0.07, bl - 0.04, h - 0.39, 0.16, shade(color, 1.06), "matt", -0.12);
+      const rbn = Math.max(1, Math.round((d - s - arm) / 0.75));
+      const rbl = (d - s - arm) / rbn;
+      for (let i = 0; i < rbn; i++) soft(-w / 2 + back + 0.07, (0.36 + h - 0.03) / 2, rz0 + (i + 0.5) * rbl, 0.16, h - 0.39, rbl - 0.04, shade(color, 1.06), "matt", 0);
+      soft(0, (0.3 + h) / 2 - 0.05, -d / 2 + back / 2, w, h - 0.3, back);
+      soft(-w / 2 + back / 2, (0.3 + h) / 2 - 0.05, back / 2, back, h - 0.3, d - back);
+      soft(w / 2 - arm / 2, 0.36, -d / 2 + s / 2, arm, 0.52, s);
+      soft(-w / 2 + s / 2, 0.36, d / 2 - arm / 2, s, 0.52, arm);
       break;
     }
     case "low-sofa": {
@@ -449,8 +509,8 @@ function fixtureParts(
       const frame = shade(color, 0.85);
       legs([[-w / 2 + 0.06, -d / 2 + 0.06], [w / 2 - 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, d / 2 - 0.06], [w / 2 - 0.06, d / 2 - 0.06]]);
       box(0, 0.18, 0, w, 0.16, d, frame);
-      for (const sx of [-1, 1]) box(sx * (w / 2 - arm / 2), 0.38, 0, arm, 0.24, d, color);
-      box(0, (0.26 + h) / 2, -d / 2 + back / 2, w - arm * 2, h - 0.26, back, color);
+      for (const sx of [-1, 1]) soft(sx * (w / 2 - arm / 2), 0.38, 0, arm, 0.24, d, color);
+      soft(0, (0.26 + h) / 2, -d / 2 + back / 2, w - arm * 2, h - 0.26, back, color);
       cushions(-w / 2 + arm, w / 2 - arm, -d / 2 + back, d / 2, 0.26, true);
       break;
     }
@@ -629,12 +689,15 @@ function fixtureParts(
       break;
     }
     case "pouf":
-      drum(0, h, w, d, color);
-      drum(h - 0.012, h + 0.002, w * 0.98, d * 0.98, shade(color, 0.9));
+      drum(0, h - 0.02, w, d, color);
+      out.push({ g: "ball", p: [0, h - 0.02, 0], s: [w * 0.98, 0.08, d * 0.98], c: color, f: "matt" });
+      drum(h - 0.03, h - 0.02, w * 1.005, d * 1.005, shade(color, 0.8));
       break;
     case "round-table":
-      drum(0, 0.02, w * 0.5, d * 0.5, shade(color, 0.85), "satin");
-      drum(0.02, h - 0.03, w * 0.45, d * 0.45, shade(color, 0.92), "satin");
+      drum(0, 0.02, w * 0.45, d * 0.45, shade(color, 0.85), "satin");
+      drum(0.02, 0.12, w * 0.2, d * 0.2, shade(color, 0.88), "satin");
+      drum(0.12, h - 0.03, w * 0.12, d * 0.12, shade(color, 0.92), "satin");
+      drum(h - 0.042, h - 0.03, w * 0.98, d * 0.98, shade(color, 0.85), "satin");
       drum(h - 0.03, h, w, d, color, "satin");
       break;
     case "floor-lamp": {
@@ -864,6 +927,9 @@ function fixtureParts(
       for (const x of ovens) box(x, 0.42, d / 2 + 0.005, w / ovens.length - 0.08, 0.5, 0.01, "#30353a", "gloss");
       box(0, h - 0.12, d / 2 + 0.005, w - 0.04, 0.1, 0.01, shade(color, 1.2), "satin");
       cyl(0, 0.75, d / 2 + 0.05, 0.025, w - 0.1, CHROME, "metal", "x");
+      const nk = ovens.length * 2 + 2;
+      for (let i = 0; i < nk; i++) cyl(-w / 2 + ((i + 0.5) * w) / nk, h - 0.12, d / 2 + 0.015, 0.035, 0.02, CHROME, "metal", "z");
+      box(0, h - 0.12, d / 2 + 0.012, 0.08, 0.03, 0.006, "#1a1c1f", "gloss");
       box(0, 0.04, 0, w - 0.02, 0.08, d - 0.04, PLINTH);
       break;
     }
@@ -1104,12 +1170,37 @@ function fixtureParts(
       for (const sx of [-1, 1]) box(sx * (w / 2 - t / 2), h / 2, 0, t, h, d, color, "satin");
       const n = Math.max(2, Math.round(h / 0.35));
       for (let i = 0; i <= n; i++) box(0, t / 2 + (i * (h - t)) / n, 0, w - t * 2, t, d, color, "satin");
-      // A few rows of books so it reads as a bookcase.
-      const bookColours = ["#7b3b3b", "#2f4f6f", "#5d6b3a", "#b08a4a"];
+      // Books left to right on every shelf, from a seeded PRNG so each bookcase is the same every time.
+      const bookColours = ["#7b3b3b", "#2f4f6f", "#5d6b3a", "#b08a4a", "#3d3a36", "#8c6f5a", "#c9b99a", "#4d5d6b"];
+      const inner = w - t * 2;
       for (let i = 0; i < n; i++) {
         const y = t + (i * (h - t)) / n;
-        const bh = Math.min(0.26, (h - t) / n - t - 0.04);
-        bookColours.forEach((c, j) => box(-w / 2 + t + (w - t * 2) * (0.05 + j * 0.2 + ((i * 7) % 3) * 0.02), y + bh / 2, 0.01, (w - t * 2) * 0.16, bh, d * 0.75, c));
+        const gap = (h - t) / n - t;
+        let seed = (((i + 1) * 73856093) ^ Math.round(w * 100) * 19349663 ^ Math.round(h * 100) * 83492791) >>> 0;
+        const rnd = () => {
+          seed = (Math.imul(seed ^ (seed >>> 15), 2246822507) + 0x6d2b79f5) >>> 0;
+          return (seed >>> 8) / 16777216;
+        };
+        const target = inner * (0.7 + rnd() * 0.2);
+        let used = 0;
+        let x = -inner / 2 + 0.01;
+        let count = 0;
+        while (count < 14) {
+          const bw = 0.025 + rnd() * 0.025;
+          if (used + bw > target) break;
+          const bh = gap * (0.7 + rnd() * 0.25);
+          const c = bookColours[Math.floor(rnd() * bookColours.length)];
+          // On every third shelf the last books lie in a short flat stack instead.
+          if (i % 3 === 2 && used + bw * 4 > target) {
+            const sw = 0.15 + rnd() * 0.05;
+            for (let k = 0; k < 3; k++) box(x + sw / 2 + 0.01, y + 0.02 * k + 0.01, 0.01, sw - k * 0.01, 0.02, d * 0.7, bookColours[Math.floor(rnd() * bookColours.length)]);
+            break;
+          }
+          box(x + bw / 2, y + bh / 2, 0.01, bw, bh, d * 0.75, c);
+          used += bw;
+          x += bw;
+          count++;
+        }
       }
       break;
     }
@@ -1201,6 +1292,7 @@ function fixtureParts(
       box(0, 0.06 + (cy0 - 0.06) / 2, 0, w, cy0 - 0.06, d, "#26282c", "satin");
       box(0, 0.055, 0.02, w - 0.06, 0.012, d - 0.08, "#8e9399", "metal");
       box(0, cy0 - 0.03, d / 2 + 0.003, w - 0.02, 0.012, 0.006, "#4b4f55", "satin");
+      box(0, 0.065, d / 2 - 0.005, w, 0.01, 0.01, STEEL, "metal");
       break;
     }
     case "fireplace": {
