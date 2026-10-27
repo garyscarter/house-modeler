@@ -6,6 +6,10 @@ import {
   centreHeight,
   circuitOf,
   controllersOf,
+  gangCount,
+  gangOf,
+  allControls,
+  setGang,
   deleteCircuit,
   links,
   glyphOffset,
@@ -103,8 +107,8 @@ describe("rooms and numbers", () => {
 
 describe("links", () => {
   it("indexes the switches of each light across floors and skips dangling ids", () => {
-    expect(controllersOf(model, "hl").map((s) => s.id)).toEqual(["sw2"]);
-    expect(controllersOf(model, "k1").map((s) => s.id)).toEqual(["sw"]);
+    expect(controllersOf(model, "hl").map((c) => c.sw.id)).toEqual(["sw2"]);
+    expect(controllersOf(model, "k1").map((c) => c.sw.id)).toEqual(["sw"]);
     expect(links(model).map((l) => `${l.from.fx.id}>${l.to.fx.id}`)).toEqual(["sw>k1", "sw>k2", "sw2>hl"]);
   });
   it("toggles a link and prunes dead ones", () => {
@@ -113,6 +117,44 @@ describe("links", () => {
     const pruned = pruneLinks(model);
     expect(pruned.floors[1].fixtures!.find((f) => f.id === "sw")!.controls).toEqual(["k1", "k2"]);
     expect(pruneLinks(pruned)).toBe(pruned);
+  });
+  it("gives a 2-gang plate two rockers, each with its own lights and on/off", () => {
+    expect(gangCount(byId("switch-2g")!)).toBe(2);
+    expect(gangCount(byId("switch-1g")!)).toBe(1);
+    expect(gangCount(byId("socket-double")!)).toBe(0);
+    const sw: Pick<Fixture, "controls" | "on" | "extraGangs"> = { controls: ["a"] };
+    const two = { ...sw, ...toggleLink(sw, "b", 1) };
+    expect(two.controls).toEqual(["a"]);
+    expect(two.extraGangs).toEqual([{ controls: ["b"] }]);
+    expect(allControls(two)).toEqual(["a", "b"]);
+    // A light sits on one rocker: linking it to gang 2 takes it off gang 1.
+    const moved = { ...two, ...toggleLink(two, "a", 1) };
+    expect(moved.controls).toBeUndefined();
+    expect(moved.extraGangs).toEqual([{ controls: ["b", "a"] }]);
+    // Unlinking from the rocker that has it, and emptying the last extra gang, clears the field.
+    const less = { ...moved, ...toggleLink(moved, "a", 1) };
+    const none = { ...less, ...toggleLink(less, "b", 1) };
+    expect(none.extraGangs).toBeUndefined();
+    // Each rocker's switch is its own.
+    const off2 = { ...two, ...setGang(two, 1, { on: false }) };
+    expect(gangOf(off2, 0).on).toBe(true);
+    expect(gangOf(off2, 1).on).toBe(false);
+    expect(gangOf(off2, 1).controls).toEqual(["b"]);
+    const on2 = { ...off2, ...setGang(off2, 1, { on: true }) };
+    expect(on2.extraGangs).toEqual([{ controls: ["b"] }]);
+    expect(setGang(sw, 0, { on: false })).toEqual({ controls: ["a"], on: false });
+  });
+  it("indexes, links and prunes per gang", () => {
+    const plate: Fixture = { id: "p2", type: "switch-2g", x: 60, y: 60, rot: 0, controls: ["k1"], extraGangs: [{ controls: ["k2", "gone"], on: false }] };
+    const m = { ...model, floors: model.floors.map((f, i) => (i === 1 ? { ...f, fixtures: [...(f.fixtures ?? []), plate] } : f)) };
+    expect(controllersOf(m, "k2").map((c) => `${c.sw.id}:${c.gang}:${c.on}`)).toEqual(["sw:0:true", "p2:1:false"]);
+    expect(controllersOf(m, "k1").map((c) => `${c.sw.id}:${c.gang}:${c.on}`)).toEqual(["sw:0:true", "p2:0:true"]);
+    expect(links(m).filter((l) => l.from.fx.id === "p2").map((l) => `${l.gang}>${l.to.fx.id}`)).toEqual(["0>k1", "1>k2"]);
+    const pruned = pruneLinks(m);
+    expect(pruned.floors[1].fixtures!.find((f) => f.id === "p2")!.extraGangs).toEqual([{ controls: ["k2"], on: false }]);
+    const rows = pointRows(pruned);
+    expect(rows.find((r) => r.id === "p2")!.notes).toBe("Gang 1 switches L1; Gang 2 switches L2");
+    expect(rows.find((r) => r.id === "k2")!.notes).toContain("On SW2, SW1 gang 2");
   });
 });
 

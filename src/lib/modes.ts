@@ -96,6 +96,8 @@ export interface ModeUi {
   gardenSel?: string[];
   /** Electrics: the switch whose lights are being linked (clicking a light toggles it in the switch's `controls`); null = not linking. */
   linkSwitchId?: string | null;
+  /** Electrics: which rocker (gang, 0-based) of the linking switch the tapped lights go on. */
+  linkGang?: number;
 }
 
 /** Modes whose plan places, selects and moves fixtures (Furnish: furniture and lights; Electrics: electrical points and lights). */
@@ -114,7 +116,7 @@ export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> 
 
 /** The UI fields that change when the mode does. Selections the new mode cannot hold are cleared. */
 export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
-  const patch: Partial<ModeUi> = { mode: next, gardenSel: [], linkSwitchId: null };
+  const patch: Partial<ModeUi> = { mode: next, gardenSel: [], linkSwitchId: null, linkGang: 0 };
   if (!roomTapSelects(next)) patch.selectedRoomId = null;
   if (next !== "decorate") patch.selectedEdge = null;
   if (editsSite(next)) {

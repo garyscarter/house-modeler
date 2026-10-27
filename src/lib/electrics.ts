@@ -1,4 +1,4 @@
-import type { Circuit, CircuitKind, Fixture, Floor, HouseModel, Pt } from "../types";
+import type { Circuit, CircuitKind, Fixture, Floor, HouseModel, Pt, SwitchGang } from "../types";
 import { byId, isElectricalItem, isFittedLight, pitchOf, type CatalogueItem, type Symbol } from "./catalogue";
 import { gridPoints } from "./lights";
 import { pointInPolygon, toWorld } from "./geometry";
@@ -221,32 +221,100 @@ export function numberPoints(model: HouseModel): NumberedPoint[] {
 
 const allFixtures = (model: HouseModel): Fixture[] => model.floors.flatMap((f) => f.fixtures ?? []);
 
-/** For every light id, the switches (on any floor) whose `controls` list it. */
-export function controlIndex(model: HouseModel): Map<string, Fixture[]> {
-  const out = new Map<string, Fixture[]>();
+// ---------------------------------------------------------------------------
+// Switch gangs and links
+
+/** Rockers per switch plate; any switch not listed has one. */
+const GANG_COUNT: Partial<Record<Symbol, number>> = { "switch-2g": 2 };
+/** How many rockers (gangs) a switch has, each working its own lights; 0 for anything that is not a switch. */
+export const gangCount = (item: Pick<CatalogueItem, "category" | "symbol">): number => (isSwitchItem(item) ? (GANG_COUNT[item.symbol] ?? 1) : 0);
+/** "Gang 1", "Gang 2": the rockers of a plate, numbered from 1 for people (gang indexes are 0-based in code). */
+export const gangLabel = (gang: number): string => `Gang ${gang + 1}`;
+
+/** One rocker's lights and state. Gang 0 is the fixture's own `controls` and `on`; later gangs live in `extraGangs`. */
+export function gangOf(fx: Pick<Fixture, "controls" | "on" | "extraGangs">, gang: number): { controls: string[]; on: boolean } {
+  if (gang <= 0) return { controls: fx.controls ?? [], on: fx.on !== false };
+  const g = fx.extraGangs?.[gang - 1];
+  return { controls: g?.controls ?? [], on: g?.on !== false };
+}
+
+/** How many gangs a fixture carries data for: at least one, and every extra gang present. */
+const gangsPresent = (fx: Pick<Fixture, "extraGangs">): number => 1 + (fx.extraGangs?.length ?? 0);
+
+/** The light ids a switch controls over all its gangs, each once. */
+export function allControls(fx: Pick<Fixture, "controls" | "extraGangs">): string[] {
+  const out: string[] = [];
+  for (let g = 0; g < gangsPresent(fx); g++) for (const id of gangOf(fx, g).controls) if (!out.includes(id)) out.push(id);
+  return out;
+}
+
+/** The fixture fields that give gang `gang` the lights and state in `patch` (others unchanged); empty gangs are stored as nothing. */
+export function setGang(fx: Pick<Fixture, "controls" | "on" | "extraGangs">, gang: number, patch: Partial<SwitchGang>): Partial<Fixture> {
+  const cur = gangOf(fx, gang);
+  const controls = patch.controls !== undefined ? patch.controls : cur.controls;
+  const on = patch.on !== undefined ? patch.on : cur.on;
+  if (gang <= 0) return { controls: controls.length ? controls : undefined, on: on ? undefined : false };
+  const list: (SwitchGang | undefined)[] = [...(fx.extraGangs ?? [])];
+  while (list.length < gang) list.push(undefined);
+  const entry: SwitchGang = {};
+  if (controls.length) entry.controls = controls;
+  if (!on) entry.on = false;
+  list[gang - 1] = Object.keys(entry).length ? entry : undefined;
+  // Trailing empty gangs are dropped; a gap stays as an empty entry so the indexes keep meaning.
+  while (list.length && list[list.length - 1] === undefined) list.pop();
+  return { extraGangs: list.length ? list.map((g) => g ?? {}) : undefined };
+}
+
+/**
+ * The switch with `lightId` linked to (or unlinked from) its gang `gang`. A light sits on one rocker of a plate at a
+ * time: linking it to a gang that does not have it moves it off any other gang that does.
+ */
+export function toggleLink(sw: Pick<Fixture, "controls" | "on" | "extraGangs">, lightId: string, gang = 0): Partial<Fixture> {
+  const here = gangOf(sw, gang).controls;
+  if (here.includes(lightId)) return setGang(sw, gang, { controls: here.filter((id) => id !== lightId) });
+  let out: Pick<Fixture, "controls" | "on" | "extraGangs"> = sw;
+  for (let g = 0; g < gangsPresent(sw); g++) {
+    if (g === gang) continue;
+    const c = gangOf(out, g).controls;
+    if (c.includes(lightId)) out = { ...out, ...setGang(out, g, { controls: c.filter((id) => id !== lightId) }) };
+  }
+  out = { ...out, ...setGang(out, gang, { controls: [...here, lightId] }) };
+  const patch: Partial<Fixture> = { controls: out.controls, extraGangs: out.extraGangs };
+  if (out.on !== sw.on) patch.on = out.on;
+  return patch;
+}
+
+/** One rocker that controls a light: the switch, which of its gangs, and whether that gang is on. */
+export interface Controller {
+  sw: Fixture;
+  gang: number;
+  /** The gang is switched on (so it is not holding the light off). */
+  on: boolean;
+}
+
+/** Every light id a switch gang controls, mapped to the rockers controlling it, in fixture order. Lights without a switch are absent. */
+export function controlIndex(model: HouseModel): Map<string, Controller[]> {
+  const out = new Map<string, Controller[]>();
   for (const sw of allFixtures(model)) {
-    if (!sw.controls?.length) continue;
+    if (!sw.controls?.length && !sw.extraGangs?.length) continue;
     const item = byId(sw.type);
     if (!item || !isSwitchItem(item)) continue;
-    for (const id of sw.controls) out.set(id, [...(out.get(id) ?? []), sw]);
+    for (let g = 0; g < gangsPresent(sw); g++) {
+      const { controls, on } = gangOf(sw, g);
+      for (const id of controls) out.set(id, [...(out.get(id) ?? []), { sw, gang: g, on }]);
+    }
   }
   return out;
 }
 
-/** The switches controlling one light (for lib/lights.ts fixtureLit). */
-export const controllersOf = (model: HouseModel, lightId: string): Fixture[] => controlIndex(model).get(lightId) ?? [];
+/** The rockers controlling one light (for lib/lights.ts fixtureLit, which reads their `on`). */
+export const controllersOf = (model: HouseModel, lightId: string): Controller[] => controlIndex(model).get(lightId) ?? [];
 
-/** The patch that links or unlinks `lightId` on a switch. */
-export function toggleLink(sw: Pick<Fixture, "controls">, lightId: string): Pick<Fixture, "controls"> {
-  const list = sw.controls ?? [];
-  const next = list.includes(lightId) ? list.filter((id) => id !== lightId) : [...list, lightId];
-  return { controls: next.length ? next : undefined };
-}
-
-/** A switch-to-light link between two numbered points (possibly on different floors). */
+/** A switch-to-light link between two numbered points (possibly on different floors), from one gang of the switch. */
 export interface Link {
   from: NumberedPoint;
   to: NumberedPoint;
+  gang: number;
 }
 
 /** Every link whose ends are both numbered points (a switch and a light); dangling ids are skipped. */
@@ -255,26 +323,33 @@ export function links(model: HouseModel, numbered: NumberedPoint[] = numberPoint
   const out: Link[] = [];
   for (const p of numbered) {
     if (p.kind !== "switch") continue;
-    for (const id of p.fx.controls ?? []) {
-      const to = byFx.get(id);
-      if (to && to.kind === "light") out.push({ from: p, to });
+    for (let g = 0; g < gangsPresent(p.fx); g++) {
+      for (const id of gangOf(p.fx, g).controls) {
+        const to = byFx.get(id);
+        if (to && to.kind === "light") out.push({ from: p, to, gang: g });
+      }
     }
   }
   return out;
 }
 
-/** The model with every `controls` id that no longer names a light dropped (the same object when nothing changes). */
+/** The model with every link to a fixture that is no longer a light dropped (the same object when nothing changes). */
 export function pruneLinks(model: HouseModel): HouseModel {
   const lights = new Set(allFixtures(model).filter((fx) => byId(fx.type) && pointKind(byId(fx.type)!) === "light").map((fx) => fx.id));
   let changed = false;
   const floors = model.floors.map((f) => {
     let fc = false;
     const fixtures = (f.fixtures ?? []).map((fx) => {
-      if (!fx.controls) return fx;
-      const keep = fx.controls.filter((id) => lights.has(id));
-      if (keep.length === fx.controls.length) return fx;
+      if (!fx.controls && !fx.extraGangs) return fx;
+      let next: Fixture = fx;
+      for (let g = 0; g < gangsPresent(fx); g++) {
+        const c = gangOf(fx, g).controls;
+        const keep = c.filter((id) => lights.has(id));
+        if (keep.length !== c.length) next = { ...next, ...setGang(next, g, { controls: keep }) };
+      }
+      if (next === fx) return fx;
       fc = true;
-      return { ...fx, controls: keep.length ? keep : undefined };
+      return next;
     });
     if (!fc) return f;
     changed = true;
@@ -407,11 +482,18 @@ export function pointRows(model: HouseModel, numbered: NumberedPoint[] = numberP
     if (p.fx.label) notes.push(p.fx.label);
     if (p.item.outdoor) notes.push("Outdoor");
     if (p.kind === "switch") {
-      const lights = (p.fx.controls ?? []).map((id) => byFx.get(id)).filter((x): x is NumberedPoint => !!x && x.kind === "light");
-      if (lights.length) notes.push(`Switches ${lights.map((l) => refName(p, l)).join(", ")}`);
+      // One note per rocker: "Switches L1, L2" for a single switch, "Gang 1 switches L1" and "Gang 2 switches L2" for a plate.
+      const gangs = Math.max(gangCount(p.item), gangsPresent(p.fx));
+      for (let g = 0; g < gangs; g++) {
+        const lights = gangOf(p.fx, g).controls.map((id) => byFx.get(id)).filter((x): x is NumberedPoint => !!x && x.kind === "light");
+        if (lights.length) notes.push(`${gangs > 1 ? `${gangLabel(g)} switches` : "Switches"} ${lights.map((l) => refName(p, l)).join(", ")}`);
+      }
     } else if (p.kind === "light") {
-      const sws = (idx.get(p.fx.id) ?? []).map((sw) => byFx.get(sw.id)).filter((x): x is NumberedPoint => !!x);
-      if (sws.length) notes.push(`On ${sws.map((sw) => refName(p, sw)).join(", ")}`);
+      const sws = (idx.get(p.fx.id) ?? []).flatMap((c) => {
+        const sw = byFx.get(c.sw.id);
+        return sw ? [gangCount(sw.item) > 1 ? `${refName(p, sw)} ${gangLabel(c.gang).toLowerCase()}` : refName(p, sw)] : [];
+      });
+      if (sws.length) notes.push(`On ${sws.join(", ")}`);
     }
     if (p.item.symbol === "downlight-grid") {
       const pitch = pitchOf(p.fx, p.item);

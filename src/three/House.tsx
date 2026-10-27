@@ -108,7 +108,7 @@ export function House({
   const ceilingGlow = Math.round((1 - nightDark(altitude)) * 10) / 10;
   const floorKey = floors.map((f) => f.id).join();
   // Lights held dark by a wall switch that is off (switches may sit on another floor), by id; the set keeps its identity until that changes.
-  const blockedKey = useMemo(() => [...controlIndex(model)].filter(([, sws]) => sws.some((sw) => !switchedOn(sw))).map(([id]) => id).sort().join(), [model]);
+  const blockedKey = useMemo(() => [...controlIndex(model)].filter(([, sws]) => sws.some((c) => !c.on)).map(([id]) => id).sort().join(), [model]);
   const blocked = useMemo<ReadonlySet<string>>(() => new Set(blockedKey ? blockedKey.split(",") : []), [blockedKey]);
   const lamps = useMemo(
     () => (lampsOn ? floors.flatMap((f) => floorLamps(f, model.ceilingHeight, floorBaseY(model, f), (fx) => switchedOn(fx) && !blocked.has(fx.id))) : []),

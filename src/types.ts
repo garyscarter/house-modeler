@@ -433,6 +433,12 @@ export interface Fixture {
    * Ids that no longer name a light are pruned by lib/electrics.ts pruneLinks; never rely on them being valid.
    */
   controls?: string[];
+  /**
+   * Multi-gang switches: the second and later rockers on the plate, in order (gang 2 is index 0), each with the
+   * light ids it controls and its own on/off. The first rocker is the fixture's own `controls` and `on`. Read them
+   * through lib/electrics.ts `gangOf`, never directly.
+   */
+  extraGangs?: SwitchGang[];
   /** Ceiling lights: how far the top of the fitting hangs below the ceiling, metres (default from the catalogue; 0 for flush fittings). */
   drop?: number;
   /** Lights: colour temperature in kelvin, 2700 (warm), 3000 (soft) or 4000 (cool). Default from lib/lights.ts. */
@@ -455,6 +461,14 @@ export interface Circuit {
   kind: CircuitKind;
   /** Fixture ids (electrical points and lights) across every floor of the model. A point belongs to at most one circuit. */
   points: string[];
+}
+
+/** One rocker of a multi-gang light switch beyond the first (see Fixture.extraGangs). */
+export interface SwitchGang {
+  /** Ids of the light fixtures this rocker controls. Absent = none. */
+  controls?: string[];
+  /** Switched on. Absent = on. */
+  on?: boolean;
 }
 
 /** Light colour temperatures offered, kelvin. */
