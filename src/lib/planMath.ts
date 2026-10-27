@@ -1,5 +1,5 @@
 import type { Fixture, Floor, Opening, OpeningKind, Pt, Room } from "../types";
-import { DOWNLIGHT_D, cornerEnds, dropOf, gridOf, isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
+import { DEFAULT_CEILING, cornerEnds, dropOf, isCornerUnit, isFloorCovering, mountOf, type CatalogueItem } from "./catalogue";
 import { EXT_WALL_T, WALL_T, polygonArea, pointInPolygon } from "./geometry";
 
 /**
@@ -563,17 +563,10 @@ export const turn = (rot: number, delta: number) => Math.round(normDeg(rot + del
  */
 export function fixtureBox(fx: Fixture, item: CatalogueItem, ceiling?: number): { w: number; d: number; h: number; z0: number } {
   const h = item.toCeiling && ceiling ? Math.min(fx.h ?? ceiling, ceiling) : fx.h ?? item.h;
-  // A downlight grid's footprint is its bulb spacing plus one downlight; its own w and d are not used.
-  const g = gridOf(fx, item);
-  const w = g ? (g.cols - 1) * g.pitch + DOWNLIGHT_D : fx.w ?? item.w;
-  const d = g ? (g.rows - 1) * g.pitch + DOWNLIGHT_D : fx.d ?? item.d;
-  // Ceiling items hang from the ceiling (a typical 2.4 m one when the caller has none, as the plan's clash checks do).
-  const z0 = item.ceiling ? Math.max(0, (ceiling ?? CEILING_FALLBACK) - dropOf(fx, item) - h) : mountOf(fx, item);
-  return { w, d, h, z0 };
+  // A ceiling item hangs from the ceiling: its top sits `drop` below it, and never lower than the floor.
+  const z0 = item.ceiling ? Math.max(0, (ceiling ?? DEFAULT_CEILING) - dropOf(fx, item) - h) : mountOf(fx, item);
+  return { w: fx.w ?? item.w, d: fx.d ?? item.d, h, z0 };
 }
-
-/** Ceiling height assumed for ceiling items when fixtureBox is not given the room's. */
-export const CEILING_FALLBACK = 2.4;
 
 /** Plan footprints and heights of fixtures for clash checks; unknown catalogue ids and rugs are skipped. */
 export function fixtureSolids(fixtures: Fixture[], pxPerM: number, lookup: (id: string) => CatalogueItem | undefined): Solid[] {

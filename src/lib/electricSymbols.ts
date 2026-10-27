@@ -23,7 +23,7 @@ export const GLYPH_MM = 3.5;
 
 /** Symbols this module draws: every Lighting and Electrics symbol (plug-in lamps keep their furniture symbols). */
 export const ELECTRIC_SYMBOLS: readonly Symbol[] = [
-  "pendant", "pendant-multi", "ceiling-flush", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light",
+  "pendant", "pendant-multi", "flush-light", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light",
   "switch-1g", "switch-2g", "switch-2way", "switch-dimmer", "switch-pull",
   "socket-1", "socket-2", "socket-usb", "socket-floor", "socket-outdoor", "shaver-socket",
   "fused-spur", "cooker-switch", "cooker-outlet", "shower-point",
@@ -63,7 +63,7 @@ const socketStrokes = (xs: number[], to = 0.25): SymPrim[] =>
 const DRAW: Record<string, () => SymPrim[]> = {
   pendant: () => [...crossed(0, 0, 0.4), circle(0, 0, 0.06, true)],
   "pendant-multi": () => [line(-0.5, 0, 0.5, 0), ...[-0.33, 0, 0.33].flatMap((x) => crossed(x, 0, 0.15))],
-  "ceiling-flush": () => [circle(0, 0, 0.47), ...crossed(0, 0, 0.3)],
+  "flush-light": () => [circle(0, 0, 0.47), ...crossed(0, 0, 0.3)],
   downlight: () => [circle(0, 0, 0.42), circle(0, 0, 0.2, true)],
   "downlight-grid": () => [
     circle(0, 0, 0.42),

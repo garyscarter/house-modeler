@@ -345,6 +345,10 @@ export interface JoineryConfig {
   front?: JoineryFront;
   /** Carcass and inside colour (unset = the fixture colour). */
   carcass?: string;
+  /** Shaker doors: colour of the raised bead round each panel; unset = a shade of the door colour. */
+  trim?: string;
+  /** Shaker doors: colour of the recessed panel inside the bead; unset = the door colour. */
+  panel?: string;
   /** Shelf thickness, m. */
   shelfT?: number;
   seatFront?: SeatFront;
@@ -407,20 +411,15 @@ export interface Fixture {
    * Ids that no longer name a light are pruned by lib/electrics.ts pruneLinks; never rely on them being valid.
    */
   controls?: string[];
-  /** Ceiling lights hung on a flex or rod (pendants): metres from the ceiling to the top of the fitting. Absent = the catalogue's `drop`, else 0. */
+  /** Ceiling lights: how far the top of the fitting hangs below the ceiling, metres (default from the catalogue; 0 for flush fittings). */
   drop?: number;
-  /** Lights: colour temperature in kelvin. Absent = 2700 (warm). */
+  /** Lights: colour temperature in kelvin, 2700 (warm), 3000 (soft) or 4000 (cool). Default from lib/lights.ts. */
   warmth?: LightWarmth;
-  /** Lights: dimmer level in percent, 1-100. Absent = 100. */
+  /** Lights: dimmer setting, 1-100 percent (absent = 100). */
   dim?: number;
-  /** Downlight grids: bulbs across (along w) and down (along d), and their spacing in metres. Absent = the catalogue's `grid`. */
-  cols?: number;
-  rows?: number;
+  /** Downlight grids: spacing between downlights, metres (default from the catalogue). */
   pitch?: number;
 }
-
-/** Colour temperatures offered for a light: warm, soft and cool white. */
-export type LightWarmth = 2700 | 3000 | 4000;
 
 export type CircuitKind = "lighting" | "ring" | "radial" | "cooker" | "shower" | "ev" | "other";
 
@@ -435,6 +434,9 @@ export interface Circuit {
   /** Fixture ids (electrical points and lights) across every floor of the model. A point belongs to at most one circuit. */
   points: string[];
 }
+
+/** Light colour temperatures offered, kelvin. */
+export type LightWarmth = 2700 | 3000 | 4000;
 
 export interface Floor {
   id: string;

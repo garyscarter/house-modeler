@@ -9,16 +9,20 @@ Owner's decisions (settled, do not reopen):
 3. Links first, circuits light: `Fixture.controls` on switches is the main interaction; `HouseModel.circuits` with a simple list (add, rename, delete, assign). No validation beyond dropping dangling ids. `fixtureLit`: own switch on AND every controlling switch on AND master.
 4. The guide shows new (proposed) points only; no removed-points marking.
 
-## 0. What Chunk 0 landed (commit "Electrics plan: shared types, catalogue, lib contracts and the Electrics mode entry (Lady Gaga)")
+## 0. What Chunk 0 landed
+
+Note (lead): the lighting thread's phases 1 and 2 reached main while Chunk 0 was written. Upstream's names win for every lighting piece (ids `pendant … strip-light`, symbol `flush-light`, `pitch`-only grids, `DEFAULT_CEILING`, `LampDef.bulbs`, `gridPoints`, `floorLamps`, `LampLights`, `setLampGlow`, lit glass in shell/textures, light fields in the inspector and light symbols in FixtureSymbol). Chunk 0 keeps only the electrics additions. Rows below are corrected to that.
+
+### Chunk 0 contract (commit "Electrics plan: shared types, catalogue, lib contracts and the Electrics mode entry (Lady Gaga)")
 
 Every builder starts from this commit. These names are the contract: do not rename or change their signatures; add beside them. Catalogue ids are saved data: never rename.
 
 | File | What is there |
 |---|---|
-| `src/types.ts` | `Fixture.controls?`, `drop?`, `warmth?: LightWarmth`, `dim?`, `cols?`, `rows?`, `pitch?`; `LightWarmth = 2700 \| 3000 \| 4000`; `CircuitKind`; `Circuit { id, name, kind, points }`; `HouseModel.circuits?` |
-| `src/lib/catalogue.ts` | `CatalogueItem.ceiling?`, `drop?`, `outdoor?`, `grid?: { cols, rows, pitch }`; 34 new `Symbol` members; 9 `Lighting` + 26 `Electrics` entries (section 2); `LIGHTING`, `ELECTRICS`, `PickerScope`, `SCOPE_CATEGORIES`, `isFittedLight`, `isElectricalItem`, `gridOf`, `dropOf`, `DOWNLIGHT_D`; `filterCatalogue(query, category, extra, scope = "furnish")` (Furnish never lists Electrics) |
-| `src/lib/planMath.ts` | `fixtureBox`: ceiling items' `z0 = ceiling - drop - h` (ceiling defaults to `CEILING_FALLBACK` 2.4 when not given); a grid's w and d from its bulbs |
-| `src/lib/lights.ts` | `LampDef.spot?`; LAMPS for `pendant pendant-multi ceiling-flush downlight downlight-grid spot-bar wall-light strip-light` (lumens per bulb); `WARMTH_COLOR`, `WARMTHS`, `WARMTH_LABEL`; `lampBulbs(fx, item, box)`; `lampOutput(fx, item)`; `fixtureLit(fx, item, master, altitude, controllers = [])` |
+| `src/types.ts` | `Fixture.controls?` (Chunk 0) beside upstream's `drop?`, `warmth?: LightWarmth`, `dim?`, `pitch?` (no cols/rows: a grid is sized by its w, d and pitch); `LightWarmth = 2700 \| 3000 \| 4000`; `CircuitKind`; `Circuit { id, name, kind, points }`; `HouseModel.circuits?` |
+| `src/lib/catalogue.ts` | `CatalogueItem.outdoor?` beside upstream's `ceiling?`, `drop?`, `pitch?`; 34 new `Symbol` members; upstream's 8 `Lighting` entries plus `outside-light`, and 26 `Electrics` entries (section 2); `LIGHTING`, `ELECTRICS`, `PickerScope`, `SCOPE_CATEGORIES`, `isFittedLight`, `isElectricalItem`, `gridOf`, `dropOf`, `DOWNLIGHT_D`; `filterCatalogue(query, category, extra, scope = "furnish")` (Furnish never lists Electrics) |
+| `src/lib/planMath.ts` | `fixtureBox`: ceiling items' `z0 = ceiling - drop - h` (ceiling defaults to `DEFAULT_CEILING` 2.4 when not given); upstream's version |
+| `src/lib/lights.ts` | `LampDef.spot?`; LAMPS for `pendant pendant-multi flush-light downlight downlight-grid spot-bar wall-light strip-light` (lumens per bulb); `WARMTH_COLOR`, `WARMTHS`, `WARMTH_LABEL`; `lampBulbs(fx, item, box)`; `lampOutput(fx, item)`; `fixtureLit(fx, item, master, altitude, controllers = [])` |
 | `src/lib/electrics.ts` | working: `PointKind`, `POINT_KINDS`, `POINT_PREFIX`, `POINT_KIND_LABEL`, `pointKind`, `isSwitchItem`, `isElectricalFixture`, `pointQuantity`, `centreHeight`, `mountForCentre`, `isWallPoint`, `glyphOffset`, `OUTSIDE`, `ROOM_REACH`, `RoomRef`, `roomOf`, `Point`, `pointsOf`, `NumberedPoint`, `numberPoints`, `controlIndex`, `controllersOf`, `toggleLink`, `Link`, `links`, `pruneLinks`, `CIRCUIT_KINDS`, `CIRCUIT_KIND_LABEL`, `addCircuit`, `renameCircuit`, `setCircuitKind`, `deleteCircuit`, `assignToCircuit`, `circuitOf`, `pruneCircuits`. Stubs (return []): `pointRows`, `scheduleRows`, `totals` with types `PointRow`, `ScheduleRow`, `TotalRow` |
 | `src/lib/electricSymbols.ts` | `SymPrim`, `ELECTRIC_GLYPH_M` (0.25 m), `GLYPH_MM` (3.5), `ELECTRIC_SYMBOLS`, `hasElectricSymbol`, `electricSymbol(symbol)` (placeholder: circle + letter), `glyphSvg(symbol, cx, cy, size, { rot, ink, stroke })` |
 | `src/editor/ElectricGlyph.tsx` | `ElectricGlyph({ symbol, size, stroke, ink?, paper? })`: renders `electricSymbol` prims (working) |
@@ -43,12 +47,12 @@ All fields optional: old saves, synced projects and imports load unchanged. **No
 | `Fixture` | `on` (phase 1) | on | lights.ts `switchedOn`; switches use it too (a switch with `on: false` darkens what it controls) |
 | `Fixture` | `controls: string[]` | none | electrics.ts `controlIndex`/`links`; 3D lit test; plan links layer; guide arcs and notes |
 | `Fixture` | `drop` | `item.drop ?? 0` (`dropOf`) | planMath `fixtureBox` (z0), 3D flex length, inspector |
-| `Fixture` | `warmth` | 2700 | `lampOutput` colour; inspector |
-| `Fixture` | `dim` (1-100) | 100 | `lampOutput` lumens; inspector |
-| `Fixture` | `cols`, `rows`, `pitch` | `item.grid` (`gridOf`, clamped 1-12, 0.2-3 m) | `fixtureBox` footprint, `lampBulbs`, `pointQuantity`, plan/print symbols per bulb |
+| `Fixture` | `warmth` | 2700 | `lightColor` (lights.ts); inspector (upstream) |
+| `Fixture` | `dim` (1-100) | 100 | `dimOf` (lights.ts); inspector (upstream) |
+| `Fixture` | `pitch` | `item.pitch` (`pitchOf`, 1.2 m) | a grid's bulbs are `gridPoints(w, d, pitch)` (lights.ts): `pointQuantity`, plan/print symbols per bulb |
 | `Fixture` | `mount` (existing) | `item.mount` | **base height** as for all items. Wall points' catalogue mounts are set so the **centre** is at the UK height; the Electrics inspector and the guide show the centre (`centreHeight`), and write back with `mountForCentre` |
 | `CatalogueItem` | `ceiling` | false | `fixtureBox` (`z0 = ceiling - drop - h`, mount ignored); placement (no wall snap) |
-| `CatalogueItem` | `drop`, `grid` | 0, none | as above |
+| `CatalogueItem` | `drop`, `pitch` | 0, 1.2 | as above |
 | `CatalogueItem` | `outdoor` | false | `roomOf` (always Outside), guide notes "Outdoor" |
 | `HouseModel` | `circuits: Circuit[]` | `[]` | ElectricsPanel list, inspector circuit field, guide circuit column (blank when unassigned) |
 | `Circuit.points` | fixture ids across floors | | a point is on at most one circuit (`assignToCircuit` enforces) |
@@ -65,15 +69,15 @@ Plate sizes: single 86 × 86 mm, double 146 × 86 mm. `mount` = centre - h/2. Sy
 
 | id | name | cat | w × d × h m | mount / place | symbol | drawing (BS EN 60617 style) |
 |---|---|---|---|---|---|---|
-| light-pendant | Pendant (single) | Lighting | .30 × .30 × .25 | ceiling, drop .55 | pendant | circle with a diagonal cross (lighting outlet), small dot at centre (rose) |
-| light-pendant-3 | Pendant cluster (3 drops) | Lighting | .90 × .25 × .20 | ceiling, drop .7 | pendant-multi | three small crossed circles on a horizontal line |
-| light-flush | Flush ceiling light | Lighting | .35 × .35 × .10 | ceiling | ceiling-flush | crossed circle inside a second concentric circle |
-| light-downlight | Downlight (recessed) | Lighting | .09 × .09 × .02 | ceiling | downlight | filled disc inside an open ring (recessed luminaire) |
-| light-downlight-grid | Downlights (grid) | Lighting | grid 3 × 2 @ 1.0 | ceiling | downlight-grid | the downlight glyph at every bulb (`lampBulbs`), legend shows one |
-| light-spot-bar | Spotlight bar (3 heads) | Lighting | .75 × .08 × .15 | ceiling | spot-bar | horizontal bar with three small circles each with a centre dot |
-| light-wall | Wall light | Lighting | .15 × .12 × .20 | centre 1.8 | wall-light | crossed circle on a short stem from the wall line |
-| light-outside | Outside wall light | Lighting | .12 × .12 × .22 | centre 1.9, outdoor | wall-light | as wall light (legend row says "outdoor, IP44") |
-| light-strip | Under-cabinet LED strip | Lighting | .60 × .03 × .01 | base 1.44 | strip-light | long thin rectangle at real length with short end ticks (linear luminaire) |
+| pendant | Pendant (single) | Lighting | .30 × .30 × .25 | ceiling, drop .55 | pendant | circle with a diagonal cross (lighting outlet), small dot at centre (rose) |
+| pendant-multi | Pendant cluster (3 drops) | Lighting | .90 × .25 × .20 | ceiling, drop .7 | pendant-multi | three small crossed circles on a horizontal line |
+| flush-light | Flush ceiling light | Lighting | .35 × .35 × .10 | ceiling | flush-light | crossed circle inside a second concentric circle |
+| downlight | Downlight (recessed) | Lighting | .09 × .09 × .02 | ceiling | downlight | filled disc inside an open ring (recessed luminaire) |
+| downlight-grid | Downlights (grid) | Lighting | 2.4 × 2.4, pitch 1.2 | ceiling | downlight-grid | the downlight glyph at every bulb (`gridPoints`), legend shows one |
+| spot-bar | Spotlight bar (3 heads) | Lighting | .75 × .08 × .15 | ceiling | spot-bar | horizontal bar with three small circles each with a centre dot |
+| wall-light | Wall light | Lighting | .15 × .12 × .20 | centre 1.8 | wall-light | crossed circle on a short stem from the wall line |
+| outside-light | Outside wall light | Lighting | .12 × .12 × .22 | centre 1.9, outdoor | wall-light | as wall light (legend row says "outdoor, IP44") |
+| strip-light | Under-cabinet LED strip | Lighting | .60 × .03 × .01 | base 1.44 | strip-light | long thin rectangle at real length with short end ticks (linear luminaire) |
 | switch-1g | Light switch (1-gang) | Electrics | .086 × .03 × .086 | centre 1.2 | switch-1g | small filled circle, one stroke rising at 45° with a short end tick |
 | switch-2g | Light switch (2-gang) | Electrics | .146 × .03 × .086 | centre 1.2 | switch-2g | as 1-gang with two parallel ticks |
 | switch-2way | Light switch (2-way) | Electrics | .086 × .03 × .086 | centre 1.2 | switch-2way | filled circle, stroke through both ways with a tick at each end |
@@ -108,7 +112,7 @@ Pickers: Furnish offers every category except Electrics (Lighting included); Ele
 - `numberPoints(model)`: floors by level; rooms in `floor.rooms` order, then **Outside**; kinds in `POINT_KINDS` order (board, light, switch, socket, connection, appliance, alarm, data); within a room and kind, reading order (0.5 m rows from the top of the plan, then left to right, ties by id). Numbers restart per room and kind.
 - Prefixes: L lights, SW switches, S sockets (incl. floor, outdoor, shaver), C spurs and isolators (fused spur, cooker switch, cooker outlet), P fixed appliances (shower, fan, thermostat, bell push and chime, EV charger), A alarms, D TV and data, CU consumer unit.
 - Room: the topmost room containing the centre; else the nearest room edge within `ROOM_REACH` (0.35 m: a point in a wall's thickness); else Outside (one Outside group per floor). Outdoor items are always Outside. A point is named "Kitchen S2" (room + label); the guide prints the label beside the symbol and the room in the schedule.
-- A downlight grid is **one** numbered point with quantity cols × rows (counts and costs use the quantity; the CSV row carries it).
+- A downlight grid is **one** numbered point with quantity = its `gridPoints` count (counts and costs use the quantity; the CSV row carries it).
 
 ## 4. lib/electrics.ts: what is left (Dua Lipa)
 
@@ -131,7 +135,7 @@ Tests: the Chunk 0 test model (or a new one) gives exact rows; a grid counts 6; 
 
 - **Parts** (`three/Fixtures.tsx` `fixtureParts`): pendant (flex: thin dark cylinder from the fitting top up `drop` to the ceiling; drum or cone shade; bulb), cluster (three of them across w), flush (disc + diffuser), downlight (thin bezel ring + diffuser disc per bulb), spot bar (bar + three tilted heads), wall light (back plate + shade), strip (thin bar + diffuser), and small parts for every Electrics symbol (faceplate box in `item.color`, rockers/socket holes as tiny darker boxes, alarms as discs, consumer unit a box with a lid line, EV charger a box with a cable stub). Pass the fixture (or its `drop`, grid and bulbs) into `fixtureParts`; it is private, change its signature freely. Glowing parts (shade inside, diffuser, bulb) use the `glow` finish only when lit; unlit they are matt white/the shade colour.
 - **Lit state**: `House.tsx` computes once per model + sun change `const idx = controlIndex(model)`, `master = lightsMaster(sun)`, `altitude` (null when the study is off, from `useSunInfo`), and passes `lit: (fx) => fixtureLit(fx, item, master, altitude, idx.get(fx.id) ?? [])` to `Fixtures`. Toggling a switch must rebuild only the glow materials/meshes, not every fixture: build glow parts into their own merged mesh(es) keyed by lit state, or put lit and unlit glow on separate materials and swap.
-- **Real lights** (new `three/FixtureLights.tsx`, mounted by `House.tsx` for the viewed floors): every lit light's `lampBulbs` in world space (`toWorld`, `z0` from `fixtureBox(fx, item, ceiling)`, rotation `-rot` about +y as Fixtures does, plus the floor's base y), with `lampOutput` → `intensity = candela(lumens)`, `color`, `distance = reach`, `decay = 2`, no shadows; `spot` lamps are SpotLights aimed straight down (target 1 m below) with `angle`/`penumbra`. Cap with `pickLights(bulbs, cameraPos, LIGHT_CAP[quality])`, re-picked when the camera stops (controls `end`) or every 500 ms while moving, not per frame. **Keep a fixed pool** of `LIGHT_CAP` point lights and `LIGHT_CAP` spot lights mounted all the time with intensity 0 when unused, so three.js never recompiles shaders when the count changes. Grid bulbs count individually against the cap.
+- **Real lights** (new `three/FixtureLights.tsx`, mounted by `House.tsx` for the viewed floors): every lit light's bulbs in world space (`bulbsWorld`, `floorLamps` in lights.ts; upstream's `LampLights` already renders them) (`toWorld`, `z0` from `fixtureBox(fx, item, ceiling)`, rotation `-rot` about +y as Fixtures does, plus the floor's base y), with `lampOutput` → `intensity = candela(lumens)`, `color`, `distance = reach`, `decay = 2`, no shadows; `spot` lamps are SpotLights aimed straight down (target 1 m below) with `angle`/`penumbra`. Cap with `pickLights(bulbs, cameraPos, LIGHT_CAP[quality])`, re-picked when the camera stops (controls `end`) or every 500 ms while moving, not per frame. **Keep a fixed pool** of `LIGHT_CAP` point lights and `LIGHT_CAP` spot lights mounted all the time with intensity 0 when unused, so three.js never recompiles shaders when the count changes. Grid bulbs count individually against the cap.
 - **Night interior** (`Lighting.tsx`, `House.tsx`): below `NIGHT_ALTITUDE` (-4°) the environment intensity drops to ~0.03 and the hemisphere fill to ~0.05; the moon fill stays. `RoomCeiling`'s emissive (0.35 today) goes to 0 at night so an unlit room is dark; lit rooms read from the real lights.
 - **Lit glass** (`shell.ts`, `textures.ts`): today `setGlassMode(high, lit)` lights every pane at night. Add a lit variant: `glassMaterial(color, { lit: true })` that glows at night and a plain one that stays dark; panes of openings whose room is in `litRooms(floor, lit)` use the lit variant. New pure helper `lib/nightGlass.ts` `openingRoom(floor, opening): string | undefined` (the room whose polygon edge lies within 0.25 m of the opening centre and whose interior is on the inside; tests). Toggling a light swaps materials on the glass meshes, never rebuilds wall geometry (group glass per room).
 - **Dev hook** (`Viewer.tsx`, dev only): `window.__houseLights = () => ({ point: n, spot: n, active: n })` so scripts can check lights without reading pixels.

@@ -20,6 +20,12 @@ describe("joineryOf", () => {
     expect(j.shelves).toBe(0);
     expect(j.topBox).toBe(0);
   });
+  it("passes shaker trim and panel colours through, unset by default", () => {
+    const item = byId("built-in-alcove")!;
+    expect(joineryOf(fx("built-in-alcove", { joinery: { trim: "#1f4e79", panel: "#f3e9d2" } }), item, ALCOVE)).toMatchObject({ trim: "#1f4e79", panel: "#f3e9d2" });
+    expect(joineryOf(fx("built-in-alcove", {}), item, ALCOVE).trim).toBeUndefined();
+  });
+
   it("colours the carcass and top like the unit unless set", () => {
     const item = byId("built-in-alcove")!;
     expect(joineryOf(fx("built-in-alcove", { color: "#123456" }), item, ALCOVE)).toMatchObject({ carcass: "#123456", topColor: "#123456" });
