@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
 import { trackScene } from "./textures";
-import { lampPoolsOf, lampStats } from "./lampPool";
+import { lampPoolsOf, lampStats, onLampPoolChange } from "./lampPool";
 
 /** Frames to redraw the shadow map for after mounting, while the scene settles. */
 const MOUNT_FRAMES = 3;
@@ -216,17 +216,26 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       if (cancelled) return;
       lampStats.litReady = true;
       // Materials that first appear later (a new colour, a fitting added) were compiled only for the lamp state they
-      // appeared in: once the renderer's programs stop growing, build their other variant too.
+      // appeared in, and a pool that changes size (a light fitting added or removed) needs both states again: once the
+      // renderer's programs stop growing, or the pool settles, build the other variant too.
       let known = gl.info.programs?.length ?? 0;
-      stopWatch = addAfterEffect(() => {
-        const n = gl.info.programs?.length ?? 0;
-        if (running || n <= known) return;
-        known = n;
+      const later = () => {
         window.clearTimeout(rewarm);
         rewarm = window.setTimeout(() => {
           void otherLampState().then(() => (known = gl.info.programs?.length ?? 0));
         }, REWARM_MS);
+      };
+      const stopAfter = addAfterEffect(() => {
+        const n = gl.info.programs?.length ?? 0;
+        if (running || n <= known) return;
+        known = n;
+        later();
       });
+      const stopPool = onLampPoolChange(gl, later);
+      stopWatch = () => {
+        stopAfter();
+        stopPool();
+      };
     })();
     return () => {
       cancelled = true;

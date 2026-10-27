@@ -12,6 +12,24 @@ const lampPools = new WeakMap<THREE.WebGLRenderer, Set<THREE.Object3D>>();
 /** This renderer's lamp pools. */
 export const lampPoolsOf = (gl: THREE.WebGLRenderer): THREE.Object3D[] => [...(lampPools.get(gl) ?? [])];
 
+/** Who to tell when a renderer's pool changes size (a light fitting added or removed): Precompile, to build the other lamp state for the new size. */
+const poolListeners = new WeakMap<THREE.WebGLRenderer, Set<() => void>>();
+
+/** Calls `fn` whenever a lamp pool of this renderer changes size; returns the unsubscribe. */
+export function onLampPoolChange(gl: THREE.WebGLRenderer, fn: () => void): () => void {
+  let set = poolListeners.get(gl);
+  if (!set) poolListeners.set(gl, (set = new Set()));
+  set.add(fn);
+  return () => {
+    set.delete(fn);
+  };
+}
+
+/** Tells the listeners a lamp pool of this renderer has changed size. */
+export function lampPoolChanged(gl: THREE.WebGLRenderer) {
+  for (const fn of poolListeners.get(gl) ?? []) fn();
+}
+
 /** Registers the object in `ref` as a lamp light pool for precompiling while the calling component is mounted. */
 export function useLampPool(ref: RefObject<THREE.Object3D | null>) {
   const gl = useThree((s) => s.gl);

@@ -1,4 +1,4 @@
-import { Suspense, memo, useEffect, useLayoutEffect, useMemo } from "react";
+import { Suspense, memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { usePanelPrefs } from "../components/panelPrefs";
@@ -17,7 +17,7 @@ import { useSunInfo } from "./useSun";
 import { nightDark } from "./Lighting";
 import { byId } from "../lib/catalogue";
 import { controlIndex } from "../lib/electrics";
-import { floorLamps, isLightItem, lampGlow, lightsMaster, lightsOn as masterAllows, litRooms, switchedOn } from "../lib/lights";
+import { POOL, floorLamps, isLightItem, lampGlow, lightsMaster, lightsOn as masterAllows, litRooms, poolFor, switchedOn, type PoolSizes } from "../lib/lights";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
@@ -117,6 +117,10 @@ export function House({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lampsOn, floorKey, model, blocked],
   );
+  // The pool of real lights is sized to the house, so its shaders change only when a light fitting is added or removed.
+  const quality = useStore((s) => s.settings.quality);
+  const pool = useRef<PoolSizes | null>(null);
+  const sizes = useMemo(() => (pool.current = poolFor(model, POOL[quality], pool.current)), [model, quality]);
   const invalidate = useThree((s) => s.invalidate);
   const glow = lampGlow(true, altitude);
   useEffect(() => {
@@ -125,7 +129,7 @@ export function House({
 
   return (
     <group>
-      {!ghost && <LampLights lamps={lamps} />}
+      {!ghost && <LampLights lamps={lamps} sizes={sizes} />}
       {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
       {showExterior && !ghost && showPins && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (

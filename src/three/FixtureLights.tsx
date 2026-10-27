@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { POOL, assignSlots, coneGain, type LampLight, type PoolSizes, type Slots } from "../lib/lights";
-import { useStore } from "../store";
-import { lampStats, useLampPool } from "./lampPool";
+import { assignSlots, coneGain, type LampLight, type PoolSizes, type Slots } from "../lib/lights";
+import { lampPoolChanged, lampStats, useLampPool } from "./lampPool";
 
 /** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
 export const LAMP_SCALE = 0.06;
@@ -26,21 +25,27 @@ export const spotIntensity = (l: Pick<LampLight, "candela" | "spot">): number =>
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 /**
- * The lit lamps of every shown floor as a fixed pool of lights: point lights, and spot lights aimed straight down for
- * fittings with a cone, filled with the lamps nearest to the camera (the rest only glow; see POOL in lib/lights.ts).
- * Three bakes the number of lights into every lit material's shader, so the pool never changes size: an empty slot
- * stays mounted, parked dark, and the whole pool is hidden while no lamp is lit. Precompile builds the lit shaders ahead
- * of the first switch-on. The nearest `casters` spot slots cast shadows; point lights never do. A lamp that stays picked
- * keeps its slot (assignSlots). The pick runs when the lamps change or the camera has moved a metre, so orbiting costs
- * no React renders.
+ * The lit lamps of every shown floor as a pool of lights of a fixed size `sizes` (poolFor in lib/lights.ts: one slot
+ * per lamp bulb in the house, up to POOL's cap): point lights, and spot lights aimed straight down for fittings with a
+ * cone, filled with the lamps nearest to the camera (the rest only glow). Three bakes the number of lights into every
+ * lit material's shader, so the pool keeps its size while lights switch: an empty slot stays mounted, parked dark, and
+ * the whole pool is hidden while no lamp is lit. Precompile builds the lit shaders ahead of the first switch-on, and
+ * again when the size changes (a light fitting added or removed). The nearest `casters` spot slots cast shadows; point
+ * lights never do. A lamp that stays picked keeps its slot (assignSlots). The pick runs when the lamps change or the
+ * camera has moved a metre, so orbiting costs no React renders.
  */
-export function LampLights({ lamps }: { lamps: LampLight[] }) {
-  const quality = useStore((s) => s.settings.quality);
-  const sizes = POOL[quality];
+export function LampLights({ lamps, sizes }: { lamps: LampLight[]; sizes: PoolSizes }) {
+  const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
   const group = useRef<THREE.Group>(null);
   useLampPool(group);
+  // The first run is the mount, which Precompile's own pass covers.
+  const sized = useRef(false);
+  useEffect(() => {
+    if (sized.current) lampPoolChanged(gl);
+    sized.current = true;
+  }, [gl, sizes]);
   const [slots, setSlots] = useState<Slots>(() => assignSlots(null, [], [0, 0, 0], sizes));
   const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; sizes: PoolSizes }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, sizes });
   const repick = () => {

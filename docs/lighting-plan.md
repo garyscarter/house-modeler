@@ -20,7 +20,7 @@ Owner's brief (Oct 2026): switch lights, lamps included, on and off to judge the
 |---|---|---|
 | `Fixture` (`src/types.ts`) | `on?: boolean` | on |
 | `SunState` (`src/store.ts`) | `lights?: LightsMaster` (`"auto" \| "on" \| "off"`) | auto |
-| `src/lib/lights.ts` | `LAMPS` (light fittings by catalogue symbol: lumens, colour, bulb position, reach), `isLightItem`, `fixtureLit`, `lightsOn`, `lampGlow`, `candela`, `POOL` (fixed light slots per quality), `pickLights`, `assignSlots`, `litRooms` | |
+| `src/lib/lights.ts` | `LAMPS` (light fittings by catalogue symbol: lumens, colour, bulb position, reach), `isLightItem`, `fixtureLit`, `lightsOn`, `lampGlow`, `candela`, `POOL` (the most lights per quality), `poolFor`, `pickLights`, `assignSlots`, `litRooms` | |
 | `src/lib/dusk.ts` | `NIGHT_PRESET_ALTITUDE` (-8°), `nightHour` | |
 
 Rules: a light is lit when `fixtureLit(fx, item, master, altitude)`; `altitude` is the sun study's altitude or null when the study is off. Old saves need no migration.
@@ -64,7 +64,7 @@ The brief is `docs/wiring-guide-brief.md`; the implementation plan, which also c
 
 Three bakes the number of point, spot and shadow-casting lights into every lit material's shader, so mounting lamp lights only while they are lit recompiled every material at the switch. Now:
 
-- **A fixed pool** (`POOL`: high 16 point + 8 spot with 4 shadowed, balanced 12 + 6, low 8 + 4): every slot stays mounted, an empty one parked dark; the pool is hidden while no lamp is lit. `assignSlots` keeps a lamp in its slot while it stays among the nearest, so orbiting doesn't reshuffle.
-- **Both lamp states precompiled** (`three/frameLoop.tsx` `Precompile`): after the first frame the other state (pool shown or hidden) is compiled in the background and each new program given its first use a couple per frame; it runs again for materials that appear later.
+- **A pool sized to the house** (`poolFor`: a slot per lamp bulb the house has, spot or point, capped by `POOL`: 16 lights on high with 4 shadowed spots, 12 on balanced, 8 on low, spots and points sharing the cap by demand): every slot stays mounted, an empty one parked dark; the pool is hidden while no lamp is lit. Every slot is shaded on every pixel, so the size follows the house, not the cap, and changes only when a light fitting is added or removed (then both lamp states compile again, in the background). `assignSlots` keeps a lamp in its slot while it stays among the nearest, so orbiting doesn't reshuffle.
+- **Both lamp states precompiled** (`three/frameLoop.tsx` `Precompile`): after the first frame the other state (pool shown or hidden) is compiled in the background and each new program given its first use a couple per frame; it runs again for materials that appear later and when the pool changes size.
 - **Lit and unlit swap materials only**: fixture geometry ignores on, dim and warmth (`lib/fixtureGlow.ts`), and window glass glows by a per-floor room mask (`lib/glassGlow.ts`), so neither the fixtures nor the shell are rebuilt.
 

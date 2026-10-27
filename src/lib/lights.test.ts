@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, POOL, assignSlots, type LampLight, type PoolSizes, type Slots, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
+import { LAMPS, POOL, assignSlots, poolFor, type LampLight, type PoolSizes, type Slots, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
 import { CATALOGUE, byId, dropOf } from "./catalogue";
 import { fixtureBox } from "./planMath";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
@@ -82,6 +82,22 @@ describe("light fixtures", () => {
     expect(lights[0].spot).toBeDefined();
     expect(lights[0].color).toBe(WARMTH_COLOR[2700]);
     expect(lights.map((l) => l.id)).toEqual(["g:pm:0", "g:pm:1", "g:pm:2"]);
+  });
+  it("sizes the pool to the house's bulbs, capped, whatever is switched on or shown", () => {
+    const g = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("pendant-multi", { id: "pm", on: false }), fx("table-lamp", { id: "t" })] } as unknown as Floor;
+    const f1 = { ...g, id: "f1", level: 1, fixtures: [fx("downlight-grid", { id: "dg" }), fx("floor-lamp", { id: "fl" }), fx("sofa", { id: "s" })] } as unknown as Floor;
+    const model = { floors: [g, f1], ceilingHeight: 2.4 };
+    // 3 pendant bulbs and 4 downlights are spots, the table and floor lamps points.
+    expect(poolFor(model, POOL.high)).toEqual({ point: 2, spot: 7, casters: 4 });
+    // Over the cap: half each, then the rest to the kind that still wants it (here 2 points, 6 spots of 8).
+    expect(poolFor(model, POOL.low)).toEqual({ point: 2, spot: 6, casters: 0 });
+    expect(poolFor(model, { total: 4, casters: 1 })).toEqual({ point: 2, spot: 2, casters: 1 });
+    expect(poolFor({ ...model, floors: [f1, f1, f1, f1] }, { total: 8, casters: 0 })).toEqual({ point: 4, spot: 4, casters: 0 });
+    expect(poolFor({ ...model, floors: [f1, f1, f1, f1, f1] }, { total: 8, casters: 0 })).toEqual({ point: 4, spot: 4, casters: 0 });
+    expect(poolFor({ floors: [], ceilingHeight: 2.4 }, POOL.high)).toEqual({ point: 0, spot: 0, casters: 0 });
+    const prev = poolFor(model, POOL.high);
+    expect(poolFor(model, POOL.high, prev)).toBe(prev);
+    expect(poolFor({ ...model, floors: [g] }, POOL.high, prev)).not.toBe(prev);
   });
   it("gives every downlight of a grid its full lumens", () => {
     const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("downlight-grid", { id: "dg" })] } as unknown as Floor;
@@ -236,19 +252,20 @@ describe("assignSlots", () => {
     expect(next.spot.slice(1).sort()).toEqual(["s1", "s2"]);
     expect(next.spot[1]).toBe("s2");
   });
+  const big: PoolSizes = { point: 8, spot: 8, casters: 4 };
   it("re-packs when the sizes change", () => {
     const ls = [lamp("a", 1), lamp("b", 2)];
     const s = assignSlots(null, ls, eye, sizes);
-    const bigger = assignSlots(s, ls, eye, POOL.high);
-    expect(bigger.point).toHaveLength(POOL.high.point);
-    expect(bigger.spot).toHaveLength(POOL.high.spot);
+    const bigger = assignSlots(s, ls, eye, big);
+    expect(bigger.point).toHaveLength(big.point);
+    expect(bigger.spot).toHaveLength(big.spot);
     expect(bigger.point.slice(0, 2)).toEqual(["a", "b"]);
   });
   it("never holds more ids than slots, or one twice", () => {
     const ls = Array.from({ length: 40 }, (_, i) => lamp("l" + i, i, i % 2 === 0));
-    const s = assignSlots(null, ls, eye, POOL.high);
-    expect(s.point.filter(Boolean).length).toBeLessThanOrEqual(POOL.high.point);
-    expect(s.spot.filter(Boolean).length).toBeLessThanOrEqual(POOL.high.spot);
+    const s = assignSlots(null, ls, eye, big);
+    expect(s.point.filter(Boolean).length).toBeLessThanOrEqual(big.point);
+    expect(s.spot.filter(Boolean).length).toBeLessThanOrEqual(big.spot);
     expect(new Set(ids(s)).size).toBe(ids(s).length);
   });
 });

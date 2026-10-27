@@ -1,4 +1,4 @@
-import type { Fixture, Floor, LightWarmth } from "../types";
+import type { Fixture, Floor, HouseModel, LightWarmth } from "../types";
 import { byId, pitchOf, type CatalogueItem, type Symbol } from "./catalogue";
 import { pointInPolygon, toWorld } from "./geometry";
 import { fixtureBox } from "./planMath";
@@ -156,24 +156,49 @@ export function coneGain(angle?: number): number {
 /** Rendering quality, as the store's settings name it. */
 type Quality = "high" | "balanced" | "low";
 
-/** The fixed light pool of a quality: point lights, spot lights, and how many of the spots (the first ones) cast shadows. */
+/** A light pool: point lights, spot lights, and how many of the spots (the first ones) cast shadows. */
 export interface PoolSizes {
   point: number;
   spot: number;
   casters: number;
 }
 
+/** The most lights a quality shades: point and spot together, and how many spots cast shadows. */
+export interface PoolCap {
+  total: number;
+  casters: number;
+}
+
 /**
- * Real lights per rendering quality; the rest of the lit lamps only glow. The pool is a fixed number of lights, mounted
- * while any lamp is lit, because three bakes the light counts into every lit material's shader: a pool that never changes
- * size means switching lights on compiles nothing (see three/frameLoop.tsx Precompile). The nearest `casters` spot
- * lights cast shadows; point lights never do.
+ * Most real lights per rendering quality; the rest of the lit lamps only glow. The pool is a fixed number of lights,
+ * mounted while any lamp is lit, because three bakes the light counts into every lit material's shader: a pool that
+ * never changes size means switching lights on compiles nothing (see three/frameLoop.tsx Precompile). Every slot is
+ * shaded on every pixel whether a lamp fills it or not, so the pool is sized to the house (poolFor) and this is only
+ * its cap: spots and point lights share it (most ceiling fittings are spots, lamps are points). The nearest `casters`
+ * spot lights cast shadows; point lights never do.
  */
-export const POOL: Record<Quality, PoolSizes> = {
-  high: { point: 16, spot: 8, casters: 4 },
-  balanced: { point: 12, spot: 6, casters: 0 },
-  low: { point: 8, spot: 4, casters: 0 },
+export const POOL: Record<Quality, PoolCap> = {
+  high: { total: 16, casters: 4 },
+  balanced: { total: 12, casters: 0 },
+  low: { total: 8, casters: 0 },
 };
+
+/**
+ * The pool a house needs: a slot per lamp bulb it has (spot or point), counted over every floor and every light
+ * fitting whether switched on or not, so the size changes only when a light fitting is added or removed, never at
+ * the switch or when a floor is hidden. Over `cap.total`, each kind gets up to half and the rest goes to whichever
+ * still wants it. Returns `prev` itself when the numbers are the same.
+ */
+export function poolFor(model: Pick<HouseModel, "floors" | "ceilingHeight">, cap: PoolCap, prev: PoolSizes | null = null): PoolSizes {
+  let points = 0;
+  let spots = 0;
+  for (const f of model.floors) for (const l of floorLamps(f, model.ceilingHeight, 0, () => true)) if (l.spot) spots++; else points++;
+  const half = Math.ceil(cap.total / 2);
+  const spot = Math.min(spots, Math.max(half, cap.total - points));
+  const point = Math.min(points, cap.total - spot);
+  const next = { point, spot, casters: Math.min(cap.casters, spot) };
+  return prev && prev.point === next.point && prev.spot === next.spot && prev.casters === next.casters ? prev : next;
+}
 
 /** The `cap` lights nearest to `eye` (world metres), nearest first. Ties keep input order. */
 export function pickLights<T extends { pos: readonly [number, number, number] }>(lights: T[], eye: readonly [number, number, number], cap: number): T[] {
