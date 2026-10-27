@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { byId, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, type CatalogueItem } from "../../lib/catalogue";
 import { addCanopy, canopyAt, moveCanopy, moveCanopyCorner, snapShift } from "../../lib/canopy";
 import { insertCorner, removeCorner } from "../../lib/featureWalls";
 import { expandToGroups, fixturesInRect, moveFixtures, rotateFixtures, selectionBounds, type Rect } from "../../lib/fixtureGroups";
@@ -32,7 +32,7 @@ export interface PlanGeo {
   hitShapes: HitSolid[];
   faceLines: Parameters<typeof snapToWall>[3];
   fitPlacing(c: Pt, item: CatalogueItem, free: boolean): (Placement & { w: number; d?: number; h?: number; joinery?: JoineryConfig }) | null;
-  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number }, rot: number, free: boolean, exclude?: string): Placement | null;
+  snapFixture(c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string): Placement | null;
 }
 
 export interface PlanDragArgs {
@@ -149,7 +149,7 @@ export function usePlanDrag(args: PlanDragArgs) {
         sel.setFixtures((all) => [...all, { ...fx, ...fitted, joinery: tidyJoinery({ ...fx.joinery, ...fitted.joinery }) }]);
         return;
       }
-      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0 }, placing.rot, m.alt);
+      const snapped = geo.snapFixture(raw, { ...placing.item, z0: placing.item.mount ?? 0, ceiling: isCeilingItem(placing.item) }, placing.rot, m.alt);
       sel.setFixtures((all) => [...all, { ...fx, ...snapped }]);
       return; // stay in place mode for the next one
     }
@@ -532,7 +532,7 @@ export function usePlanDrag(args: PlanDragArgs) {
           return;
         }
         const b = fixtureBox(cur, item);
-        const snapped = B.geo.snapFixture(target, b, cur.rot, m.alt, cur.id);
+        const snapped = B.geo.snapFixture(target, { ...b, ceiling: isCeilingItem(item) }, cur.rot, m.alt, cur.id);
         let pos: { x: number; y: number; rot?: number } = snapped ?? target;
         if (m.alt) setGuides([]);
         else {

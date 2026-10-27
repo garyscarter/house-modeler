@@ -32,6 +32,10 @@ export interface Joinery {
   topBox: number;
   front: JoineryFront;
   carcass: string;
+  /** Shaker bead colour; undefined = a shade of the door colour (decided where it is drawn). */
+  trim?: string;
+  /** Shaker panel colour; undefined = the door colour. */
+  panel?: string;
   topColor: string;
   shelfT: number;
   seatFront: SeatFront;
@@ -66,6 +70,8 @@ export function joineryOf(fx: Pick<Fixture, "joinery" | "color" | "worktop">, it
     topBox: builtIn ? numIn(c.topBox, 0, box.h - baseH - 0.3, 0) : 0,
     front: c.front ?? "open",
     carcass: c.carcass ?? color,
+    trim: c.trim,
+    panel: c.panel,
     topColor: fx.worktop ?? color,
     // A single floating shelf (and every old one) is one board as thick as the item is high.
     shelfT: s === "shelf" && shelves === 1 ? box.h : numIn(c.shelfT, 0.01, box.h, s === "shelf" ? 0.04 : 0.025),

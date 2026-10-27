@@ -6,10 +6,10 @@ import { knockThroughNeighbours } from "../lib/mergeRooms";
 import { detailsSummary, floorSettingsSummary, knockSummary, openingLookSummary, printedChip, shapeSummary, stairsSummary } from "../lib/modeSummary";
 import { ask } from "../components/Dialogs";
 import { canopySize } from "../lib/canopy";
-import type { Fixture, Floor, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
+import type { Fixture, Floor, LightWarmth, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
 import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../lib/art";
-import { DEFAULT_WORKTOP, MIN_SEAT, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
+import { DEFAULT_WORKTOP, MIN_SEAT, dropOf, isCeilingItem, pitchOf, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
 import { isUnheated } from "../lib/report";
@@ -19,7 +19,7 @@ import { openingSides } from "../lib/openingSides";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
-import { isLightItem, switchedOn } from "../lib/lights";
+import { WARMTHS, WARMTH_LABEL, dimOf, isLightItem, switchedOn, warmthOf } from "../lib/lights";
 import { floorDisplayName } from "../lib/studio";
 import { requestPlanTool } from "./planTool";
 import {
@@ -835,7 +835,7 @@ export function FixtureInspector({
           )}
         </div>
       )}
-      {item.mount !== undefined && (
+      {item.mount !== undefined && !isCeilingItem(item) && (
         <div className="field">
           <span className="field-label">Height above floor (m)</span>
           <NumberField value={mountOf(fixture, item)} label="Height above floor" min={-0.001} onCommit={(mount) => onChange({ mount: Math.max(0, mount) })} />
@@ -846,6 +846,23 @@ export function FixtureInspector({
           )}
         </div>
       )}
+      {isCeilingItem(item) && (
+        <div className="field">
+          <span className="field-label">Drop below ceiling (m)</span>
+          <NumberField value={dropOf(fixture, item)} label="Drop below ceiling" min={0} onCommit={(drop) => onChange({ drop: Math.max(0, drop) })} />
+          {fixture.drop !== undefined && fixture.drop !== dropOf({}, item) && (
+            <button className="link" onClick={() => onChange({ drop: undefined })}>
+              Reset to {dropOf({}, item).toFixed(2)} m
+            </button>
+          )}
+        </div>
+      )}
+      {item.symbol === "downlight-grid" && (
+        <div className="field">
+          <span className="field-label">Spacing (m)</span>
+          <NumberField value={pitchOf(fixture, item)} label="Spacing" min={0.3} onCommit={(pitch) => onChange({ pitch: Math.max(0.3, pitch) })} />
+        </div>
+      )}
       {isLightItem(item) && (
         <div className="row check-row">
           <label className="check">
@@ -854,8 +871,26 @@ export function FixtureInspector({
           <Info>Lit when the sun study's Lights master allows: Auto lights it from dusk, On always.</Info>
         </div>
       )}
+      {isLightItem(item) && (
+        <>
+          <label>
+            Warmth
+            <select value={warmthOf(fixture)} disabled={locked} onChange={(e) => { const v = parseInt(e.target.value); onChange({ warmth: v === 2700 ? undefined : (v as LightWarmth) }); }}>
+              {WARMTHS.map((k) => (
+                <option key={k} value={k}>
+                  {WARMTH_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dimmer {Math.round(dimOf(fixture) * 100)}%
+            <input type="range" min={10} max={100} step={5} disabled={locked} value={Math.round(dimOf(fixture) * 100)} onChange={(e) => { const v = parseInt(e.target.value); onChange({ dim: v === 100 ? undefined : v }); }} />
+          </label>
+        </>
+      )}
       <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
-      {isJoinery(item) && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
+      {(isJoinery(item) || item.symbol === "shaker-wardrobe") && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
         <SwatchField
           label="Worktop colour"
@@ -920,7 +955,7 @@ function JoineryFields({
   const set = (p: Parameters<typeof patchJoinery>[1]) => onChange(patchJoinery(fixture, p));
   const sym = item.symbol;
   const colourField = (label: string, value: string, isSet: boolean, change: (c: string) => void, reset: () => void) => (
-    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} />
+    <SwatchField label={label} value={value} isSet={isSet} onChange={change} onReset={reset} dulux />
   );
   const frontSelect = (label: string, value: JoineryFront, change: (v: JoineryFront) => void, openLabel?: string) => (
     <label>
@@ -944,6 +979,12 @@ function JoineryFields({
         </button>
       )}
     </div>
+  );
+  const shakerColours = (
+    <>
+      {colourField("Trim colour", j.trim ?? fixture.color ?? item.color, j.trim !== undefined, (c) => set({ trim: c }), () => set({ trim: undefined }))}
+      {colourField("Panel colour", j.panel ?? fixture.color ?? item.color, j.panel !== undefined, (c) => set({ panel: c }), () => set({ panel: undefined }))}
+    </>
   );
   const toCeiling = fixture.h === undefined || (ceiling !== undefined && fixture.h >= ceiling);
   const refitLabel =
@@ -998,9 +1039,11 @@ function JoineryFields({
             </label>
           )}
           {colourField("Carcass colour", j.carcass, fixture.joinery?.carcass !== undefined, (c) => set({ carcass: c }), () => set({ carcass: undefined }))}
+          {(j.baseFront === "shaker" || j.upperFront === "shaker") && shakerColours}
           {j.top && colourField("Top colour", j.topColor, fixture.worktop !== undefined, (c) => onChange({ worktop: c }), () => onChange({ worktop: undefined }))}
         </>
       )}
+      {sym === "shaker-wardrobe" && shakerColours}
       {sym === "window-seat" && (
         <>
           <label>

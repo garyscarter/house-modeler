@@ -35,12 +35,12 @@ const ground = floor([rect("Kitchen", 0, 0, 400, 300), rect("Hall", 400, 0, 600,
     fx("s2", "socket-double", 300, 296),
     fx("s1", "socket-double", 100, 296),
     fx("sw", "switch-1g", 390, 150, { controls: ["k1", "k2", "gone"] }),
-    fx("k1", "light-pendant", 100, 150),
-    fx("k2", "light-downlight-grid", 300, 150),
+    fx("k1", "pendant", 100, 150),
+    fx("k2", "downlight-grid", 300, 150),
     fx("sofa", "sofa-3", 200, 100),
     fx("lamp", "floor-lamp", 50, 50),
-    fx("out", "light-outside", 200, 310),
-    fx("hl", "light-flush", 500, 150),
+    fx("out", "outside-light", 200, 310),
+    fx("hl", "flush-light", 500, 150),
   ],
 });
 const first = floor([rect("Landing", 0, 0, 300, 300)], [], { id: "f1", level: 1, name: "First", fixtures: [fx("sw2", "switch-2way", 10, 10, { controls: ["hl"] })] });
@@ -48,8 +48,8 @@ const model: HouseModel = { floors: [first, ground], ceilingHeight: 2.4, slabThi
 
 describe("pointKind", () => {
   it("classes lights, switches, sockets and the rest; furniture and plug-in lamps are not points", () => {
-    expect(pointKind(byId("light-pendant")!)).toBe("light");
-    expect(pointKind(byId("light-outside")!)).toBe("light");
+    expect(pointKind(byId("pendant")!)).toBe("light");
+    expect(pointKind(byId("outside-light")!)).toBe("light");
     expect(pointKind(byId("switch-pull-cord")!)).toBe("switch");
     expect(pointKind(byId("socket-floor")!)).toBe("socket");
     expect(pointKind(byId("cooker-switch")!)).toBe("connection");
@@ -65,8 +65,9 @@ describe("heights", () => {
     const item = byId("socket-double")!;
     expect(centreHeight(fx("a", "socket-double", 0, 0), item, 2.4)).toBeCloseTo(0.45, 3);
     expect(mountForCentre(1.1, fx("a", "socket-double", 0, 0), item)).toBeCloseTo(1.1 - 0.043, 3);
-    expect(pointQuantity({}, byId("light-downlight-grid")!)).toBe(6);
-    expect(pointQuantity({}, byId("light-pendant")!)).toBe(1);
+    expect(pointQuantity({}, byId("downlight-grid")!)).toBe(4);
+    expect(pointQuantity({ w: 3.6, d: 2.4, pitch: 1.2 }, byId("downlight-grid")!)).toBe(6);
+    expect(pointQuantity({}, byId("pendant")!)).toBe(1);
   });
 });
 
@@ -79,7 +80,7 @@ describe("glyphOffset", () => {
     const r = glyphOffset({ rot: 90 }, sock, 0.25);
     expect(r.x).toBeCloseTo(-(0.125 - 0.0175));
     expect(r.y).toBeCloseTo(0);
-    expect(glyphOffset({ rot: 0 }, byId("light-pendant")!, 0.25)).toEqual({ x: 0, y: 0 });
+    expect(glyphOffset({ rot: 0 }, byId("pendant")!, 0.25)).toEqual({ x: 0, y: 0 });
     expect(isWallPoint(byId("socket-floor")!)).toBe(false);
   });
 });

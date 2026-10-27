@@ -45,6 +45,8 @@ export interface ShellInput {
   doorsOpen: boolean;
   /** The flight up from this floor, if any: walls it passes over stop under its treads. */
   flight?: FlightShape | null;
+  /** Rooms with a lit light in them: their window panes glow at night. */
+  litRooms?: ReadonlySet<string>;
 }
 
 export interface ShellMesh {
@@ -183,9 +185,9 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
    * below, the wall's paint above. Fitted ones are stretched to the band, and
    * start at the wall's end so panels begin at a corner.
    */
-  const addFace = (q: FaceQuad, wall: WallSeg | null, op: Opening | null, sills: number[], u0: number) => {
+  const addFace = (q: FaceQuad, wall: WallSeg | null, op: Opening | null, sills: number[], u0: number, lit = false) => {
     const room = q.slot.kind === "inside" && wall && !wall.color ? roomsById.get(q.slot.roomId) : undefined;
-    if (q.slot.kind !== "inside" || !room) return batch.add(q, slotSpec(q.slot, wall, op));
+    if (q.slot.kind !== "inside" || !room) return batch.add(q, slotSpec(q.slot, wall, op, lit));
     const fin = interiorFinish(room, undefined, q.slot.edge);
     const layout = fin.covering === "paint" ? undefined : coverLayout(fin.covering);
     if (!layout) return batch.add(q, finishSpec(fin));
@@ -199,7 +201,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
     }
     if (hi) batch.add(hi, finishSpec(upper ?? lower));
   };
-  const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null): MatSpec => {
+  const slotSpec = (slot: FaceSlot, wall: WallSeg | null, op: Opening | null, lit = false): MatSpec => {
     switch (slot.kind) {
       case "inside":
         return finishSpec(interiorFinish(roomsById.get(slot.roomId), wall?.color, slot.edge));
@@ -207,8 +209,10 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
         return outsideSpec(slot.roomId, wall?.color, slot.edge);
       case "top":
         return { kind: "plain", color: "#cfcac0", roughness: 0.9 };
-      case "part":
-        return partSpec(slot.mat, op, trimColor, slot.side);
+      case "part": {
+        const spec = partSpec(slot.mat, op, trimColor, slot.side);
+        return lit && spec.kind === "glass" ? { kind: "glass", lit: true } : spec;
+      }
     }
   };
 
@@ -270,6 +274,9 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       out ? wallColour(out === 1 ? 1 : 0) : wallColour(1),
     );
     const frame = { centre: pl.centre, dir: pl.dir };
+    // The pane glows at night when a room it looks into has a lit light: the inside room of an outside window, either
+    // side of an internal one.
+    const lit = !!inp.litRooms?.size && (out ? [spanAt(spans[out === 1 ? 1 : 0], along)] : [spanAt(spans[0], along), spanAt(spans[1], along)]).some((id) => !!id && inp.litRooms!.has(id));
     let parts;
     if (op.kind === "bay" && out) {
       // The room is on the side away from outside.
@@ -280,8 +287,8 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
       // A bay on an internal wall makes no sense; draw it as a window.
       parts = openingParts({ ...pl, y0: Math.min(windowSill(op), pl.y1 - 0.1), opening: { ...op, kind: "window" } }, wallT, out);
     } else parts = openingParts(pl, wallT, out, inp.doorsOpen);
-    for (const q of boxQuads(parts.boxes, frame)) addFace(q, null, op, [], 0);
-    for (const q of quadsToWorld(parts.quads, frame)) addFace(q, null, op, [], 0);
+    for (const q of boxQuads(parts.boxes, frame)) addFace(q, null, op, [], 0, lit);
+    for (const q of quadsToWorld(parts.quads, frame)) addFace(q, null, op, [], 0, lit);
   }
 
   return { meshes: batch.build(), bayFloors };
