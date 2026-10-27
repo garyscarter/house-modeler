@@ -15,6 +15,7 @@ import { Fixtures, LampLights, setLampGlow } from "./Fixtures";
 import { useSunInfo } from "./useSun";
 import { nightDark } from "./Lighting";
 import { byId } from "../lib/catalogue";
+import { controlIndex } from "../lib/electrics";
 import { floorLamps, isLightItem, lampGlow, lightsMaster, lightsOn as masterAllows, litRooms, switchedOn } from "../lib/lights";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
@@ -106,10 +107,13 @@ export function House({
   // Tenths, so a playing sun re-renders the floors only when the ceilings visibly change.
   const ceilingGlow = Math.round((1 - nightDark(altitude)) * 10) / 10;
   const floorKey = floors.map((f) => f.id).join();
+  // Lights held dark by a wall switch that is off (switches may sit on another floor), by id; the set keeps its identity until that changes.
+  const blockedKey = useMemo(() => [...controlIndex(model)].filter(([, sws]) => sws.some((sw) => !switchedOn(sw))).map(([id]) => id).sort().join(), [model]);
+  const blocked = useMemo<ReadonlySet<string>>(() => new Set(blockedKey ? blockedKey.split(",") : []), [blockedKey]);
   const lamps = useMemo(
-    () => (lampsOn ? floors.flatMap((f) => floorLamps(f, model.ceilingHeight, floorBaseY(model, f), (fx) => switchedOn(fx))) : []),
+    () => (lampsOn ? floors.flatMap((f) => floorLamps(f, model.ceilingHeight, floorBaseY(model, f), (fx) => switchedOn(fx) && !blocked.has(fx.id))) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lampsOn, floorKey, model],
+    [lampsOn, floorKey, model, blocked],
   );
   const invalidate = useThree((s) => s.invalidate);
   const glow = lampGlow(true, altitude);
@@ -142,6 +146,7 @@ export function House({
           wells={wells}
           aboveShown={shown(floor.level + 1)}
           lampsOn={lampsOn}
+          blocked={blocked}
           ceilingGlow={ceilingGlow}
         />
       ))}
@@ -178,6 +183,7 @@ function FloorGroupInner({
   wells,
   aboveShown,
   lampsOn,
+  blocked,
   ceilingGlow,
 }: {
   model: HouseModel;
@@ -201,6 +207,8 @@ function FloorGroupInner({
   aboveShown: boolean;
   /** The lights master lets switched-on lamps be lit now. */
   lampsOn: boolean;
+  /** Lights a wall switch that is off keeps dark. */
+  blocked: ReadonlySet<string>;
   /** Share of the ceilings' daytime glow left (0 at night, so an unlit room is dark). */
   ceilingGlow: number;
 }) {
@@ -234,9 +242,9 @@ function FloorGroupInner({
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
   // Rooms with a lit lamp: their windows glow at night.
   const lit = useMemo(
-    () => (lampsOn ? litRooms(floor, (fx) => switchedOn(fx) && isLamp(fx.type)) : NO_ROOMS),
+    () => (lampsOn ? litRooms(floor, (fx) => switchedOn(fx) && !blocked.has(fx.id) && isLamp(fx.type)) : NO_ROOMS),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lampsOn, floor.fixtures, floor.rooms],
+    [lampsOn, floor.fixtures, floor.rooms, blocked],
   );
 
   // Ghost mode with a comparison draws only the removed walls.
@@ -285,7 +293,7 @@ function FloorGroupInner({
       {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
 
       <group onClick={onPickWall ? block : undefined}>
-        <Fixtures floor={floor} ceiling={H} lightsOn={lampsOn} />
+        <Fixtures floor={floor} ceiling={H} lightsOn={lampsOn} blocked={blocked} />
       </group>
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}

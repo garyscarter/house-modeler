@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
+import { lampStats } from "./Fixtures";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { STICKY_MS, wheelClassifier, wheelPixels, wheelZoomFactor } from "../lib/wheelGesture";
@@ -504,7 +505,7 @@ function Orbit({
 
   // Dev builds expose the camera and controls (like window.__houseStore) for the Playwright checks.
   useEffect(() => {
-    if (import.meta.env.DEV) Object.assign(window, { __houseCamera: { camera, controls: controls.current }, __houseRenderer: gl });
+    if (import.meta.env.DEV) Object.assign(window, { __houseLights: () => ({ ...lampStats }), __houseCamera: { camera, controls: controls.current }, __houseRenderer: gl });
   }, [camera, gl]);
 
   const tmp = useMemo(() => ({ off: new THREE.Spherical(), v: new THREE.Vector3(), t: new THREE.Vector3() }), []);
