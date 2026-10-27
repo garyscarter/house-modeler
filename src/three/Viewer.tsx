@@ -26,6 +26,7 @@ import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 import { Loader } from "../components/Loader";
+import { Measure, MeasureButton } from "./Measure";
 import "./Viewer.css";
 
 interface ViewerProps {
@@ -157,6 +158,7 @@ function ViewerImpl(props: ViewerProps) {
     <div className="viewer">
       {chrome && title && <div className="viewer-title">{title}</div>}
       {chrome && <ViewCube />}
+      {chrome && <MeasureButton />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
       {(compiled === null || lost) && (
@@ -218,6 +220,7 @@ function ViewerImpl(props: ViewerProps) {
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
         <TrackScene />
+        <Measure />
         <FrameOnCommit />
       </Canvas>
       <ContextMenu menu={menu} onClose={() => setMenu(null)} />

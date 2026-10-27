@@ -157,6 +157,7 @@ export function buildCommands(c: CommandContext): Command[] {
   if (c.tab === "3d") {
     const sides: [ViewSide, string][] = [["front", "Look at the front"], ["rear", "Look at the rear"], ["left", "Look at the left"], ["right", "Look at the right"], ["top", "Look at the top"], ["home", "Home view"]];
     for (const [side, title] of sides) add(`camera:${side}`, title, "Camera", () => c.dispatch("house:view", { side }), { keywords: ["camera"] });
+    add("measure:3d", "Measure in 3D", "View", () => c.setUi({ measureTool: true }), { hint: "M", keywords: ["measure", "tape", "ruler", "distance", "height", "length"] });
     add("camera:save", "Save this camera view", "Camera", c.saveView, { keywords: ["bookmark", "view"] });
   }
   for (const v of c.savedViews) add(`savedview:${v.id}`, `Go to view: ${v.name}`, "Camera", () => c.goToView(v.id), { keywords: ["camera", "bookmark", "saved"] });

@@ -53,6 +53,11 @@ export function useStudioKeys() {
         if (st().peek) e.preventDefault();
         return;
       }
+      if (s.tab === "3d" && !e.shiftKey && (e.key === "m" || e.key === "M")) {
+        e.preventDefault();
+        s.setUi({ measureTool: !s.measureTool });
+        return;
+      }
       if (s.peek) return; // the floor shown is the one you left; digits wait for release
       if (e.shiftKey || !/^[0-9]$/.test(e.key)) return;
       if (s.tab === "plan" && editsSite(s.mode)) return;

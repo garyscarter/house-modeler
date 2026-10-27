@@ -1,0 +1,30 @@
+/* The 3D tape measure: its chrome button (above the view cube), end dots and length label. */
+.viewer canvas.measuring { cursor: crosshair; }
+
+.measure-btn {
+  position: absolute; right: var(--float-gap, 12px); bottom: calc(76px + 108px + 8px); z-index: 12;
+  width: 36px; height: 36px; padding: 0; display: grid; place-items: center; cursor: pointer;
+  color: var(--text);
+}
+.measure-btn:hover { color: var(--accent); }
+.measure-btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.measure-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.measure-end {
+  display: block; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--panel); box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.measure-label {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 3px 8px; border-radius: 6px; white-space: nowrap; user-select: none; pointer-events: none;
+  background: var(--panel); color: var(--text); border: 1.5px solid var(--accent);
+  font-family: var(--font-ui); font-size: 12px; line-height: 1.25; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+  transform: translateY(-18px);
+}
+.measure-label strong { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.measure-label span { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.measure-label.preview { border-style: dashed; }
+
+/* Phone: the view cube is an 84 px card at the top right, so the button sits just under it. */
+.app[data-chassis="phone"] .measure-btn { top: calc(var(--float-gap, 12px) + 84px + 8px); bottom: auto; width: 40px; height: 40px; }
+.app[data-touch] .measure-btn { touch-action: manipulation; }
