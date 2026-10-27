@@ -6,6 +6,7 @@ import { duplicateFixtures, expandToGroups, groupFixtures, positionsCentre } fro
 import { pasteAt } from "../../lib/nudge";
 import { useStore } from "../../store";
 import { raiseSheet } from "../core";
+import { pruneDeleted } from "./linking";
 import { uid, type Fixture, type Floor, type Opening, type Pt, type VariantKey, type Wall } from "../../types";
 
 export type Selection = { room?: string; opening?: string; wall?: string; fixtures?: string[]; canopy?: number };
@@ -86,6 +87,15 @@ export function usePlanSelection(variant: VariantKey, floor: Floor, viewCentre: 
   /** What a command aimed at one fixture acts on: the selection when it is in it, else its whole group. */
   const targetIds = (id: string) => (liveIds.includes(id) ? liveIds : expandToGroups([id], allFixtures));
 
+  /** After fixtures are deleted: drop switch links and circuit entries that name them (a no-op without any; joins the delete's undo step). */
+  const pruneDangling = () => {
+    const st = useStore.getState();
+    const m = st.variants[variant];
+    if (!m) return;
+    const next = pruneDeleted(m);
+    if (next !== m) st.updateModel(variant, { floors: next.floors, circuits: next.circuits });
+  };
+
   const removeSelected = () => {
     if (selectedCanopy !== null) {
       if (canopies[selectedCanopy]) setCanopies((all) => removeCanopy(all, selectedCanopy));
@@ -93,6 +103,7 @@ export function usePlanSelection(variant: VariantKey, floor: Floor, viewCentre: 
     } else if (liveIds.length) {
       setFixtures((all) => all.filter((x) => !liveIds.includes(x.id)));
       setSelectedFixtureIds([]);
+      pruneDangling();
     } else if (selectedOpeningId) {
       if (floor.openings.some((o) => o.id === selectedOpeningId)) dropOpening(selectedOpeningId);
       setSelectedOpeningId(null);
@@ -149,7 +160,7 @@ export function usePlanSelection(variant: VariantKey, floor: Floor, viewCentre: 
     // derived
     allFixtures, canopies, liveIds, selectedFixtureId, targetIds, anyLocked,
     // commands
-    select, removeSelected, lockFixtures, duplicateFixtureIds, copyFixtureIds, pasteFixtures, groupSelected,
+    select, removeSelected, pruneDangling, lockFixtures, duplicateFixtureIds, copyFixtureIds, pasteFixtures, groupSelected,
     // floor edits
     setFixtures, patchFixture, patchOpening, dropOpening, patchWall, dropWall, setCanopies,
   };

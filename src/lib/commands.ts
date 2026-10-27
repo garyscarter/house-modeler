@@ -164,7 +164,8 @@ export function buildCommands(c: CommandContext): Command[] {
   add("review:report", "Open report", "Review", () => c.dispatch("house:open-review", { section: "report" }), { keywords: ["areas", "costs"] });
   add("review:planning", "Open planning check", "Review", () => c.dispatch("house:open-review", { section: "planning" }), { keywords: ["permitted development"] });
 
-  for (const m of MODES) add(`mode:${m}`, `Mode: ${MODE_LABEL[m]}`, "Mode", () => c.setMode(m), { keywords: ["mode"] });
+  const modeWords: Partial<Record<Mode, string[]>> = { electrics: ["wiring", "sockets", "switches", "lights", "circuits", "electrician"] };
+  for (const m of MODES) add(`mode:${m}`, `Mode: ${MODE_LABEL[m]}`, "Mode", () => c.setMode(m), { keywords: ["mode", ...(modeWords[m] ?? [])] });
   const other: Look = c.look === "glass" ? "studio" : "glass";
   add(`look:${other}`, `Look: ${other === "glass" ? "Glass" : "Studio"}`, "Settings", () => c.setLook(other), { keywords: ["look", "theme", "appearance"] });
 

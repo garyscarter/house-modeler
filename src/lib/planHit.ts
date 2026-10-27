@@ -1,5 +1,8 @@
 import type { Floor, Pt } from "../types";
 import type { Mode } from "./modes";
+import { editsFixtures } from "./modes";
+import { isElectricalItem, type CatalogueItem } from "./catalogue";
+import { isWallPoint } from "./electrics";
 import { pointInPolygon } from "./geometry";
 import { closestOnSegment } from "./planMath";
 
@@ -45,12 +48,31 @@ export function nearestEdge(poly: Pt[], p: Pt, tol: number): number | null {
 }
 
 /**
- * The thing under p, in priority order: furniture (Furnish), an opening within `tol.hit` of its centre line (Build),
+ * Whether the plan in this mode lets the pointer pick the item. Furnish picks furniture and lights but not Electrics-category
+ * points (drawn greyed); Electrics picks only electrical points (Lighting and Electrics); other modes pick nothing.
+ */
+export function fixtureSelectable(mode: Mode, item: Pick<CatalogueItem, "category">): boolean {
+  if (mode === "furnish") return item.category !== "Electrics";
+  if (mode === "electrics") return isElectricalItem(item);
+  return false;
+}
+
+/**
+ * How an item snaps when placed or dragged: furniture to a wall and its neighbours; a wall point (socket, switch, wall light)
+ * to a wall face only; a ceiling point or floor socket not at all.
+ */
+export function snapKind(item: Pick<CatalogueItem, "category" | "ceiling" | "symbol">): "furniture" | "wall" | "none" {
+  if (!isElectricalItem(item)) return "furniture";
+  return isWallPoint(item) ? "wall" : "none";
+}
+
+/**
+ * The thing under p, in priority order: a fixture (Furnish, Electrics; `solids` holds only what the mode can pick), an opening within `tol.hit` of its centre line (Build),
  * a free-standing wall within `tol.hit` (Build and Decorate), the topmost room containing p with its nearest edge within
  * `tol.edge` (Build and Decorate), else empty. Tolerances are in image px.
  */
 export function planTargetAt(floor: Floor, p: Pt, mode: Mode, tol: { hit: number; edge: number }, solids: HitSolid[] = []): PlanTarget {
-  if (mode === "furnish") {
+  if (editsFixtures(mode)) {
     for (let i = solids.length - 1; i >= 0; i--) if (pointInPolygon(p, solids[i].corners)) return { kind: "fixture", id: solids[i].id };
     return { kind: "empty" };
   }

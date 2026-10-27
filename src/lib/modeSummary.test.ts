@@ -7,6 +7,7 @@ import {
   exteriorSummary,
   floorSettingsSummary,
   floorSummary,
+  electricsSummary,
   furnishSummary,
   knockSummary,
   openingLookSummary,
@@ -61,6 +62,19 @@ describe("floor summaries", () => {
     expect(furnishSummary(f, 0)).toBe("4 pieces on this floor");
     expect(furnishSummary(f, 1)).toContain("1 overlap");
     expect(furnishSummary(floor([]), 0)).toBe("No furniture yet");
+  });
+
+  it("electricsSummary counts points (a grid counts every bulb) and circuits", () => {
+    const pts = floor([rect("Kitchen", 0, 0, 400, 300)], [], {
+      fixtures: [
+        { id: "a", type: "socket-double", x: 100, y: 296, rot: 0 },
+        { id: "b", type: "light-pendant", x: 100, y: 150, rot: 0 },
+        { id: "c", type: "sofa-3", x: 200, y: 100, rot: 0 },
+      ],
+    });
+    expect(electricsSummary({ floors: [floor([])] })).toBe("No electrical points yet");
+    expect(electricsSummary({ floors: [pts] })).toBe("2 points");
+    expect(electricsSummary({ floors: [pts], circuits: [{ id: "c1", name: "Ring", kind: "ring", points: ["a"] }] })).toBe("2 points · 1 circuit");
   });
 
   it("floorSettingsSummary and stairsSummary", () => {
