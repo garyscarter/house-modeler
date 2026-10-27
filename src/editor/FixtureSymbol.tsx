@@ -1,6 +1,9 @@
 import { createElement, memo, type ReactNode } from "react";
 import { burners, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
+import { hasElectricSymbol, ELECTRIC_GLYPH_M } from "../lib/electricSymbols";
+import { isWallPoint } from "../lib/electrics";
+import { ElectricGlyph } from "./ElectricGlyph";
 import type { Fixture } from "../types";
 
 /**
@@ -69,6 +72,21 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   const j = isJoinery(item) ? joineryOf(fixture ?? {}, item, { w: w / m, d: d / m, h: fixture?.h ?? item.h }) : undefined;
   /** Door joints along the front strip, one per bay boundary. */
   const joints = (xs: number[], inset: number) => xs.slice(1, -1).map((x) => <line key={`j${x}`} x1={x} y1={y1 - inset} x2={x} y2={y1} {...thin} />);
+
+  if (item.category === "Electrics" && hasElectricSymbol(item.symbol)) {
+    const ink = outline;
+    const paper = ghost ? "#f0fdf4" : clash ? "#fee2e2" : "var(--plan-chip-bg, #fff)";
+    const gsw = sw * 0.8;
+    const base = ELECTRIC_GLYPH_M * m;
+    const size = Math.max(Math.min(w, d), base);
+    const oy = isWallPoint(item) ? (size - d) / 2 : 0;
+    return g(
+      <rect key="hit" x={-size / 2} y={oy - size / 2} width={size} height={size} fill="transparent" stroke="none" />,
+      <g key="g" transform={`translate(0 ${oy})`}>
+        <ElectricGlyph symbol={item.symbol} size={size} stroke={gsw} ink={ink} paper={paper} />
+      </g>,
+    );
+  }
 
   switch (item.symbol) {
     case "bed": {

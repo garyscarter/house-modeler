@@ -21,12 +21,6 @@ export const ELECTRIC_GLYPH_M = 0.25;
 /** Size of a symbol in the printed guide and its legend, paper mm. */
 export const GLYPH_MM = 3.5;
 
-/** Placeholder until each symbol is drawn (Sia): a circle with the symbol's first letter. */
-const fallback = (symbol: Symbol): SymPrim[] => [
-  { k: "circle", cx: 0, cy: 0, r: 0.4 },
-  { k: "text", x: 0, y: 0.15, size: 0.45, text: symbol.charAt(0).toUpperCase() },
-];
-
 /** Symbols this module draws: every Lighting and Electrics symbol (plug-in lamps keep their furniture symbols). */
 export const ELECTRIC_SYMBOLS: readonly Symbol[] = [
   "pendant", "pendant-multi", "ceiling-flush", "downlight", "downlight-grid", "spot-bar", "wall-light", "strip-light",
@@ -38,10 +32,97 @@ export const ELECTRIC_SYMBOLS: readonly Symbol[] = [
 ];
 export const hasElectricSymbol = (symbol: Symbol): boolean => ELECTRIC_SYMBOLS.includes(symbol);
 
+const circle = (cx: number, cy: number, r: number, fill?: boolean): SymPrim => ({ k: "circle", cx, cy, r, ...(fill ? { fill } : {}) });
+const line = (x1: number, y1: number, x2: number, y2: number): SymPrim => ({ k: "line", x1, y1, x2, y2 });
+const rect = (x: number, y: number, w: number, h: number): SymPrim => ({ k: "rect", x, y, w, h });
+const text = (x: number, y: number, size: number, t: string): SymPrim => ({ k: "text", x, y, size, text: t });
+const D = Math.SQRT1_2;
+/** A circle with a diagonal cross: the lighting outlet. */
+const crossed = (cx: number, cy: number, r: number): SymPrim[] => [
+  circle(cx, cy, r),
+  line(cx - r * D, cy - r * D, cx + r * D, cy + r * D),
+  line(cx - r * D, cy + r * D, cx + r * D, cy - r * D),
+];
+/** A semicircle with its flat side on the wall, optionally filled. */
+const half = (r: number, cy: number, fill?: boolean): SymPrim => ({
+  k: "path", d: `M ${-r} ${cy} A ${r} ${r} 0 0 0 ${r} ${cy} Z`, ...(fill ? { fill } : {}),
+});
+/** A switch: dot on the wall, stroke rising at 45 degrees, tick across its end. */
+const stroke45 = (sx: number, dir: 1 | -1, len = 0.3, tick = true): SymPrim[] => {
+  const ex = sx + dir * len, ey = -0.4 + len;
+  return [
+    line(sx, -0.4, ex, ey),
+    ...(tick ? [line(ex - dir * 0.1 * D, ey - 0.1 * D, ex + dir * 0.1 * D, ey + 0.1 * D)] : []),
+  ];
+};
+const switchBase: SymPrim[] = [circle(0, -0.4, 0.1, true)];
+const plate = (): SymPrim => rect(-0.4, -0.5, 0.8, 0.8);
+const socketStrokes = (xs: number[], to = 0.25): SymPrim[] =>
+  xs.map((x) => line(x, -0.5 + Math.sqrt(0.16 - x * x), x, to));
+
+const DRAW: Record<string, () => SymPrim[]> = {
+  pendant: () => [...crossed(0, 0, 0.4), circle(0, 0, 0.06, true)],
+  "pendant-multi": () => [line(-0.5, 0, 0.5, 0), ...[-0.33, 0, 0.33].flatMap((x) => crossed(x, 0, 0.15))],
+  "ceiling-flush": () => [circle(0, 0, 0.47), ...crossed(0, 0, 0.3)],
+  downlight: () => [circle(0, 0, 0.42), circle(0, 0, 0.2, true)],
+  "downlight-grid": () => [
+    circle(0, 0, 0.42),
+    ...[-0.17, 0.17].flatMap((x) => [-0.17, 0.17].map((y) => circle(x, y, 0.1, true))),
+  ],
+  "spot-bar": () => [
+    rect(-0.5, -0.2, 1, 0.12),
+    ...[-0.3, 0, 0.3].flatMap((x) => [circle(x, 0.2, 0.14), circle(x, 0.2, 0.035, true)]),
+  ],
+  "wall-light": () => [line(0, -0.5, 0, -0.25), ...crossed(0, 0.05, 0.3)],
+  "strip-light": () => [rect(-0.5, -0.09, 1, 0.18), line(-0.5, -0.22, -0.5, 0.22), line(0.5, -0.22, 0.5, 0.22)],
+  "switch-1g": () => [...switchBase, ...stroke45(0, 1)],
+  "switch-2g": () => [...switchBase, ...stroke45(0, 1), line(0.225 - 0.1 * D, -0.175 - 0.1 * D, 0.225 + 0.1 * D, -0.175 + 0.1 * D)],
+  "switch-2way": () => [...switchBase, ...stroke45(0, 1), ...stroke45(0, -1)],
+  "switch-dimmer": () => [
+    ...switchBase, ...stroke45(0, 1),
+    line(0.044, -0.144, 0.256, -0.356), line(0.256, -0.356, 0.156, -0.356), line(0.256, -0.356, 0.256, -0.256),
+  ],
+  "switch-pull": () => [...switchBase, ...stroke45(0, 1, 0.3, false), circle(0.357, -0.043, 0.08)],
+  "socket-1": () => [half(0.4, -0.5), ...socketStrokes([0])],
+  "socket-2": () => [half(0.4, -0.5), ...socketStrokes([-0.18, 0.18])],
+  "socket-usb": () => [half(0.4, -0.5), ...socketStrokes([-0.18, 0.18], 0.1), text(0, 0.43, 0.3, "USB")],
+  "socket-floor": () => [rect(-0.5, -0.5, 1, 1), half(0.3, -0.25), line(0, 0.05, 0, 0.35)],
+  "socket-outdoor": () => [half(0.4, -0.5, true), ...socketStrokes([0], 0.12), text(0, 0.43, 0.32, "IP")],
+  "shaver-socket": () => [half(0.4, -0.5), circle(-0.12, 0.2, 0.17), circle(0.12, 0.2, 0.17)],
+  "fused-spur": () => [plate(), line(-0.4, -0.1, 0.4, -0.1), rect(-0.16, -0.2, 0.32, 0.2)],
+  "cooker-switch": () => [
+    rect(-0.45, -0.5, 0.9, 0.9), circle(-0.25, -0.3, 0.07, true), line(-0.25, -0.3, 0.05, 0), text(0.22, 0.3, 0.3, "C"),
+  ],
+  "cooker-outlet": () => [plate(), text(0, 0, 0.28, "CCU")],
+  "shower-point": () => [rect(-0.5, -0.5, 1, 0.8), text(0, 0.04, 0.4, "ES")],
+  "extractor-fan": () => [
+    circle(0, -0.02, 0.48),
+    { k: "path", d: "M 0 -0.02 C 0.3 -0.12 0.35 -0.32 0.1 -0.4" },
+    { k: "path", d: "M 0 -0.02 C -0.3 0.08 -0.35 0.28 -0.1 0.36" },
+  ],
+  thermostat: () => [plate(), text(0, 0.1, 0.55, "\u03b8")],
+  "bell-push": () => [circle(0, -0.2, 0.3), circle(0, -0.2, 0.08, true)],
+  "bell-chime": () => [
+    line(0, -0.5, 0, -0.22),
+    { k: "path", d: "M -0.35 0.15 C -0.35 -0.35 0.35 -0.35 0.35 0.15 Z" },
+    line(-0.45, 0.15, 0.45, 0.15), circle(0, 0.29, 0.06, true),
+  ],
+  "smoke-alarm": () => [circle(0, 0, 0.46), text(0, 0.17, 0.5, "S")],
+  "heat-alarm": () => [circle(0, 0, 0.46), text(0, 0.17, 0.5, "H")],
+  "co-alarm": () => [circle(0, -0.02, 0.48), text(0, 0.12, 0.38, "CO")],
+  "tv-point": () => [plate(), text(0, 0.04, 0.4, "TV")],
+  "data-point": () => [plate(), text(0, 0.08, 0.5, "D")],
+  "ev-charger": () => [rect(-0.5, -0.5, 1, 0.8), text(0, 0.04, 0.45, "EV")],
+  "consumer-unit": () => [
+    rect(-0.5, -0.5, 1, 0.8),
+    { k: "path", d: "M -0.5 0.3 L 0.5 0.3 L 0.5 -0.5 Z", fill: true },
+    line(-0.5, 0.3, 0.5, -0.5),
+  ],
+};
+
 /** The primitives of a symbol in the unit frame; [] for a symbol this module does not draw. */
 export function electricSymbol(symbol: Symbol): SymPrim[] {
-  if (!hasElectricSymbol(symbol)) return [];
-  return fallback(symbol);
+  return DRAW[symbol]?.() ?? [];
 }
 
 const n = (v: number) => (Math.round(v * 1000) / 1000).toString();
