@@ -9,6 +9,7 @@ import { canopySize } from "../lib/canopy";
 import type { Fixture, Floor, LightWarmth, Opening, OpeningKind, Pt, Room, VariantKey, Wall } from "../types";
 import { DEFAULT_EXTERIOR, GLAZING_LABEL, OPENING_KIND_LABEL, SIDELIGHT_LABEL, SILL_STYLE_LABEL, STAIRS_DIR_LABEL, type GlazingPattern, type OpeningStyle, type Sidelight, type SillStyle, type StairsDir } from "../types";
 import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../lib/art";
+import { RUG_PATTERNS, rugPattern } from "../lib/rugs";
 import { DEFAULT_WORKTOP, MIN_SEAT, dropOf, isCeilingItem, pitchOf, TV_SIZES, byId, chaiseSizes, cornerSofaSizes, hasSeatDepth, hasWorktop, isCornerUnit, isTv, mountOf, tvInches, tvSize, type CatalogueItem } from "../lib/catalogue";
 import { useModel, useStore } from "../store";
 import { bbox, estimatePxPerM } from "../lib/geometry";
@@ -889,7 +890,22 @@ export function FixtureInspector({
           </label>
         </>
       )}
-      <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+      {item.symbol === "rug" && (
+        <label>
+          Pattern
+          <select value={rugPattern(fixture) ?? ""} disabled={locked} onChange={(e) => onChange({ rug: e.target.value || undefined })}>
+            <option value="">Plain</option>
+            {RUG_PATTERNS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {!(item.symbol === "rug" && rugPattern(fixture)) && (
+        <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+      )}
       {(isJoinery(item) || item.symbol === "shaker-wardrobe") && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (
         <SwatchField

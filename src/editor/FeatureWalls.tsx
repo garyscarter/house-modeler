@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
+import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, WALL_SPLIT_LABEL, type WallSplitKind, type Floor, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, hasAccent, hasBaseColour, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
+import { DEFAULT_SPLIT_HEIGHT } from "../lib/wallSplit";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
 import { useSite, useStore } from "../store";
 import { Info } from "../components/Info";
-import { ColourWell, SwatchField } from "../components/inspector";
+import { ColourWell, NumberField, SwatchField } from "../components/inspector";
 
 /**
  * One edge's finish controls: the inside covering select, the colour (quick
@@ -81,6 +82,56 @@ export function WallFinishRow({
           }}
           resetLabel="Same as the room"
         />
+      )}
+      {showInside && covering === "paint" && (
+        <>
+          <div className="wall-finish">
+            <select
+              aria-label={`Wall ${i + 1} two colours`}
+              value={o?.split?.kind ?? ""}
+              onChange={(e) => {
+                const kind = e.target.value as WallSplitKind | "";
+                if (!kind) {
+                  const { split: _split, ...rest } = o ?? {};
+                  set(setWallOverride(room, i, Object.keys(rest).length ? rest : null));
+                } else {
+                  set(setWallOverride(room, i, { ...o, split: { kind, color: o?.split?.color ?? "#5b6b7f", at: o?.split?.at } }));
+                }
+              }}
+            >
+              <option value="">Two colours: no</option>
+              {(Object.keys(WALL_SPLIT_LABEL) as WallSplitKind[]).map((k) => (
+                <option key={k} value={k}>
+                  Two colours: {WALL_SPLIT_LABEL[k].toLowerCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+          {o?.split && (
+            <>
+              <SwatchField
+                dulux
+                label={`Wall ${i + 1} second colour`}
+                value={o.split.color}
+                isSet
+                onChange={(hex) => set(setWallOverride(room, i, { ...o, split: { ...o.split!, color: hex } }))}
+                onReset={() => {
+                  const { split: _split, ...rest } = o;
+                  set(setWallOverride(room, i, Object.keys(rest).length ? rest : null));
+                }}
+                resetLabel="One colour"
+              />
+              {(o.split.kind === "horizontal" || o.split.kind === "vertical") && (
+                <NumberField
+                  label={`Wall ${i + 1} split at (m)`}
+                  value={o.split.at ?? (o.split.kind === "horizontal" ? DEFAULT_SPLIT_HEIGHT : Math.round((edgeLengthsM(room.polygon, floor.pxPerM)[i] / 2) * 100) / 100)}
+                  step={0.05}
+                  onCommit={(v) => set(setWallOverride(room, i, { ...o, split: { ...o.split!, at: v } }))}
+                />
+              )}
+            </>
+          )}
+        </>
       )}
       {outside && (
         <div className="wall-finish">

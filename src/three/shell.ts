@@ -12,6 +12,7 @@ import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThi
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_LINING, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, withRoomWallColours, type Box, type PartMat } from "../lib/openings";
 import { coverLayout, coverTop, coverV, interiorFinish, outsideLook, splitFinish, splitQuadAtY, type InteriorFinish } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
+import { splitFaceByLine, splitLine } from "../lib/wallSplit";
 import { skirtingColour } from "../lib/skirting";
 import { clipUnderFlight, type FlightShape } from "../lib/stairs";
 import { type MatSpec, matKey } from "./textures";
@@ -189,6 +190,27 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
     const room = q.slot.kind === "inside" && wall && !wall.color ? roomsById.get(q.slot.roomId) : undefined;
     if (q.slot.kind !== "inside" || !room) return batch.add(q, slotSpec(q.slot, wall, op, lit));
     const fin = interiorFinish(room, undefined, q.slot.edge);
+    const e = q.slot.edge;
+    const split = fin.covering === "paint" && e !== undefined && e < room.polygon.length ? room.wallFinishes?.[e]?.split : undefined;
+    const poly = split && wall ? rooms.find((r) => r.id === room.id)?.poly : undefined;
+    if (split && wall && poly && e !== undefined && poly.length > e) {
+      const wl = Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y) || 1;
+      const d = { x: (wall.b.x - wall.a.x) / wl, y: (wall.b.y - wall.a.y) / wl };
+      const uOf = (p: { x: number; y: number }) => (p.x - wall.a.x) * d.x + (p.y - wall.a.y) * d.y + u0;
+      const uA = uOf(poly[e]);
+      const uB = uOf(poly[(e + 1) % poly.length]);
+      // The viewer looks along -n (n points into the room), y up, world z toward the front. Their right is
+      // forward x up = (-f.z, 0, f.x) with f = -n, i.e. (n.z, 0, -n.x) in (x, z). If that points along the wall
+      // direction, u grows to the viewer's right and the left end is the smaller u.
+      const rightward = q.n[2] * d.x - q.n[0] * d.y >= 0;
+      const lo = Math.min(uA, uB);
+      const hi = Math.max(uA, uB);
+      const top = wall.height !== undefined ? Math.min(wall.height, H) : H;
+      const { below, above } = splitFaceByLine(q, rightward ? splitLine(split, lo, hi, top) : splitLine(split, hi, lo, top));
+      for (const b of below) batch.add(b, finishSpec(fin));
+      for (const a of above) batch.add(a, finishSpec({ covering: "paint", color: split.color }));
+      return;
+    }
     const layout = fin.covering === "paint" ? undefined : coverLayout(fin.covering);
     if (!layout) return batch.add(q, finishSpec(fin));
     const top = coverTop(layout, H, sills);
