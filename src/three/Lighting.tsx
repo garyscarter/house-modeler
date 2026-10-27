@@ -218,7 +218,8 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
     gradient.add(new THREE.Mesh(gradientGeo, gradientMat));
     const top = new THREE.Color(ENV_GRADIENT[0]), horizon = new THREE.Color(ENV_GRADIENT[1]);
     const duskTop = new THREE.Color(ENV_DUSK[0]), duskHorizon = new THREE.Color(ENV_DUSK[1]);
-    const cube = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { type: THREE.HalfFloatType });
+    // The gradient writes no depth, so the cube needs no depth buffer.
+    const cube = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { type: THREE.HalfFloatType, depthBuffer: false });
     const cubeCamera = new THREE.CubeCamera(0.1, 100, cube);
     let rt: THREE.WebGLRenderTarget | null = null;
     let baked = -1;
@@ -232,8 +233,11 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
       // The post-processing composer turns autoClear off; each cube face needs clearing.
       const autoClear = gl.autoClear;
       gl.autoClear = true;
-      cubeCamera.update(gl, gradient);
-      gl.autoClear = autoClear;
+      try {
+        cubeCamera.update(gl, gradient);
+      } finally {
+        gl.autoClear = autoClear;
+      }
       // The first bake allocates the target (and PMREM's working targets); later ones refill it.
       rt = pmrem.fromCubemap(cube.texture, rt);
       scene.environment = rt.texture;
