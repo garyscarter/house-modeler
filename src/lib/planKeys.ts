@@ -1,4 +1,4 @@
-import { PLAN_TOOLS, type Mode, type Tool } from "./modes";
+import { editsFixtures, PLAN_TOOLS, type Mode, type Tool } from "./modes";
 import { TOOL_KEY } from "./shortcuts";
 
 /** What a single key press does in the plan editor (null: nothing, leave it to someone else). */
@@ -39,7 +39,7 @@ export function planKeyAction(e: PlanKeyEvent, ctx: PlanKeyContext): PlanKeyActi
   if (k === "f") return { fit: true };
   if (k === "+" || k === "=") return { zoom: 1 };
   if (k === "-" || k === "_") return { zoom: -1 };
-  if (k === "a") return ctx.mode === "furnish" ? { add: true } : null;
+  if (k === "a") return editsFixtures(ctx.mode) ? { add: true } : null;
   const tool = KEY_TOOL.get(k);
   if (tool && PLAN_TOOLS[ctx.mode].includes(tool)) return { tool };
   return null;

@@ -104,7 +104,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   await page.waitForSelector('.site-canvas svg', { timeout: 20000 });
   await page.waitForTimeout(1500);
   const bar = await page.evaluate(() => { const n = document.querySelector('.tab-bar'); return { fits: n.scrollWidth <= n.clientWidth, count: n.querySelectorAll('button').length }; });
-  ok(bar.fits && bar.count === 6, `garden: the six-tab bar fits at 390 px (${bar.count} tabs)`);
+  ok(bar.fits && bar.count === 7, `garden: the seven-tab bar fits at 390 px (${bar.count} tabs)`);
   const gtools = await page.$$eval('.tool-rail [data-tool]', (els) => els.map((e) => e.getAttribute('data-tool')));
   ok(gtools.includes('add') && gtools.includes('select') && !['surface', 'circle', 'polygon', 'rect'].some((t) => gtools.includes(t)), `garden: rail has add and select, no draw tools (${gtools.join(',')})`);
   const gitems = () => page.evaluate(() => { const st = window.__houseStore.getState(); return ((st.sites[st.activeVariant] || st.sites.current).items || []).map((i) => ({ ...i })); });

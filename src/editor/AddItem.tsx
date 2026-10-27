@@ -110,7 +110,7 @@ export function CataloguePicker({ activeId, onPick, scope = "furnish" }: { activ
   const items = filterCatalogue(query, cat, furnish ? pieces.map(pieceItem) : [], scope);
   return (
     <div className="catalogue-picker furniture-picker">
-      <input type="search" autoFocus placeholder="Search furniture" aria-label="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input type="search" autoFocus placeholder={furnish ? "Search furniture" : "Search lights and points"} aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="chips" role="group" aria-label="Category">
         {["All", ...(furnish ? [MINE] : []), ...cats].map((c) => (
           <button key={c} className={c === cat ? "chip active" : "chip"} aria-pressed={c === cat} onClick={() => setPrefs({ addCategory: c })}>
@@ -120,7 +120,7 @@ export function CataloguePicker({ activeId, onPick, scope = "furnish" }: { activ
       </div>
       <div className="picker-rows">
         {items.map((c) => (
-          <button key={c.id} className={activeId === (c.piece ?? c.id) ? "active" : ""} title={c.note ?? ""} onClick={() => onPick(c)}>
+          <button key={c.id} data-item-id={c.id} className={activeId === (c.piece ?? c.id) ? "active" : ""} title={c.note ?? ""} onClick={() => onPick(c)}>
             <FixtureThumb item={c} />
             <span className="garden-row-name">{c.name}</span>
             <span className="muted">
