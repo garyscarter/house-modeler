@@ -11,7 +11,11 @@ import { roomColor } from "../lib/roomColor";
 import { wallThickness } from "../lib/walls";
 import { ceilingY } from "../lib/ceiling";
 import { Roof } from "./Roof";
-import { Fixtures } from "./Fixtures";
+import { Fixtures, LampLights, setLampGlow } from "./Fixtures";
+import { useSunInfo } from "./useSun";
+import { nightDark } from "./Lighting";
+import { byId } from "../lib/catalogue";
+import { floorLamps, isLightItem, lampGlow, lightsMaster, lightsOn as masterAllows, litRooms, switchedOn } from "../lib/lights";
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
@@ -92,8 +96,30 @@ export function House({
   const structure = modelStructure(model);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wells = useMemo(() => stairwells(model), [structure]);
+
+  // Interior lights: whether the master lets lamps be lit now, the lit lamps of every shown floor (capped together
+  // in LampLights), and how dark the night is for the ceilings.
+  const sun = useSunInfo();
+  const altitude = sun?.active ? sun.position.altitude : null;
+  const master = useStore((s) => lightsMaster(s.sun));
+  const lampsOn = !ghost && masterAllows(master, altitude);
+  // Tenths, so a playing sun re-renders the floors only when the ceilings visibly change.
+  const ceilingGlow = Math.round((1 - nightDark(altitude)) * 10) / 10;
+  const floorKey = floors.map((f) => f.id).join();
+  const lamps = useMemo(
+    () => (lampsOn ? floors.flatMap((f) => floorLamps(f, model.ceilingHeight, floorBaseY(model, f), (fx) => switchedOn(fx))) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lampsOn, floorKey, model],
+  );
+  const invalidate = useThree((s) => s.invalidate);
+  const glow = lampGlow(true, altitude);
+  useEffect(() => {
+    if (!ghost && setLampGlow(glow)) invalidate();
+  }, [ghost, glow, invalidate]);
+
   return (
     <group>
+      {!ghost && <LampLights lamps={lamps} />}
       {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
       {showExterior && !ghost && showPins && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (
@@ -115,6 +141,8 @@ export function House({
           otherFloor={diffAgainst?.floors.find((f) => f.level === floor.level) ?? null}
           wells={wells}
           aboveShown={shown(floor.level + 1)}
+          lampsOn={lampsOn}
+          ceilingGlow={ceilingGlow}
         />
       ))}
     </group>
@@ -149,6 +177,8 @@ function FloorGroupInner({
   otherFloor,
   wells,
   aboveShown,
+  lampsOn,
+  ceilingGlow,
 }: {
   model: HouseModel;
   floor: Floor;
@@ -169,6 +199,10 @@ function FloorGroupInner({
   wells: Stairwell[];
   /** The storey above is drawn too, so this floor's outer walls carry up through the slab to meet it. */
   aboveShown: boolean;
+  /** The lights master lets switched-on lamps be lit now. */
+  lampsOn: boolean;
+  /** Share of the ceilings' daytime glow left (0 at night, so an unlit room is dark). */
+  ceilingGlow: number;
 }) {
   const y0 = floorBaseY(model, floor);
   const modelSig = modelStructure(model);
@@ -198,6 +232,12 @@ function FloorGroupInner({
   const otherWalls = useMemo(() => (otherFloor ? buildWalls(otherFloor) : null), [otherFloor]);
   // Walls of this floor that the other variant does not have.
   const changed = useMemo(() => (otherWalls ? diffWalls(allWalls, otherWalls) : []), [allWalls, otherWalls]);
+  // Rooms with a lit lamp: their windows glow at night.
+  const lit = useMemo(
+    () => (lampsOn ? litRooms(floor, (fx) => switchedOn(fx) && isLamp(fx.type)) : NO_ROOMS),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lampsOn, floor.fixtures, floor.rooms],
+  );
 
   // Ghost mode with a comparison draws only the removed walls.
   if (ghost)
@@ -226,10 +266,11 @@ function FloorGroupInner({
         doorsOpen={doorsOpen}
         flight={flight}
         aboveShown={aboveShown}
+        litRooms={lit}
       />
       {showCeilings && (
         <group onClick={onPickWall ? block : undefined}>
-          {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} />)}
+          {floor.rooms.map((room) => <RoomCeiling key={room.id} floor={floor} room={room} height={H} holes={ceilingHoles} glow={ceilingGlow} />)}
         </group>
       )}
       <Balustrade runs={rails} />
@@ -244,7 +285,7 @@ function FloorGroupInner({
       {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
 
       <group onClick={onPickWall ? block : undefined}>
-        <Fixtures floor={floor} ceiling={H} />
+        <Fixtures floor={floor} ceiling={H} lightsOn={lampsOn} />
       </group>
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
@@ -275,10 +316,13 @@ function FloorShell({
   doorsOpen,
   flight,
   aboveShown,
+  litRooms,
 }: {
   model: HouseModel;
   floor: Floor;
   walls: WallSeg[];
+  /** Rooms with a lit lamp, whose window panes glow at night. */
+  litRooms: Set<string>;
   /** The flight up from this floor (see FloorGroup). */
   flight: FlightShape | null;
   photos: Photo[];
@@ -313,6 +357,7 @@ function FloorShell({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const upperWalls = useMemo(() => above.flatMap((f) => buildWalls(f)), [upperSig]);
   const finish = ext.wallFinish ?? "render";
+  const litSig = [...litRooms].sort().join();
   const shell = useMemo(
     () =>
       buildShell({
@@ -331,9 +376,10 @@ function FloorShell({
         doorColours: { frontDoorColor: ext.frontDoorColor, backDoorColor: ext.backDoorColor },
         doorsOpen,
         flight,
+        litRooms,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
+    [shellLooks(floor), litSig, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
 
@@ -403,6 +449,12 @@ function FloorShell({
     </group>
   );
 }
+
+const NO_ROOMS = new Set<string>();
+const isLamp = (type: string) => {
+  const item = byId(type);
+  return !!item && isLightItem(item);
+};
 
 const SLAB: MatSpec = { kind: "plain", color: "#b8b3a8", roughness: 0.9 };
 
@@ -541,13 +593,14 @@ function PhotoFloorMaterial({ url, tint }: { url: string; tint: string }) {
   return <meshStandardMaterial map={tex} color={tint} roughness={0.8} />;
 }
 
-function RoomCeiling({ floor, room, height, holes }: { floor: Floor; room: Room; height: number; holes: Rect[] }) {
+/** Ceilings glow faintly by day so rooms read bright from above; `glow` is the share of that left (none at night). */
+function RoomCeiling({ floor, room, height, holes, glow }: { floor: Floor; room: Room; height: number; holes: Rect[]; glow: number }) {
   const polys = useMemo(() => cutWells(roomWorldPolygon(floor, room), holes), [floor, room, holes]);
   const geom = useMemo(() => new THREE.ShapeGeometry(polys.map(shapeFrom)), [polys]);
   useEffect(() => () => geom.dispose(), [geom]);
   return (
     <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, ceilingY(height), 0]}>
-      <meshStandardMaterial color="#f3f3f0" emissive="#ffffff" emissiveIntensity={0.35} side={THREE.DoubleSide} />
+      <meshStandardMaterial color="#f3f3f0" emissive="#ffffff" emissiveIntensity={0.35 * glow} side={THREE.DoubleSide} />
     </mesh>
   );
 }

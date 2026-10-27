@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, LIGHTS_AUTO_ALTITUDE, candela, fixtureLit, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights } from "./lights";
+import { LAMPS, LIGHTS_AUTO_ALTITUDE, bulbWorld, candela, floorLamps, fixtureLit, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights } from "./lights";
 import { byId } from "./catalogue";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
 import { dayOfYear, solarPosition, sunTimes } from "./sun";
 import { listingSite } from "./houses/listing91770873";
-import type { Fixture } from "../types";
+import type { Fixture, Floor } from "../types";
 
 const site = listingSite();
 const YEAR = 2026;
@@ -88,6 +88,31 @@ describe("litRooms", () => {
     const lit = (f: Fixture) => fixtureLit(f, byId(f.type)!, "on", null);
     expect([...litRooms(floor, lit)]).toEqual(["a"]);
     expect(litRooms(floor, () => false).size).toBe(0);
+  });
+});
+
+describe("bulbWorld and floorLamps", () => {
+  // 100 px to the metre, plan origin at (100, 100) px placed at world (1, 2).
+  const floor = { id: "g", level: 0, name: "Ground", rooms: [], origin: { x: 100, y: 100 }, offset: { x: 1, y: 2 }, pxPerM: 100 } as unknown as Floor;
+  const desk = byId("desk-lamp")!;
+  it("puts the bulb at the fixture's plan position and mount height, turned with it", () => {
+    const f = fx("desk-lamp", { x: 200, y: 300 });
+    const [x, y, z] = bulbWorld(floor, f, desk, 2.4, 3)!;
+    const lz = desk.d / 2 - desk.d * 0.2;
+    expect(x).toBeCloseTo(2);
+    expect(y).toBeCloseTo(3 + 0.75 + desk.h - 0.11);
+    expect(z).toBeCloseTo(4 + lz);
+    // A quarter turn clockwise on the plan swings the head's front (+plan y) to -x.
+    const [x2, , z2] = bulbWorld(floor, { ...f, rot: 90 }, desk, 2.4, 3)!;
+    expect(x2).toBeCloseTo(2 - lz);
+    expect(z2).toBeCloseTo(4);
+  });
+  it("lists the lit lamps only, with their candela and reach", () => {
+    const f = { ...floor, fixtures: [fx("floor-lamp", { id: "a" }), fx("table-lamp", { id: "b", on: false }), fx("sofa-3", { id: "c" })] } as Floor;
+    const lamps = floorLamps(f, 2.4, 0, (x, item) => fixtureLit(x, item, "on", null));
+    expect(lamps.map((l) => l.id)).toEqual(["g:a"]);
+    expect(lamps[0].candela).toBeCloseTo(candela(LAMPS["floor-lamp"]!.lumens));
+    expect(lamps[0].reach).toBe(LAMPS["floor-lamp"]!.reach);
   });
 });
 

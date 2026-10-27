@@ -1,6 +1,7 @@
 import type { Fixture, Floor } from "../types";
-import type { CatalogueItem, Symbol } from "./catalogue";
-import { pointInPolygon } from "./geometry";
+import { byId, type CatalogueItem, type Symbol } from "./catalogue";
+import { pointInPolygon, toWorld } from "./geometry";
+import { fixtureBox } from "./planMath";
 import { lightGlow } from "./dusk";
 
 /**
@@ -112,6 +113,45 @@ export function litRooms(floor: Pick<Floor, "rooms" | "fixtures">, lit: (fx: Fix
     if (!lit(fx)) continue;
     const room = floor.rooms.find((r) => !out.has(r.id) && pointInPolygon({ x: fx.x, y: fx.y }, r.polygon));
     if (room) out.add(room.id);
+  }
+  return out;
+}
+
+/** A lit lamp's bulb as a point light: world position (x, y up, z = plan y), colour, candela and reach. */
+export interface LampLight {
+  /** Floor and fixture id, unique across the house. */
+  id: string;
+  pos: [number, number, number];
+  color: string;
+  candela: number;
+  reach: number;
+}
+
+/**
+ * The bulb of a light fixture in world space: LAMPS[symbol].bulb in the fixture's frame, turned by its rotation
+ * (plan degrees clockwise, the 3D view's yaw of -rot about +y) and moved to its plan position and mount height,
+ * on a storey whose base is at `baseY`.
+ */
+export function bulbWorld(floor: Floor, fx: Fixture, item: CatalogueItem, ceiling: number, baseY: number): [number, number, number] | null {
+  const lamp = lampOf(item);
+  if (!lamp) return null;
+  const b = fixtureBox(fx, item, ceiling);
+  const [lx, ly, lz] = lamp.bulb(b);
+  const t = (-fx.rot * Math.PI) / 180;
+  const c = Math.cos(t), s = Math.sin(t);
+  const p = toWorld(floor, { x: fx.x, y: fx.y });
+  return [p.x + lx * c + lz * s, baseY + b.z0 + ly, p.y - lx * s + lz * c];
+}
+
+/** Every lit lamp on a floor as a point light (`lit` says which fixtures are lit, see fixtureLit). */
+export function floorLamps(floor: Floor, ceiling: number, baseY: number, lit: (fx: Fixture, item: CatalogueItem) => boolean): LampLight[] {
+  const out: LampLight[] = [];
+  for (const fx of floor.fixtures ?? []) {
+    const item = byId(fx.type);
+    const lamp = item && lampOf(item);
+    if (!item || !lamp || !lit(fx, item)) continue;
+    const pos = bulbWorld(floor, fx, item, ceiling, baseY);
+    if (pos) out.push({ id: `${floor.id}:${fx.id}`, pos, color: lamp.color, candela: candela(lamp.lumens), reach: lamp.reach });
   }
   return out;
 }
