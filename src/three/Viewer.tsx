@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
-import { lampStats } from "./Fixtures";
+import { lampStats } from "./FixtureLights";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { STICKY_MS, wheelClassifier, wheelPixels, wheelZoomFactor } from "../lib/wheelGesture";

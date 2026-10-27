@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
+import { LAMPS, POOL, assignSlots, type LampLight, type PoolSizes, type Slots, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
 import { CATALOGUE, byId, dropOf } from "./catalogue";
 import { fixtureBox } from "./planMath";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
@@ -201,5 +201,54 @@ describe("ceiling and wall lights", () => {
     expect(fixtureLit(fx("pendant"), item, "on", null, [{}, { on: true }])).toBe(true);
     expect(fixtureLit(fx("pendant"), item, "on", null, [{}, { on: false }])).toBe(false);
     expect(fixtureLit(fx("pendant"), item, "on", null)).toBe(true);
+  });
+});
+
+describe("assignSlots", () => {
+  const lamp = (id: string, x: number, spot = false): LampLight => ({ id, pos: [x, 0, 0], color: "#fff", candela: 1, reach: 4, spot: spot ? { angle: 1, penumbra: 0.5 } : undefined });
+  const sizes: PoolSizes = { point: 3, spot: 3, casters: 1 };
+  const eye: [number, number, number] = [0, 0, 0];
+  const ids = (s: Slots) => [...s.point, ...s.spot].filter((x): x is string => x !== null);
+
+  it("returns the same reference for the same input", () => {
+    const ls = [lamp("a", 1), lamp("b", 2, true)];
+    const s = assignSlots(null, ls, eye, sizes);
+    expect(assignSlots(s, ls, eye, sizes)).toBe(s);
+  });
+  it("leaves nulls when there are fewer lamps than slots", () => {
+    const s = assignSlots(null, [lamp("a", 1)], eye, sizes);
+    expect(s.point).toEqual(["a", null, null]);
+    expect(s.spot).toEqual([null, null, null]);
+  });
+  it("evicts the farthest past the cap and leaves the others where they were", () => {
+    const ls = [lamp("a", 1), lamp("b", 2), lamp("c", 3)];
+    const s = assignSlots(null, ls, eye, sizes);
+    const next = assignSlots(s, [...ls, lamp("near", 0.5)], eye, sizes);
+    expect(next.point).toEqual(["a", "b", "near"]);
+    expect(ids(next)).not.toContain("c");
+  });
+  it("moves a spot promoted to caster into the caster slots, leaving the rest", () => {
+    const ls = [lamp("s1", 1, true), lamp("s2", 2, true), lamp("s3", 3, true)];
+    const s = assignSlots(null, ls, eye, sizes);
+    expect(s.spot).toEqual(["s1", "s2", "s3"]);
+    const next = assignSlots(s, [...ls, lamp("s0", 0.1, true)], eye, sizes);
+    expect(next.spot[0]).toBe("s0");
+    expect(next.spot.slice(1).sort()).toEqual(["s1", "s2"]);
+    expect(next.spot[1]).toBe("s2");
+  });
+  it("re-packs when the sizes change", () => {
+    const ls = [lamp("a", 1), lamp("b", 2)];
+    const s = assignSlots(null, ls, eye, sizes);
+    const bigger = assignSlots(s, ls, eye, POOL.high);
+    expect(bigger.point).toHaveLength(POOL.high.point);
+    expect(bigger.spot).toHaveLength(POOL.high.spot);
+    expect(bigger.point.slice(0, 2)).toEqual(["a", "b"]);
+  });
+  it("never holds more ids than slots, or one twice", () => {
+    const ls = Array.from({ length: 40 }, (_, i) => lamp("l" + i, i, i % 2 === 0));
+    const s = assignSlots(null, ls, eye, POOL.high);
+    expect(s.point.filter(Boolean).length).toBeLessThanOrEqual(POOL.high.point);
+    expect(s.spot.filter(Boolean).length).toBeLessThanOrEqual(POOL.high.spot);
+    expect(new Set(ids(s)).size).toBe(ids(s).length);
   });
 });

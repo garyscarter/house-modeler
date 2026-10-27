@@ -140,9 +140,6 @@ export function lampGlow(lit: boolean, altitude: number | null): number {
   return lit ? Math.max(LIT_DAY_GLOW, lightGlow(altitude)) : 0;
 }
 
-/** Spot lights that cast shadows per rendering quality (the nearest ones): the rest light through walls. */
-export const SHADOW_CAP: Record<"high" | "balanced" | "low", number> = { high: 4, balanced: 0, low: 0 };
-
 /** Point light intensity in candela for a bulb's lumens (an even sphere of light: lm / 4π). */
 export const candela = (lumens: number): number => lumens / (4 * Math.PI);
 
@@ -156,8 +153,29 @@ export function coneGain(angle?: number): number {
   return 2 / (1 - Math.cos(a));
 }
 
-/** Real point lights per rendering quality; the rest of the lit lamps only glow. */
-export const LIGHT_CAP: Record<"high" | "balanced" | "low", number> = { high: 16, balanced: 12, low: 8 };
+/** Rendering quality, as the store's settings name it. */
+type Quality = "high" | "balanced" | "low";
+
+/** The fixed light pool of a quality: point lights, spot lights, and how many of the spots (the first ones) cast shadows. */
+export interface PoolSizes {
+  point: number;
+  spot: number;
+  casters: number;
+}
+
+/**
+ * Real lights per rendering quality; the rest of the lit lamps only glow. The pool is a fixed number of lights, mounted
+ * while any lamp is lit, because three bakes the light counts into every lit material's shader: a pool that never changes
+ * size means switching lights on compiles nothing (see three/frameLoop.tsx Precompile). The nearest `casters` spot
+ * lights cast shadows; point lights never do.
+ */
+export const POOL: Record<Quality, PoolSizes> = {
+  high: { point: 16, spot: 8, casters: 4 },
+  balanced: { point: 12, spot: 6, casters: 0 },
+  low: { point: 8, spot: 4, casters: 0 },
+};
+export const POINT_SLOTS: Record<Quality, number> = { high: POOL.high.point, balanced: POOL.balanced.point, low: POOL.low.point };
+export const SPOT_SLOTS: Record<Quality, number> = { high: POOL.high.spot, balanced: POOL.balanced.spot, low: POOL.low.spot };
 
 /** The `cap` lights nearest to `eye` (world metres), nearest first. Ties keep input order. */
 export function pickLights<T extends { pos: readonly [number, number, number] }>(lights: T[], eye: readonly [number, number, number], cap: number): T[] {
@@ -168,6 +186,49 @@ export function pickLights<T extends { pos: readonly [number, number, number] }>
     .sort((a, b) => a.d - b.d || a.i - b.i)
     .slice(0, Math.max(0, cap))
     .map((x) => x.l);
+}
+
+/** Which lamp each pool slot holds (lamp id, or null for an empty slot). Spot slots [0, casters) are the shadow casters. */
+export interface Slots {
+  point: (string | null)[];
+  spot: (string | null)[];
+}
+
+/**
+ * Fills the pool's slots with the lamps nearest to `eye` (the nearest `sizes.point` point lights, the nearest
+ * `sizes.spot` spot lights, the nearest `sizes.casters` of those casting). A lamp that stays picked keeps its slot, so
+ * orbiting moves no light that does not have to move; only a spot that gains or loses shadow casting changes slot.
+ * Returns `prev` itself when nothing changed.
+ */
+export function assignSlots(prev: Slots | null, lamps: LampLight[], eye: readonly [number, number, number], sizes: PoolSizes): Slots {
+  const sp = pickLights(lamps.filter((l) => l.spot), eye, sizes.spot).map((l) => l.id);
+  const pts = pickLights(lamps.filter((l) => !l.spot), eye, sizes.point).map((l) => l.id);
+  const casters = Math.min(sizes.casters, sizes.spot);
+  const base = prev && prev.point.length === sizes.point && prev.spot.length === sizes.spot ? prev : null;
+  const point = pack(base?.point ?? Array(sizes.point).fill(null), 0, sizes.point, pts);
+  const spot = pack(pack(base?.spot ?? Array(sizes.spot).fill(null), 0, casters, sp.slice(0, casters)), casters, sizes.spot, sp.slice(casters));
+  if (base && point === base.point && spot === base.spot) return base;
+  return { point, spot };
+}
+
+/** Slots [lo, hi) of `slots` made to hold exactly `wanted` (nearest first): ids already there stay, the rest go to the lowest free slots. Returns `slots` itself if unchanged. */
+function pack(slots: (string | null)[], lo: number, hi: number, wanted: string[]): (string | null)[] {
+  const keep = new Set(wanted);
+  const out = slots.slice();
+  const held = new Set<string>();
+  for (let i = lo; i < hi; i++) {
+    const id = out[i];
+    if (id !== null && keep.has(id) && !held.has(id)) held.add(id);
+    else out[i] = null;
+  }
+  let at = lo;
+  for (const id of wanted) {
+    if (held.has(id)) continue;
+    while (at < hi && out[at] !== null) at++;
+    if (at >= hi) break;
+    out[at] = id;
+  }
+  return out.every((v, i) => v === slots[i]) ? slots : out;
 }
 
 /** Ids of the floor's rooms with a lit light in them (by the fixture's centre), so their windows glow at night. */
