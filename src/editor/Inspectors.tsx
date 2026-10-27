@@ -1478,9 +1478,8 @@ function GridFields({ fixture, item, onChange }: { fixture: Fixture; item: Catal
     <>
       <div className="field">
         <span className="field-label">Downlights (across × down)</span>
-        <div className="row">
+        <div className="size-row">
           <NumberField value={grid.cols} placeholder={String(auto.cols)} label="Across" step={1} min={0} max={MAX_GRID} onCommit={count("cols")} onClear={() => onChange({ cols: undefined })} />
-          <span className="muted">×</span>
           <NumberField value={grid.rows} placeholder={String(auto.rows)} label="Down" step={1} min={0} max={MAX_GRID} onCommit={count("rows")} onClear={() => onChange({ rows: undefined })} />
         </div>
       </div>
