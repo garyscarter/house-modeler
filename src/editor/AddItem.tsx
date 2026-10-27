@@ -7,6 +7,7 @@ import { usePanelPrefs } from "../components/panelPrefs";
 import { OPEN_ADD_EVENT, takePendingAdd } from "./addPicker";
 import { filterGarden, GARDEN_CATEGORIES, type GardenCategory, type GardenDef } from "../lib/gardenCatalogue";
 import { GardenThumb } from "./GardenSymbol";
+import { FixtureSymbol } from "./FixtureSymbol";
 
 /**
  * The Add furniture popover: a search box and category chips in a card that opens to the right of its anchor
@@ -80,6 +81,16 @@ export function AddPopover({
   );
 }
 
+/** A 36 px plan symbol of a catalogue item, scaled to fit its footprint with 8 % padding; same tile as the garden's. */
+function FixtureThumb({ item, size = 36 }: { item: CatalogueItem; size?: number }) {
+  const s = (size * 0.92) / Math.max(item.w, item.d, 0.05);
+  return (
+    <svg className="garden-thumb" width={size} height={size} viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} aria-hidden="true" focusable="false">
+      <FixtureSymbol item={item} w={item.w * s} d={item.d * s} m={s} stroke={0.8} />
+    </svg>
+  );
+}
+
 /** Search box, category chips and the matching rows. */
 export function CataloguePicker({ activeId, onPick }: { activeId?: string | null; onPick: (item: CatalogueItem) => void }) {
   const category = usePanelPrefs((s) => s.addCategory);
@@ -91,7 +102,7 @@ export function CataloguePicker({ activeId, onPick }: { activeId?: string | null
   const cat = category === "All" || category === MINE || CATEGORIES.includes(category) ? category : "All";
   const items = filterCatalogue(query, cat, pieces.map(pieceItem));
   return (
-    <div className="catalogue-picker">
+    <div className="catalogue-picker furniture-picker">
       <input type="search" autoFocus placeholder="Search furniture" aria-label="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="chips" role="group" aria-label="Category">
         {["All", MINE, ...CATEGORIES].map((c) => (
@@ -103,7 +114,8 @@ export function CataloguePicker({ activeId, onPick }: { activeId?: string | null
       <div className="picker-rows">
         {items.map((c) => (
           <button key={c.id} className={activeId === (c.piece ?? c.id) ? "active" : ""} title={c.note ?? ""} onClick={() => onPick(c)}>
-            <span>{c.name}</span>
+            <FixtureThumb item={c} />
+            <span className="garden-row-name">{c.name}</span>
             <span className="muted">
               {c.piece ? "Yours · " : ""}
               {c.w.toFixed(2)} × {c.d.toFixed(2)} m

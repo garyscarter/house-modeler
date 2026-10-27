@@ -18,7 +18,7 @@ import { boundaryWallSegments, wallAt, type WallSegment } from "../lib/wallSteps
 import { triangles } from "./geometryUtil";
 import { membraneTexture, tileTextures } from "./roofTextures";
 import { getMaterial } from "./textures";
-import { metricBox, siteTexture, type TextureKind } from "./siteTextures";
+import { BRICK_TOP_METRES, metricBox, siteTexture, type TextureKind } from "./siteTextures";
 import { cutRun, SCREEN_THICK, screenBand } from "../lib/screenBlocks";
 import { useSiteView } from "./siteView";
 import { SunHoursOverlay } from "./SunHours";
@@ -78,6 +78,20 @@ function SiteContent({ site, house, centre: houseCentre, quiet }: { quiet: boole
 
 const LAYER: Record<SurfaceKind, number> = { road: 1, lawn: 1, pavement: 2, drive: 2, bed: 3, patio: 3, path: 4 };
 
+/** World-scale tone variation per texture kind: [low multiplier, high multiplier, small scale m, large scale m]. */
+const VARIATION: Partial<Record<TextureKind, [number, number, number, number]>> = {
+  road: [0.78, 1.22, 10, 30],
+  lawn: [0.86, 1.12, 4, 9],
+  bed: [0.9, 1.08, 3, 7],
+  patio: [0.93, 1.06, 3, 6],
+  slabs: [0.93, 1.06, 3, 6],
+  path: [0.93, 1.06, 3, 6],
+  drive: [0.93, 1.06, 3, 6],
+  "block-mixed": [0.93, 1.06, 3, 6],
+  "block-weathered": [0.93, 1.06, 3, 6],
+  gravel: [0.93, 1.06, 3, 6],
+};
+
 const materials = new Map<string, THREE.Material>();
 /** One cached material per surface or boundary kind, shared by every viewer. */
 function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
@@ -93,18 +107,20 @@ function surfaceMaterial(kind: TextureKind, layer = 0): THREE.Material {
       // Screen blocks are see-through where the texture is clear, shadows included.
       ...(kind === "screen" ? { alphaTest: 0.5 } : {}),
     });
-    if (kind === "road") breakUpRepeat(m as THREE.MeshStandardMaterial);
+    const vary = VARIATION[kind];
+    if (vary) breakUp(m as THREE.MeshStandardMaterial, vary[0], vary[1], vary[2], vary[3]);
     materials.set(key, m);
   }
   return m;
 }
 
 /**
- * The road's 4 m texture tile shows its dark blotches at a visible rhythm. Mix
- * in smooth two-octave noise from world position, at 10 to 30 m, which
- * lightens and darkens the surface so no two tiles read alike.
+ * A texture tile of a few metres shows its blotches at a visible rhythm. Mix in smooth two-octave noise from
+ * world position, at `big` and about `small` metres, scaling the surface between `lo` and `hi` so no two
+ * tiles read alike. Each setting has its own program.
  */
-function breakUpRepeat(m: THREE.MeshStandardMaterial) {
+function breakUp(m: THREE.MeshStandardMaterial, lo: number, hi: number, small: number, big: number) {
+  const f = (n: number) => n.toFixed(4);
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vRoadXZ;")
@@ -125,12 +141,12 @@ float roadNoise(vec2 p) {
         "#include <map_fragment>",
         `#include <map_fragment>
 {
-  float lo = roadNoise(vRoadXZ * 0.09) * 0.65 + roadNoise(vRoadXZ * 0.23 + 17.0) * 0.35;
-  diffuseColor.rgb *= 0.78 + 0.44 * lo;
+  float lo = roadNoise(vRoadXZ * ${f(1 / big)}) * 0.65 + roadNoise(vRoadXZ * ${f(1 / small)} + 17.0) * 0.35;
+  diffuseColor.rgb *= ${f(lo)} + ${f(hi - lo)} * lo;
 }`,
       );
   };
-  m.customProgramCacheKey = () => "road-variation";
+  m.customProgramCacheKey = () => `variation-${lo}-${hi}-${small}-${big}`;
 }
 
 function plainMaterial(color: string, layer = 0): THREE.Material {
@@ -186,28 +202,34 @@ function Surface({ surface, surfaces }: { surface: SiteSurface; surfaces: SiteSu
     () => (slope ? surfaceEdge(outline, (p) => slopeHeight(outline, slope, p), 0.01 * layer + 0.02) : null),
     [outline, slope?.toward, slope?.rise, slope?.base, layer], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  // A raised bed with a brick kerb is capped with a brick-on-edge coping, 65 mm tall unless the height is set.
+  const coping = kerb.style === "brick" && raised;
+  const copingUp = coping && surface.kerbHeight === undefined ? 0.065 : kerb.height;
   const band = useMemo(
-    () => (kerb.style === "none" ? null : kerbBand(outline, (p) => (slope ? slopeHeight(outline, slope, p) : 0), KERBS[kerb.style].width, kerb.height)),
-    [outline, slope?.toward, slope?.rise, slope?.base, kerb.style, kerb.height], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (kerb.style === "none" ? null : kerbBand(outline, (p) => (slope ? slopeHeight(outline, slope, p) : 0), KERBS[kerb.style].width, copingUp, coping)),
+    [outline, slope?.toward, slope?.rise, slope?.base, kerb.style, copingUp, coping], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const line = useMemo(() => (surface.kind === "road" ? centreLine(outline) : null), [outline, surface.kind]);
   useDispose(geom);
   useDispose(edge);
-  useDispose(band);
+  useDispose(band?.sides ?? null);
+  useDispose(band?.top ?? null);
   useDispose(line);
   const sides = kerb.style !== "none" ? kerbMaterial(kerb.style) : surface.kind === "bed" && !surface.kerb ? surfaceMaterial("brick") : plainMaterial("#a19e96");
   return (
     <group position={[0, GROUND_Y + 0.01 * layer, 0]}>
       <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} material={surfaceMaterial(surfaceLook(surface), raised ? 0 : layer)} receiveShadow />
       {edge && <mesh geometry={edge} material={sides} castShadow receiveShadow />}
-      {band && <mesh geometry={band} material={kerbMaterial(kerb.style)} castShadow receiveShadow />}
+      {band?.sides && <mesh geometry={band.sides} material={kerbMaterial(kerb.style)} castShadow receiveShadow />}
+      {band?.top && <mesh geometry={band.top} material={kerbMaterial(kerb.style, coping ? "top-coping" : "top")} castShadow receiveShadow />}
       {line &&<mesh geometry={line} position={[0, 0.004, 0]} material={plainMaterial("#ecebe4", layer + 1)} receiveShadow />}
     </group>
   );
 }
 
 /** The material of a kerb style's band and of the raised sides it edges. */
-function kerbMaterial(style: KerbStyle): THREE.Material {
+function kerbMaterial(style: KerbStyle, part: "sides" | "top" | "top-coping" = "sides"): THREE.Material {
+  if (style === "brick" && part !== "sides") return surfaceMaterial(part === "top" ? "brick-top" : "brick-coping");
   if (style === "brick" || style === "paving" || style === "sleeper" || style === "corten" || style === "render") return surfaceMaterial(style);
   return plainMaterial("#a19e96");
 }
@@ -254,15 +276,21 @@ function area2(poly: V2[]): number {
  * (`up` 0) is a strip a few millimetres proud. Outer face, top and (when it stands up) inner face, UVs in
  * metres with v following height so courses stay level.
  */
-function kerbBand(poly: V2[], height: (p: V2) => number, width: number, up: number): THREE.BufferGeometry | null {
+function kerbBand(poly: V2[], height: (p: V2) => number, width: number, up: number, coping = false): { sides: THREE.BufferGeometry | null; top: THREE.BufferGeometry | null } {
   const n = poly.length;
-  if (n < 3 || width <= 0) return null;
-  const { inward, inner } = insetOutline(poly, width, area2(poly) >= 0 ? 1 : -1);
+  if (n < 3 || width <= 0) return { sides: null, top: null };
+  const sgn = area2(poly) >= 0 ? 1 : -1;
+  const { inward, inner } = insetOutline(poly, width, sgn);
+  // A coping overhangs the wall below it by 15 mm, so it throws a shadow line under its lip.
+  const outerPoly = coping ? insetOutline(poly, -0.015, sgn).inner : poly;
   const lift = up > 0 ? up : 0.006;
-  const pos: number[] = [];
-  const uv: number[] = [];
+  const sink = coping ? 0.02 : 0.03;
+  const sp: number[] = [];
+  const su: number[] = [];
+  const tp: number[] = [];
+  const tu: number[] = [];
   /** A quad (four corners, world-local x, y, z) wound to face along `want`. */
-  const quad = (q: number[][], t: number[][], want: number[]) => {
+  const quad = (pos: number[], uv: number[], q: number[][], t: number[][], want: number[]) => {
     const e1 = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]];
     const e2 = [q[2][0] - q[0][0], q[2][1] - q[0][1], q[2][2] - q[0][2]];
     const nn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
@@ -272,25 +300,30 @@ function kerbBand(poly: V2[], height: (p: V2) => number, width: number, up: numb
       uv.push(...t[k]);
     }
   };
+  // The top strip is one course across: v spans the texture tile (0.9 m) over the strip's full width.
+  const vs = BRICK_TOP_METRES / (width + (coping ? 0.015 : 0));
   let run = 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    const a = poly[i], b = poly[j], ai = inner[i], bi = inner[j];
+    const a = outerPoly[i], b = outerPoly[j], ai = inner[i], bi = inner[j];
     const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const ha = height(a), hb = height(b), hai = height(ai), hbi = height(bi);
+    const ha = height(poly[i]), hb = height(poly[j]), hai = height(ai), hbi = height(bi);
     const ta = ha + lift, tb = hb + lift;
     const u0 = run, u1 = run + len;
     const nin = inward[i];
     const out = [-nin.x, 0, -nin.y];
     // Outer face, down a little into the ground (or onto the raised side below it).
-    quad([[a.x, ha - 0.03, a.y], [b.x, hb - 0.03, b.y], [b.x, tb, b.y], [a.x, ta, a.y]], [[u0, ha - 0.03], [u1, hb - 0.03], [u1, tb], [u0, ta]], out);
-    // Top.
-    quad([[a.x, ta, a.y], [b.x, tb, b.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[u0, 0], [u1, 0], [u1, width], [u0, width]], [0, 1, 0]);
+    quad(sp, su, [[a.x, ha - sink, a.y], [b.x, hb - sink, b.y], [b.x, tb, b.y], [a.x, ta, a.y]], [[u0, ha - sink], [u1, hb - sink], [u1, tb], [u0, ta]], out);
+    // Top: u follows the outer edge's direction for all four corners, so joints stay square to the kerb.
+    const dx = (b.x - a.x) / (len || 1), dy = (b.y - a.y) / (len || 1);
+    const pu = (p: V2) => u0 + (p.x - a.x) * dx + (p.y - a.y) * dy;
+    const tv = (p: V2) => ((p.x - a.x) * -out[0] + (p.y - a.y) * -out[2]) * vs;
+    quad(tp, tu, [[a.x, ta, a.y], [b.x, tb, b.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[u0, 0], [u1, 0], [pu(bi), tv(bi)], [pu(ai), tv(ai)]], [0, 1, 0]);
     // Inner face, from the surface up to the top.
-    if (up > 0) quad([[ai.x, hai, ai.y], [bi.x, hbi, bi.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[u0, hai], [u1, hbi], [u1, hbi + lift], [u0, hai + lift]], [nin.x, 0, nin.y]);
+    if (up > 0) quad(sp, su, [[ai.x, hai, ai.y], [bi.x, hbi, bi.y], [bi.x, hbi + lift, bi.y], [ai.x, hai + lift, ai.y]], [[pu(ai), hai], [pu(bi), hbi], [pu(bi), hbi + lift], [pu(ai), hai + lift]], [nin.x, 0, nin.y]);
     run = u1;
   }
-  return pos.length ? triangles(pos, uv) : null;
+  return { sides: sp.length ? triangles(sp, su) : null, top: tp.length ? triangles(tp, tu) : null };
 }
 
 /**
@@ -642,7 +675,8 @@ const PART_MATERIAL: Record<Part, () => THREE.Material> = {
 
 /** Fences, walls and hedges along the plot boundary, stopping at buildings and stepping or raking with sloping ground. Merged into one mesh per material. */
 function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { site: Site; buildings: V2[][] }) {
-  const parts = useMemo(() => {
+  const { parts, shadowGeom } = useMemo(() => {
+    let shadowGeom: THREE.BufferGeometry | null = null;
     const out: Record<Part, THREE.BufferGeometry[]> = { timber: [], concrete: [], brick: [], coping: [], mortar: [], hedge: [], screen: [] };
     const edges = edgesOf({ boundary, boundaryEdges });
     boundary.forEach((a, i) => {
@@ -658,7 +692,38 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
         else hedge(out, at(a, b, 1, t0), at(a, b, 1, t1), e.height);
       }
     });
-    return (Object.keys(out) as Part[]).flatMap((k) => {
+    // Soft contact shadow where ground meets a wall or fence: one merged strip mesh for every edge.
+    const shade: number[] = [];
+    const shadeA: number[] = [];
+    boundary.forEach((a, i) => {
+      const e = edges[i];
+      if (!e || (e.kind !== "wall" && e.kind !== "fence") || e.height <= 0.05) return;
+      const b = boundary[(i + 1) % boundary.length];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len < 1e-6) return;
+      const dx = (b.x - a.x) / len, dz = (b.y - a.y) / len;
+      const half = e.kind === "wall" ? 0.1075 : 0.04;
+      for (const [t0, t1] of clipSegmentOutside(a, b, buildings, 0.12)) {
+        const p = at(a, b, 1, t0), q = at(a, b, 1, t1);
+        for (const side of [1, -1]) {
+          const nx = -dz * side, nz = dx * side;
+          const y = GROUND_Y + 0.05;
+          const P = [[p.x + nx * half, p.y + nz * half], [q.x + nx * half, q.y + nz * half], [q.x + nx * (half + 0.12), q.y + nz * (half + 0.12)], [p.x + nx * (half + 0.12), p.y + nz * (half + 0.12)]];
+          const A = [0.18, 0.18, 0, 0];
+          for (const k of [0, 1, 2, 0, 2, 3]) {
+            shade.push(P[k][0], y, P[k][1]);
+            shadeA.push(0, 0, 0, A[k]);
+          }
+        }
+      }
+    });
+    if (shade.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(shade, 3));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(shadeA, 4));
+      shadowGeom = g;
+    }
+    const parts = (Object.keys(out) as Part[]).flatMap((k) => {
       if (!out[k].length) return [];
       // Raked runs are unindexed; merging needs all one or the other.
       const mixed = out[k].some((g) => !g.index);
@@ -667,15 +732,23 @@ function Boundary({ site: { boundary, boundaryEdges, surfaces }, buildings }: { 
       new Set([...out[k], ...list]).forEach((g) => g.dispose());
       return merged ? [{ part: k, geom: merged }] : [];
     });
+    return { parts, shadowGeom };
   }, [boundary, boundaryEdges, surfaces, buildings]);
-  useDisposeAll(useMemo(() => parts.map((p) => p.geom), [parts]));
+  useDisposeAll(useMemo(() => [...parts.map((p) => p.geom), shadowGeom], [parts, shadowGeom]));
   return (
     <group>
       {parts.map(({ part, geom }) => (
         <mesh key={part} geometry={geom} material={PART_MATERIAL[part]()} castShadow receiveShadow />
       ))}
+      {shadowGeom && <mesh geometry={shadowGeom} material={contactShadowMaterial()} renderOrder={5} />}
     </group>
   );
+}
+
+let contactMat: THREE.Material | undefined;
+/** Black that fades out with vertex alpha: the contact shadow at the foot of a wall. */
+function contactShadowMaterial(): THREE.Material {
+  return (contactMat ??= new THREE.MeshBasicMaterial({ color: "#000", vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -24 }));
 }
 
 /** Fallback tints for a neighbour with no colour of its own. */

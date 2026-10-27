@@ -7,7 +7,7 @@ import { rng } from "./textures";
  * a canvas and shared by every viewer. Each covers `metres` of ground, so a
  * geometry with UVs in metres sets repeat to 1 / metres.
  */
-export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen" | "sleeper" | "paving" | "corten" | "render";
+export type TextureKind = SurfaceKind | SurfaceFinish | "ground" | "fence" | "brick" | "hedge" | "screen" | "sleeper" | "paving" | "corten" | "render" | "brick-top" | "brick-coping";
 
 export interface SiteTexture {
   map: THREE.Texture;
@@ -16,6 +16,8 @@ export interface SiteTexture {
 }
 
 const SIZE = 512;
+/** Tile size of the brick-top textures; Site.tsx scales the kerb top's v to match. */
+export const BRICK_TOP_METRES = 0.9;
 const cache = new Map<TextureKind, SiteTexture>();
 
 /** Small deterministic PRNG so textures look the same on every load. */
@@ -46,7 +48,7 @@ function slabs(g: CanvasRenderingContext2D, r: () => number, cols: number, rows:
 }
 
 /** Rectangular blocks in stretcher bond, each filled by `colour()`, with `gap` pixels of joint between them. */
-function blockPaving(g: CanvasRenderingContext2D, joint: string, cols: number, rows: number, colour: () => string, gap: number) {
+function blockPaving(g: CanvasRenderingContext2D, joint: string, cols: number, rows: number, colour: () => string, gap: number, rr: () => number) {
   g.fillStyle = joint;
   g.fillRect(0, 0, SIZE, SIZE);
   const w = SIZE / cols;
@@ -54,8 +56,31 @@ function blockPaving(g: CanvasRenderingContext2D, joint: string, cols: number, r
   for (let j = 0; j < rows; j++) {
     const off = (j % 2) * (w / 2);
     for (let i = -1; i < cols + 1; i++) {
+      const x = i * w + off + gap / 2;
+      const y = j * h + gap / 2;
+      const bw = w - gap;
+      const bh = h - gap;
       g.fillStyle = colour();
-      g.fillRect(i * w + off + gap / 2, j * h + gap / 2, w - gap, h - gap);
+      g.fillRect(x, y, bw, bh);
+      // Soft brindle inside the block, then a 1 px bevel catching light on top and left.
+      g.save();
+      g.beginPath();
+      g.rect(x, y, bw, bh);
+      g.clip();
+      const nb = 2 + Math.floor(rr() * 2);
+      for (let k = 0; k < nb; k++) {
+        g.fillStyle = rr() < 0.5 ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+        g.beginPath();
+        g.ellipse(x + rr() * bw, y + rr() * bh, bw * (0.2 + rr() * 0.25), bh * (0.25 + rr() * 0.3), rr() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
+      g.fillStyle = "rgba(255,255,255,0.10)";
+      g.fillRect(x, y, bw, 1);
+      g.fillRect(x, y, 1, bh);
+      g.fillStyle = "rgba(0,0,0,0.18)";
+      g.fillRect(x, y + bh - 1, bw, 1);
+      g.fillRect(x + bw - 1, y, 1, bh);
     }
   }
 }
@@ -72,23 +97,32 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
     case "lawn":
     case "ground": {
       const ground = kind === "ground";
-      g.fillStyle = ground ? hsl(88, 14, 60) : hsl(88, 30, 38);
+      g.fillStyle = ground ? hsl(88, 14, 60) : hsl(95, 26, 31);
       g.fillRect(0, 0, SIZE, SIZE);
       if (!ground) {
-        // Mowing stripes, two per tile.
+        // Mowing stripes: alternate 0.5 m bands (one stripe per tile half, the tile being 2 m of lawn in four bands).
         for (let i = 0; i < 2; i++) {
-          g.fillStyle = "rgba(255,255,255,0.035)";
+          g.fillStyle = "rgba(255,255,255,0.05)";
           g.fillRect(0, i * (SIZE / 2), SIZE, SIZE / 4);
         }
+        // A few faint dry patches.
+        for (let i = 0; i < 8; i++) {
+          g.fillStyle = "rgba(150,140,80,0.06)";
+          g.beginPath();
+          g.ellipse(r() * SIZE, r() * SIZE, 30 + r() * 50, 20 + r() * 40, r() * Math.PI, 0, Math.PI * 2);
+          g.fill();
+        }
       }
-      for (let i = 0; i < 9000; i++) {
+      const blades = ground ? 9000 : 16000;
+      for (let i = 0; i < blades; i++) {
         const x = r() * SIZE;
         const y = r() * SIZE;
-        g.strokeStyle = hsl(78 + r() * 25, ground ? 12 + r() * 10 : 22 + r() * 22, (ground ? 50 : 27) + r() * 22, 0.55);
+        g.strokeStyle = ground ? hsl(78 + r() * 25, 12 + r() * 10, 50 + r() * 22, 0.55) : hsl(70 + r() * 45, 20 + r() * 22, 22 + r() * 26, 0.6);
         g.lineWidth = 1;
         g.beginPath();
         g.moveTo(x, y);
-        g.lineTo(x + (r() - 0.5) * 3, y - 2 - r() * 4);
+        const len = ground ? 2 + r() * 4 : 3 + r() * 4;
+        g.lineTo(x + (r() - 0.5) * 3, y - len);
         g.stroke();
       }
       metres = ground ? 4 : 2;
@@ -113,7 +147,7 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
     case "drive":
     case "block-mixed": {
       // Block paving, 200 x 100 mm in stretcher bond, brindle colours.
-      blockPaving(g, "#6f6258", 6, 12, () => (r() < 0.6 ? hsl(14 + r() * 8, 30 + r() * 15, 42 + r() * 10) : hsl(30, 8 + r() * 6, 40 + r() * 12)), 3);
+      blockPaving(g, "#5e544b", 6, 12, () => (r() < 0.6 ? hsl(14 + r() * 8, 30 + r() * 15, 42 + r() * 10) : hsl(30, 8 + r() * 6, 40 + r() * 12)), 3, r);
       speckle(g, r, 4000, 0.15, 0.2);
       metres = 1.2;
       break;
@@ -123,16 +157,17 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       // darkened and mottled by moss, oil and wear, in dirty joints (rear-garden, rear-4).
       blockPaving(
         g,
-        "#3b3836",
+        "#2f2c2a",
         8,
         16,
         () => {
           const v = r();
-          if (v < 0.34) return hsl(10 + r() * 8, 26 + r() * 12, 38 + r() * 9);
+          if (v < 0.34) return hsl(10 + r() * 8, 18 + r() * 12, 38 + r() * 9);
           if (v < 0.5) return hsl(14 + r() * 8, 14 + r() * 8, 29 + r() * 7);
           return hsl(25 + r() * 20, 3 + r() * 5, 33 + r() * 11);
         },
         2,
+        r,
       );
       for (let i = 0; i < 70; i++) {
         g.fillStyle = r() < 0.5 ? `rgba(70,80,50,${0.05 + r() * 0.07})` : `rgba(0,0,0,${0.06 + r() * 0.08})`;
@@ -171,21 +206,52 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
       break;
     }
     case "bed": {
-      g.fillStyle = hsl(25, 28, 22);
+      g.fillStyle = hsl(24, 24, 18);
       g.fillRect(0, 0, SIZE, SIZE);
-      speckle(g, r, 8000, 0.12, 0.3, 3);
-      // Shrubs and perennials seen from above.
-      for (let i = 0; i < 70; i++) {
+      // Clods and bark mulch.
+      for (let i = 0; i < 3000; i++) {
+        g.fillStyle = r() < 0.5 ? "rgba(0,0,0,0.25)" : "rgba(120,95,70,0.25)";
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 1 + r() * 1.5, 1 + r() * 1.5, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let i = 0; i < 1500; i++) {
+        g.fillStyle = hsl(25, 35, 30 + r() * 8);
+        g.beginPath();
+        g.ellipse(r() * SIZE, r() * SIZE, 2, 0.75, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      // Low planting seen from above: each clump throws a soft shadow, its leaves lit on the upper left.
+      for (let i = 0; i < 45; i++) {
         const x = r() * SIZE;
         const y = r() * SIZE;
-        const rad = 10 + r() * 34;
-        const hue = r() < 0.12 ? (r() < 0.5 ? 330 : 45) : 85 + r() * 50;
-        const flowering = hue < 80 || hue > 300;
-        for (let k = 0; k < 14; k++) {
-          g.fillStyle = hsl(hue + (r() - 0.5) * 12, flowering ? 55 : 30 + r() * 20, (flowering ? 60 : 24) + r() * 16, 0.8);
+        const rad = 10 + r() * 30;
+        g.fillStyle = "rgba(0,0,0,0.35)";
+        g.beginPath();
+        g.ellipse(x + 4, y + 4, rad * 1.1, rad * 1.1, 0, 0, Math.PI * 2);
+        g.fill();
+        const hue = 85 + r() * 50;
+        const leaves = 18 + Math.floor(r() * 9);
+        for (let k = 0; k < leaves; k++) {
+          const a = r() * Math.PI * 2;
+          const d = Math.sqrt(r()) * rad * 0.8;
+          const lx = x + Math.cos(a) * d;
+          const ly = y + Math.sin(a) * d;
+          const lit = lx - x + (ly - y) < -rad * 0.15 ? 8 : 0;
+          g.fillStyle = hsl(hue + (r() - 0.5) * 10, 25 + r() * 20, 20 + r() * 14 + lit);
           g.beginPath();
-          g.arc(x + (r() - 0.5) * rad, y + (r() - 0.5) * rad, rad * (0.2 + r() * 0.3), 0, Math.PI * 2);
+          g.ellipse(lx, ly, 4 + r() * 5, 3 + r() * 3, r() * Math.PI, 0, Math.PI * 2);
           g.fill();
+        }
+        if (i % 8 === 0) {
+          const fh = [330, 45, 275][Math.floor(r() * 3)];
+          const dots = 6 + Math.floor(r() * 7);
+          for (let k = 0; k < dots; k++) {
+            g.fillStyle = hsl(fh, 60, 62);
+            g.beginPath();
+            g.arc(x + (r() - 0.5) * rad, y + (r() - 0.5) * rad, 1 + r(), 0, Math.PI * 2);
+            g.fill();
+          }
         }
       }
       metres = 2.5;
@@ -226,6 +292,24 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
         }
       }
       metres = 1;
+      break;
+    }
+    case "brick-top":
+    case "brick-coping": {
+      // The top of a brick kerb: one course across the tile (v spans the strip's width), 215 x 102.5 mm bricks
+      // laid along it with 10 mm joints; the coping lays them on edge as 75 mm headers across.
+      g.fillStyle = "#8a7f6e";
+      g.fillRect(0, 0, SIZE, SIZE);
+      const cols = kind === "brick-top" ? 4 : 12;
+      const w = SIZE / cols;
+      const joint = kind === "brick-top" ? (10 / 225) * w : (10 / 75) * w;
+      const vj = (10 / 102.5) * SIZE * 0.5;
+      for (let i = 0; i < cols; i++) {
+        g.fillStyle = hsl(12 + r() * 10, 38 + r() * 14, 32 + r() * 12);
+        g.fillRect(i * w + joint / 2, vj / 2, w - joint, SIZE - vj);
+      }
+      speckle(g, r, 4000, 0.1, 0.2);
+      metres = BRICK_TOP_METRES;
       break;
     }
     case "brick": {
@@ -350,6 +434,14 @@ function draw(kind: TextureKind): { canvas: HTMLCanvasElement; metres: number } 
           const v = r();
           g.fillStyle = v < 0.34 ? hsl(10 + r() * 8, 26 + r() * 12, 38 + r() * 9) : v < 0.5 ? hsl(14 + r() * 8, 14 + r() * 8, 29 + r() * 7) : hsl(25 + r() * 20, 3 + r() * 5, 33 + r() * 11);
           g.fillRect(i * w + off + gap / 2, j * h + gap / 2, w - gap, h - gap);
+          g.fillStyle = r() < 0.5 ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+          g.beginPath();
+          g.ellipse(i * w + off + w * r(), j * h + h * r(), w * 0.3, h * 0.3, r() * Math.PI, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = "rgba(255,255,255,0.10)";
+          g.fillRect(i * w + off + gap / 2, j * h + gap / 2, w - gap, 1);
+          g.fillStyle = "rgba(0,0,0,0.18)";
+          g.fillRect(i * w + off + gap / 2, (j + 1) * h - gap / 2 - 1, w - gap, 1);
         }
       }
       for (let i = 0; i < 40; i++) {

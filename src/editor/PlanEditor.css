@@ -81,6 +81,9 @@
 .picker-rows { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; min-height: 0; }
 .picker-rows button { display: flex; justify-content: space-between; gap: 6px; padding: 4px 8px; text-align: left; font-size: 12px; }
 .picker-rows button.active .muted { color: var(--accent-soft); }
+.furniture-picker .picker-rows button { align-items: center; gap: var(--sp-2, 8px); padding-block: 3px; }
+.furniture-picker .picker-rows button .muted { margin-left: auto; white-space: nowrap; font-size: 11px; }
+.furniture-picker .garden-row-name { flex: 1; min-width: 0; }
 
 /* Selected furniture names in the multi-item inspector. */
 .multi-list {

@@ -20,6 +20,23 @@ export const SURFACE_FILL: Record<SurfaceKind, string> = {
   road: "#7d8086",
 };
 
+/** Paving kinds get a block-bond hatch over their fill, beds a sparse dot pattern; both in world metres. */
+const PAVED: SurfaceKind[] = ["patio", "path", "drive", "pavement"];
+
+function SurfacePatterns() {
+  return (
+    <defs>
+      <pattern id="site-bond" width={0.4} height={0.2} patternUnits="userSpaceOnUse">
+        <path d="M0 0.1H0.4M0 0V0.1M0.2 0.1V0.2" fill="none" stroke="#000" strokeOpacity={0.12} strokeWidth={0.012} />
+      </pattern>
+      <pattern id="site-dots" width={0.5} height={0.5} patternUnits="userSpaceOnUse">
+        <circle cx={0.12} cy={0.14} r={0.025} fill="#000" fillOpacity={0.18} />
+        <circle cx={0.37} cy={0.38} r={0.02} fill="#000" fillOpacity={0.14} />
+      </pattern>
+    </defs>
+  );
+}
+
 interface WorldProps {
   site: Site;
   mode: SiteMode;
@@ -41,6 +58,7 @@ export function SiteWorld({ site, mode, sel, tool, px, outlines, walls, clearanc
   const fs = 12 * px;
   return (
     <>
+      <SurfacePatterns />
       {site.surfaces.map((s) => (
         <path
           key={s.id}
@@ -54,6 +72,11 @@ export function SiteWorld({ site, mode, sel, tool, px, outlines, walls, clearanc
           onPointerDown={garden ? (e) => onItemDown(e, { type: "surface", id: s.id, vertex: null }) : undefined}
         />
       ))}
+
+      {site.surfaces.map((s) => {
+        const pat = PAVED.includes(s.kind) ? "site-bond" : s.kind === "bed" ? "site-dots" : null;
+        return pat ? <path key={`pat-${s.id}`} d={outlinePath(s, (p) => p, site.surfaces)} fill={`url(#${pat})`} fillOpacity={garden ? 1 : 0.5} pointerEvents="none" /> : null;
+      })}
 
       {site.neighbours.map((n) => {
         const c = polygonCentroid(n.polygon);

@@ -1413,8 +1413,8 @@ function drawCover(p: Pattern, hex: string, accentHex: string | null): { color: 
         for (let j = 0; j < SQUARES; j++) {
           const x = (i * SQUARE + joint / 2) * sx;
           const y = (j * SQUARE + joint / 2) * sy;
-          const rim = (0.03 + rnd() * 0.022) * sx;
-          const edge = accent.clone().lerp(base, 0.1 + rnd() * 0.25);
+          const rim = (0.018 + rnd() * 0.012) * sx;
+          const edge = accent.clone().lerp(base, 0.3 + rnd() * 0.25);
           const centre = new THREE.Color(vary(base, rnd, 0.04, 0.01));
           for (let k = 0; k <= steps; k++) {
             const f = k / steps;
