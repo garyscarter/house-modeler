@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, POOL, assignSlots, poolFor, type LampLight, type PoolSizes, type Slots, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
+import { LAMPS, POOL, assignSlots, clusterBulbs, focusPoint, poolFor, type LampLight, type PoolSizes, type Slots, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, bulbWorld, bulbsWorld, candela, coneGain, dimOf, floorLamps, fixtureLit, gridPoints, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights, warmthOf } from "./lights";
 import { CATALOGUE, byId, dropOf } from "./catalogue";
 import { fixtureBox } from "./planMath";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
@@ -74,24 +74,54 @@ describe("light fixtures", () => {
     expect(pts).toHaveLength(3);
     pts.map((p) => p[0]).forEach((x, i) => expect(x).toBeCloseTo([-1.2, 0, 1.2][i], 9));
   });
-  it("splits a fitting's lumens over its bulbs and dims them", () => {
+  it("merges a pendant bar's three drops into one dimmed light at their centre, with a wider cone", () => {
     const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("pendant-multi", { id: "pm", dim: 50 })] } as unknown as Floor;
     const lights = floorLamps(floor, 2.4, 0, () => true);
-    expect(lights).toHaveLength(3);
-    expect(lights[0].candela).toBeCloseTo((candela(1200) * 0.5) / 3, 5);
-    expect(lights[0].spot).toBeDefined();
+    expect(lights).toHaveLength(1);
+    expect(lights[0].candela).toBeCloseTo(candela(1200) * 0.5, 5);
+    expect(lights[0].spot!.angle).toBeGreaterThan(LAMPS["pendant-multi"]!.spot!.angle);
+    expect(lights[0].spot!.angle).toBeLessThan(Math.PI / 2);
     expect(lights[0].color).toBe(WARMTH_COLOR[2700]);
-    expect(lights.map((l) => l.id)).toEqual(["g:pm:0", "g:pm:1", "g:pm:2"]);
+    expect(lights.map((l) => l.id)).toEqual(["g:pm:0"]);
+    const bulbs = bulbsWorld(floor, floor.fixtures![0], byId("pendant-multi")!, 2.4, 0);
+    expect(lights[0].pos[0]).toBeCloseTo((bulbs[0][0] + bulbs[1][0] + bulbs[2][0]) / 3, 9);
+    expect(lights[0].pos[1]).toBeCloseTo(bulbs[0][1], 9);
+  });
+  it("clusters bulbs by distance", () => {
+    expect(clusterBulbs([[0, 0, 0], [0.3, 0, 0], [0.6, 0, 0], [0.9, 0, 0]])).toEqual([[0, 1, 2, 3]]);
+    expect(clusterBulbs([[0, 0, 0], [1.2, 0, 0], [0, 0, 1.2], [1.2, 0, 1.2]])).toEqual([[0], [1], [2], [3]]);
+    expect(clusterBulbs([[0, 0, 0], [0.3, 0, 0], [0.6, 0, 0], [0.9, 0, 0], [1.2, 0, 0], [1.5, 0, 0], [1.8, 0, 0]])).toEqual([[0, 1, 2, 3], [4, 5, 6]]);
+    expect(clusterBulbs([])).toEqual([]);
+  });
+  it("looks at the point on the lamp-height plane in the middle of the view", () => {
+    // Straight down from 9 m: the point below, at FOCUS_Y.
+    const down = focusPoint([3, 9, 4], [0, -1, 0]);
+    expect(down[0]).toBe(3);
+    expect(down[1]).toBeCloseTo(1.2, 9);
+    expect(down[2]).toBe(4);
+    // Looking down at 45 degrees from 5 m up: 3.8 m out.
+    const f = focusPoint([0, 5, 0], [0, -Math.SQRT1_2, -Math.SQRT1_2]);
+    expect(f[1]).toBeCloseTo(1.2, 9);
+    expect(f[2]).toBeCloseTo(-3.8, 9);
+    // Level or upward views: 10 m along.
+    expect(focusPoint([0, 1, 0], [1, 0, 0])).toEqual([10, 1, 0]);
+    const up = focusPoint([0, 0.5, 0], [0, 0.6, 0.8]);
+    expect(up[1]).toBeCloseTo(6.5, 9);
+    expect(up[2]).toBeCloseTo(8, 9);
+    // Far above the plane, the focus is capped at 60 m out; close to it, at least 1 m.
+    expect(focusPoint([0, 200, 0], [0, -1, 0])[1]).toBe(140);
+    expect(focusPoint([0, 1.3, 0], [0, -1, 0])[1]).toBeCloseTo(0.3, 9);
   });
   it("sizes the pool to the house's bulbs, capped, whatever is switched on or shown", () => {
     const g = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("pendant-multi", { id: "pm", on: false }), fx("table-lamp", { id: "t" })] } as unknown as Floor;
     const f1 = { ...g, id: "f1", level: 1, fixtures: [fx("downlight-grid", { id: "dg" }), fx("floor-lamp", { id: "fl" }), fx("sofa", { id: "s" })] } as unknown as Floor;
     const model = { floors: [g, f1], ceilingHeight: 2.4 };
-    // 3 pendant bulbs and 4 downlights are spots, the table and floor lamps points.
-    expect(poolFor(model, POOL.high)).toEqual({ point: 2, spot: 7, casters: 4 });
-    // Over the cap: half each, then the rest to the kind that still wants it (here 2 points, 6 spots of 8).
-    expect(poolFor(model, POOL.low)).toEqual({ point: 2, spot: 6, casters: 0 });
+    // The pendant bar (one light for its three drops) and 4 downlights are spots, the table and floor lamps points.
+    expect(poolFor(model, POOL.high)).toEqual({ point: 2, spot: 5, casters: 4 });
+    expect(poolFor(model, POOL.low)).toEqual({ point: 2, spot: 5, casters: 0 });
+    // Over the cap: half each, then the rest to the kind that still wants it.
     expect(poolFor(model, { total: 4, casters: 1 })).toEqual({ point: 2, spot: 2, casters: 1 });
+    expect(poolFor({ ...model, floors: [f1, f1, f1] }, { total: 8, casters: 0 })).toEqual({ point: 3, spot: 5, casters: 0 });
     expect(poolFor({ ...model, floors: [f1, f1, f1, f1] }, { total: 8, casters: 0 })).toEqual({ point: 4, spot: 4, casters: 0 });
     expect(poolFor({ ...model, floors: [f1, f1, f1, f1, f1] }, { total: 8, casters: 0 })).toEqual({ point: 4, spot: 4, casters: 0 });
     expect(poolFor({ floors: [], ceilingHeight: 2.4 }, POOL.high)).toEqual({ point: 0, spot: 0, casters: 0 });

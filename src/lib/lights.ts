@@ -200,7 +200,7 @@ export function poolFor(model: Pick<HouseModel, "floors" | "ceilingHeight">, cap
   return prev && prev.point === next.point && prev.spot === next.spot && prev.casters === next.casters ? prev : next;
 }
 
-/** The `cap` lights nearest to `eye` (world metres), nearest first. Ties keep input order. */
+/** The `cap` lights nearest to `eye` (world metres, usually the view's focusPoint), nearest first. Ties keep input order. */
 export function pickLights<T extends { pos: readonly [number, number, number] }>(lights: T[], eye: readonly [number, number, number], cap: number): T[] {
   if (lights.length <= cap) return lights.slice();
   const d2 = (l: T) => (l.pos[0] - eye[0]) ** 2 + (l.pos[1] - eye[1]) ** 2 + (l.pos[2] - eye[2]) ** 2;
@@ -297,7 +297,31 @@ export function bulbWorld(floor: Floor, fx: Fixture, item: CatalogueItem, ceilin
   return bulbsWorld(floor, fx, item, ceiling, baseY)[0] ?? null;
 }
 
-/** Every lit light on a floor as scene lights, one per bulb (the fitting's lumens split over them unless perBulb), dimmed by the fixture's dimmer (`lit` says which fixtures are lit, see fixtureLit). */
+/** Bulbs of one fitting closer together than this (metres) share one scene light: a pendant bar's drops, a spot bar's heads, a strip's LEDs; a downlight grid's spots stay their own. */
+export const CLUSTER_M = 0.6;
+/** A merged cone is widened by the cluster's radius seen from this far below it (metres). */
+const CLUSTER_THROW = 1.5;
+const MAX_SPOT = 85 * DEG;
+
+/** Groups bulbs greedily: each joins the first cluster whose centre is within `within` of it, else starts one. Returns member indexes. */
+export function clusterBulbs(bulbs: readonly (readonly [number, number, number])[], within = CLUSTER_M): number[][] {
+  const out: { at: [number, number, number]; members: number[] }[] = [];
+  bulbs.forEach((b, i) => {
+    const c = out.find((k) => Math.hypot(k.at[0] - b[0], k.at[1] - b[1], k.at[2] - b[2]) <= within + 1e-9);
+    if (!c) return out.push({ at: [b[0], b[1], b[2]], members: [i] });
+    const n = c.members.push(i);
+    for (let a = 0; a < 3; a++) c.at[a] += (b[a] - c.at[a]) / n;
+  });
+  return out.map((k) => k.members);
+}
+
+/**
+ * Every lit light on a floor as scene lights, dimmed by the fixture's dimmer (`lit` says which fixtures are lit, see
+ * fixtureLit). A fitting's bulbs are one light each, except that bulbs within CLUSTER_M of each other (the drops of a
+ * pendant bar, a spot bar's heads, a strip's LEDs) share one light at their centre, with their lumens added and a
+ * cone widened to cover them: real lights are few (see POOL), and one per fitting lights a kitchen where one per
+ * bulb would run out of slots.
+ */
 export function floorLamps(floor: Floor, ceiling: number, baseY: number, lit: (fx: Fixture, item: CatalogueItem) => boolean): LampLight[] {
   const out: LampLight[] = [];
   for (const fx of floor.fixtures ?? []) {
@@ -305,9 +329,31 @@ export function floorLamps(floor: Floor, ceiling: number, baseY: number, lit: (f
     const lamp = item && lampOf(item);
     if (!item || !lamp || !lit(fx, item)) continue;
     const bulbs = bulbsWorld(floor, fx, item, ceiling, baseY);
+    // Each bulb's share of the fitting's light.
     const cd = (candela(lamp.lumens) * dimOf(fx)) / (lamp.perBulb ? 1 : Math.max(1, bulbs.length));
     const color = lightColor(fx, lamp);
-    bulbs.forEach((pos, i) => out.push({ id: `${floor.id}:${fx.id}:${i}`, pos, color, candela: cd, reach: lamp.reach, spot: lamp.spot }));
+    clusterBulbs(bulbs).forEach((members, k) => {
+      const pos: [number, number, number] = [0, 0, 0];
+      for (const i of members) for (let a = 0; a < 3; a++) pos[a] += bulbs[i][a] / members.length;
+      const radius = Math.max(0, ...members.map((i) => Math.hypot(bulbs[i][0] - pos[0], bulbs[i][1] - pos[1], bulbs[i][2] - pos[2])));
+      const spot = lamp.spot && (radius > 0 ? { angle: Math.min(MAX_SPOT, lamp.spot.angle + Math.atan(radius / CLUSTER_THROW)), penumbra: lamp.spot.penumbra } : lamp.spot);
+      out.push({ id: `${floor.id}:${fx.id}:${k}`, pos, color, candela: cd * members.length, reach: lamp.reach, spot });
+    });
   }
   return out;
+}
+
+/** Height (metres above a floor's base) the view is taken to be looking at, for picking the lights that matter: about lamp height. */
+export const FOCUS_Y = 1.2;
+
+/**
+ * Where the view is looking: the point on the plane y = `y` along the view from `eye` in direction `dir` (a unit
+ * vector), between 1 and 60 m out, or 10 m along the view when it does not look down at that plane. Lights are
+ * picked by their distance from this point, not from the eye: seen from above, the eye is nearest to upstairs and
+ * ceiling lights everywhere, while the room in the middle of the screen is what should be lit.
+ */
+export function focusPoint(eye: readonly [number, number, number], dir: readonly [number, number, number], y = FOCUS_Y): [number, number, number] {
+  const t = dir[1] < -0.05 ? (y - eye[1]) / dir[1] : NaN;
+  const d = Number.isFinite(t) ? Math.min(60, Math.max(1, t)) : 10;
+  return [eye[0] + dir[0] * d, eye[1] + dir[1] * d, eye[2] + dir[2] * d];
 }

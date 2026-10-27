@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { assignSlots, coneGain, type LampLight, type PoolSizes, type Slots } from "../lib/lights";
+import { assignSlots, coneGain, focusPoint, type LampLight, type PoolSizes, type Slots } from "../lib/lights";
 import { lampPoolChanged, lampStats, useLampPool } from "./lampPool";
 
 /** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
@@ -11,8 +11,9 @@ export const LAMP_SCALE = 0.06;
  * spotIntensity). Tuned so a 450 lm downlight from a 2.25 m ceiling makes a soft pool about 1.5 m across.
  */
 export const SPOT_SCALE = 0.03;
-/** Re-pick the nearest lamps once the camera has moved this far (metres). */
+/** Re-pick the nearest lamps once the view's focus has moved this far (metres). */
 const REPICK_M = 1;
+const _dir = new THREE.Vector3();
 /** Where an empty slot's light waits: far below the house, dark and with a tiny reach, so it lights and shadows nothing. */
 const PARK: [number, number, number] = [0, -500, 0];
 
@@ -27,12 +28,12 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 /**
  * The lit lamps of every shown floor as a pool of lights of a fixed size `sizes` (poolFor in lib/lights.ts: one slot
  * per lamp bulb in the house, up to POOL's cap): point lights, and spot lights aimed straight down for fittings with a
- * cone, filled with the lamps nearest to the camera (the rest only glow). Three bakes the number of lights into every
+ * cone, filled with the lamps nearest to where the view is looking (focusPoint; the rest only glow). Three bakes the number of lights into every
  * lit material's shader, so the pool keeps its size while lights switch: an empty slot stays mounted, parked dark, and
  * the whole pool is hidden while no lamp is lit. Precompile builds the lit shaders ahead of the first switch-on, and
  * again when the size changes (a light fitting added or removed). The nearest `casters` spot slots cast shadows; point
  * lights never do. A lamp that stays picked keeps its slot (assignSlots). The pick runs when the lamps change or the
- * camera has moved a metre, so orbiting costs no React renders.
+ * focus has moved a metre, so orbiting costs no React renders.
  */
 export function LampLights({ lamps, sizes }: { lamps: LampLight[]; sizes: PoolSizes }) {
   const gl = useThree((s) => s.gl);
@@ -47,15 +48,17 @@ export function LampLights({ lamps, sizes }: { lamps: LampLight[]; sizes: PoolSi
     sized.current = true;
   }, [gl, sizes]);
   const [slots, setSlots] = useState<Slots>(() => assignSlots(null, [], [0, 0, 0], sizes));
-  const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; sizes: PoolSizes }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, sizes });
+  const last = useRef<{ focus: THREE.Vector3; lamps: LampLight[] | null; sizes: PoolSizes }>({ focus: new THREE.Vector3(Infinity, 0, 0), lamps: null, sizes });
   const repick = () => {
     const l = last.current;
     const eye = camera.position;
-    if (l.lamps === lamps && l.sizes === sizes && l.eye.distanceTo(eye) < REPICK_M) return;
-    l.eye.copy(eye);
+    const d = camera.getWorldDirection(_dir);
+    const focus = focusPoint([eye.x, eye.y, eye.z], [d.x, d.y, d.z]);
+    if (l.lamps === lamps && l.sizes === sizes && l.focus.distanceTo(_dir.set(focus[0], focus[1], focus[2])) < REPICK_M) return;
+    l.focus.set(focus[0], focus[1], focus[2]);
     l.lamps = lamps;
     l.sizes = sizes;
-    setSlots((prev) => assignSlots(prev, lamps, [eye.x, eye.y, eye.z], sizes));
+    setSlots((prev) => assignSlots(prev, lamps, focus, sizes));
   };
   useEffect(repick);
   useFrame(repick);
