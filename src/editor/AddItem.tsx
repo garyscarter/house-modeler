@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CATEGORIES, filterCatalogue, MINE, type CatalogueItem } from "../lib/catalogue";
+import { filterCatalogue, MINE, SCOPE_CATEGORIES, type CatalogueItem, type PickerScope } from "../lib/catalogue";
 import { pieceItem } from "../lib/myFurniture";
 import { useStore } from "../store";
 import { PieceForm } from "./MyFurniture";
@@ -19,7 +19,10 @@ export function AddPopover({
   open,
   onOpenChange,
   children,
+  scope = "furnish",
 }: {
+  /** Which catalogue the picker offers: Furnish (furniture and lights) or Electrics (lights and electrical points). */
+  scope?: PickerScope;
   activeId?: string | null;
   onPick?: (item: CatalogueItem) => void;
   open: boolean;
@@ -70,6 +73,7 @@ export function AddPopover({
     >
       {children ?? (
         <CataloguePicker
+          scope={scope}
           activeId={activeId}
           onPick={(item) => {
             onOpenChange(false);
@@ -92,20 +96,23 @@ function FixtureThumb({ item, size = 36 }: { item: CatalogueItem; size?: number 
 }
 
 /** Search box, category chips and the matching rows. */
-export function CataloguePicker({ activeId, onPick }: { activeId?: string | null; onPick: (item: CatalogueItem) => void }) {
+export function CataloguePicker({ activeId, onPick, scope = "furnish" }: { activeId?: string | null; onPick: (item: CatalogueItem) => void; scope?: PickerScope }) {
   const category = usePanelPrefs((s) => s.addCategory);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const [query, setQuery] = useState("");
   const pieces = useStore((s) => s.pieces);
   const addPiece = useStore((s) => s.addPiece);
   const [adding, setAdding] = useState(false);
-  const cat = category === "All" || category === MINE || CATEGORIES.includes(category) ? category : "All";
-  const items = filterCatalogue(query, cat, pieces.map(pieceItem));
+  // Electrics has no "Mine": the owner's pieces are furniture.
+  const furnish = scope === "furnish";
+  const cats = SCOPE_CATEGORIES[scope];
+  const cat = category === "All" || (furnish && category === MINE) || cats.includes(category) ? category : "All";
+  const items = filterCatalogue(query, cat, furnish ? pieces.map(pieceItem) : [], scope);
   return (
     <div className="catalogue-picker furniture-picker">
       <input type="search" autoFocus placeholder="Search furniture" aria-label="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="chips" role="group" aria-label="Category">
-        {["All", MINE, ...CATEGORIES].map((c) => (
+        {["All", ...(furnish ? [MINE] : []), ...cats].map((c) => (
           <button key={c} className={c === cat ? "chip active" : "chip"} aria-pressed={c === cat} onClick={() => setPrefs({ addCategory: c })}>
             {c}
           </button>

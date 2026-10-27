@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAMPS, LIGHTS_AUTO_ALTITUDE, candela, fixtureLit, isLightItem, lampGlow, lightsMaster, lightsOn, litRooms, pickLights } from "./lights";
+import { LAMPS, LIGHTS_AUTO_ALTITUDE, WARMTH_COLOR, candela, fixtureLit, isLightItem, lampBulbs, lampGlow, lampOutput, lightsMaster, lightsOn, litRooms, pickLights } from "./lights";
 import { byId } from "./catalogue";
 import { NIGHT_PRESET_ALTITUDE, nightHour } from "./dusk";
 import { dayOfYear, solarPosition, sunTimes } from "./sun";
@@ -104,5 +104,37 @@ describe("nightHour", () => {
     const h = nightHour(site, YEAR, dayOfYear(YEAR, 6, 21));
     expect(h).toBeGreaterThan(22);
     expect(h).toBeLessThanOrEqual(23.75);
+  });
+});
+
+describe("ceiling and wall lights", () => {
+  it("are lights, with spots for downlights and bars", () => {
+    for (const id of ["light-pendant", "light-pendant-3", "light-flush", "light-downlight", "light-downlight-grid", "light-spot-bar", "light-wall", "light-outside", "light-strip"]) expect(isLightItem(byId(id)!), id).toBe(true);
+    expect(LAMPS.downlight?.spot).toBeDefined();
+    expect(LAMPS["spot-bar"]?.spot).toBeDefined();
+    expect(LAMPS.pendant?.spot).toBeUndefined();
+  });
+  it("go dark when any switch that controls them is off", () => {
+    const item = byId("light-pendant")!;
+    expect(fixtureLit(fx("light-pendant"), item, "on", null, [{}, { on: true }])).toBe(true);
+    expect(fixtureLit(fx("light-pendant"), item, "on", null, [{}, { on: false }])).toBe(false);
+    expect(fixtureLit(fx("light-pendant"), item, "on", null)).toBe(true);
+  });
+  it("have one bulb per grid point, centred, and three on a cluster or a bar", () => {
+    const grid = byId("light-downlight-grid")!;
+    const bulbs = lampBulbs({ cols: 3, rows: 2, pitch: 1 }, grid, { w: 2.09, d: 1.09, h: 0.02 });
+    expect(bulbs).toHaveLength(6);
+    expect(bulbs.map((b) => b[0]).sort((a, b) => a - b)).toEqual([-1, -1, 0, 0, 1, 1]);
+    expect(bulbs.map((b) => b[2]).sort((a, b) => a - b)).toEqual([-0.5, -0.5, -0.5, 0.5, 0.5, 0.5]);
+    expect(lampBulbs({}, byId("light-pendant-3")!, { w: 0.9, d: 0.25, h: 0.2 })).toHaveLength(3);
+    expect(lampBulbs({}, byId("light-spot-bar")!, { w: 0.75, d: 0.08, h: 0.15 })).toHaveLength(3);
+    expect(lampBulbs({}, byId("light-pendant")!, { w: 0.3, d: 0.3, h: 0.25 })).toHaveLength(1);
+    expect(lampBulbs({}, byId("sofa-3")!, { w: 2, d: 1, h: 1 })).toEqual([]);
+  });
+  it("dims and warms", () => {
+    const item = byId("light-pendant")!;
+    expect(lampOutput({}, item)).toEqual({ lumens: 800, color: LAMPS.pendant!.color });
+    expect(lampOutput({ dim: 25, warmth: 4000 }, item)).toEqual({ lumens: 200, color: WARMTH_COLOR[4000] });
+    expect(lampOutput({}, byId("sofa-3")!)).toBeUndefined();
   });
 });

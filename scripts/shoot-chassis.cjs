@@ -2,7 +2,7 @@ const { chromium, devices } = require('/opt/node22/lib/node_modules/playwright')
 const out = process.env.OUT || '/tmp/shots';
 require('fs').mkdirSync(out, { recursive: true });
 // Usage: PORT=5201 OUT=/path/to/shots node scripts/shoot-chassis.cjs  (against a running `npx vite --port 5201`)
-// Screenshots every mode (Build, Decorate, Furnish, Garden, Plot, Review) at phone (390x844), iPad portrait (820x1180) and iPad landscape (1180x820), all touch.
+// Screenshots every mode (Build, Decorate, Furnish, Electrics, Garden, Plot, Review) at phone (390x844), iPad portrait (820x1180) and iPad landscape (1180x820), all touch.
 const sizes = [
   ['phone', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }],
   ['tablet-portrait', { viewport: { width: 820, height: 1180 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }],
@@ -35,6 +35,9 @@ const sizes = [
     await page.evaluate(() => window.__houseStore.getState().setMode('furnish'));
     await page.waitForTimeout(800);
     await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-furnish.png` });
+    await page.evaluate(() => window.__houseStore.getState().setMode('electrics'));
+    await page.waitForTimeout(800);
+    await page.screenshot({ timeout: 120000, animations: "disabled", path: `${out}/${name}-plan-electrics.png` });
     // Garden: the plan with the panel, then with a table and a tree placed and the table selected (the phone sheet shows its fields), then 3D.
     await page.evaluate(() => window.__houseStore.getState().setMode('garden'));
     await page.waitForTimeout(1500);

@@ -401,6 +401,39 @@ export interface Fixture {
   joinery?: JoineryConfig;
   /** Lights (lamps, lit mirrors, ceiling lights): switched on. Absent = on; the Lights master in the sun study still decides whether it is lit (see lib/lights.ts). */
   on?: boolean;
+  /**
+   * Light switches (Electrics): ids of the light fixtures this switch controls, on any floor of the same model.
+   * A light is lit only when every switch that lists it is on (lib/lights.ts fixtureLit). Absent = none.
+   * Ids that no longer name a light are pruned by lib/electrics.ts pruneLinks; never rely on them being valid.
+   */
+  controls?: string[];
+  /** Ceiling lights hung on a flex or rod (pendants): metres from the ceiling to the top of the fitting. Absent = the catalogue's `drop`, else 0. */
+  drop?: number;
+  /** Lights: colour temperature in kelvin. Absent = 2700 (warm). */
+  warmth?: LightWarmth;
+  /** Lights: dimmer level in percent, 1-100. Absent = 100. */
+  dim?: number;
+  /** Downlight grids: bulbs across (along w) and down (along d), and their spacing in metres. Absent = the catalogue's `grid`. */
+  cols?: number;
+  rows?: number;
+  pitch?: number;
+}
+
+/** Colour temperatures offered for a light: warm, soft and cool white. */
+export type LightWarmth = 2700 | 3000 | 4000;
+
+export type CircuitKind = "lighting" | "ring" | "radial" | "cooker" | "shower" | "ev" | "other";
+
+/**
+ * An electrical circuit (Electrics mode): a named group of points. Grouping only; nothing is checked beyond
+ * dropping ids that no longer name a fixture (lib/electrics.ts pruneCircuits).
+ */
+export interface Circuit {
+  id: string;
+  name: string;
+  kind: CircuitKind;
+  /** Fixture ids (electrical points and lights) across every floor of the model. A point belongs to at most one circuit. */
+  points: string[];
 }
 
 export interface Floor {
@@ -592,6 +625,8 @@ export interface HouseModel {
   basedOn?: { id: string; version: number };
   /** Total floor area printed on the listing's floorplan (m²), to check the tracing against. */
   listedArea?: number;
+  /** Electrical circuits (Electrics mode). Absent = none; the wiring guide's circuit column is then blank. */
+  circuits?: Circuit[];
 }
 
 /** A point in world metres on the plan: x to the right, y towards the front (bottom of the plan). */

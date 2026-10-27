@@ -41,8 +41,8 @@ import { svgPoints,
   cornerCorners,
 } from "./planMath";
 import { floor, rect } from "./testing";
-import type { CatalogueItem } from "./catalogue";
-import type { Opening } from "../types";
+import { byId, type CatalogueItem } from "./catalogue";
+import type { Fixture, Opening } from "../types";
 
 // 100 px per metre throughout, so coordinates read as centimetres.
 const PX = 100;
@@ -530,5 +530,21 @@ describe("cornerCorners with square ends", () => {
     const both = cornerCorners({ x: 0, y: 0 }, 100, 100, 0, "flat", { endBack: 20, endSide: 30 });
     expect(both).toHaveLength(5);
     expect(both[2]).toEqual({ x: 50, y: -30 });
+  });
+});
+
+describe("fixtureBox for ceiling items and grids", () => {
+  const fx = (type: string, extra: Partial<Fixture> = {}): Fixture => ({ id: type, type, x: 0, y: 0, rot: 0, ...extra });
+  it("hangs a pendant its drop below the ceiling, and assumes 2.4 m without one", () => {
+    const pendant = byId("light-pendant")!;
+    expect(fixtureBox(fx("light-pendant"), pendant, 2.5).z0).toBeCloseTo(2.5 - 0.55 - 0.25);
+    expect(fixtureBox(fx("light-pendant", { drop: 1 }), pendant, 2.5).z0).toBeCloseTo(2.5 - 1 - 0.25);
+    expect(fixtureBox(fx("light-pendant"), pendant).z0).toBeCloseTo(2.4 - 0.55 - 0.25);
+    expect(fixtureBox(fx("light-flush"), byId("light-flush")!, 2.4).z0).toBeCloseTo(2.3);
+  });
+  it("sizes a downlight grid from its bulbs", () => {
+    const b = fixtureBox(fx("light-downlight-grid", { cols: 4, rows: 3, pitch: 0.8, w: 9 }), byId("light-downlight-grid")!, 2.4);
+    expect(b.w).toBeCloseTo(3 * 0.8 + 0.09);
+    expect(b.d).toBeCloseTo(2 * 0.8 + 0.09);
   });
 });

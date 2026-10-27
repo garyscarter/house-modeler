@@ -37,6 +37,9 @@ export function ModePanel() {
     if (mode === "review") return null;
     if (!model || !floor) return <p className="muted small">Load a house to start.</p>;
     switch (mode) {
+      case "electrics":
+        // Interim (Chunk 0): Janet Jackson's ElectricsPanel replaces this line.
+        return <p className="muted small">Place lights, switches and sockets on the plan with Add.</p>;
       case "build":
         return room && roomFloor ? (
           <BuildRoomPanel key={room.id} variant={variant} floor={roomFloor} room={room} onChange={(p) => updateRoom(variant, roomFloor.id, room.id, p)} />

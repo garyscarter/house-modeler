@@ -179,7 +179,7 @@ export function areaReport(current?: HouseModel, proposed?: HouseModel): AreaRep
 // Changes
 
 export type Unit = "m²" | "m" | "each";
-export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site" | "Garden";
+export type ChangeCategory = "Floor" | "Room" | "Wall" | "Door" | "Window" | "Opening" | "Joinery" | "Site" | "Garden" | "Electrics";
 export type CostLineId =
   | "newFloorArea"
   | "removeWall"
@@ -205,7 +205,9 @@ export type CostLineId =
   | "gardenLighting"
   | "gardenPlanting"
   | "hedging"
-  | "removeGardenItem";
+  | "removeGardenItem"
+  // Electrics (electricalChanges): each new or moved light, switch, socket or other point
+  | "electricalWorks";
 
 export interface Change {
   key: string;
@@ -470,6 +472,15 @@ export function joineryChanges(fa: Floor | undefined, fb: Floor, ceilA: number, 
   return out;
 }
 
+/**
+ * Costed changes to electrical points on one floor (Dua Lipa implements; docs/electrics-plan.md section 7): new
+ * points and points moved 0.3 m or more, grouped per room and catalogue type, on the electricalWorks line, quantity
+ * = points (a downlight grid counts every bulb); removed points for information only. Category "Electrics".
+ */
+export function electricalChanges(_fa: Floor | undefined, _fb: Floor): JoineryChange[] {
+  return [];
+}
+
 export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?: Site }): Change[] {
   const out: Change[] = [];
   for (const { level, a: fa, b: fb } of pairFloors(a, b)) {
@@ -633,6 +644,8 @@ export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?:
 
     // Fitted joinery.
     for (const c of joineryChanges(fa, fb!, a.ceilingHeight, b.ceilingHeight)) push(c);
+    // Electrical points (lights, switches, sockets and the rest).
+    for (const c of electricalChanges(fa, fb!)) push(c);
   }
   if (sites) out.push(...diffSites(sites.a, sites.b));
   return out;
@@ -674,6 +687,7 @@ export const COST_LINES: CostLineDef[] = [
   { id: "gardenPlanting", label: "Trees, shrubs and plants", unit: "each", example: 40 },
   { id: "hedging", label: "Hedging, screens and climbers", unit: "m", example: 60 },
   { id: "removeGardenItem", label: "Remove a garden item", unit: "each", example: 60 },
+  { id: "electricalWorks", label: "Electrical works (per new point)", unit: "each", example: 120 },
 ];
 
 /** Key in store.costRates for the contingency percentage. */

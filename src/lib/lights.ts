@@ -1,5 +1,5 @@
-import type { Fixture, Floor } from "../types";
-import type { CatalogueItem, Symbol } from "./catalogue";
+import type { Fixture, Floor, LightWarmth } from "../types";
+import { gridOf, type CatalogueItem, type Symbol } from "./catalogue";
 import { pointInPolygon } from "./geometry";
 import { lightGlow } from "./dusk";
 
@@ -10,8 +10,9 @@ import { lightGlow } from "./dusk";
  * (components/SunControls.tsx) owns the master switch.
  *
  * A light is lit when its own switch is on (`Fixture.on`, absent = on) AND
- * the master lets lights be on: "auto" means from dusk in a sun study,
- * "on" always, "off" never.
+ * every wall switch that controls it (`Fixture.controls` on a switch, see
+ * lib/electrics.ts controllersOf) is on AND the master lets lights be on:
+ * "auto" means from dusk in a sun study, "on" always, "off" never.
  */
 
 export type LightsMaster = "auto" | "on" | "off";
@@ -49,6 +50,11 @@ export interface LampDef {
   bulb: (box: { w: number; d: number; h: number }) => [number, number, number];
   /** How far the light reaches (metres); beyond it the point light is cut off. */
   reach: number;
+  /**
+   * A spot light aiming straight down (downlights, spot bars, strips) instead of a point light: the cone's
+   * half-angle in radians and its soft edge, 0 to 1 (three.js SpotLight angle and penumbra).
+   */
+  spot?: { angle: number; penumbra: number };
 }
 
 const WARM = "#ffd9a8";
@@ -64,7 +70,49 @@ export const LAMPS: Partial<Record<Symbol, LampDef>> = {
   "desk-lamp": { lumens: 400, color: WARM, reach: 3, bulb: ({ d, h }) => [0, h - 0.11, d / 2 - d * 0.2] },
   // Edge-lit mirror: a soft cool glow from the whole face.
   "mirror-lit": { lumens: 600, color: COOL_WHITE, reach: 3, bulb: ({ d, h }) => [0, h / 2, d / 2 + 0.05] },
+  // Ceiling and wall lights (category Lighting). Lumens are per bulb: a grid, cluster or bar has several (lampBulbs).
+  pendant: { lumens: 800, color: WARM, reach: 6, bulb: ({ h }) => [0, h * 0.4, 0] },
+  "pendant-multi": { lumens: 400, color: WARM, reach: 4.5, bulb: ({ h }) => [0, h * 0.4, 0] },
+  "ceiling-flush": { lumens: 1500, color: WARM, reach: 6, bulb: ({ h }) => [0, h * 0.5, 0] },
+  downlight: { lumens: 500, color: WARM, reach: 4.5, bulb: ({ h }) => [0, h * 0.5, 0], spot: { angle: 0.55, penumbra: 0.5 } },
+  "downlight-grid": { lumens: 500, color: WARM, reach: 4.5, bulb: ({ h }) => [0, h * 0.5, 0], spot: { angle: 0.55, penumbra: 0.5 } },
+  "spot-bar": { lumens: 350, color: WARM, reach: 4, bulb: ({ h }) => [0, h * 0.3, 0], spot: { angle: 0.35, penumbra: 0.4 } },
+  "wall-light": { lumens: 600, color: WARM, reach: 4.5, bulb: ({ d, h }) => [0, h * 0.5, d * 0.1] },
+  "strip-light": { lumens: 300, color: WARM, reach: 2, bulb: ({ d, h }) => [0, h * 0.5, d * 0.1], spot: { angle: 1.1, penumbra: 0.8 } },
 };
+
+/** Light colour per colour temperature (Fixture.warmth). */
+export const WARMTH_COLOR: Record<LightWarmth, string> = { 2700: WARM, 3000: "#ffe6c8", 4000: "#f2f4ff" };
+export const WARMTHS: LightWarmth[] = [2700, 3000, 4000];
+export const WARMTH_LABEL: Record<LightWarmth, string> = { 2700: "Warm (2700 K)", 3000: "Soft (3000 K)", 4000: "Cool (4000 K)" };
+
+/**
+ * Every bulb of a light in its own frame (as LampDef.bulb): one for most, one per grid point of a downlight grid
+ * (cols along x, rows along z, centred), three across a pendant cluster and a spot bar. Empty for non-lights.
+ * The 3D view turns each into a point or spot light, all switched together.
+ */
+export function lampBulbs(fx: Pick<Fixture, "cols" | "rows" | "pitch">, item: Pick<CatalogueItem, "symbol" | "grid">, box: { w: number; d: number; h: number }): [number, number, number][] {
+  const lamp = LAMPS[item.symbol];
+  if (!lamp) return [];
+  const [, y, z] = lamp.bulb(box);
+  const g = gridOf(fx, item);
+  if (g) {
+    const out: [number, number, number][] = [];
+    for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) out.push([(c - (g.cols - 1) / 2) * g.pitch, y, (r - (g.rows - 1) / 2) * g.pitch]);
+    return out;
+  }
+  if (item.symbol === "pendant-multi") return [-box.w / 3, 0, box.w / 3].map((x) => [x, y, z]);
+  if (item.symbol === "spot-bar") return [-box.w * 0.35, 0, box.w * 0.35].map((x) => [x, y, z]);
+  return [lamp.bulb(box)];
+}
+
+/** A light's output per bulb: its lumens scaled by the dimmer (Fixture.dim, percent, absent = 100) and its colour (Fixture.warmth). */
+export function lampOutput(fx: Pick<Fixture, "dim" | "warmth">, item: Pick<CatalogueItem, "symbol">): { lumens: number; color: string } | undefined {
+  const lamp = LAMPS[item.symbol];
+  if (!lamp) return undefined;
+  const dim = fx.dim !== undefined && Number.isFinite(fx.dim) ? Math.max(1, Math.min(100, fx.dim)) : 100;
+  return { lumens: (lamp.lumens * dim) / 100, color: fx.warmth ? WARMTH_COLOR[fx.warmth] ?? lamp.color : lamp.color };
+}
 
 export const isLightItem = (item: Pick<CatalogueItem, "symbol">): boolean => item.symbol in LAMPS;
 export const lampOf = (item: Pick<CatalogueItem, "symbol">): LampDef | undefined => LAMPS[item.symbol];
@@ -72,9 +120,18 @@ export const lampOf = (item: Pick<CatalogueItem, "symbol">): LampDef | undefined
 /** The fixture's own switch (absent = on). */
 export const switchedOn = (fx: Pick<Fixture, "on">): boolean => fx.on !== false;
 
-/** A light fixture that is lit now: its own switch on and the master allowing it. False for anything that is not a light. */
-export function fixtureLit(fx: Pick<Fixture, "on">, item: Pick<CatalogueItem, "symbol">, master: LightsMaster, altitude: number | null): boolean {
-  return isLightItem(item) && switchedOn(fx) && lightsOn(master, altitude);
+/**
+ * A light fixture that is lit now: its own switch on, every switch that controls it on (`controllers`, from
+ * lib/electrics.ts controllersOf; none = no wall switch) and the master allowing it. False for anything that is not a light.
+ */
+export function fixtureLit(
+  fx: Pick<Fixture, "on">,
+  item: Pick<CatalogueItem, "symbol">,
+  master: LightsMaster,
+  altitude: number | null,
+  controllers: readonly Pick<Fixture, "on">[] = [],
+): boolean {
+  return isLightItem(item) && switchedOn(fx) && controllers.every(switchedOn) && lightsOn(master, altitude);
 }
 
 /** Glow of a lit lamp's shade in daylight: lit lamps always read as lit, even with the sun up. */
