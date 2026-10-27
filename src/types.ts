@@ -388,6 +388,8 @@ export interface Fixture {
   endSide?: number;
   /** Pictures: which sample print is in the frame (see lib/art.ts). */
   print?: string;
+  /** Rugs: the pattern id (see lib/rugs.ts); unset = plain. */
+  rug?: string;
   /** Pictures: the frame style. */
   frame?: "black" | "oak" | "white" | "none";
   color?: string;

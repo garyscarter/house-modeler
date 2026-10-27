@@ -9,6 +9,8 @@ import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, ch
 import { fixtureBox } from "../lib/planMath";
 import { FRAME_COLOUR, FRAME_W, isPicture, type PictureFrame } from "../lib/art";
 import { artTexture } from "./artTextures";
+import { RUG_GROUND, rugPattern } from "../lib/rugs";
+import { rugTexture } from "./rugTextures";
 import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type Joinery } from "../lib/joinery";
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
@@ -38,7 +40,9 @@ export function Fixtures({ floor, ceiling, lightsOn = false }: { floor: Floor; c
       ))}
       {(floor.fixtures ?? []).map((f) => {
         const item = byId(f.type);
-        return item && isPicture(item) ? <PrintFace key={f.id} floor={floor} fixture={f} item={item} ceiling={ceiling} /> : null;
+        if (item && isPicture(item)) return <PrintFace key={f.id} floor={floor} fixture={f} item={item} ceiling={ceiling} />;
+        if (item && item.symbol === "rug" && rugPattern(f)) return <RugFace key={f.id} floor={floor} fixture={f} item={item} />;
+        return null;
       })}
     </group>
   );
@@ -60,6 +64,25 @@ function PrintFace({ floor, fixture: f, item, ceiling }: { floor: Floor; fixture
   return (
     <group position={[p.x, b.z0, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
       <mesh geometry={geometry} material={material} position={[0, b.h / 2, b.d / 2 + 0.001]} />
+    </group>
+  );
+}
+
+/** The printed top of a patterned rug: a textured plane just above its pile. */
+function RugFace({ floor, fixture: f, item }: { floor: Floor; fixture: Fixture; item: CatalogueItem }) {
+  const p = toWorld(floor, { x: f.x, y: f.y });
+  const w = f.w ?? item.w;
+  const d = f.d ?? item.d;
+  const h = f.h ?? item.h;
+  const id = rugPattern(f) ?? "leopard";
+  const texture = useMemo(() => rugTexture(id, w, d), [id, w, d]);
+  const geometry = useMemo(() => new THREE.PlaneGeometry(w, d), [w, d]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ map: texture, roughness: 0.95 }), [texture]);
+  useEffect(() => () => material.dispose(), [material]);
+  return (
+    <group position={[p.x, FLOOR_SURFACE + h + 0.002, p.y]} rotation={[0, (-f.rot * Math.PI) / 180, 0]}>
+      <mesh geometry={geometry} material={material} rotation={[-Math.PI / 2, 0, 0]} receiveShadow />
     </group>
   );
 }
@@ -95,8 +118,9 @@ function buildFixtureMeshes(floor: Floor, ceiling: number, lightsOn: boolean): F
     const b = fixtureBox(f, item, ceiling);
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) || item.symbol === "shaker-wardrobe" ? joineryOf(f, item, b) : undefined;
-    const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : (f.color ?? item.color);
-    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lightsOn && switchedOn(f))) {
+    const pat = item.symbol === "rug" ? rugPattern(f) : undefined;
+    const colour = isPicture(item) ? FRAME_COLOUR[f.frame ?? "black"] : pat ? RUG_GROUND[pat] : (f.color ?? item.color);
+    for (const pt of fixtureParts(item.symbol, b.w, b.d, b.h, colour, f.worktop ?? WORKTOP, b.z0, j, f.seat, f.front, cornerEnds(b.w, b.d, f), f.frame, lightsOn && switchedOn(f), !!pat)) {
       const axis = pt.axis === "x" ? AXIS_X : pt.axis === "z" ? AXIS_Z : null;
       _quat.setFromEuler(axis ? _euler.set(axis[0], axis[1], axis[2]) : _euler.set(pt.tilt ?? 0, pt.rotY ?? 0, 0));
       _part.compose(_pos.set(pt.p[0], pt.p[1], pt.p[2]), _quat, pt.g === "soft" ? _scale.set(1, 1, 1) : _scale.set(pt.s[0], pt.s[1], pt.s[2]));
@@ -280,6 +304,7 @@ function fixtureParts(
   ends = { endBack: 0, endSide: 0 },
   frame?: PictureFrame,
   lit = false,
+  patterned = false,
 ): Part[] {
   const out: Part[] = [];
   /** A lamp's glowing part: the warm glow when lit, else `off` (the shade's own fabric in shadow, or a frosted bulb), matt. */
@@ -808,6 +833,7 @@ function fixtureParts(
       // Lies on the room's floor surface (not the storey base, which the floor finish covers), with a border.
       const y = FLOOR_SURFACE;
       box(0, y + h / 2, 0, w, h, d, color);
+      if (patterned) break; // the printed face replaces the border
       box(0, y + h + 0.001, 0, w - Math.min(0.24, w * 0.16), 0.002, d - Math.min(0.24, d * 0.16), shade(color, 0.88));
       break;
     }
