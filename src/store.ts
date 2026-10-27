@@ -309,7 +309,7 @@ export const useStore = create<State>()(
         viewMode: "single",
         selectedRoomId: null,
         selectedPhotoId: null,
-        showLabels: true,
+        showLabels: false,
         showCeilings: false,
         doorsOpen: false,
         planImage: { show: true, opacity: 0.3 },
