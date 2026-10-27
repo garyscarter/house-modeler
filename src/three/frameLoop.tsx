@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
-import type * as THREE from "three";
+import * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
 import { trackScene } from "./textures";
@@ -89,6 +89,27 @@ export function TrackScene() {
   return null;
 }
 
+/**
+ * Objects drawn only in some states (the physical sky shows only during a sun study), per renderer.
+ * Precompile compiles them with the scene, so the first switch into that state doesn't stall on a
+ * shader compile. Register stand-ins (a mesh sharing the material), not the live objects: compiling
+ * only reads them, but they must never be added to a scene.
+ */
+const offstage = new WeakMap<THREE.WebGLRenderer, Set<THREE.Object3D>>();
+
+/** Adds `objects` to this renderer's precompile list while the calling component is mounted. */
+export function useOffstageCompile(objects: THREE.Object3D[]) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    let set = offstage.get(gl);
+    if (!set) offstage.set(gl, (set = new Set()));
+    for (const o of objects) set.add(o);
+    return () => {
+      for (const o of objects) set.delete(o);
+    };
+  }, [gl, objects]);
+}
+
 /** Longest wait for shaders to compile before drawing anyway, ms. */
 const COMPILE_TIMEOUT = 5000;
 
@@ -102,9 +123,14 @@ const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()
  * program. `before` is awaited first, so lazily loaded parts that change the
  * renderer (the post-processing chunk) are in place. The viewer holds its
  * frame loop until `onDone` is called. Anything not ready in time simply
- * compiles on first use, as it would have anyway.
+ * compiles on first use, as it would have anyway. Objects registered with
+ * useOffstageCompile are compiled too, lit as the scene is. With `offscreen`
+ * (post-processing on), the scene is drawn into the composer's buffer, not the
+ * canvas, so it is compiled with a render target bound: those programs differ
+ * (linear output, no tone mapping) and would otherwise all compile again on
+ * the first frame.
  */
-export function Precompile({ token, before, onDone }: { token: string; before?: () => Promise<unknown>; onDone: (token: string) => void }) {
+export function Precompile({ token, offscreen = false, before, onDone }: { token: string; offscreen?: boolean; before?: () => Promise<unknown>; onDone: (token: string) => void }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -122,7 +148,18 @@ export function Precompile({ token, before, onDone }: { token: string; before?: 
         await nextFrame();
         await nextFrame();
         if (cancelled) return;
-        await Promise.race([gl.compileAsync(scene, camera), new Promise((r) => setTimeout(r, COMPILE_TIMEOUT))]);
+        // compileAsync picks each program while it is called; only the wait for linking is async.
+        const target = offscreen ? new THREE.WebGLRenderTarget(1, 1) : null;
+        const previous = gl.getRenderTarget();
+        let compiling: Promise<unknown>;
+        gl.setRenderTarget(target);
+        try {
+          compiling = Promise.all([gl.compileAsync(scene, camera), ...[...(offstage.get(gl) ?? [])].map((o) => gl.compileAsync(o, camera, scene))]);
+        } finally {
+          gl.setRenderTarget(previous);
+          target?.dispose();
+        }
+        await Promise.race([compiling, new Promise((r) => setTimeout(r, COMPILE_TIMEOUT))]);
       } catch {
         // Compiling ahead is only an optimisation; draw regardless.
       }
@@ -131,6 +168,6 @@ export function Precompile({ token, before, onDone }: { token: string; before?: 
     return () => {
       cancelled = true;
     };
-  }, [gl, scene, camera, token]);
+  }, [gl, scene, camera, token, offscreen]);
   return null;
 }
