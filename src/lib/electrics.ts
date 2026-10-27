@@ -382,14 +382,92 @@ export interface TotalRow {
   count: number;
 }
 
-export function pointRows(_model: HouseModel, _numbered?: NumberedPoint[]): PointRow[] {
-  return [];
+/** How a light or switch is named in another point's note: bare in the same room, with the room in another, with the floor too on another floor. */
+function refName(from: NumberedPoint, to: NumberedPoint): string {
+  if (to.floor.id !== from.floor.id) return `${to.floor.name} ${to.room.name} ${to.label}`;
+  if (to.room.key !== from.room.key) return `${to.room.name} ${to.label}`;
+  return to.label;
 }
 
-export function scheduleRows(_rows: PointRow[]): ScheduleRow[] {
-  return [];
+const heightText = (p: NumberedPoint, ceiling: number): string => {
+  if (p.item.ceiling) return "Ceiling";
+  if (p.item.symbol === "socket-floor") return "Floor";
+  return `${Math.round(centreHeight(p.fx, p.item, ceiling) * 1000)} mm`;
+};
+
+const fmtPitch = (m: number) => `${(Math.round(m * 100) / 100).toFixed(1)} m`.replace(/(\.\d)0 m$/, "$1 m");
+
+/** One row per numbered point, in numbering order: the schedule's raw data and the CSV. */
+export function pointRows(model: HouseModel, numbered: NumberedPoint[] = numberPoints(model)): PointRow[] {
+  const byFx = new Map(numbered.map((p) => [p.fx.id, p]));
+  const idx = controlIndex(model);
+  return numbered.map((p) => {
+    const notes: string[] = [];
+    if (p.fx.label) notes.push(p.fx.label);
+    if (p.item.outdoor) notes.push("Outdoor");
+    if (p.kind === "switch") {
+      const lights = (p.fx.controls ?? []).map((id) => byFx.get(id)).filter((x): x is NumberedPoint => !!x && x.kind === "light");
+      if (lights.length) notes.push(`Switches ${lights.map((l) => refName(p, l)).join(", ")}`);
+    } else if (p.kind === "light") {
+      const sws = (idx.get(p.fx.id) ?? []).map((sw) => byFx.get(sw.id)).filter((x): x is NumberedPoint => !!x);
+      if (sws.length) notes.push(`On ${sws.map((sw) => refName(p, sw)).join(", ")}`);
+    }
+    const g = gridOf(p.fx, p.item);
+    if (g) notes.push(`${g.cols} × ${g.rows} at ${fmtPitch(g.pitch)}`);
+    return {
+      id: p.fx.id,
+      floor: p.floor.name,
+      room: p.room.name,
+      label: p.label,
+      kind: p.kind,
+      type: p.item.name,
+      quantity: p.quantity,
+      height: heightText(p, model.ceilingHeight),
+      circuit: circuitOf(model.circuits, p.fx.id)?.name ?? "",
+      notes: notes.join("; "),
+    };
+  });
 }
 
-export function totals(_rows: PointRow[]): TotalRow[] {
-  return [];
+/** "S1–S4" for runs of consecutive numbers of one prefix, otherwise a comma list ("S1, S3"). */
+function joinLabels(labels: string[]): string {
+  const parsed = labels.map((l) => {
+    const m = /^([A-Z]+)(\d+)$/.exec(l);
+    return { l, pre: m?.[1], n: m ? Number(m[2]) : NaN };
+  });
+  const out: string[] = [];
+  for (let i = 0; i < parsed.length; ) {
+    let j = i;
+    while (j + 1 < parsed.length && parsed[i].pre && parsed[j + 1].pre === parsed[i].pre && parsed[j + 1].n === parsed[j].n + 1) j++;
+    out.push(j > i ? `${parsed[i].l}–${parsed[j].l}` : parsed[i].l);
+    i = j + 1;
+  }
+  return out.join(", ");
+}
+
+/** The schedule grouped for print: consecutive rows of one room, type, height and circuit become one line. */
+export function scheduleRows(rows: PointRow[]): ScheduleRow[] {
+  const out: (ScheduleRow & { _labels: string[]; _notes: string[] })[] = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    if (last && last.floor === r.floor && last.room === r.room && last.type === r.type && last.height === r.height && last.circuit === r.circuit) {
+      last.count += r.quantity;
+      last._labels.push(r.label);
+      if (r.notes && !last._notes.includes(r.notes)) last._notes.push(r.notes);
+    } else {
+      out.push({ floor: r.floor, room: r.room, type: r.type, kind: r.kind, count: r.quantity, height: r.height, circuit: r.circuit, labels: "", notes: "", _labels: [r.label], _notes: r.notes ? [r.notes] : [] });
+    }
+  }
+  return out.map(({ _labels, _notes, ...row }) => ({ ...row, labels: joinLabels(_labels), notes: _notes.join("; ") }));
+}
+
+/** One row per catalogue type with the summed quantity, by kind (POINT_KINDS order) then name. */
+export function totals(rows: PointRow[]): TotalRow[] {
+  const m = new Map<string, TotalRow>();
+  for (const r of rows) {
+    const t = m.get(r.type);
+    if (t) t.count += r.quantity;
+    else m.set(r.type, { kind: r.kind, type: r.type, count: r.quantity });
+  }
+  return [...m.values()].sort((a, b) => POINT_KINDS.indexOf(a.kind) - POINT_KINDS.indexOf(b.kind) || a.type.localeCompare(b.type));
 }
