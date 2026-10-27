@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
+import { defaultSection, describeSection, sectionRange, sectionStops, snapSection } from "../lib/sectionCut";
 import { Icon } from "./icons";
 import { usePanelPrefs } from "./panelPrefs";
 import "./ViewMenu.css";
@@ -101,6 +102,60 @@ export function ViewToggles() {
       <label className="check" title={hasPhotos ? "Camera pins on the rooms and one photo pin beside each side of the house" : "No photos in this project yet"}>
         <input type="checkbox" checked={showPins && hasPhotos} disabled={!hasPhotos} onChange={(e) => setPrefs({ showPins: e.target.checked })} /> Photos
       </label>
+      <SectionCutControl />
+    </div>
+  );
+}
+
+/**
+ * The section cut: slice the house horizontally and look down into a floor. A switch, a slider from the
+ * lowest floor to over the ridge with each floor's stops as ticks (it snaps onto them), and a chip per floor.
+ */
+export function SectionCutControl() {
+  const height = useStore((s) => s.sectionHeight);
+  const model = useStore((s) => s.variants[s.activeVariant]);
+  const setUi = useStore((s) => s.setUi);
+  const listId = useId();
+  const cut = useMemo(() => (model && model.floors.length ? { range: sectionRange(model), stops: sectionStops(model) } : null), [model]);
+  if (!model || !cut) return null;
+  const on = height !== null;
+  const { range, stops } = cut;
+  const value = on ? Math.min(range.max, Math.max(range.min, height)) : defaultSection(model);
+  const floorStops = stops.filter((s) => s.kind === "floor");
+  return (
+    <div className="section-cut">
+      <label className="check" title="Slice the house at a height and look down into the floor below the cut">
+        <input type="checkbox" checked={on} onChange={(e) => setUi({ sectionHeight: e.target.checked ? defaultSection(model) : null })} /> Section cut
+      </label>
+      {on && (
+        <div className="section-cut-body">
+          <input
+            type="range"
+            className="section-cut-slider"
+            aria-label="Section cut height"
+            aria-valuetext={describeSection(value, model)}
+            min={range.min}
+            max={range.max}
+            step={0.01}
+            value={value}
+            list={listId}
+            onChange={(e) => setUi({ sectionHeight: snapSection(Number(e.target.value), stops, range) })}
+          />
+          <datalist id={listId}>
+            {stops.map((s) => (
+              <option key={s.id} value={s.height} label={s.label} />
+            ))}
+          </datalist>
+          <div className="section-cut-reading">{describeSection(value, model)}</div>
+          <div className="section-cut-stops">
+            {floorStops.map((s) => (
+              <button key={s.id} type="button" className={Math.abs(s.height - value) < 0.005 ? "section-chip active" : "section-chip"} aria-pressed={Math.abs(s.height - value) < 0.005} onClick={() => setUi({ sectionHeight: s.height })}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
