@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { uid, type Fixture, type Floor, type Pt, type VariantKey } from "../types";
 import { pieceFixtureFields } from "../lib/myFurniture";
 import { byId, isElectricalItem, type CatalogueItem } from "../lib/catalogue";
-import { links as linksOf, numberPoints } from "../lib/electrics";
+import { allControls, gangCount, gangOf, links as linksOf, numberPoints } from "../lib/electrics";
 import { ContextMenu } from "../components/ContextMenu";
 import { usePanelPrefs } from "../components/panelPrefs";
 import { editsFixtures, pruneSelection } from "../lib/modes";
@@ -60,6 +60,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const fixtureMode = editsFixtures(mode);
   const model = useStore((s) => s.variants[variant]);
   const linkSwitchId = useStore((s) => s.linkSwitchId);
+  const linkGang = useStore((s) => s.linkGang);
   const setUi = useStore((s) => s.setUi);
   const planImage = useStore((s) => s.planImage);
   const wallsOn = useStore((s) => s.planWalls);
@@ -177,8 +178,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const switchInHand = linkSwitchId ?? (liveIds.length === 1 ? liveIds[0] : null);
   const linkedIds = useMemo(() => {
     const sw = electrics && switchInHand ? numbered.find((p) => p.fx.id === switchInHand && p.kind === "switch") : undefined;
-    return new Set(sw?.fx.controls ?? []);
-  }, [electrics, numbered, switchInHand]);
+    return new Set(!sw ? [] : linkSwitchId ? gangOf(sw.fx, linkGang).controls : allControls(sw.fx));
+  }, [electrics, numbered, switchInHand, linkSwitchId, linkGang]);
   const furnitureOrder = useMemo(() => (electrics ? geo.drawOrder.filter((fx) => { const it = byId(fx.type); return !it || !isElectricalItem(it); }) : geo.drawOrder), [electrics, geo.drawOrder]);
   const linking = linkSwitchId ? numbered.find((p) => p.fx.id === linkSwitchId) : undefined;
   const hoverBox = useMemo(() => {
@@ -240,7 +241,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const statusText = statusTextFor({
     tool, draftLen: draft.length, measureLen: measure.length, calibLen: calib.length, placing,
     movingWall: drag.movingWall, roomHint, hasSelectedRoom: !!selectedRoomId, touch,
-    linking: linking ? `${linking.label} (${linking.room.name})` : linkSwitchId ? "switch" : null,
+    linking: linking ? `${linking.label}${gangCount(linking.item) > 1 ? ` gang ${linkGang + 1}` : ""} (${linking.room.name})` : linkSwitchId ? "switch" : null,
   });
 
   return (
@@ -275,6 +276,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 links={floorLinks}
                 selectedIds={liveIds}
                 linkSwitchId={linkSwitchId}
+                linkGang={linkGang}
                 linkedIds={linkedIds}
                 ppm={ppm}
                 px={px}

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useStore } from "../store";
 import { uid, type CircuitKind, type Floor, type VariantKey } from "../types";
 import { electricsSummary } from "../lib/modeSummary";
-import { CIRCUIT_KINDS, CIRCUIT_KIND_LABEL, POINT_KINDS, POINT_KIND_LABEL, addCircuit, deleteCircuit, numberPoints, renameCircuit, setCircuitKind } from "../lib/electrics";
+import { CIRCUIT_KINDS, CIRCUIT_KIND_LABEL, POINT_KINDS, POINT_KIND_LABEL, addCircuit, deleteCircuit, gangCount, numberPoints, renameCircuit, setCircuitKind } from "../lib/electrics";
 import { NameField } from "../editor/Inspectors";
 import { requestAddPicker } from "../editor/addPicker";
 import { Section } from "./Section";
@@ -19,6 +19,7 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
   const updateModel = useStore((s) => s.updateModel);
   const setUi = useStore((s) => s.setUi);
   const linkSwitchId = useStore((s) => s.linkSwitchId);
+  const linkGang = useStore((s) => s.linkGang);
   const [kind, setKind] = useState<CircuitKind>("lighting");
   const [busy, setBusy] = useState<"html" | "csv" | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -90,9 +91,9 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
         {linking ? (
           <div className="electrics-linking">
             <p className="small">
-              Linking {linking.room.name} {linking.label}: tap lights on the plan to switch them on or off this switch.
+              Linking {linking.room.name} {linking.label}{gangCount(linking.item) > 1 ? ` gang ${linkGang + 1}` : ""}: tap lights on the plan to switch them on or off this switch.
             </p>
-            <button className="primary" onClick={() => setUi({ linkSwitchId: null })}>
+            <button className="primary" onClick={() => setUi({ linkSwitchId: null, linkGang: 0 })}>
               Done
             </button>
           </div>

@@ -34,6 +34,7 @@ export const ElectricsLayer = memo(function ElectricsLayer({
   links,
   selectedIds,
   linkSwitchId,
+  linkGang,
   linkedIds,
   ppm,
   px,
@@ -45,6 +46,8 @@ export const ElectricsLayer = memo(function ElectricsLayer({
   links: Link[];
   selectedIds: string[];
   linkSwitchId: string | null;
+  /** The rocker being linked (0-based) while linking. */
+  linkGang: number;
   /** The lights the selected (or linking) switch controls: ringed. */
   linkedIds: ReadonlySet<string>;
   ppm: number;
@@ -61,7 +64,8 @@ export const ElectricsLayer = memo(function ElectricsLayer({
       {links.map((l, i) => {
         const a = at.get(l.from.fx.id);
         if (!a) return null;
-        const hot = selectedIds.includes(l.from.fx.id) || linkSwitchId === l.from.fx.id;
+        const linkingThis = linkSwitchId === l.from.fx.id;
+        const hot = linkingThis ? l.gang === linkGang : selectedIds.includes(l.from.fx.id);
         const stroke = hot ? "var(--plan-sel)" : "var(--muted)";
         const b = at.get(l.to.fx.id);
         if (b) {
@@ -70,7 +74,19 @@ export const ElectricsLayer = memo(function ElectricsLayer({
           const len = Math.hypot(b.x - a.x, b.y - a.y);
           const cx = mx + (-(b.y - a.y) / (len || 1)) * len * 0.2;
           const cy = my + ((b.x - a.x) / (len || 1)) * len * 0.2;
-          return <path key={`l${i}`} d={`M${a.x} ${a.y} Q${cx} ${cy} ${b.x} ${b.y}`} fill="none" stroke={stroke} strokeWidth={px * (hot ? 1.6 : 1.1)} strokeDasharray={`${px * 5} ${px * 4}`} style={{ pointerEvents: "none" }} />;
+          // Gang 2+ links carry the rocker number beside the switch so the curve can be told from gang 1's.
+          const tl = Math.hypot(cx - a.x, cy - a.y) || 1;
+          const off = size / 2 + px * 7;
+          return (
+            <g key={`l${i}`} style={{ pointerEvents: "none" }}>
+              <path d={`M${a.x} ${a.y} Q${cx} ${cy} ${b.x} ${b.y}`} fill="none" stroke={stroke} strokeWidth={px * (hot ? 1.6 : 1.1)} strokeDasharray={l.gang > 0 ? `${px * 2} ${px * 3}` : `${px * 5} ${px * 4}`} />
+              {l.gang > 0 && (
+                <text x={a.x + ((cx - a.x) / tl) * off} y={a.y + ((cy - a.y) / tl) * off} fontSize={px * 8} fill={stroke} textAnchor="middle" dominantBaseline="middle" {...halo(px)}>
+                  {l.gang + 1}
+                </text>
+              )}
+            </g>
+          );
         }
         const up = l.to.floor.level > l.from.floor.level;
         const dy = (up ? -1 : 1) * px * 26;

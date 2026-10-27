@@ -100,7 +100,7 @@ export function usePlanKeys(a: PlanKeyArgs) {
     } else if (e.key === "Escape" && !e.defaultPrevented && useStore.getState().linkSwitchId) {
       // Esc ends linking first; the switch stays selected.
       e.preventDefault();
-      setUi({ linkSwitchId: null });
+      setUi({ linkSwitchId: null, linkGang: 0 });
     } else if (e.key === "Escape" && !e.defaultPrevented) {
       tools.setDraft([]);
       tools.setCalib([]);

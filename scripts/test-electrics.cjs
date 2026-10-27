@@ -208,6 +208,44 @@ async function open(browser, opts, mode = 'electrics') {
     ok(!fxs.some((x) => x.id === pends[0].id) && swNow.controls && swNow.controls.join() === pends[1].id, 'Delete removes the pendant and its id from controls');
     await page.screenshot({ path: `${shots}/electrics-desktop-after-delete.png`, timeout: 180000, animations: 'disabled' });
 
+    // Two-gang plate: each rocker has its own lights.
+    await page.evaluate(({ x, y, ppm, pendant }) => {
+      const st = window.__houseStore.getState();
+      const fid = st.editFloorId || st.variants[st.activeVariant].floors[0].id;
+      st.updateFloor(st.activeVariant, fid, (fl) => ({ ...fl, fixtures: [...(fl.fixtures || []),
+        { id: 'plate-2g', type: 'switch-2g', x: x - 1.2 * ppm, y: y + 0.5 * ppm, rot: 0 },
+        { id: 'pend-A', type: pendant, x, y: y + 0.5 * ppm, rot: 0 },
+        { id: 'pend-B', type: pendant, x: x + 0.7 * ppm, y: y + 0.5 * ppm, rot: 0 }] }));
+    }, { x: mid.x, y: mid.y, ppm: f.pxPerM, pendant });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => window.__houseStore.getState().setUi({ linkSwitchId: 'plate-2g', linkGang: 0 }));
+    await page.waitForTimeout(200);
+    c = await glyph('pend-A'); await page.mouse.click(c.x, c.y); await page.waitForTimeout(200);
+    await page.evaluate(() => window.__houseStore.getState().setUi({ linkGang: 1 }));
+    await page.waitForTimeout(200);
+    c = await glyph('pend-B'); await page.mouse.click(c.x, c.y); await page.waitForTimeout(200);
+    let plate = (await fixturesOf(page)).find((x) => x.id === 'plate-2g');
+    ok(JSON.stringify(plate.controls) === '["pend-A"]' && JSON.stringify(plate.extraGangs) === '[{"controls":["pend-B"]}]' || (plate.controls?.join() === 'pend-A' && plate.extraGangs?.length === 1 && plate.extraGangs[0].controls.join() === 'pend-B'), `gang 1 -> A, gang 2 -> B (${JSON.stringify([plate.controls, plate.extraGangs])})`);
+    ok((await page.$eval('.plan-status', (e) => e.textContent).catch(() => '')).includes('gang 2'), 'status line names gang 2');
+    await page.evaluate(() => window.__houseStore.getState().setUi({ linkSwitchId: null, linkGang: 0 }));
+    await page.evaluate(() => window.__houseStore.getState().select?.({ fixtures: ['plate-2g'] }));
+    c = await glyph('plate-2g'); await page.mouse.click(c.x, c.y); await page.waitForTimeout(300);
+    const heads = await page.$$eval('.field-label', (e) => e.map((x) => x.textContent).filter((t) => /^Gang \d/.test(t)));
+    const linkBtns = await page.getByRole('button', { name: 'Link lights' }).count();
+    ok(heads.length === 2 && linkBtns === 2, `inspector shows two Gang headings and two Link lights buttons (${heads.join()}, ${linkBtns})`);
+    await page.getByRole('button', { name: 'Link lights' }).nth(1).click();
+    await page.waitForTimeout(200);
+    ok((await page.evaluate(() => window.__houseStore.getState().linkGang)) === 1, 'second Link lights button links gang 2');
+    c = await glyph('pend-B'); await page.mouse.click(c.x, c.y); await page.waitForTimeout(200);
+    plate = (await fixturesOf(page)).find((x) => x.id === 'plate-2g');
+    ok(!plate.extraGangs && plate.controls.join() === 'pend-A', 'tapping B again on gang 2 removes it (extraGangs gone)');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    const lk = await page.evaluate(() => { const s = window.__houseStore.getState(); return [s.linkSwitchId, s.linkGang]; });
+    ok(lk[0] === null && lk[1] === 0, 'Esc clears linkSwitchId and resets linkGang');
+    await page.screenshot({ path: `${shots}/electrics-desktop-gangs.png`, timeout: 180000, animations: 'disabled' });
+    await page.keyboard.press('Escape');
+
     // Circuits and exports (nothing selected: the panel).
     await page.mouse.click(5, 450);
     await page.keyboard.press('Escape');

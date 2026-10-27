@@ -225,7 +225,7 @@ export function usePlanDrag(args: PlanDragArgs) {
       if (!m.shift) {
         // Tapping empty plan ends linking (the switch stays selected).
         if (useStore.getState().linkSwitchId) {
-          useStore.getState().setUi({ linkSwitchId: null });
+          useStore.getState().setUi({ linkSwitchId: null, linkGang: 0 });
           return;
         }
         select({});
@@ -486,7 +486,7 @@ export function usePlanDrag(args: PlanDragArgs) {
           const st = useStore.getState();
           const m = st.variants[L.current.variant];
           if (!m) return;
-          const next = toggleLinkInModel(m, linkId, fx.id);
+          const next = toggleLinkInModel(m, linkId, fx.id, useStore.getState().linkGang);
           if (next !== m) st.updateModel(L.current.variant, { floors: next.floors });
         },
       });

@@ -21,7 +21,7 @@ import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, wit
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
 import { WARMTHS, WARMTH_LABEL, dimOf, isLightItem, switchedOn, warmthOf } from "../lib/lights";
-import { assignToCircuit, centreHeight, circuitOf, isSwitchItem, isWallPoint, mountForCentre, numberPoints, pointKind, toggleLink } from "../lib/electrics";
+import { assignToCircuit, centreHeight, circuitOf, isSwitchItem, isWallPoint, mountForCentre, gangCount, gangLabel, gangOf, numberPoints, pointKind, setGang, toggleLink } from "../lib/electrics";
 import type { Circuit } from "../types";
 import { floorDisplayName } from "../lib/studio";
 import { requestPlanTool } from "./planTool";
@@ -991,16 +991,46 @@ function PointFields({ fixture, item, ceiling, locked, variant, onChange }: { fi
   const wall = isWallPoint(item) && item.mount !== undefined;
   const centre = centreHeight(fixture, item, ceiling ?? CEILING_DEFAULT);
   const defaultCentre = (item.mount ?? 0) + item.h / 2;
-  const linking = linkSwitchId === fixture.id;
-  const lights = useMemo(() => {
-    if (!isSwitchItem(item) || !model) return [];
-    const byIdMap = new Map(numberPoints(model).map((p) => [p.fx.id, p]));
-    return (fixture.controls ?? []).flatMap((id) => {
-      const p = byIdMap.get(id);
-      return p ? [{ id, label: `${p.room.name} ${p.label}` }] : [];
-    });
-  }, [model, item, fixture.controls]);
-  const unlink = (lightId: string) => onChange(toggleLink(fixture, lightId));
+  const linkGang = useStore((s) => s.linkGang);
+  const gangs = isSwitchItem(item) ? gangCount(item) : 0;
+  const labels = useMemo(() => {
+    if (!isSwitchItem(item) || !model) return new Map<string, string>();
+    return new Map(numberPoints(model).map((p) => [p.fx.id, `${p.room.name} ${p.label}`]));
+  }, [model, item]);
+  const unlink = (lightId: string, g: number) => onChange(toggleLink(fixture, lightId, g));
+  const gangBlock = (g: number, heading: boolean) => {
+    const linking = linkSwitchId === fixture.id && linkGang === g;
+    const lights = gangOf(fixture, g).controls.flatMap((id) => (labels.has(id) ? [{ id, label: labels.get(id)! }] : []));
+    return (
+      <div className="field" key={g}>
+        <span className="field-label">{heading ? gangLabel(g) : "Lights"}</span>
+        {heading && (
+          <label className="check">
+            <input type="checkbox" checked={gangOf(fixture, g).on} disabled={locked} onChange={(e) => onChange(setGang(fixture, g, { on: e.target.checked }))} />
+            Switched on
+          </label>
+        )}
+        {lights.length === 0 ? (
+          <p className="muted small">No lights linked yet.</p>
+        ) : (
+          <ul className="multi-list small link-list">
+            {lights.map((l) => (
+              <li key={l.id}>
+                {l.label}{" "}
+                <button className="link" aria-label={`Unlink ${l.label}`} title="Unlink" onClick={() => unlink(l.id, g)}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button className={linking ? "active" : ""} aria-pressed={linking} onClick={() => setUi(linking ? { linkSwitchId: null, linkGang: 0 } : { linkSwitchId: fixture.id, linkGang: g })}>
+          {linking ? "Done" : "Link lights"}
+        </button>
+        {linking && <p className="muted small">{heading ? "Tap lights on the plan to put them on this rocker, or tap again to take them off." : "Tap lights on the plan to link or unlink them."}</p>}
+      </div>
+    );
+  };
   return (
     <>
       {wall && (
@@ -1014,29 +1044,7 @@ function PointFields({ fixture, item, ceiling, locked, variant, onChange }: { fi
           )}
         </div>
       )}
-      {isSwitchItem(item) && (
-        <div className="field">
-          <span className="field-label">Lights</span>
-          {lights.length === 0 ? (
-            <p className="muted small">No lights linked yet.</p>
-          ) : (
-            <ul className="multi-list small link-list">
-              {lights.map((l) => (
-                <li key={l.id}>
-                  {l.label}{" "}
-                  <button className="link" aria-label={`Unlink ${l.label}`} title="Unlink" onClick={() => unlink(l.id)}>
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button className={linking ? "active" : ""} aria-pressed={linking} onClick={() => setUi({ linkSwitchId: linking ? null : fixture.id })}>
-            {linking ? "Done" : "Link lights"}
-          </button>
-          {linking && <p className="muted small">Tap lights on the plan to link or unlink them.</p>}
-        </div>
-      )}
+      {Array.from({ length: gangs }, (_, g) => gangBlock(g, gangs > 1))}
       {variant && <CircuitSelect variant={variant} ids={[fixture.id]} />}
     </>
   );
