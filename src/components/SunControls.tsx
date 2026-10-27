@@ -8,7 +8,8 @@ import { useViewedSite, useViewedVariant } from "../three/viewedVariant";
 import { useSiteView } from "../three/siteView";
 import { SUN_HOURS_GRADIENT, SUN_HOURS_MAX, useSunHours } from "../three/SunHours";
 import { shareWithSun } from "../three/sunShare";
-import { duskHour } from "../lib/dusk";
+import { duskHour, nightHour } from "../lib/dusk";
+import { LIGHTS_MASTERS, LIGHTS_MASTER_LABEL, LIGHTS_MASTER_TITLE, lightsMaster, lightsOn } from "../lib/lights";
 import "./SunControls.css";
 
 const QUICK_DATES: [string, number][] = [
@@ -41,7 +42,9 @@ export function SunControls() {
   const rise = info?.times.sunrise ?? 0;
   const set = info?.times.sunset ?? 24;
   const min = quarter(rise, Math.floor);
-  const max = quarter(set, Math.ceil);
+  // The slider runs on into the evening so the night is scrubbable; play still goes sunrise to sunset.
+  const night = site ? nightHour(site, SUN_YEAR, sun.dayOfYear) : set;
+  const max = quarter(Math.max(set, night), Math.ceil);
 
   // Play through the day: about 20 s from sunrise to sunset, then round again.
   useEffect(() => {
@@ -69,13 +72,15 @@ export function SunControls() {
   /** Change the day, keeping the time within that day's daylight. */
   const pickDay = (d: number) => {
     const t = sunTimes(site.latitude, site.longitude, SUN_YEAR, d);
-    const hour = t.sunrise === null || t.sunset === null ? sun.hour : Math.min(Math.max(sun.hour, quarter(t.sunrise, Math.ceil)), quarter(t.sunset, Math.floor));
+    const hour = t.sunrise === null || t.sunset === null ? sun.hour : Math.min(Math.max(sun.hour, quarter(t.sunrise, Math.ceil)), nightHour(site, SUN_YEAR, d));
     setSun({ dayOfYear: d, hour });
   };
   const { altitude, azimuth } = info.position;
   const zone = ukZone(SUN_YEAR, sun.dayOfYear);
   // Dusk on the chosen day: the sun just above the horizon, low, warm and dim, so garden lights glow.
   const dusk = duskHour(site, SUN_YEAR, sun.dayOfYear);
+  const atNight = Math.abs(sun.hour - night) <= 10 / 60;
+  const master = lightsMaster(sun);
   const atDusk = Math.abs(sun.hour - dusk) <= 10 / 60;
 
   return (
@@ -129,6 +134,16 @@ export function SunControls() {
               >
                 Dusk
               </button>
+              <button
+                className={`sun-night${atNight ? " active" : ""}`}
+                onClick={() => {
+                  setPlaying(false);
+                  setSun({ enabled: true, hour: night });
+                }}
+                title={`Night on this day, ${formatClock(night)}: the sun well down and the house lit by its own lights`}
+              >
+                Night
+              </button>
             </div>
             <div className="sun-row">
               <button className="sun-play" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause" : "Play through the day"}>
@@ -156,12 +171,22 @@ export function SunControls() {
                   Sun {Math.round(altitude)}° up in the {compassPoint(azimuth)} ({Math.round(azimuth)}°)
                 </>
               ) : (
-                <>Sun below the horizon</>
+                <>Sun below the horizon{lightsOn(master, altitude) && " · lights on"}</>
               )}
             </div>
             <div className="sun-read muted">
               Sunrise {info.times.sunrise === null ? "–" : formatClock(info.times.sunrise)} · Sunset{" "}
               {info.times.sunset === null ? "–" : formatClock(info.times.sunset)}
+            </div>
+            <div className="sun-row sun-lights">
+              <span className="sun-label">Lights</span>
+              <div className="seg" role="group" aria-label="Lights">
+                {LIGHTS_MASTERS.map((m) => (
+                  <button key={m} className={master === m ? "active" : ""} aria-pressed={master === m} title={LIGHTS_MASTER_TITLE[m]} onClick={() => setSun({ lights: m })}>
+                    {LIGHTS_MASTER_LABEL[m]}
+                  </button>
+                ))}
+              </div>
             </div>
             <label className="sun-toggle sun-hours-toggle">
               <input type="checkbox" checked={sunHours} onChange={(e) => setSiteView({ sunHours: e.target.checked })} />

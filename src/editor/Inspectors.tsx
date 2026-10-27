@@ -19,6 +19,7 @@ import { openingSides } from "../lib/openingSides";
 import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_BAY_DEPTH, frontUnit, styleOptions, withSidelight } from "../lib/openings";
 import { KnockThrough } from "./KnockThrough";
 import { Info } from "../components/Info";
+import { isLightItem, switchedOn } from "../lib/lights";
 import { floorDisplayName } from "../lib/studio";
 import { requestPlanTool } from "./planTool";
 import {
@@ -843,6 +844,14 @@ export function FixtureInspector({
               Reset to {item.mount.toFixed(2)} m
             </button>
           )}
+        </div>
+      )}
+      {isLightItem(item) && (
+        <div className="row check-row">
+          <label className="check">
+            <input type="checkbox" checked={switchedOn(fixture)} onChange={(e) => onChange({ on: e.target.checked ? undefined : false })} /> Switched on
+          </label>
+          <Info>Lit when the sun study's Lights master allows: Auto lights it from dusk, On always.</Info>
         </div>
       )}
       <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
