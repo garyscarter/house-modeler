@@ -105,6 +105,8 @@ interface State {
   showExterior: boolean;
   /** Draw the plot, garden and neighbouring buildings. */
   showSite: boolean;
+  /** The 3D view's tape measure is armed (clicks place points). Not persisted; off when the tab leaves 3D. */
+  measureTool: boolean;
 
   setSettings: (s: Partial<Settings>) => void;
   setSun: (s: Partial<SunState>) => void;
@@ -158,6 +160,7 @@ interface State {
         | "maxLevel"
         | "showExterior"
         | "showSite"
+        | "measureTool"
       >
     >,
   ) => void;
@@ -303,6 +306,7 @@ export const useStore = create<State>()(
         maxLevel: null,
         showExterior: true,
         showSite: true,
+        measureTool: false,
 
         setSettings: (s) => rawSet((st) => ({ settings: { ...st.settings, ...s } })),
         setSun: (s) => rawSet((st) => ({ sun: { ...st.sun, ...s } })),
@@ -435,9 +439,10 @@ export const useStore = create<State>()(
             return { pieces: st.pieces.filter((x) => x.id !== id), variants };
           }),
         setUi: (p) =>
-          rawSet((st) =>
-            "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
-          ),
+          rawSet((st) => {
+            const q = p.tab && p.tab !== "3d" ? { ...p, measureTool: false } : p;
+            return "selectedRoomId" in q && !("selectedEdge" in q) && q.selectedRoomId !== st.selectedRoomId ? { ...q, selectedEdge: null } : q;
+          }),
         reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [] }),
       };
     },
