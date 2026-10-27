@@ -37,6 +37,8 @@ Checks: `npm run check`; Playwright screenshots of the listing at the Night pres
 
 ## Phase 2: ceiling and wall lights
 
+Built with phase 3 (see `docs/electrics-plan.md`); the notes below are the intent.
+
 - Catalogue: a Lighting category with the seven types; `CatalogueItem.ceiling?: boolean` (hangs from the ceiling: `z0 = ceiling - drop - h`), `Fixture.drop?` for pendants, `Fixture.warmth?: 2700 | 3000 | 4000`, `Fixture.dim?: number` (percent, default 100). `LAMPS` gains the new symbols, with `spot?: { angle, penumbra }` for downlights and spot bars (spot lights aiming down).
 - Downlight grids as one fixture with `cols`/`rows` and pitch; each bulb a light, all sharing the fixture's switch.
 - Plan symbols: BS EN 60617 style (circle with cross for a ceiling point, filled circle for a downlight, etc.) in `editor/FixtureSymbol.tsx`.
@@ -44,4 +46,4 @@ Checks: `npm run check`; Playwright screenshots of the listing at the Night pres
 
 ## Phase 3: electrics mode and wiring guide
 
-A separate thread. The brief for it is `docs/wiring-guide-brief.md`.
+The brief is `docs/wiring-guide-brief.md`; the implementation plan, which also covers phase 2 and phase 1's 3D, is `docs/electrics-plan.md`.
