@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -15,8 +14,7 @@ import { CUSHION_T, TOP_T, builtInLayout, isJoinery, joineryOf, shelfStack, type
 import type { JoineryFront } from "../types";
 import { glassMaterial, inUse } from "./textures";
 import { FLOOR_SURFACE, shade } from "./shell";
-import { LIGHT_CAP, SHADOW_CAP, coneGain, dimOf, gridPoints, isLightItem, lampOf, lampPitch, lightColor, pickLights, switchedOn, type LampLight } from "../lib/lights";
-import { useStore } from "../store";
+import { dimOf, gridPoints, isLightItem, lampOf, lampPitch, lightColor, switchedOn } from "../lib/lights";
 
 /**
  * Simple primitive-built furniture and fixtures, placed from the plan at their own size, colour and rotation.
@@ -1708,111 +1706,4 @@ function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, colo
       break;
   }
   return out;
-}
-
-/** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
-export const LAMP_SCALE = 0.06;
-/**
- * Spot light intensity per candela of the bulb's even-sphere candela (lights.ts), before the cone gain (see
- * spotIntensity). Tuned so a 450 lm downlight from a 2.25 m ceiling makes a soft pool about 1.5 m across.
- */
-export const SPOT_SCALE = 0.03;
-/** Re-pick the nearest lamps once the camera has moved this far (metres). */
-const REPICK_M = 1;
-
-/**
- * A spot light's intensity: brighter than a bare bulb as its output is gathered into the cone, by the square root of
- * the flux-keeping gain (coneGain), so a tight spot bar does not burn out next to a wide pendant once tone-mapped.
- */
-export const spotIntensity = (l: Pick<LampLight, "candela" | "spot">): number => l.candela * SPOT_SCALE * Math.sqrt(coneGain(l.spot?.angle));
-
-/**
- * The lit lamps of every shown floor as point lights, or spot lights aimed straight down for fittings with a cone,
- * the nearest LIGHT_CAP[quality] to the camera: the rest only glow. The nearest SHADOW_CAP[quality] spot lights cast
- * shadows; point lights never do. The pick runs when the lamps change or the camera has moved a metre, so orbiting
- * costs no React renders.
- */
-/** Lit lamp lights in use and the cap, for the dev hook window.__houseLights. */
-export const lampStats = { active: 0, pool: 0 };
-export function LampLights({ lamps }: { lamps: LampLight[] }) {
-  const quality = useStore((s) => s.settings.quality);
-  const cap = LIGHT_CAP[quality];
-  const shadows = SHADOW_CAP[quality];
-  const camera = useThree((s) => s.camera);
-  const invalidate = useThree((s) => s.invalidate);
-  const [picked, setPicked] = useState<{ lights: LampLight[]; casters: ReadonlySet<string> }>({ lights: [], casters: new Set() });
-  const last = useRef<{ eye: THREE.Vector3; lamps: LampLight[] | null; cap: number; shadows: number }>({ eye: new THREE.Vector3(Infinity, 0, 0), lamps: null, cap, shadows });
-  const repick = () => {
-    const l = last.current;
-    const eye = camera.position;
-    if (l.lamps === lamps && l.cap === cap && l.shadows === shadows && l.eye.distanceTo(eye) < REPICK_M) return;
-    l.eye.copy(eye);
-    l.lamps = lamps;
-    l.cap = cap;
-    l.shadows = shadows;
-    const at: [number, number, number] = [eye.x, eye.y, eye.z];
-    const next = lamps.length <= cap ? lamps : pickLights(lamps, at, cap);
-    const casters = new Set(shadows > 0 ? pickLights(next.filter((x) => x.spot), at, shadows).map((x) => x.id) : []);
-    setPicked((prev) =>
-      prev.lights.length === next.length && prev.lights.every((p, i) => p === next[i]) && prev.casters.size === casters.size && [...casters].every((id) => prev.casters.has(id))
-        ? prev
-        : { lights: next, casters },
-    );
-  };
-  useEffect(repick);
-  useFrame(repick);
-  useEffect(() => invalidate(), [picked, invalidate]);
-  // For the dev hook window.__houseLights: lights in use and the cap.
-  useEffect(() => {
-    lampStats.active = picked.lights.length;
-    lampStats.pool = cap;
-  }, [picked, cap]);
-  return (
-    <>
-      {picked.lights.map((l) =>
-        l.spot ? (
-          <DownSpot key={l.id} light={l} cast={picked.casters.has(l.id)} />
-        ) : (
-          <pointLight key={l.id} position={l.pos} color={l.color} intensity={l.candela * LAMP_SCALE} decay={2} distance={l.reach} castShadow={false} />
-        ),
-      )}
-    </>
-  );
-}
-
-/** A spot light aimed straight down from the bulb; its target sits a metre below (outside the scene, so placed by hand). */
-function DownSpot({ light: l, cast }: { light: LampLight; cast: boolean }) {
-  const ref = useRef<THREE.SpotLight>(null);
-  useLayoutEffect(() => {
-    const s = ref.current;
-    if (!s) return;
-    s.target.position.set(l.pos[0], l.pos[1] - 1, l.pos[2]);
-    s.target.updateMatrixWorld();
-  }, [l.pos]);
-  // Shadow maps are redrawn only on demand (see ShadowUpdates): a spot that starts casting, or moves, needs one drawn.
-  const gl = useThree((s) => s.gl);
-  const invalidate = useThree((s) => s.invalidate);
-  // A layout effect, so the next frame (the first that samples the new map) draws it first.
-  useLayoutEffect(() => {
-    if (!cast) return;
-    gl.shadowMap.needsUpdate = true;
-    invalidate();
-  }, [cast, l.pos, gl, invalidate]);
-  return (
-    <spotLight
-      ref={ref}
-      position={l.pos}
-      color={l.color}
-      intensity={spotIntensity(l)}
-      angle={l.spot!.angle}
-      penumbra={l.spot!.penumbra}
-      decay={2}
-      distance={l.reach}
-      castShadow={cast}
-      shadow-mapSize={[512, 512]}
-      shadow-bias={-0.0005}
-      shadow-camera-near={0.1}
-      shadow-camera-far={l.reach}
-    />
-  );
 }

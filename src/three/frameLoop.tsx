@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
 import { trackScene } from "./textures";
+import { lampStats } from "./FixtureLights";
 
 /** Frames to redraw the shadow map for after mounting, while the scene settles. */
 const MOUNT_FRAMES = 3;
@@ -110,6 +111,24 @@ export function useOffstageCompile(objects: THREE.Object3D[]) {
   }, [gl, objects]);
 }
 
+/** The lamp light pools of this renderer's houses (see LampLights): groups hidden while no lamp is lit, which Precompile shows to compile the lit variant. */
+const lampPools = new WeakMap<THREE.WebGLRenderer, Set<THREE.Object3D>>();
+
+/** Registers the object in `ref` as a lamp light pool for precompiling while the calling component is mounted. */
+export function useLampPool(ref: RefObject<THREE.Object3D | null>) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    const o = ref.current;
+    if (!o) return;
+    let set = lampPools.get(gl);
+    if (!set) lampPools.set(gl, (set = new Set()));
+    set.add(o);
+    return () => {
+      set.delete(o);
+    };
+  }, [gl, ref]);
+}
+
 /** Longest wait for shaders to compile before drawing anyway, ms. */
 const COMPILE_TIMEOUT = 5000;
 
@@ -141,6 +160,22 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
 
   useEffect(() => {
     let cancelled = false;
+    lampStats.litReady = false;
+    // compileAsync picks each program while it is called; only the wait for linking is async. `added` lists the programs this call created.
+    const compileNow = () => {
+      const target = offscreen ? new THREE.WebGLRenderTarget(1, 1) : null;
+      const previous = gl.getRenderTarget();
+      const had = new Set<THREE.WebGLProgram>(gl.info.programs ?? []);
+      let linked: Promise<unknown>;
+      gl.setRenderTarget(target);
+      try {
+        linked = Promise.all([gl.compileAsync(scene, camera), ...[...(offstage.get(gl) ?? [])].map((o) => gl.compileAsync(o, camera, scene))]);
+      } finally {
+        gl.setRenderTarget(previous);
+        target?.dispose();
+      }
+      return { linked, added: () => (gl.info.programs ?? []).filter((p) => !had.has(p)) };
+    };
     void (async () => {
       try {
         await prepare.current?.();
@@ -148,22 +183,36 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
         await nextFrame();
         await nextFrame();
         if (cancelled) return;
-        // compileAsync picks each program while it is called; only the wait for linking is async.
-        const target = offscreen ? new THREE.WebGLRenderTarget(1, 1) : null;
-        const previous = gl.getRenderTarget();
-        let compiling: Promise<unknown>;
-        gl.setRenderTarget(target);
-        try {
-          compiling = Promise.all([gl.compileAsync(scene, camera), ...[...(offstage.get(gl) ?? [])].map((o) => gl.compileAsync(o, camera, scene))]);
-        } finally {
-          gl.setRenderTarget(previous);
-          target?.dispose();
-        }
-        await Promise.race([compiling, new Promise((r) => setTimeout(r, COMPILE_TIMEOUT))]);
+        await Promise.race([compileNow().linked, new Promise((r) => setTimeout(r, COMPILE_TIMEOUT))]);
       } catch {
         // Compiling ahead is only an optimisation; draw regardless.
       }
-      if (!cancelled) done.current(token);
+      if (cancelled) return;
+      done.current(token);
+      // Then, in the background, the other lamp state: three bakes the light counts into every lit material's shader,
+      // so with the lamp pool hidden (no lamp lit) the lit programs don't exist yet, and with it shown the unlit ones
+      // don't. Compiling that variant now means switching lights compiles nothing.
+      const pools = [...(lampPools.get(gl) ?? [])];
+      try {
+        await nextFrame();
+        await nextFrame();
+        if (cancelled) return;
+        const was = pools.map((o) => o.visible);
+        let added: THREE.WebGLProgram[] = [];
+        try {
+          for (const o of pools) o.visible = !o.visible;
+          const compiling = compileNow();
+          added = compiling.added();
+        } finally {
+          pools.forEach((o, i) => (o.visible = was[i]));
+        }
+        // Not compileAsync's own promise: a render in between points materials back at the other variant, so poll these programs.
+        const end = performance.now() + COMPILE_TIMEOUT;
+        while (!cancelled && performance.now() < end && !added.every((p) => (p as unknown as { isReady(): boolean }).isReady())) await new Promise((r) => setTimeout(r, 16));
+      } catch {
+        // As above: only an optimisation.
+      }
+      if (!cancelled) lampStats.litReady = true;
     })();
     return () => {
       cancelled = true;
