@@ -1459,7 +1459,7 @@ export type MatSpec =
   | { kind: "paint"; color: string }
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
   | { kind: "plain"; color: string; roughness?: number; metalness?: number }
-  /** Window glass; a pane's faces glow at night by their `glow` vertex attribute (see buildShell). */
+  /** Window glass; a pane's faces glow at night by their `glowSlot` vertex attribute and the material's lit-room mask (see buildShell). */
   | { kind: "glass" }
   | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
 
@@ -1501,15 +1501,22 @@ const GLASS_TINT = "#e4ecea";
 const GLASS_GLOW = new THREE.Color("#ffd9a0");
 
 /**
- * The glass shader: the emissive glow is scaled by the per-vertex `glow` attribute (1 on a face that looks into a lit
- * room from the other side, 0 elsewhere; geometry without the attribute reads 0), and only on the face's front, so a
- * double-sided film pane does not show the outer face's glow from inside. The film variant also gets a Fresnel alpha:
- * nearly clear face-on, a mirror at grazing angles.
+ * The glass shader: the emissive glow is scaled by `vGlow`, 1 on a face whose room slot (the per-vertex `glowSlot`
+ * attribute: 0 none, k the room at index k-1 of the floor) is set in the material's `glassLitMask` bitmask (four uint32
+ * words, see lib/glassGlow); geometry without the attribute reads slot 0 and never glows. The glow shows only on the
+ * face's front, so a double-sided film pane does not show the outer face's glow from inside. The film variant also gets
+ * a Fresnel alpha: nearly clear face-on, a mirror at grazing angles.
  */
-function glassShader(shader: { vertexShader: string; fragmentShader: string }, m: THREE.MeshPhysicalMaterial) {
+function glassShader(shader: { vertexShader: string; fragmentShader: string; uniforms: Record<string, THREE.IUniform> }, m: THREE.MeshPhysicalMaterial, litMask: { value: Uint32Array }) {
+  shader.uniforms.glassLitMask = litMask;
   shader.vertexShader = shader.vertexShader
-    .replace("#include <common>", "#include <common>\nattribute float glow;\nvarying float vGlow;")
-    .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGlow = glow;");
+    .replace("#include <common>", "#include <common>\nattribute float glowSlot;\nuniform uvec4 glassLitMask;\nvarying float vGlow;")
+    .replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+    uint gs = uint(glowSlot + 0.5);
+    vGlow = gs == 0u ? 0.0 : float((glassLitMask[(gs - 1u) >> 5u] >> ((gs - 1u) & 31u)) & 1u);`,
+    );
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", "#include <common>\nvarying float vGlow;")
     .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance *= gl_FrontFacing ? vGlow : 0.0;");
@@ -1543,17 +1550,39 @@ function styleGlass(m: THREE.MeshPhysicalMaterial) {
 }
 
 /**
- * Window glass: a neutral, glossy pane. Shared by the shell and the fixtures. At night (see setGlassMode) the faces
- * whose `glow` attribute is 1 glow warm: the shell sets it on a pane's face that looks into a lit room.
+ * Window glass: a neutral, glossy pane, made once per floor shell (its lit-room mask is its own) and for the fixtures.
+ * At night (see setGlassMode) the faces whose room slot is set in the mask glow warm (see setGlassLitMask); every
+ * instance shares one compiled program.
  */
 export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
-  m.onBeforeCompile = (shader) => glassShader(shader, m);
+  const litMask = { value: new Uint32Array(4) };
+  m.userData.litMask = litMask;
+  m.onBeforeCompile = (shader) => glassShader(shader, m, litMask);
   m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
   glassMaterials.add(m);
   styleGlass(m);
   m.addEventListener("dispose", () => glassMaterials.delete(m));
   return m;
+}
+
+/** Re-register a glass material that dispose() dropped (a StrictMode remount reuses it). */
+export function trackGlass(m: THREE.MeshPhysicalMaterial) {
+  glassMaterials.add(m);
+  styleGlass(m);
+}
+
+/** Set the rooms whose panes glow (see lib/glassGlow litMask); false when the mask is already that. */
+export function setGlassLitMask(m: THREE.MeshPhysicalMaterial, mask: Uint32Array): boolean {
+  const cur = (m.userData.litMask as { value: Uint32Array }).value;
+  let changed = false;
+  for (let i = 0; i < 4; i++) {
+    if (cur[i] !== mask[i]) {
+      cur[i] = mask[i];
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /** Switch every glass pane between real transmission (high quality) and the film, and light up the lit rooms' panes at night. */

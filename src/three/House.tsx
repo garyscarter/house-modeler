@@ -1,4 +1,4 @@
-import { Suspense, memo, useEffect, useMemo } from "react";
+import { Suspense, memo, useEffect, useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { usePanelPrefs } from "../components/panelPrefs";
@@ -24,7 +24,8 @@ import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightSha
 import { flightStructure, floorStructure, floorsStructure, modelStructure, shellLooks } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell, FLOOR_SURFACE } from "./shell";
-import { getMaterial, type MatSpec } from "./textures";
+import { getMaterial, glassMaterial, setGlassLitMask, trackGlass, type MatSpec } from "./textures";
+import { litMask } from "../lib/glassGlow";
 import { floorBaseY } from "./floorBase";
 import { finishColour, floorAngle, groutColour } from "../lib/floorFinish";
 import { floorUv } from "../lib/floorPattern";
@@ -384,12 +385,22 @@ function FloorShell({
         doorColours: { frontDoorColor: ext.frontDoorColor, backDoorColor: ext.backDoorColor },
         doorsOpen,
         flight,
-        litRooms,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shellLooks(floor), litSig, walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
+    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
+  // This floor's own glass: the lit rooms are a mask on the material, so which rooms are lit never rebuilds the shell.
+  const glass = useMemo(() => glassMaterial(), []);
+  useEffect(() => {
+    trackGlass(glass);
+    return () => glass.dispose();
+  }, [glass]);
+  const invalidate = useThree((s) => s.invalidate);
+  useLayoutEffect(() => {
+    if (setGlassLitMask(glass, litMask(shell.roomSlots, litRooms))) invalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glass, shell, litSig]);
 
   const roomsById = useMemo(() => new Map(floor.rooms.map((r) => [r.id, r])), [floor.rooms]);
   // Each room's floor, as pieces when a stairwell opening is cut out of it.
@@ -438,7 +449,7 @@ function FloorShell({
         <mesh
           key={m.key}
           geometry={m.geometry}
-          material={getMaterial(m.spec)}
+          material={m.spec.kind === "glass" ? glass : getMaterial(m.spec)}
           castShadow={m.castShadow}
           receiveShadow
           onClick={
