@@ -1,10 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { addAfterEffect, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
 import { trackScene } from "./textures";
-import { lampStats } from "./FixtureLights";
+import { lampPoolsOf, lampStats } from "./lampPool";
 
 /** Frames to redraw the shadow map for after mounting, while the scene settles. */
 const MOUNT_FRAMES = 3;
@@ -111,26 +111,12 @@ export function useOffstageCompile(objects: THREE.Object3D[]) {
   }, [gl, objects]);
 }
 
-/** The lamp light pools of this renderer's houses (see LampLights): groups hidden while no lamp is lit, which Precompile shows to compile the lit variant. */
-const lampPools = new WeakMap<THREE.WebGLRenderer, Set<THREE.Object3D>>();
-
-/** Registers the object in `ref` as a lamp light pool for precompiling while the calling component is mounted. */
-export function useLampPool(ref: RefObject<THREE.Object3D | null>) {
-  const gl = useThree((s) => s.gl);
-  useEffect(() => {
-    const o = ref.current;
-    if (!o) return;
-    let set = lampPools.get(gl);
-    if (!set) lampPools.set(gl, (set = new Set()));
-    set.add(o);
-    return () => {
-      set.delete(o);
-    };
-  }, [gl, ref]);
-}
-
 /** Longest wait for shaders to compile before drawing anyway, ms. */
 const COMPILE_TIMEOUT = 5000;
+/** Programs given their first use per frame while the other lamp state is built in the background. */
+const WARM_PER_FRAME = 2;
+/** Quiet time after the renderer's programs last grew before the other lamp state is built for the newcomers, ms. */
+const REWARM_MS = 600;
 
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
@@ -176,6 +162,43 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       }
       return { linked, added: () => (gl.info.programs ?? []).filter((p) => !had.has(p)) };
     };
+    let stopWatch = () => {};
+    let rewarm = 0;
+    let running: Promise<void> | null = null;
+    // The other lamp state, in the background: three bakes the light counts into every lit material's shader, so with
+    // the lamp pool hidden (no lamp lit) the lit programs don't exist yet, and with it shown the unlit ones don't.
+    // Building that variant now means switching lights compiles nothing.
+    const otherLampState = () =>
+      (running ??= (async () => {
+        const pools = lampPoolsOf(gl);
+        try {
+          await nextFrame();
+          await nextFrame();
+          if (cancelled) return;
+          const was = pools.map((o) => o.visible);
+          let added: THREE.WebGLProgram[] = [];
+          try {
+            for (const o of pools) o.visible = !o.visible;
+            added = compileNow().added();
+          } finally {
+            pools.forEach((o, i) => (o.visible = was[i]));
+          }
+          // Not compileAsync's own promise: a render in between points materials back at the other variant, so poll these programs.
+          const end = performance.now() + COMPILE_TIMEOUT;
+          while (!cancelled && performance.now() < end && !added.every((p) => (p as unknown as { isReady(): boolean }).isReady())) await new Promise((r) => setTimeout(r, 16));
+          // A program's first use checks its link and reads its uniforms, which blocks until it is linked (at once
+          // where the driver can't link in parallel): do that here, a few per frame, not in the frame that switches.
+          for (let i = 0; i < added.length && !cancelled; i += WARM_PER_FRAME) {
+            const live = new Set(gl.info.programs ?? []);
+            for (const p of added.slice(i, i + WARM_PER_FRAME)) if (live.has(p)) p.getUniforms();
+            await nextFrame();
+          }
+        } catch {
+          // Only an optimisation.
+        } finally {
+          running = null;
+        }
+      })());
     void (async () => {
       try {
         await prepare.current?.();
@@ -189,33 +212,26 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       }
       if (cancelled) return;
       done.current(token);
-      // Then, in the background, the other lamp state: three bakes the light counts into every lit material's shader,
-      // so with the lamp pool hidden (no lamp lit) the lit programs don't exist yet, and with it shown the unlit ones
-      // don't. Compiling that variant now means switching lights compiles nothing.
-      const pools = [...(lampPools.get(gl) ?? [])];
-      try {
-        await nextFrame();
-        await nextFrame();
-        if (cancelled) return;
-        const was = pools.map((o) => o.visible);
-        let added: THREE.WebGLProgram[] = [];
-        try {
-          for (const o of pools) o.visible = !o.visible;
-          const compiling = compileNow();
-          added = compiling.added();
-        } finally {
-          pools.forEach((o, i) => (o.visible = was[i]));
-        }
-        // Not compileAsync's own promise: a render in between points materials back at the other variant, so poll these programs.
-        const end = performance.now() + COMPILE_TIMEOUT;
-        while (!cancelled && performance.now() < end && !added.every((p) => (p as unknown as { isReady(): boolean }).isReady())) await new Promise((r) => setTimeout(r, 16));
-      } catch {
-        // As above: only an optimisation.
-      }
-      if (!cancelled) lampStats.litReady = true;
+      await otherLampState();
+      if (cancelled) return;
+      lampStats.litReady = true;
+      // Materials that first appear later (a new colour, a fitting added) were compiled only for the lamp state they
+      // appeared in: once the renderer's programs stop growing, build their other variant too.
+      let known = gl.info.programs?.length ?? 0;
+      stopWatch = addAfterEffect(() => {
+        const n = gl.info.programs?.length ?? 0;
+        if (running || n <= known) return;
+        known = n;
+        window.clearTimeout(rewarm);
+        rewarm = window.setTimeout(() => {
+          void otherLampState().then(() => (known = gl.info.programs?.length ?? 0));
+        }, REWARM_MS);
+      });
     })();
     return () => {
       cancelled = true;
+      stopWatch();
+      window.clearTimeout(rewarm);
     };
   }, [gl, scene, camera, token, offscreen]);
   return null;

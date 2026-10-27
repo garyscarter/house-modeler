@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { POOL, assignSlots, coneGain, type LampLight, type PoolSizes, type Slots } from "../lib/lights";
 import { useStore } from "../store";
-import { useLampPool } from "./frameLoop";
+import { lampStats, useLampPool } from "./lampPool";
 
 /** Point light intensity per candela: the scene is lit in the renderer's units with the sun at a few units, so a real bulb's candela is scaled to sit with it. */
 export const LAMP_SCALE = 0.06;
@@ -22,9 +22,6 @@ const PARK: [number, number, number] = [0, -500, 0];
  * the flux-keeping gain (coneGain), so a tight spot bar does not burn out next to a wide pendant once tone-mapped.
  */
 export const spotIntensity = (l: Pick<LampLight, "candela" | "spot">): number => l.candela * SPOT_SCALE * Math.sqrt(coneGain(l.spot?.angle));
-
-/** Lit lamp lights in use and the pool, for the dev hook window.__houseLights (litReady is set by Precompile once the lit shaders are built). */
-export const lampStats = { active: 0, pool: 0, point: 0, spot: 0, casters: 0, slots: { point: [], spot: [] } as Slots, litReady: false };
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 

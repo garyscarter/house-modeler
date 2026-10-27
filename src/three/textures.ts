@@ -1552,21 +1552,22 @@ function styleGlass(m: THREE.MeshPhysicalMaterial) {
 /**
  * Window glass: a neutral, glossy pane, made once per floor shell (its lit-room mask is its own) and for the fixtures.
  * At night (see setGlassMode) the faces whose room slot is set in the mask glow warm (see setGlassLitMask); every
- * instance shares one compiled program.
+ * instance shares one compiled program. `track: false` leaves registering it to trackGlass, for one made during render
+ * (StrictMode may make it twice and drop one).
  */
-export function glassMaterial(color = GLASS_TINT): THREE.MeshPhysicalMaterial {
+export function glassMaterial(color = GLASS_TINT, track = true): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.02, metalness: 0, envMapIntensity: 1.5 });
   const litMask = { value: new Uint32Array(4) };
   m.userData.litMask = litMask;
   m.onBeforeCompile = (shader) => glassShader(shader, m, litMask);
   m.customProgramCacheKey = () => (m.transmission > 0 ? "glass-t" : "glass-f");
-  glassMaterials.add(m);
+  if (track) glassMaterials.add(m);
   styleGlass(m);
   m.addEventListener("dispose", () => glassMaterials.delete(m));
   return m;
 }
 
-/** Re-register a glass material that dispose() dropped (a StrictMode remount reuses it). */
+/** Register a glass material made with `track: false`, or re-register one that dispose() dropped (a StrictMode remount reuses it). */
 export function trackGlass(m: THREE.MeshPhysicalMaterial) {
   glassMaterials.add(m);
   styleGlass(m);

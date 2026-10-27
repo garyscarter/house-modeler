@@ -174,8 +174,6 @@ export const POOL: Record<Quality, PoolSizes> = {
   balanced: { point: 12, spot: 6, casters: 0 },
   low: { point: 8, spot: 4, casters: 0 },
 };
-export const POINT_SLOTS: Record<Quality, number> = { high: POOL.high.point, balanced: POOL.balanced.point, low: POOL.low.point };
-export const SPOT_SLOTS: Record<Quality, number> = { high: POOL.high.spot, balanced: POOL.balanced.spot, low: POOL.low.spot };
 
 /** The `cap` lights nearest to `eye` (world metres), nearest first. Ties keep input order. */
 export function pickLights<T extends { pos: readonly [number, number, number] }>(lights: T[], eye: readonly [number, number, number], cap: number): T[] {

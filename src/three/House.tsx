@@ -392,7 +392,8 @@ function FloorShell({
   );
   useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
   // This floor's own glass: the lit rooms are a mask on the material, so which rooms are lit never rebuilds the shell.
-  const glass = useMemo(() => glassMaterial(), []);
+  // Registered in the effect, so a copy StrictMode makes and drops is never tracked.
+  const glass = useMemo(() => glassMaterial(undefined, false), []);
   useEffect(() => {
     trackGlass(glass);
     return () => glass.dispose();

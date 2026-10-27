@@ -20,7 +20,7 @@ Owner's brief (Oct 2026): switch lights, lamps included, on and off to judge the
 |---|---|---|
 | `Fixture` (`src/types.ts`) | `on?: boolean` | on |
 | `SunState` (`src/store.ts`) | `lights?: LightsMaster` (`"auto" \| "on" \| "off"`) | auto |
-| `src/lib/lights.ts` | `LAMPS` (light fittings by catalogue symbol: lumens, colour, bulb position, reach), `isLightItem`, `fixtureLit`, `lightsOn`, `lampGlow`, `candela`, `LIGHT_CAP`, `pickLights`, `litRooms` | |
+| `src/lib/lights.ts` | `LAMPS` (light fittings by catalogue symbol: lumens, colour, bulb position, reach), `isLightItem`, `fixtureLit`, `lightsOn`, `lampGlow`, `candela`, `POOL` (fixed light slots per quality), `pickLights`, `assignSlots`, `litRooms` | |
 | `src/lib/dusk.ts` | `NIGHT_PRESET_ALTITUDE` (-8°), `nightHour` | |
 
 Rules: a light is lit when `fixtureLit(fx, item, master, altitude)`; `altitude` is the sun study's altitude or null when the study is off. Old saves need no migration.
@@ -29,7 +29,7 @@ Rules: a light is lit when `fixtureLit(fx, item, master, altitude)`; `altitude` 
 
 - **Sun panel** (`components/SunControls.tsx`): a Night preset beside Dusk (`nightHour`); the time slider runs from sunrise to the night hour so the evening is scrubbable; a Lights segmented control Auto / On / Off writing `sun.lights`.
 - **Inspector** (`editor/Inspectors.tsx`): a Switched on toggle for light fixtures.
-- **3D** (`three/Fixtures.tsx`): lit lamps get a point light at `LAMPS[symbol].bulb(box)` with intensity `candela(lumens)`, `decay 2`, `distance reach`, no shadows, capped with `pickLights` by camera distance; shades and bulbs use `lampGlow` for their emissive. Unlit lamps have no glow.
+- **3D** (`three/FixtureLights.tsx`): lit lamps get a point light at `LAMPS[symbol].bulb(box)` with intensity `candela(lumens)`, `decay 2`, `distance reach`, no shadows, from a fixed pool of slots (`POOL`, filled nearest the camera by `assignSlots`); shades and bulbs use `lampGlow` for their emissive (`three/Fixtures.tsx`). Unlit lamps have no glow.
 - **Night interior** (`three/Lighting.tsx`, `three/House.tsx`): below `NIGHT_ALTITUDE` the environment intensity drops to near nothing and room ceilings lose their emissive, so an unlit room is dark; the moon fill stays so the house is still readable.
 - **Windows** (`three/shell.ts`, `three/textures.ts`): glass gets a `lit` variant; panes in a lit room (`litRooms`) glow at night, others stay dark.
 
@@ -46,12 +46,12 @@ Foundation on main (keep these; add beside them):
 | `src/types.ts` | `Fixture.drop?`, `.warmth?: LightWarmth` (2700 \| 3000 \| 4000), `.dim?` (1-100), `.pitch?` |
 | `src/lib/catalogue.ts` | `CatalogueItem.ceiling?`, `.drop?`, `.pitch?`; symbols `pendant`, `pendant-multi`, `flush-light`, `downlight`, `downlight-grid`, `spot-bar`, `wall-light`, `strip-light`; category "Lighting" (8 entries); `dropOf`, `pitchOf`, `isCeilingItem`, `DEFAULT_CEILING` |
 | `src/lib/planMath.ts` | `fixtureBox`: a ceiling item's `z0 = ceiling - drop - h` (ceiling defaults to 2.4 when not given) |
-| `src/lib/lights.ts` | `LampDef.bulbs(box, pitch)` (several bulbs per fitting), `.spot` (cone aimed down), `gridPoints`; `WARMTHS`, `WARMTH_LABEL`, `WARMTH_COLOR`, `warmthOf`, `dimOf`, `lightColor`, `lampPitch`; `LampLight.spot`; `bulbsWorld`, `floorLamps` (one light per bulb, lumens split, dimmed); `SHADOW_CAP` (4 on high) |
+| `src/lib/lights.ts` | `LampDef.bulbs(box, pitch)` (several bulbs per fitting), `.spot` (cone aimed down), `gridPoints`; `WARMTHS`, `WARMTH_LABEL`, `WARMTH_COLOR`, `warmthOf`, `dimOf`, `lightColor`, `lampPitch`; `LampLight.spot`; `bulbsWorld`, `floorLamps` (one light per bulb, lumens split, dimmed); `POOL[quality].casters` (4 shadowed spots on high) |
 
 - **Plan** (`editor/FixtureSymbol.tsx`, `editor/plan/layers/Fixtures.tsx`): BS EN 60617 style symbols. Pendant: circle with a cross through it. Multi-pendant: a bar with three such circles. Flush light: circle with a cross and a filled centre. Downlight: small filled circle in a ring; a grid draws one per `gridPoints`. Spot bar: a bar of three arrows-in-circles. Wall light: a half circle on the wall with a cross. Strip: a thin bar with a dashed centre line. Ceiling items are drawn above furniture, outline only (no filled body), in the plan's ink colour; lamps keep their furniture symbols.
 - **Placement** (`editor/plan/useGeometry.ts`, `useDrag.ts`): ceiling items never snap to a wall and never abut neighbours; they place freely (grid snap only).
 - **Inspector** (`editor/Inspectors.tsx`): for lights, Warmth (select), Dimmer (range 10-100, shown as %); for ceiling items a Drop field with a reset (in place of Height above floor); for grids a Spacing field. The existing Switched on toggle stays.
-- **3D** (`three/Fixtures.tsx`): parts for each new symbol (a flex and shade, a bar with three small shades, a shallow diffuser disc, a recessed ring with a lens, a bar with three tilted heads, a backplate with an up-and-down shade, a slim strip). `LampLights` renders a `spotLight` aimed straight down for lights with `spot`, a `pointLight` otherwise; the nearest `SHADOW_CAP[quality]` spot lights cast shadows (small maps, 512). Lit parts glow by `lampGlow × dimOf`, in the fixture's light colour.
+- **3D** (`three/Fixtures.tsx`): parts for each new symbol (a flex and shade, a bar with three small shades, a shallow diffuser disc, a recessed ring with a lens, a bar with three tilted heads, a backplate with an up-and-down shade, a slim strip). `LampLights` (`three/FixtureLights.tsx`) fills a fixed pool of `spotLight`s aimed straight down (lights with `spot`) and `pointLight`s; the nearest `POOL[quality].casters` spot lights cast shadows (small maps, 512). Lit parts glow by `lampGlow × dimOf`, in the fixture's light colour.
 - **Windows, both sides** (`three/shell.ts`, `three/textures.ts`): the lit-room glow must show only on the pane's face that looks into the lit room from the other side. Shell gives every glass quad a `glow` vertex attribute (1 when the room behind that face, seen from where the face points, is lit; 0 otherwise); the glass shader multiplies its emissive by it. From inside a lit room the window stays dark glass; from outside it glows. The same attribute will carry outside lights (garden) onto the inner face later. The `glass|lit` material variant goes away.
 
 Checks: `npm run check`, `npm run build`; screenshots of the listing with a pendant, a downlight grid and a spot bar at the Night preset from inside and outside; a plan screenshot of the Lighting symbols.
@@ -59,3 +59,12 @@ Checks: `npm run check`, `npm run build`; screenshots of the listing with a pend
 ## Phase 3: electrics mode and wiring guide
 
 The brief is `docs/wiring-guide-brief.md`; the implementation plan, which also covers phase 2 and phase 1's 3D, is `docs/electrics-plan.md`.
+
+## Switching lights without a stall
+
+Three bakes the number of point, spot and shadow-casting lights into every lit material's shader, so mounting lamp lights only while they are lit recompiled every material at the switch. Now:
+
+- **A fixed pool** (`POOL`: high 16 point + 8 spot with 4 shadowed, balanced 12 + 6, low 8 + 4): every slot stays mounted, an empty one parked dark; the pool is hidden while no lamp is lit. `assignSlots` keeps a lamp in its slot while it stays among the nearest, so orbiting doesn't reshuffle.
+- **Both lamp states precompiled** (`three/frameLoop.tsx` `Precompile`): after the first frame the other state (pool shown or hidden) is compiled in the background and each new program given its first use a couple per frame; it runs again for materials that appear later.
+- **Lit and unlit swap materials only**: fixture geometry ignores on, dim and warmth (`lib/fixtureGlow.ts`), and window glass glows by a per-floor room mask (`lib/glassGlow.ts`), so neither the fixtures nor the shell are rebuilt.
+
