@@ -1,0 +1,7 @@
+/* The saving notice: top centre of the canvas, above the floating cards. */
+.save-notice {
+  position: absolute; left: 50%; top: var(--float-top); transform: translateX(-50%); z-index: var(--z-pop);
+  max-width: min(560px, calc(100% - 32px)); padding: 8px 14px; font-size: 13px; color: var(--text);
+  border-left: 3px solid var(--warn);
+}
+.app[data-chassis="phone"] .save-notice { top: 8px; }

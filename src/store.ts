@@ -221,6 +221,9 @@ const photoSource = (variants: State["variants"]): VariantKey | undefined =>
   variants.current ? "current" : variants.proposed ? "proposed" : undefined;
 
 
+/** Load the saved project again (another tab saved newer work); set once the store exists. */
+let reloadSaved: () => Promise<void> | void = () => {};
+
 export const useStore = create<State>()(
   persist(
     (rawSet, get) => {
@@ -454,7 +457,7 @@ export const useStore = create<State>()(
     },
     {
       name: "house-modeler",
-      storage: imageAwareStorage<Persisted>(),
+      storage: imageAwareStorage<Persisted>(undefined, undefined, { onTakeover: () => reloadSaved() }),
       partialize: (s): Persisted => ({
         variants: s.variants,
         photos: s.photos,
@@ -507,3 +510,5 @@ export const useStore = create<State>()(
 export const useModel = (k?: VariantKey) => useStore((s) => s.variants[k ?? s.activeVariant]);
 /** The plot variant `k` (default: the active one) shows: its own, or As listed's while Proposed has none. */
 export const useSite = (k?: VariantKey) => useStore((s) => siteOf(s.sites, k ?? s.activeVariant));
+
+reloadSaved = () => useStore.persist.rehydrate();

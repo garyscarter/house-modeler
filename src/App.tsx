@@ -31,6 +31,7 @@ import { Recovery } from "./components/Recovery";
 import { useHydration } from "./lib/persist";
 import { Welcome } from "./components/Welcome";
 import { CoachStrip } from "./components/CoachStrip";
+import { SaveNotice } from "./components/SaveNotice";
 import { startChassisWatch, useChassis } from "./components/useChassis";
 import { TabBar } from "./components/mobile/TabBar";
 import { useSheet } from "./components/mobile/sheet";
@@ -295,6 +296,7 @@ export default function App() {
         )}
         {model && chassis === "phone" && both && <LayoutSwitch className="layout-pill float-card" />}
         {model && <CoachStrip />}
+        <SaveNotice />
         {model && <Dock />}
         {peek && <div className="peek-badge">Showing {VARIANT_LABEL[activeVariant]} · release Space</div>}
       </main>

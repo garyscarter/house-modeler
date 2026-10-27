@@ -71,7 +71,17 @@ export interface StorageOptions {
    * tab (or an older build) may have written images this tab has never seen, and they are not ours to delete.
    */
   gcOnStart?: boolean;
+  /**
+   * Called when this tab takes over saving and finds the saved project newer than what it loaded (another tab saved
+   * meanwhile): the store should load the saved project again rather than let this tab write over it.
+   */
+  onTakeover?: () => Promise<void> | void;
 }
+
+/** Why saving stopped in this tab, for the notice (see components/SaveNotice.tsx). */
+export const TAKEN_OVER = "Another tab took over saving this project. Your next change here takes it back.";
+/** Shown for a moment after a takeover found newer saved work: this tab's unsaved change was dropped for it. */
+export const REFRESHED = "Loaded your changes from the other tab. Make your last change here again.";
 
 export const WRITER_LOCK = "storey-writer";
 
@@ -92,30 +102,53 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: Stor
   let chain: Promise<void> = Promise.resolve();
   let persistAsked = false;
 
-  // Only one tab may write; the others keep what they have in memory and say so.
+  // Only one tab writes at a time: the one the owner is using. A tab takes the lock when it opens, comes to the
+  // front or gets a change; the tab that loses it keeps what it has in memory and says so (its next change takes the
+  // lock back). Before writing after a takeover, the tab checks the saved project is the one it loaded: if another
+  // tab saved meanwhile it loads that instead of writing over it. A hidden tab (a preview) never takes the lock.
   let writer = !locks;
   let asking = false;
+  /** The saved blob this tab last loaded or wrote, to tell whether another tab has saved since. */
+  let lastJson: string | null = null;
+  const visible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
   const tryLock = () => {
-    if (!locks || writer || asking) return;
+    if (!locks || writer || asking || !visible()) return;
     asking = true;
+    let got = false;
     void Promise.resolve(
-      locks.request(WRITER_LOCK, { ifAvailable: true }, (lock) => {
+      locks.request(WRITER_LOCK, { steal: true }, async (lock) => {
         asking = false;
         if (!lock) {
           setStatus({ kind: "readonly" });
           return undefined;
         }
+        got = true;
         writer = true;
         if (useStorageStatus.getState().kind === "readonly") setStatus({ kind: "idle" });
         if (latest && !useHydration.getState().error) {
-          pending = latest;
-          void flush();
+          const stored = lastJson === null ? undefined : await get<string>(latest.name).catch(() => undefined);
+          if (stored !== undefined && stored !== lastJson) {
+            // Another tab saved since this one loaded: take its work rather than write over it.
+            pending = null;
+            latest = null;
+            lastState = null;
+            lastJson = stored;
+            setStatus({ kind: "ok", message: REFRESHED, persistent: useStorageStatus.getState().persistent });
+            await opts.onTakeover?.();
+          } else {
+            pending = latest;
+            void flush();
+          }
         }
-        return new Promise<void>(() => {}); // hold the lock until the page goes
+        return new Promise<void>(() => {}); // hold the lock until the page goes, or another tab takes it
       }),
     ).catch(() => {
       asking = false;
-      writer = true; // locks unusable: behave as if there were none
+      if (got) {
+        // Another tab took the lock and saves from now on.
+        writer = false;
+        setStatus({ kind: "readonly", message: TAKEN_OVER });
+      } else writer = true; // locks unusable: behave as if there were none
     });
   };
 
@@ -148,6 +181,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: Stor
           fresh.forEach((id) => written.add(id));
         }
         await setMany([[job.name, json]]);
+        lastJson = json;
         // Drop images this tab stopped using (removed photos, replaced plans), never ones it hasn't seen.
         const stale = [...previouslyUsed].filter((id) => !used.has(id));
         previouslyUsed = used;
@@ -189,6 +223,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: Stor
   return {
     getItem: async (name) => {
       const raw = await get<string>(name);
+      lastJson = raw ?? null;
       if (!raw) return null;
       const ids = refIds(raw);
       const urls = ids.length ? await getMany<string | undefined>(ids.map((id) => IMG_KEY_PREFIX + id)) : [];

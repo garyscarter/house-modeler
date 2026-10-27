@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { dehydrate, dropAiSettings, imageAwareStorage, refIds, rehydrate, saveFailureMessage, useStorageStatus } from "./persist";
+import { REFRESHED, TAKEN_OVER, dehydrate, dropAiSettings, imageAwareStorage, refIds, rehydrate, saveFailureMessage, useStorageStatus } from "./persist";
 
 const saved = vi.hoisted(() => [] as string[]);
 const db = vi.hoisted(() => new Map<string, unknown>());
@@ -118,41 +118,83 @@ describe("image GC across tabs", () => {
 });
 
 describe("single writer and status", () => {
-  const fakeLocks = (available: boolean) => {
-    const waiting: (() => void)[] = [];
-    let free = available;
+  /** A lock manager for one name: a holder, and `steal` evicting it (its request promise rejects, as the Web Locks API does). */
+  const fakeLocks = () => {
+    let evict: (() => void) | null = null;
     return {
-      open: () => {
-        free = true;
-      },
+      held: () => evict !== null,
       locks: {
-        request: ((_n: string, _o: unknown, cb: (l: unknown) => unknown) => {
-          if (!free) return Promise.resolve(cb(null));
-          free = false;
-          waiting.length = 0;
-          return Promise.resolve(cb({ name: "storey-writer" }));
+        request: ((_n: string, o: { steal?: boolean; ifAvailable?: boolean }, cb: (l: unknown) => unknown) => {
+          if (evict) {
+            if (!o.steal) return Promise.resolve(cb(null));
+            evict();
+          }
+          return new Promise<unknown>((resolve, reject) => {
+            evict = () => {
+              evict = null;
+              reject(Object.assign(new Error("stolen"), { name: "AbortError" }));
+            };
+            void Promise.resolve(cb({ name: "storey-writer" })).then(resolve, reject);
+          });
         }) as unknown as LockManager["request"],
       },
     };
   };
 
-  it("does not write without the lock, then flushes once it gets it", async () => {
+  it("takes the lock from another tab on opening, and that tab stops saving and says so", async () => {
     vi.useFakeTimers();
     try {
       db.clear();
       useStorageStatus.setState({ kind: "idle" }, true);
-      const fl = fakeLocks(false);
-      const s = imageAwareStorage<{ n: number }>(10, 50, { locks: fl.locks });
+      const fl = fakeLocks();
+      const a = imageAwareStorage<{ n: number }>(10, 50, { locks: fl.locks });
       await vi.advanceTimersByTimeAsync(5);
-      expect(useStorageStatus.getState().kind).toBe("readonly");
-      s.setItem("w", { state: { n: 1 }, version: 1 });
-      await vi.advanceTimersByTimeAsync(200);
-      expect(db.has("w")).toBe(false);
-      fl.open();
-      s.setItem("w", { state: { n: 2 }, version: 1 }); // a change retries the lock
-      await vi.advanceTimersByTimeAsync(200);
-      expect(db.has("w")).toBe(true);
-      expect(useStorageStatus.getState().kind).toBe("ok");
+      a.setItem("w", { state: { n: 1 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(JSON.parse(db.get("w") as string).state.n).toBe(1);
+      // A second tab opens: it becomes the writer; the first is told.
+      const b = imageAwareStorage<{ n: number }>(10, 50, { locks: fl.locks });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(useStorageStatus.getState()).toMatchObject({ kind: "readonly", message: TAKEN_OVER });
+      b.setItem("w", { state: { n: 2 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(JSON.parse(db.get("w") as string).state.n).toBe(2);
+      // The first tab's change is not written while the second holds the lock... until it takes it back.
+      a.setItem("w", { state: { n: 3 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(fl.held()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("on taking the lock back, loads newer saved work instead of writing over it", async () => {
+    vi.useFakeTimers();
+    try {
+      db.clear();
+      useStorageStatus.setState({ kind: "idle" }, true);
+      const fl = fakeLocks();
+      let reloaded = 0;
+      const a = imageAwareStorage<{ n: number }>(10, 50, { locks: fl.locks, onTakeover: () => void reloaded++ });
+      await vi.advanceTimersByTimeAsync(5);
+      a.setItem("w", { state: { n: 1 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      const b = imageAwareStorage<{ n: number }>(10, 50, { locks: fl.locks });
+      await vi.advanceTimersByTimeAsync(5);
+      await b.getItem("w");
+      b.setItem("w", { state: { n: 2 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(JSON.parse(db.get("w") as string).state.n).toBe(2);
+      // Tab a changes something: it takes the lock, finds b's newer save, and reloads rather than writing n = 3.
+      a.setItem("w", { state: { n: 3 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(reloaded).toBe(1);
+      expect(JSON.parse(db.get("w") as string).state.n).toBe(2);
+      expect(useStorageStatus.getState()).toMatchObject({ kind: "ok", message: REFRESHED });
+      // Now a is the writer with the saved project: its next change is written.
+      a.setItem("w", { state: { n: 4 }, version: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(JSON.parse(db.get("w") as string).state.n).toBe(4);
     } finally {
       vi.useRealTimers();
     }

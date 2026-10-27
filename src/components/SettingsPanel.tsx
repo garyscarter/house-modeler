@@ -124,7 +124,7 @@ export function StorageStatus() {
     <p className="small muted sync-status" role="status">
       <span>
         {!readonly && <Loader kind="lift" size={14} />}
-        {readonly ? "Another tab has this project open, so changes here aren't saved" : `${s.message ?? "Couldn't save on this device"}. Trying again with your next change`}
+        {readonly ? s.message ?? "Another tab is saving this project; your next change here takes over" : `${s.message ?? "Couldn't save on this device"}. Trying again with your next change`}
       </span>
     </p>
   );
