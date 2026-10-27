@@ -2,6 +2,7 @@ import type { Fixture, Floor, HouseModel, Opening, OpeningKind, Room, Site } fro
 import { FLOOR_FINISH_LABEL, type FloorFinish } from "../types";
 import { buildWalls, diffWalls, EXT_WALL_T, pointInPolygon, polygonArea, polygonCentroid, roomWorldPolygon, toWorld, type V2, type WallSeg } from "./geometry";
 import { byId } from "./catalogue";
+import { OUTSIDE, pointsOf, type Point } from "./electrics";
 import { frontAreas, isJoinery, joineryOf, shelfStack } from "./joinery";
 import { fixtureBox, M2_TO_FT2 } from "./planMath";
 import { diffSites } from "./siteDiff";
@@ -477,9 +478,53 @@ export function joineryChanges(fa: Floor | undefined, fb: Floor, ceilA: number, 
  * points and points moved 0.3 m or more, grouped per room and catalogue type, on the electricalWorks line, quantity
  * = points (a downlight grid counts every bulb); removed points for information only. Category "Electrics".
  */
-export function electricalChanges(_fa: Floor | undefined, _fb: Floor): JoineryChange[] {
-  return [];
+export function electricalChanges(fa: Floor | undefined, fb: Floor): JoineryChange[] {
+  const A = fa ? pointsOf(fa) : [];
+  const B = pointsOf(fb);
+  const taken = new Set<string>();
+  const partner = new Map<string, Point>();
+  for (const p of B) {
+    const hit = A.find((x) => x.fx.id === p.fx.id);
+    if (hit) {
+      partner.set(p.fx.id, hit);
+      taken.add(hit.fx.id);
+    }
+  }
+  for (const p of B) {
+    if (partner.has(p.fx.id)) continue;
+    const hit = A.filter((x) => !taken.has(x.fx.id) && x.fx.type === p.fx.type).find((x) => Math.hypot(x.at.x - p.at.x, x.at.y - p.at.y) < ELEC_MOVE_M);
+    if (hit) {
+      partner.set(p.fx.id, hit);
+      taken.add(hit.fx.id);
+    }
+  }
+  type Group = { roomKey: string; room: string; item: Point["item"]; quantity: number };
+  const added = new Map<string, Group>();
+  const moved = new Map<string, Group>();
+  const add = (m: Map<string, Group>, p: Point) => {
+    const key = `${p.room.key}:${p.item.id}`;
+    const g = m.get(key) ?? { roomKey: p.room.key, room: p.room.name, item: p.item, quantity: 0 };
+    g.quantity += p.quantity;
+    m.set(key, g);
+  };
+  for (const p of B) {
+    const was = partner.get(p.fx.id);
+    if (!was) add(added, p);
+    else if (Math.hypot(was.at.x - p.at.x, was.at.y - p.at.y) >= ELEC_MOVE_M) add(moved, p);
+  }
+  const where = (room: string) => (room === OUTSIDE ? "outside" : `in the ${room}`);
+  const lead = (verb: string, g: Group) => `${verb} ${g.item.name.toLowerCase()} ${where(g.room)}${g.quantity > 1 ? ` × ${g.quantity}` : ""}`;
+  const out: JoineryChange[] = [];
+  for (const [k, g] of added) out.push({ key: `elec:new:${k}`, category: "Electrics", description: lead("New", g), quantity: g.quantity, unit: "each", costLine: "electricalWorks" });
+  for (const [k, g] of moved) out.push({ key: `elec:move:${k}`, category: "Electrics", description: lead("Move", g), quantity: g.quantity, unit: "each", costLine: "electricalWorks" });
+  const gone = new Map<string, Group>();
+  for (const p of A) if (!taken.has(p.fx.id)) add(gone, p);
+  for (const [k, g] of gone) out.push({ key: `elec:removed:${k}`, category: "Electrics", description: `${g.item.name}${g.quantity > 1 ? ` × ${g.quantity}` : ""} removed ${g.room === OUTSIDE ? "from outside" : `from the ${g.room}`}`, quantity: g.quantity, unit: "each" });
+  return out;
 }
+
+/** A point moved this far (metres) or more is a new job; closer pairs are the same point. */
+const ELEC_MOVE_M = 0.3;
 
 export function diffModels(a: HouseModel, b: HouseModel, sites?: { a?: Site; b?: Site }): Change[] {
   const out: Change[] = [];

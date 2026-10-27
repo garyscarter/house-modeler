@@ -133,10 +133,66 @@ describe("circuits", () => {
   });
 });
 
-describe("schedule (stubs until Dua Lipa's chunk)", () => {
-  it("exports the schedule functions", () => {
-    expect(Array.isArray(pointRows(model))).toBe(true);
-    expect(Array.isArray(scheduleRows([]))).toBe(true);
-    expect(Array.isArray(totals([]))).toBe(true);
+describe("schedule", () => {
+  const rows = pointRows(model);
+  const byLabel = (floorName: string, room: string, label: string) => rows.find((r) => r.floor === floorName && r.room === room && r.label === label)!;
+  const gname = ground.name;
+
+  it("has one row per numbered point, in numbering order, with exact fields", () => {
+    expect(rows.length).toBe(numberPoints(model).length);
+    expect(rows.map((r) => r.id)).toEqual(numberPoints(model).map((p) => p.fx.id));
+    expect(rows.some((r) => r.id === "sofa" || r.id === "lamp")).toBe(false);
+    const s1 = byLabel(gname, "Kitchen", "S1");
+    expect(s1).toMatchObject({ id: "s1", type: "Socket (double)", quantity: 1, height: "450 mm", circuit: "", notes: "" });
+  });
+
+  it("counts a grid as its bulbs, with a size note and a ceiling height", () => {
+    const g = rows.find((r) => r.id === "k2")!;
+    expect(g.quantity).toBe(4);
+    expect(g.height).toBe("Ceiling");
+    expect(g.notes).toContain("2 × 2 at 1.2 m");
+    expect(rows.reduce((a, r) => a + r.quantity, 0)).toBe(1 + 1 + 1 + 1 + 4 + 1 + 1 + 1);
+  });
+
+  it("notes the lights a switch controls and the switches of a light, across rooms and floors", () => {
+    const sw = rows.find((r) => r.id === "sw")!;
+    expect(sw.notes).toMatch(/^Switches L1, L2$/);
+    expect(sw.notes).not.toContain("gone");
+    expect(rows.find((r) => r.id === "k1")!.notes).toBe("On SW1");
+    expect(rows.find((r) => r.id === "hl")!.notes).toBe(`On ${first.name} Landing SW1`);
+    expect(rows.find((r) => r.id === "sw2")!.notes).toBe(`Switches ${gname} Hall L1`);
+  });
+
+  it("marks outdoor points, gives wall point heights at their centre, and names circuits", () => {
+    const out = rows.find((r) => r.id === "out")!;
+    expect(out.room).toBe(OUTSIDE);
+    expect(out.notes).toContain("Outdoor");
+    expect(out.height).toMatch(/^\d+ mm$/);
+    const withC = pointRows({ ...model, circuits: [{ id: "c", name: "Ring 1", kind: "ring", points: ["s1"] }] });
+    expect(withC.find((r) => r.id === "s1")!.circuit).toBe("Ring 1");
+    const fl = { ...model, floors: [{ ...ground, fixtures: [fx("f", "socket-floor", 100, 100)] }] };
+    expect(pointRows(fl)[0].height).toBe("Floor");
+    expect(pointRows({ ...model, floors: [{ ...ground, fixtures: [fx("s", "switch-1g", 100, 100, { label: "Hall" })] }] })[0].notes).toBe("Hall");
+  });
+
+  it("groups consecutive rows into schedule lines with ranged labels", () => {
+    const sched = scheduleRows(rows);
+    const sockets = sched.find((r) => r.type === "Socket (double)")!;
+    expect(sockets).toMatchObject({ room: "Kitchen", count: 2, labels: "S1–S2", height: "450 mm" });
+    expect(sched.reduce((a, r) => a + r.count, 0)).toBe(rows.reduce((a, r) => a + r.quantity, 0));
+    const mk = (label: string, circuit = ""): (typeof rows)[number] => ({ ...rows[0], label, circuit, kind: "socket", type: "T", floor: "F", room: "R", height: "450 mm", quantity: 1, notes: "" });
+    expect(scheduleRows([mk("S1"), mk("S2"), mk("S4")])[0].labels).toBe("S1–S2, S4");
+    expect(scheduleRows([mk("S1"), mk("S2", "A")]).length).toBe(2);
+    expect(scheduleRows([mk("S1"), mk("S3")])[0].labels).toBe("S1, S3");
+  });
+
+  it("totals one row per type, by kind then name", () => {
+    const t = totals(rows);
+    expect(t.find((x) => x.type === "Downlights, grid")!.count).toBe(4);
+    expect(t.find((x) => x.type === "Socket (double)")!.count).toBe(2);
+    expect(t.reduce((a, x) => a + x.count, 0)).toBe(rows.reduce((a, r) => a + r.quantity, 0));
+    const kinds = t.map((x) => ["board", "light", "switch", "socket", "connection", "appliance", "alarm", "data"].indexOf(x.kind));
+    expect(kinds).toEqual([...kinds].sort((a, b) => a - b));
+    expect(totals([])).toEqual([]);
   });
 });

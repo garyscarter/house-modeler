@@ -31,6 +31,8 @@ import { downloadPrefix } from "../lib/brand";
 import { stampMark } from "./stampMark";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
+import { exportWiringGuide, reportFontCss } from "./wiringGuideExport";
+import { numberPoints } from "../lib/electrics";
 
 const KEYS: VariantKey[] = ["current", "proposed"];
 type AreaUnit = "m²" | "ft²";
@@ -310,12 +312,6 @@ export function Notes({ notes }: { notes: { key: VariantKey; notes: ReturnType<t
   );
 }
 
-/** The report embeds the display font so it looks right offline; loaded only when a report is made. */
-const reportFontCss = async () => {
-  const { default: woff2 } = await import("@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?inline");
-  return `@font-face{font-family:"Bricolage Grotesque Variable";src:url(${woff2}) format("woff2");font-weight:200 800}`;
-};
-
 const longDate = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 const blobToDataUrl = (b: Blob) =>
@@ -431,6 +427,8 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
     downloadBlob(new Blob(["﻿" + changesCsv(changes, rates)], { type: "text/csv;charset=utf-8" }), `${prefix}-changes-${date}.csv`);
   };
 
+  const guideModel = variants.proposed ?? variants[active];
+  const noPoints = useMemo(() => !guideModel || numberPoints(guideModel).length === 0, [guideModel]);
   const no3d = ids.length === 0;
   return (
     <div className="rp-export">
@@ -461,6 +459,18 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
             Changes and costs (CSV)
           </button>
         </div>
+      </div>
+      <div className="rp-export-group">
+        <h4 className="rp-sub">Wiring guide</h4>
+        <div className="row">
+          <button onClick={() => void run("guide", () => exportWiringGuide("html"))} disabled={noPoints || busy !== null}>
+            {busy === "guide" ? <><Loader kind="lift" size={14} />Preparing…</> : "Wiring guide (print)"}
+          </button>
+          <button onClick={() => void run("schedule", () => exportWiringGuide("csv"))} disabled={noPoints || busy !== null}>
+            {busy === "schedule" ? <><Loader kind="lift" size={14} />Saving…</> : "Schedule (CSV)"}
+          </button>
+        </div>
+        <p className="muted small">{noPoints ? "Place lights, switches and sockets in Electrics mode to get a wiring guide." : `Of the ${guideModel === variants.proposed ? "Proposed" : "current"} layout: plans with numbered points, a legend, a schedule per room and totals.`}</p>
       </div>
       <div className="rp-export-group">
         <h4 className="rp-sub">3D</h4>
