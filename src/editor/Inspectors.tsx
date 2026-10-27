@@ -686,7 +686,7 @@ export function WallInspector({
       </label>
       )}
       {mode === "decorate" && (
-        <SwatchField label="Colour" value={wall.color ?? "#f4f1ea"} isSet={!!wall.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+        <SwatchField dulux label="Colour" value={wall.color ?? "#f4f1ea"} isSet={!!wall.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
       )}
       {mode !== "decorate" && (
         <>

@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_EXTERIOR, WALL_COVERING_LABEL, WALL_FINISH_LABEL, type Floor, type Room, type VariantKey, type WallCovering, type WallFinish } from "../types";
 import { ACCENT_LABEL, BASE_LABEL, hasAccent, hasBaseColour, outsideLook, wallAccent, wallBase, wallLook } from "../lib/wallCovering";
-import { ColourSwatches } from "./ColourSwatches";
 import { edgeLabel, isOutsideEdge, setOutsideOverride, setWallOverride } from "../lib/featureWalls";
 import { edgeLengthsM, formatLength } from "../lib/planMath";
 import { useSite, useStore } from "../store";
 import { Info } from "../components/Info";
-import { ColourWell } from "../components/inspector";
+import { ColourWell, SwatchField } from "../components/inspector";
 
 /**
- * One edge's finish controls: the inside covering select, colour, accent and
- * quick swatches, and (on an outside wall) the outside finish and colour.
- * `side` limits it to one face; omitted, both faces show. `alwaysSwatches`
- * shows the inside swatches even before the wall has its own finish, so one
- * click gives it one ({ paint: hex }).
+ * One edge's finish controls: the inside covering select, the colour (quick
+ * swatches and the Dulux range), the accent, and (on an outside wall) the
+ * outside finish and colour. `side` limits it to one face; omitted, both
+ * faces show. `alwaysSwatches` shows the inside colour even before the wall
+ * has its own finish, so one click gives it one ({ paint: hex }).
  */
 export function WallFinishRow({
   floor,
@@ -64,19 +63,23 @@ export function WallFinishRow({
               </option>
             ))}
           </select>
-          {inside && hasBaseColour(covering) && (
-            <ColourWell custom label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`} value={wallBase(look)} onChange={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))} />
-          )}
           {inside && covering !== "paint" && hasAccent(covering) && (
             <ColourWell custom label={`Wall ${i + 1} ${ACCENT_LABEL[covering].toLowerCase()}`} value={wallAccent(look) ?? wallBase(look)} onChange={(hex) => set(setWallOverride(room, i, { ...o, accent: hex }))} />
           )}
         </div>
       )}
       {showInside && (inside || alwaysSwatches) && hasBaseColour(covering) && (
-        <ColourSwatches
+        <SwatchField
+          dulux
           label={`Wall ${i + 1} ${BASE_LABEL[covering].toLowerCase()}`}
           value={wallBase(look)}
-          onPick={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))}
+          isSet={o?.paint !== undefined}
+          onChange={(hex) => set(setWallOverride(room, i, { ...o, paint: hex }))}
+          onReset={() => {
+            const { paint: _paint, ...rest } = o ?? {};
+            set(setWallOverride(room, i, Object.keys(rest).length ? rest : null));
+          }}
+          resetLabel="Same as the room"
         />
       )}
       {outside && (
