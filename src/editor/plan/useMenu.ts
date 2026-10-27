@@ -6,7 +6,7 @@ import { byId } from "../../lib/catalogue";
 import { pickInPlan } from "../../lib/decorPick";
 import { exactGroup, expandToGroups, rotateFixtures, ungroupFixtures } from "../../lib/fixtureGroups";
 import { defaultFit } from "../../lib/recess";
-import type { Mode } from "../../lib/modes";
+import { editsFixtures, type Mode } from "../../lib/modes";
 import { knockThroughNeighbours } from "../../lib/mergeRooms";
 import { planTargetAt, type HitSolid, type PlanTarget } from "../../lib/planHit";
 import { closestOnSegment, DOUBLE_DOOR_M, outsideSide, SWING_KINDS } from "../../lib/planMath";
@@ -42,6 +42,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
   const build = mode === "build";
   const decorate = mode === "decorate";
   const furnish = mode === "furnish";
+  const fixtureMode = editsFixtures(mode);
   const ppm = floor.pxPerM;
   const { select, targetIds, anyLocked, liveIds, allFixtures, setFixtures } = sel;
 
@@ -85,13 +86,13 @@ export function usePlanMenu(a: PlanMenuArgs) {
     const { planImage, setUi, setMode, updateRoom, updateFloor } = useStore.getState();
     const px = camera.px;
     const empty: MenuItem[] = [
-      ...(a.clipboardCount && (build || furnish)
+      ...(a.clipboardCount && (build || fixtureMode)
         ? [
             {
               label: `${a.pasteLabel} here`,
               hint: "Ctrl V",
               run: () => {
-                if (!furnish) setMode("furnish");
+                if (!fixtureMode) setMode("furnish");
                 sel.pasteFixtures(raw);
               },
             } satisfies MenuItem,
@@ -100,7 +101,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
       { label: "Fit the rooms", hint: "F", run: () => camera.fit() },
       { label: planImage.show ? "Hide floorplan image" : "Show floorplan image", hint: "I", run: toggleImage },
     ];
-    if (t.kind === "fixture" && furnish) {
+    if (t.kind === "fixture" && fixtureMode) {
       const id = t.id;
       const ids = targetIds(id);
       const grouped = !!allFixtures.find((x) => x.id === id)?.groupId;
@@ -110,9 +111,9 @@ export function usePlanMenu(a: PlanMenuArgs) {
         { label: ids.every((i) => allFixtures.find((x) => x.id === i)?.locked) ? "Unlock" : "Lock", run: () => { select({ fixtures: ids }); sel.lockFixtures(ids, !ids.every((i) => allFixtures.find((x) => x.id === i)?.locked)); } },
         { label: "Duplicate", hint: "Ctrl D", run: () => sel.duplicateFixtureIds(ids) },
         { label: "Copy", hint: "Ctrl C", run: () => { select({ fixtures: ids }); sel.copyFixtureIds(ids); } },
-        ...(ids.length >= 2 && !exactGroup(allFixtures, ids) ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); sel.groupSelected(ids); } } satisfies MenuItem] : []),
-        ...(grouped ? [{ label: "Ungroup", hint: "Ctrl Shift G", run: () => { select({ fixtures: group }); setFixtures((all) => ungroupFixtures(all, [id])); } } satisfies MenuItem] : []),
-        ...(grouped && group.some((g) => !liveIds.includes(g)) && liveIds.length === 1 && liveIds[0] === id ? [{ label: "Select group", run: () => select({ fixtures: group }) } satisfies MenuItem] : []),
+        ...(furnish && ids.length >= 2 && !exactGroup(allFixtures, ids) ? [{ label: "Group", hint: "Ctrl G", run: () => { select({ fixtures: ids }); sel.groupSelected(ids); } } satisfies MenuItem] : []),
+        ...(furnish && grouped ? [{ label: "Ungroup", hint: "Ctrl Shift G", run: () => { select({ fixtures: group }); setFixtures((all) => ungroupFixtures(all, [id])); } } satisfies MenuItem] : []),
+        ...(furnish && grouped && group.some((g) => !liveIds.includes(g)) && liveIds.length === 1 && liveIds[0] === id ? [{ label: "Select group", run: () => select({ fixtures: group }) } satisfies MenuItem] : []),
         ...(() => {
           const one = ids.length === 1 ? allFixtures.find((x) => x.id === id) : undefined;
           const it = one && byId(one.type);
@@ -121,7 +122,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
           return [{ label: toWindow ? "Fit to window" : "Refit to recess", run: () => { select({ fixtures: ids }); a.refit(one); } } satisfies MenuItem];
         })(),
         "sep",
-        { label: "Remove", hint: "Del", danger: true, run: () => { setFixtures((all) => all.filter((x) => !ids.includes(x.id))); select({}); } },
+        { label: "Remove", hint: "Del", danger: true, run: () => { setFixtures((all) => all.filter((x) => !ids.includes(x.id))); select({}); sel.pruneDangling(); } },
       ];
     }
     if (t.kind === "opening" && build) {

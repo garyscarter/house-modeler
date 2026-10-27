@@ -146,6 +146,14 @@ describe("studio commands", () => {
     expect(buildCommands(ctx({ look: "glass" })).some((x) => x.title === "Look: Studio")).toBe(true);
   });
 
+  it("offers the Electrics mode, found by wiring words", () => {
+    const c = ctx();
+    const cmds = buildCommands(c);
+    cmds.find((x) => x.title === "Mode: Electrics")!.run();
+    expect(c.setMode).toHaveBeenCalledWith("electrics");
+    expect(rankCommands("sockets", cmds)[0]?.title).toBe("Mode: Electrics");
+    expect(rankCommands("circuits", cmds).some((x) => x.title === "Mode: Electrics")).toBe(true);
+  });
   it("has canvas and photo pin commands that write the panel preferences", () => {
     const cmds = buildCommands(ctx({}));
     cmds.find((x) => x.title === "Canvas: Full")!.run();

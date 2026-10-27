@@ -1,11 +1,21 @@
 import { useMemo } from "react";
-import { byId, isCeilingItem, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
+import { byId, isCeilingItem, isElectricalItem, isFloorCovering, mountOf, type CatalogueItem } from "../../lib/catalogue";
+import { ELECTRIC_GLYPH_M } from "../../lib/electricSymbols";
+import { glyphOffset } from "../../lib/electrics";
+import type { Mode } from "../../lib/modes";
+import { fixtureSelectable } from "../../lib/planHit";
 import { EXT_WALL_T, WALL_T } from "../../lib/geometry";
 import { abutNeighbours, fixtureBox, fixtureSolids, overlappingIds, rectCorners, snapToWall, wallLines, type Placement, type Seg } from "../../lib/planMath";
 import { planWallLines, planWalls } from "../../lib/planWalls";
 import { fitProblem, fitRecess, fitWindow, floorFaces } from "../../lib/recess";
 import type { Fixture, Floor, JoineryConfig, Pt } from "../../types";
 import { sameMap, useSame } from "./layers/shared";
+
+/** The catalogue item for furniture (not an electrical point, which has its own layer and snapping). */
+const furnitureOf = (id: string): CatalogueItem | undefined => {
+  const item = byId(id);
+  return item && !isElectricalItem(item) ? item : undefined;
+};
 
 type Fit = Placement & { w: number; d?: number; h?: number; joinery?: JoineryConfig };
 
@@ -14,7 +24,7 @@ type Fit = Placement & { w: number; d?: number; h?: number; joinery?: JoineryCon
  * and misfits, the snap targets, and the two placement helpers. Memoised on the pieces each really depends on, so a
  * fixture drag does not rebuild the walls and a corner drag does not rebuild the furniture.
  */
-export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number) {
+export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number, mode: Mode = "build") {
   const ppm = floor.pxPerM;
   const { rooms: fRooms, walls: fWalls, openings: fOpenings, pxPerM: fPpm, origin: fOrigin, offset: fOffset } = floor;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -24,7 +34,8 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number)
   const wallShapes = useMemo(() => (wallsOn ? planWalls(floor) : []), [wallsOn, fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
   const faceLines = useMemo(() => planWallLines(floor), [fRooms, fWalls, fPpm, fOrigin, fOffset]);
   const faces = useMemo(() => floorFaces(floor), [fRooms, fWalls, fOpenings, fPpm, fOrigin, fOffset]);
-  const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, byId), [floor.fixtures, ppm]);
+  // Electrical points are not furniture: a socket behind a sofa is no clash, and a sofa does not stop at a socket.
+  const solids = useMemo(() => fixtureSolids(floor.fixtures ?? [], ppm, furnitureOf), [floor.fixtures, ppm]);
   const clashes = useMemo(() => overlappingIds(solids, 0.5), [solids]);
   // Fitted joinery that no longer fits its recess or window, with why.
   const misfitsNow = useMemo(() => {
@@ -67,20 +78,27 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number)
     const isCeil = (fx: Fixture) => { const it = byId(fx.type); return !!it && isCeilingItem(it); };
     return [...sorted.filter((f) => !isCeil(f)), ...sorted.filter(isCeil)];
   }, [floor.fixtures]);
+  // What the pointer can pick in this mode: furniture boxes, or in Electrics the points' symbol squares (easy to hit).
   const hitShapes = useMemo(
     () =>
       drawOrder.flatMap((fx) => {
         const item = byId(fx.type);
-        if (!item) return [];
+        if (!item || !fixtureSelectable(mode, item)) return [];
+        if (mode === "electrics") {
+          const o = glyphOffset(fx, item, ELECTRIC_GLYPH_M);
+          const half = ELECTRIC_GLYPH_M * 0.6 * ppm;
+          const c = { x: fx.x + o.x * ppm, y: fx.y + o.y * ppm };
+          return [{ id: fx.id, corners: [{ x: c.x - half, y: c.y - half }, { x: c.x + half, y: c.y - half }, { x: c.x + half, y: c.y + half }, { x: c.x - half, y: c.y + half }] }];
+        }
         const b = fixtureBox(fx, item);
         return [{ id: fx.id, corners: rectCorners(fx, b.w * ppm, b.d * ppm, fx.rot) }];
       }),
-    [drawOrder, ppm],
+    [drawOrder, ppm, mode],
   );
   const footprints = useMemo(
     () =>
       (floor.fixtures ?? []).flatMap((fx) => {
-        const item = byId(fx.type);
+        const item = furnitureOf(fx.type);
         if (!item) return [];
         const b = fixtureBox(fx, item);
         return [{ id: fx.id, x: fx.x, y: fx.y, rot: fx.rot, w: b.w * ppm, d: b.d * ppm, z0: b.z0, z1: b.z0 + b.h }];
@@ -90,15 +108,16 @@ export function usePlanGeometry(floor: Floor, wallsOn: boolean, snapTol: number)
   /**
    * Where a fixture centred at c lands: back against a wall within reach,
    * facing into the room and flush with its neighbours in the run; null when
-   * no wall is near or Alt is held.
+   * no wall is near or Alt is held. `how` "wall" (an electrical point on a wall) only sits its back on the wall face,
+   * never abutting furniture; "none" (a ceiling point or floor socket) never snaps.
    */
-  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string): Placement | null => {
+  const snapFixture = (c: Pt, b: { w: number; d: number; h: number; z0: number; ceiling?: boolean }, rot: number, free: boolean, exclude?: string, how: "furniture" | "wall" | "none" = "furniture"): Placement | null => {
     // Ceiling fittings place freely: no wall to back onto, no neighbours to abut.
-    if (free || b.ceiling) return null;
+    if (free || b.ceiling || how === "none") return null;
     // Reach: a little more than for corners, and never under 10 cm when zoomed right in.
     const reach = Math.max(snapTol * 1.5, 0.1 * ppm);
     const onWall = snapToWall(c, b.w * ppm, b.d * ppm, faceLines, reach, rot);
-    if (!onWall) return null;
+    if (!onWall || how === "wall") return onWall;
     const others = footprints.filter((f) => f.id !== exclude);
     return abutNeighbours(onWall, b.w * ppm, b.d * ppm, b.z0, b.z0 + b.h, others, reach);
   };

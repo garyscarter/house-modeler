@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { byId, type CatalogueItem } from "../../../lib/catalogue";
+import { byId, isElectricalItem, type CatalogueItem } from "../../../lib/catalogue";
 import { fixtureBox, rectCorners } from "../../../lib/planMath";
 import type { Fixture, JoineryConfig } from "../../../types";
 import { FixtureSymbol } from "../../FixtureSymbol";
@@ -17,6 +17,7 @@ interface Box {
 const FixtureNode = memo(function FixtureNode({
   fx,
   furnish,
+  dim,
   hoverable,
   selected,
   flagged,
@@ -27,6 +28,8 @@ const FixtureNode = memo(function FixtureNode({
 }: {
   fx: Fixture;
   furnish: boolean;
+  /** Drawn greyed and unselectable (furniture in Electrics, electrical points in Furnish). */
+  dim: boolean;
   /** Furnish with the Select tool: hovering a grouped piece lights the group. */
   hoverable: boolean;
   selected: boolean;
@@ -45,7 +48,7 @@ const FixtureNode = memo(function FixtureNode({
       transform={`translate(${fx.x} ${fx.y}) rotate(${fx.rot})`}
       className="plan-fixture"
       data-fixture-id={fx.id}
-      style={furnish ? undefined : { pointerEvents: "none", opacity: 0.55 }}
+      style={dim ? { pointerEvents: "none", opacity: 0.35 } : furnish ? undefined : { pointerEvents: "none", opacity: 0.55 }}
       onPointerDown={(e) => onDown(e, fx)}
       onPointerEnter={() => hoverable && onHoverGroup(fx.groupId ?? null)}
       onPointerLeave={() => onHoverGroup(null)}
@@ -58,10 +61,18 @@ const FixtureNode = memo(function FixtureNode({
   );
 });
 
+function isDim(fx: Fixture, dimmed: "none" | "furniture" | "points"): boolean {
+  if (dimmed === "none") return false;
+  const item = byId(fx.type);
+  if (!item) return false;
+  return dimmed === "furniture" ? !isElectricalItem(item) : item.category === "Electrics";
+}
+
 /** The furniture, in draw order (rugs under everything, wall-hung over the units below). */
 export const FixtureSymbols = memo(function FixtureSymbols({
   ordered,
   furnish,
+  dimmed = "none",
   hoverable,
   selectedIds,
   flagged,
@@ -72,6 +83,8 @@ export const FixtureSymbols = memo(function FixtureSymbols({
 }: {
   ordered: Fixture[];
   furnish: boolean;
+  /** Which pieces to grey out: "furniture" (Electrics: everything but electrical points), "points" (Furnish: Electrics-category points), or none. */
+  dimmed?: "none" | "furniture" | "points";
   hoverable: boolean;
   selectedIds: string[];
   flagged: ReadonlySet<string>;
@@ -87,6 +100,7 @@ export const FixtureSymbols = memo(function FixtureSymbols({
           key={fx.id}
           fx={fx}
           furnish={furnish}
+          dim={isDim(fx, dimmed)}
           hoverable={hoverable}
           selected={selectedIds.includes(fx.id)}
           flagged={flagged.has(fx.id)}

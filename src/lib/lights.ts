@@ -11,8 +11,9 @@ import { lightGlow } from "./dusk";
  * (components/SunControls.tsx) owns the master switch.
  *
  * A light is lit when its own switch is on (`Fixture.on`, absent = on) AND
- * the master lets lights be on: "auto" means from dusk in a sun study,
- * "on" always, "off" never.
+ * every wall switch that controls it (`Fixture.controls` on a switch, see
+ * lib/electrics.ts controllersOf) is on AND the master lets lights be on:
+ * "auto" means from dusk in a sun study, "on" always, "off" never.
  */
 
 export type LightsMaster = "auto" | "on" | "off";
@@ -114,9 +115,18 @@ export const lampOf = (item: Pick<CatalogueItem, "symbol">): LampDef | undefined
 /** The fixture's own switch (absent = on). */
 export const switchedOn = (fx: Pick<Fixture, "on">): boolean => fx.on !== false;
 
-/** A light fixture that is lit now: its own switch on and the master allowing it. False for anything that is not a light. */
-export function fixtureLit(fx: Pick<Fixture, "on">, item: Pick<CatalogueItem, "symbol">, master: LightsMaster, altitude: number | null): boolean {
-  return isLightItem(item) && switchedOn(fx) && lightsOn(master, altitude);
+/**
+ * A light fixture that is lit now: its own switch on, every switch that controls it on (`controllers`, from
+ * lib/electrics.ts controllersOf; none = no wall switch) and the master allowing it. False for anything that is not a light.
+ */
+export function fixtureLit(
+  fx: Pick<Fixture, "on">,
+  item: Pick<CatalogueItem, "symbol">,
+  master: LightsMaster,
+  altitude: number | null,
+  controllers: readonly Pick<Fixture, "on">[] = [],
+): boolean {
+  return isLightItem(item) && switchedOn(fx) && controllers.every(switchedOn) && lightsOn(master, altitude);
 }
 
 /** Glow of a lit lamp's shade in daylight: lit lamps always read as lit, even with the sun up. */

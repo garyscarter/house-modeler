@@ -37,6 +37,8 @@ Checks: `npm run check`; Playwright screenshots of the listing at the Night pres
 
 ## Phase 2: ceiling and wall lights (foundation landed; builders: Dua Lipa for the plan and inspector, Bowie for 3D)
 
+Phase 3 (`docs/electrics-plan.md`) builds on this; the Electrics mode adds the switches that control these lights.
+
 Foundation on main (keep these; add beside them):
 
 | Where | What |
@@ -56,4 +58,4 @@ Checks: `npm run check`, `npm run build`; screenshots of the listing with a pend
 
 ## Phase 3: electrics mode and wiring guide
 
-A separate thread. The brief for it is `docs/wiring-guide-brief.md`.
+The brief is `docs/wiring-guide-brief.md`; the implementation plan, which also covers phase 2 and phase 1's 3D, is `docs/electrics-plan.md`.

@@ -1,7 +1,11 @@
 import { createElement, memo, type ReactNode } from "react";
+import { RUG_SPOTS, rugPattern } from "../lib/rugs";
 import { burners, chaiseSizes, pitchOf, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, isHandleless, peninsulaOverhang, radiatorPanels, SIX_RINGS, sideBySideSplit, VENTED_ZONES, wardrobeDoorCount, type CatalogueItem } from "../lib/catalogue";
 import { gridPoints } from "../lib/lights";
 import { autoBays, builtInLayout, isJoinery, joineryOf } from "../lib/joinery";
+import { hasElectricSymbol, ELECTRIC_GLYPH_M } from "../lib/electricSymbols";
+import { isWallPoint } from "../lib/electrics";
+import { ElectricGlyph } from "./ElectricGlyph";
 import type { Fixture } from "../types";
 
 /**
@@ -33,7 +37,7 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   clash?: boolean;
   ghost?: boolean;
   /** The placed fixture, for joinery drawn from its settings (bays, fronts, upper depth). */
-  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front" | "endBack" | "endSide" | "pitch">;
+  fixture?: Pick<Fixture, "joinery" | "color" | "worktop" | "h" | "seat" | "front" | "endBack" | "endSide" | "pitch" | "rug">;
 }) {
   const outline = selected ? "#d97706" : clash ? "#dc2626" : ghost ? "#16a34a" : "#374151";
   const sw = stroke * (selected ? 2.2 : 1.2);
@@ -70,6 +74,21 @@ export const FixtureSymbol = memo(function FixtureSymbol({
   const j = isJoinery(item) ? joineryOf(fixture ?? {}, item, { w: w / m, d: d / m, h: fixture?.h ?? item.h }) : undefined;
   /** Door joints along the front strip, one per bay boundary. */
   const joints = (xs: number[], inset: number) => xs.slice(1, -1).map((x) => <line key={`j${x}`} x1={x} y1={y1 - inset} x2={x} y2={y1} {...thin} />);
+
+  if (item.category === "Electrics" && hasElectricSymbol(item.symbol)) {
+    const ink = outline;
+    const paper = ghost ? "#f0fdf4" : clash ? "#fee2e2" : "var(--plan-chip-bg, #fff)";
+    const gsw = sw * 0.8;
+    const base = ELECTRIC_GLYPH_M * m;
+    const size = Math.max(Math.min(w, d), base);
+    const oy = isWallPoint(item) ? (size - d) / 2 : 0;
+    return g(
+      <rect key="hit" x={-size / 2} y={oy - size / 2} width={size} height={size} fill="transparent" stroke="none" />,
+      <g key="g" transform={`translate(0 ${oy})`}>
+        <ElectricGlyph symbol={item.symbol} size={size} stroke={gsw} ink={ink} paper={paper} />
+      </g>,
+    );
+  }
 
   switch (item.symbol) {
     case "bed": {
@@ -265,9 +284,22 @@ export const FixtureSymbol = memo(function FixtureSymbol({
       return g(body(0), ...dividers(0.6), front(Math.min(0.03 * m, d * 0.1)));
     case "rug": {
       const inset = Math.min(0.12 * m, w * 0.08, d * 0.08);
+      const pat = fixture ? rugPattern(fixture) : undefined;
+      const spots = pat
+        ? RUG_SPOTS[pat].length
+          ? Array.from({ length: 10 }, (_, i) => {
+              // A fixed scatter inside the inner rectangle; sizes and colours cycle.
+              const u = ((i * 37) % 100) / 100;
+              const v = ((i * 53 + 17) % 100) / 100;
+              const r = Math.min(w, d) * (i % 3 === 0 ? 0.07 : 0.04);
+              return <circle key={`s${i}`} cx={x0 + inset + r + u * (w - 2 * inset - 2 * r)} cy={y0 + inset + r + v * (d - 2 * inset - 2 * r)} r={r} fill={RUG_SPOTS[pat][i % 3 === 2 ? 3 : i % 3]} fillOpacity={0.85} />;
+            })
+          : []
+        : [];
       return g(
         <rect key="o" x={x0} y={y0} width={w} height={d} fill={fill} fillOpacity={ghost ? fo : 0.45} stroke={outline} strokeWidth={sw * 0.6} />,
         <rect key="i" x={x0 + inset} y={y0 + inset} width={w - inset * 2} height={d - inset * 2} {...thin} strokeDasharray={`${stroke * 4} ${stroke * 3}`} />,
+        ...spots,
       );
     }
     case "table":

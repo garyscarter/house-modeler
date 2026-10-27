@@ -4,7 +4,7 @@ import { MODES, MODE_ICON, MODE_LABEL } from "../../lib/modes";
 import { Icon } from "../icons";
 import { useSheet } from "./sheet";
 
-/** The six modes as a bottom tab bar (the phone chassis). Switching mode keeps the sheet where it is, except a full one, which drops to half. */
+/** The seven modes as a bottom tab bar (the phone chassis). Switching mode keeps the sheet where it is, except a full one, which drops to half. */
 export function TabBar() {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);

@@ -14,6 +14,7 @@ import {
   type Site,
 } from "../types";
 import { findRoom } from "./roomLinks";
+import { pointsOf } from "./electrics";
 import { areaM2, axisRect, formatArea } from "./planMath";
 import { bbox } from "./geometry";
 import { gardenDef, isPlant } from "./gardenCatalogue";
@@ -77,6 +78,16 @@ export function furnishSummary(floor: Floor, clashes: number): string {
   if (!n) return "No furniture yet";
   const parts = [`${plural(n, "piece", "pieces")} on this floor`];
   if (clashes > 0) parts.push(plural(clashes, "overlap", "overlaps"));
+  return parts.join(" · ");
+}
+
+/** Electrics at a glance: "12 points · 3 circuits" (house-wide, a downlight grid counts every bulb). */
+export function electricsSummary(model: Pick<HouseModel, "floors" | "circuits">): string {
+  const points = model.floors.reduce((n, f) => n + pointsOf(f).reduce((m, p) => m + p.quantity, 0), 0);
+  if (!points) return "No electrical points yet";
+  const parts = [plural(points, "point", "points")];
+  const circuits = model.circuits?.length ?? 0;
+  if (circuits) parts.push(plural(circuits, "circuit", "circuits"));
   return parts.join(" · ");
 }
 

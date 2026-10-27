@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import type { CatalogueItem } from "../../../lib/catalogue";
 import type { IconName } from "../../../components/icons";
 import { Info } from "../../../components/Info";
-import { PLAN_TOOLS, type Mode, type Tool } from "../../../lib/modes";
+import { editsFixtures, PLAN_TOOLS, type Mode, type Tool } from "../../../lib/modes";
 import { imageForState, imageStateOf, type ImageState } from "../../../lib/planMath";
 import { TOOL_KEY, TOOL_LABEL } from "../../../lib/shortcuts";
 import { useStore } from "../../../store";
@@ -47,7 +47,8 @@ export const PlanRail = memo(function PlanRail({
   const imageState = imageStateOf(planImage);
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
   const setImageState = (st: ImageState) => setUi({ planImage: imageForState(st, planImage.opacity) });
-  const furnish = mode === "furnish";
+  const fixtureMode = editsFixtures(mode);
+  const electrics = mode === "electrics";
   const chassis = useChassis((s) => s.chassis);
   const groups = useMemo(() => {
     const has = (t: Tool) => PLAN_TOOLS[mode].includes(t) && toolAllowed(chassis, t);
@@ -55,16 +56,16 @@ export const PlanRail = memo(function PlanRail({
       list.filter(([t]) => has(t)).map(([t, icon]) => ({ id: t, icon, label: TOOL_LABEL[t], shortcut: TOOL_KEY[t], active: tool === t, onClick: () => onPick(t) }));
     const cycleImage = () => setImageState(IMAGE_STATES[(IMAGE_STATES.indexOf(imageState) + 1) % IMAGE_STATES.length]);
     const out: RailItem[][] = [
-      furnish
+      fixtureMode
         ? [
             {
               id: "add",
               icon: "plus",
-              label: "Add furniture",
+              label: electrics ? "Add point" : "Add furniture",
               shortcut: "A",
               active: addOpen,
               onClick: () => onAddOpen(!addOpen),
-              extra: <AddPopover activeId={activeId} onPick={onStartPlacing} open={addOpen} onOpenChange={onAddOpen} />,
+              extra: <AddPopover scope={electrics ? "electrics" : "furnish"} activeId={activeId} onPick={onStartPlacing} open={addOpen} onOpenChange={onAddOpen} />,
             },
             ...(clipboardCount ? [{ id: "paste", icon: "paste" as const, label: pasteLabel, shortcut: "Ctrl V", onClick: onPaste }] : []),
           ]

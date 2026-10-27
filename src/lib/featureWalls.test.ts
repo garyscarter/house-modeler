@@ -115,6 +115,16 @@ describe("feature walls in the built shell", () => {
   });
 });
 
+describe("two-colour splits", () => {
+  const split = { kind: "diagonalUp" as const, color: "#1f4e79" };
+  const room = (): Room => ({ id: "r", name: "R", polygon: square, wallFinishes: { 1: { split }, 2: { paint: "#fff", split } } }) as Room;
+  it("keeps the split through setWallOverride and corner edits", () => {
+    expect(setWallOverride(room(), 0, { paint: "#eee" })?.[1]?.split).toEqual(split);
+    expect(insertCorner(room(), 0, { x: 1, y: 0 }).wallFinishes?.[2]?.split).toEqual(split);
+    expect(removeCorner(room(), 3).wallFinishes?.[1]?.split).toEqual(split);
+  });
+});
+
 describe("wallLook", () => {
   const room = rect("A", 0, 0, 300, 300, { wallCovering: "stripe", wallPaint: "#efe8da", wallAccent: "#cdc1ab" });
   it("starts a different covering from its own defaults", () => {

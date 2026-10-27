@@ -122,8 +122,28 @@ export interface WallOverride {
   paint?: string;
   /** Pattern colour of the covering. */
   accent?: string;
+  /** A second colour on one side of a line across the wall. Only applies while the wall's covering is paint. */
+  split?: WallSplit;
   /** The same edge's outside face, if it is an outside wall: fields left out follow the room's outside finish. */
   outside?: OutsideOverride;
+}
+
+export type WallSplitKind = "diagonalUp" | "diagonalDown" | "horizontal" | "vertical";
+
+export const WALL_SPLIT_LABEL: Record<WallSplitKind, string> = {
+  diagonalUp: "Diagonal, rising",
+  diagonalDown: "Diagonal, falling",
+  horizontal: "Horizontal line",
+  vertical: "Vertical line",
+};
+
+/** Left/right and rising/falling are as seen by someone in the room looking at the wall. The base paint stays below / left of the line. */
+export interface WallSplit {
+  kind: WallSplitKind;
+  /** horizontal: height of the line (m, default 1.2); vertical: distance from the left end as seen from inside (m, default half the wall). */
+  at?: number;
+  /** The second colour: above the line (horizontal, diagonals) or right of it (vertical). */
+  color: string;
 }
 
 /** One outside wall's own finish (for example a render panel in a brick room). */
@@ -345,6 +365,10 @@ export interface JoineryConfig {
   front?: JoineryFront;
   /** Carcass and inside colour (unset = the fixture colour). */
   carcass?: string;
+  /** Shaker doors: colour of the raised bead round each panel; unset = a shade of the door colour. */
+  trim?: string;
+  /** Shaker doors: colour of the recessed panel inside the bead; unset = the door colour. */
+  panel?: string;
   /** Shelf thickness, m. */
   shelfT?: number;
   seatFront?: SeatFront;
@@ -384,6 +408,8 @@ export interface Fixture {
   endSide?: number;
   /** Pictures: which sample print is in the frame (see lib/art.ts). */
   print?: string;
+  /** Rugs: the pattern id (see lib/rugs.ts); unset = plain. */
+  rug?: string;
   /** Pictures: the frame style. */
   frame?: "black" | "oak" | "white" | "none";
   color?: string;
@@ -401,6 +427,12 @@ export interface Fixture {
   joinery?: JoineryConfig;
   /** Lights (lamps, lit mirrors, ceiling lights): switched on. Absent = on; the Lights master in the sun study still decides whether it is lit (see lib/lights.ts). */
   on?: boolean;
+  /**
+   * Light switches (Electrics): ids of the light fixtures this switch controls, on any floor of the same model.
+   * A light is lit only when every switch that lists it is on (lib/lights.ts fixtureLit). Absent = none.
+   * Ids that no longer name a light are pruned by lib/electrics.ts pruneLinks; never rely on them being valid.
+   */
+  controls?: string[];
   /** Ceiling lights: how far the top of the fitting hangs below the ceiling, metres (default from the catalogue; 0 for flush fittings). */
   drop?: number;
   /** Lights: colour temperature in kelvin, 2700 (warm), 3000 (soft) or 4000 (cool). Default from lib/lights.ts. */
@@ -409,6 +441,20 @@ export interface Fixture {
   dim?: number;
   /** Downlight grids: spacing between downlights, metres (default from the catalogue). */
   pitch?: number;
+}
+
+export type CircuitKind = "lighting" | "ring" | "radial" | "cooker" | "shower" | "ev" | "other";
+
+/**
+ * An electrical circuit (Electrics mode): a named group of points. Grouping only; nothing is checked beyond
+ * dropping ids that no longer name a fixture (lib/electrics.ts pruneCircuits).
+ */
+export interface Circuit {
+  id: string;
+  name: string;
+  kind: CircuitKind;
+  /** Fixture ids (electrical points and lights) across every floor of the model. A point belongs to at most one circuit. */
+  points: string[];
 }
 
 /** Light colour temperatures offered, kelvin. */
@@ -603,6 +649,8 @@ export interface HouseModel {
   basedOn?: { id: string; version: number };
   /** Total floor area printed on the listing's floorplan (m²), to check the tracing against. */
   listedArea?: number;
+  /** Electrical circuits (Electrics mode). Absent = none; the wiring guide's circuit column is then blank. */
+  circuits?: Circuit[];
 }
 
 /** A point in world metres on the plan: x to the right, y towards the front (bottom of the plan). */

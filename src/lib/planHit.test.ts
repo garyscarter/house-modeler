@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { nextUnder, planTargetAt } from "./planHit";
+import { byId } from "./catalogue";
+import { fixtureSelectable, snapKind, nextUnder, planTargetAt } from "./planHit";
 import { floor, rect } from "./testing";
 import type { Opening } from "../types";
 
@@ -17,6 +18,24 @@ describe("planTargetAt", () => {
     expect(planTargetAt(f, { x: 60, y: 60 }, "furnish", tol, solids)).toEqual({ kind: "fixture", id: "bed" });
     expect(planTargetAt(f, { x: 250, y: 250 }, "furnish", tol, solids)).toEqual({ kind: "empty" });
     expect(planTargetAt(f, { x: 110, y: 110 }, "build", tol, solids)).toMatchObject({ kind: "room", id: "A" });
+  });
+  it("picks fixtures in Electrics too, and says what each mode can pick", () => {
+    expect(planTargetAt(f, { x: 110, y: 110 }, "electrics", tol, solids)).toEqual({ kind: "fixture", id: "lamp" });
+    expect(planTargetAt(f, { x: 250, y: 250 }, "electrics", tol, solids)).toEqual({ kind: "empty" });
+    expect(fixtureSelectable("furnish", { category: "Seating" })).toBe(true);
+    expect(fixtureSelectable("furnish", { category: "Lighting" })).toBe(true);
+    expect(fixtureSelectable("furnish", { category: "Electrics" })).toBe(false);
+    expect(fixtureSelectable("electrics", { category: "Seating" })).toBe(false);
+    expect(fixtureSelectable("electrics", { category: "Lighting" })).toBe(true);
+    expect(fixtureSelectable("electrics", { category: "Electrics" })).toBe(true);
+    expect(fixtureSelectable("build", { category: "Electrics" })).toBe(false);
+  });
+  it("snaps furniture to walls and neighbours, wall points to the wall face, ceiling points and floor sockets not at all", () => {
+    expect(snapKind(byId("sofa-3")!)).toBe("furniture");
+    expect(snapKind(byId("socket-double")!)).toBe("wall");
+    expect(snapKind(byId("switch-1g")!)).toBe("wall");
+    expect(snapKind(byId("pendant")!)).toBe("none");
+    expect(snapKind(byId("socket-floor")!)).toBe("none");
   });
   it("finds an opening near its centre line in Build only", () => {
     expect(planTargetAt(f, { x: 220, y: 6 }, "build", tol)).toEqual({ kind: "opening", id: "d1" });

@@ -189,3 +189,17 @@ describe("coneGain", () => {
     expect(coneGain(a) * 2 * Math.PI * (1 - Math.cos(a))).toBeCloseTo(4 * Math.PI);
   });
 });
+
+describe("ceiling and wall lights", () => {
+  it("are lights, with spots for downlights and bars", () => {
+    for (const id of ["pendant", "pendant-multi", "flush-light", "downlight", "downlight-grid", "spot-bar", "wall-light", "outside-light", "strip-light"]) expect(isLightItem(byId(id)!), id).toBe(true);
+    expect(LAMPS.downlight?.spot).toBeDefined();
+    expect(LAMPS["spot-bar"]?.spot).toBeDefined();
+  });
+  it("go dark when any switch that controls them is off", () => {
+    const item = byId("pendant")!;
+    expect(fixtureLit(fx("pendant"), item, "on", null, [{}, { on: true }])).toBe(true);
+    expect(fixtureLit(fx("pendant"), item, "on", null, [{}, { on: false }])).toBe(false);
+    expect(fixtureLit(fx("pendant"), item, "on", null)).toBe(true);
+  });
+});

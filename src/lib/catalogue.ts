@@ -98,7 +98,34 @@ export type Symbol =
   | "downlight-grid"
   | "spot-bar"
   | "wall-light"
-  | "strip-light";
+  | "strip-light"
+  // Electrical points (category "Electrics"), see lib/electrics.ts pointKind.
+  | "switch-1g"
+  | "switch-2g"
+  | "switch-2way"
+  | "switch-dimmer"
+  | "switch-pull"
+  | "socket-1"
+  | "socket-2"
+  | "socket-usb"
+  | "socket-floor"
+  | "socket-outdoor"
+  | "shaver-socket"
+  | "fused-spur"
+  | "cooker-switch"
+  | "cooker-outlet"
+  | "shower-point"
+  | "extractor-fan"
+  | "thermostat"
+  | "bell-push"
+  | "bell-chime"
+  | "smoke-alarm"
+  | "heat-alarm"
+  | "co-alarm"
+  | "tv-point"
+  | "data-point"
+  | "ev-charger"
+  | "consumer-unit";
 
 export interface CatalogueItem {
   id: string;
@@ -124,7 +151,21 @@ export interface CatalogueItem {
   piece?: string;
   /** Default joinery settings (see lib/joinery.ts). */
   joinery?: JoineryConfig;
+  /** Fitted outside (outside light and socket, doorbell push, EV charger): weatherproof, and numbered under "Outside" in the wiring guide. */
+  outdoor?: boolean;
 }
+
+/**
+ * Base height (`mount`) of a wall-mounted point whose centre is `centre` metres above the floor and whose plate is
+ * `h` tall. Electrical points keep `mount` as the base height like every other item; their defaults are set from
+ * the UK centre heights (sockets 450 mm, switches 1200 mm) this way, and the Electrics inspector and the wiring
+ * guide show the centre (lib/electrics.ts centreHeight).
+ */
+const centredAt = (centre: number, h: number) => Math.round((centre - h / 2) * 1000) / 1000;
+/** Faceplate sizes, metres: a single (86 mm square) and a double (146 × 86 mm) UK wall plate. */
+const PLATE = 0.086;
+const PLATE2 = 0.146;
+const FACE = "#f5f5f5";
 
 /** Kitchen carcass colour shared by the units so a run reads as one kitchen. */
 const UNIT = "#e0dccf";
@@ -307,8 +348,39 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "spot-bar", name: "Spotlight bar, 3 heads", category: "Lighting", w: 0.6, d: 0.12, h: 0.16, color: "#2b2d31", symbol: "spot-bar", ceiling: true, note: "Three adjustable heads on a surface-mounted bar, aimed down and out" },
   { id: "wall-light", name: "Wall light (interior)", category: "Lighting", w: 0.16, d: 0.11, h: 0.26, color: "#c8a24a", symbol: "wall-light", mount: 1.7, note: "An up-and-down wall washer on a backplate; wall-hung, set the height to suit" },
   { id: "strip-light", name: "Under-cabinet strip", category: "Lighting", w: 0.6, d: 0.03, h: 0.02, color: "#dcdcdc", symbol: "strip-light", mount: 1.43, note: "LED strip under a kitchen wall unit lighting the worktop; size it to the unit run" },
+  { id: "outside-light", name: "Outside wall light", category: "Lighting", w: 0.12, d: 0.12, h: 0.22, color: "#2b2d31", symbol: "wall-light", mount: centredAt(1.9, 0.22), outdoor: true, note: "IP44 or better, on the outside face of a wall" },
   { id: "car", name: "Car (family hatchback)", category: "Other", w: 1.80, d: 4.40, h: 1.5, color: "#8c96a3", symbol: "car", note: "Typical UK family car" },
   { id: "custom", name: "Custom box", category: "Other", w: 1.00, d: 1.00, h: 1.0, color: "#b8c4a8", symbol: "box", note: "Set its size and label in the inspector" },
+
+  // Lighting: ceiling and wall lights, in the Furnish and the Electrics pickers. Ids are saved data: never rename.
+
+  // Electrics: points for the wiring guide, only in the Electrics picker. Wall-mounted unless `ceiling` (or a floor socket). Ids are saved data: never rename.
+  { id: "switch-1g", name: "Light switch (1-gang)", category: "Electrics", w: PLATE, d: 0.03, h: PLATE, color: FACE, symbol: "switch-1g", mount: centredAt(1.2, PLATE), note: "Centre 1.2 m up, beside the door on the handle side" },
+  { id: "switch-2g", name: "Light switch (2-gang)", category: "Electrics", w: PLATE2, d: 0.03, h: PLATE, color: FACE, symbol: "switch-2g", mount: centredAt(1.2, PLATE), note: "Two switches on one plate" },
+  { id: "switch-2way", name: "Light switch (2-way)", category: "Electrics", w: PLATE, d: 0.03, h: PLATE, color: FACE, symbol: "switch-2way", mount: centredAt(1.2, PLATE), note: "One of a pair switching the same lights, e.g. top and bottom of the stairs" },
+  { id: "switch-dimmer", name: "Dimmer switch", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "switch-dimmer", mount: centredAt(1.2, PLATE), note: "Rotary or push dimmer; check the lamps are dimmable" },
+  { id: "switch-pull-cord", name: "Pull-cord switch", category: "Electrics", w: 0.06, d: 0.06, h: 0.05, color: FACE, symbol: "switch-pull", ceiling: true, note: "On the ceiling, for bathrooms and showers" },
+  { id: "socket-single", name: "Socket (single)", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "socket-1", mount: centredAt(0.45, PLATE), note: "Switched, centre 450 mm up" },
+  { id: "socket-double", name: "Socket (double)", category: "Electrics", w: PLATE2, d: 0.035, h: PLATE, color: FACE, symbol: "socket-2", mount: centredAt(0.45, PLATE), note: "Switched, centre 450 mm up; 1.1 m above a worktop" },
+  { id: "socket-double-usb", name: "Socket (double, USB)", category: "Electrics", w: PLATE2, d: 0.04, h: PLATE, color: FACE, symbol: "socket-usb", mount: centredAt(0.45, PLATE), note: "Double socket with USB-A and USB-C outlets" },
+  { id: "socket-floor", name: "Floor socket", category: "Electrics", w: 0.15, d: 0.15, h: 0.02, color: "#b9bdc2", symbol: "socket-floor", note: "Flush in the floor, e.g. under a sofa in the middle of a room" },
+  { id: "socket-outdoor", name: "Outside socket (IP66)", category: "Electrics", w: 0.12, d: 0.07, h: 0.15, color: "#2b2d31", symbol: "socket-outdoor", mount: centredAt(0.45, 0.15), outdoor: true, note: "Weatherproof with a lid, RCD protected, on an outside wall" },
+  { id: "shaver-socket", name: "Shaver socket", category: "Electrics", w: PLATE2, d: 0.05, h: PLATE, color: FACE, symbol: "shaver-socket", mount: centredAt(1.3, PLATE), note: "Isolating shaver supply unit; the only socket allowed near a basin" },
+  { id: "fused-spur", name: "Fused spur (FCU)", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "fused-spur", mount: centredAt(1.1, PLATE), note: "Switched fused connection unit for a fixed appliance (boiler, extractor, towel rail)" },
+  { id: "cooker-switch", name: "Cooker switch (45 A)", category: "Electrics", w: PLATE2, d: 0.04, h: PLATE2, color: FACE, symbol: "cooker-switch", mount: centredAt(1.2, PLATE2), note: "Double-pole isolator within 2 m of the cooker, not above the hob" },
+  { id: "cooker-outlet", name: "Cooker outlet", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "cooker-outlet", mount: centredAt(0.45, PLATE), note: "Cooker connection unit behind the cooker or oven" },
+  { id: "shower-point", name: "Electric shower", category: "Electrics", w: 0.32, d: 0.10, h: 0.45, color: FACE, symbol: "shower-point", mount: centredAt(1.55, 0.45), note: "On its own circuit from the consumer unit, with a ceiling pull-cord isolator" },
+  { id: "extractor-fan", name: "Extractor fan", category: "Electrics", w: 0.15, d: 0.10, h: 0.15, color: FACE, symbol: "extractor-fan", mount: centredAt(2.1, 0.15), note: "Bathroom, shower room or kitchen; on the light or with a timer" },
+  { id: "thermostat", name: "Heating thermostat", category: "Electrics", w: PLATE, d: 0.025, h: PLATE, color: FACE, symbol: "thermostat", mount: centredAt(1.5, PLATE), note: "Room thermostat or boiler controls" },
+  { id: "doorbell-push", name: "Doorbell push", category: "Electrics", w: 0.04, d: 0.025, h: 0.09, color: "#2b2d31", symbol: "bell-push", mount: centredAt(1.4, 0.09), outdoor: true, note: "Beside the front door, outside" },
+  { id: "doorbell-chime", name: "Doorbell chime", category: "Electrics", w: 0.15, d: 0.05, h: 0.10, color: FACE, symbol: "bell-chime", mount: centredAt(2.0, 0.1), note: "In the hall, high on the wall" },
+  { id: "smoke-alarm", name: "Smoke alarm (mains)", category: "Electrics", w: 0.12, d: 0.12, h: 0.05, color: FACE, symbol: "smoke-alarm", ceiling: true, note: "Mains-wired and interlinked; on the ceiling, at least 300 mm from walls and lights" },
+  { id: "heat-alarm", name: "Heat alarm (mains)", category: "Electrics", w: 0.12, d: 0.12, h: 0.05, color: FACE, symbol: "heat-alarm", ceiling: true, note: "Mains-wired and interlinked; in the kitchen" },
+  { id: "co-alarm", name: "Carbon monoxide alarm", category: "Electrics", w: 0.10, d: 0.04, h: 0.12, color: FACE, symbol: "co-alarm", mount: centredAt(1.5, 0.12), note: "In a room with a gas boiler or fire, 1 to 3 m from it at head height" },
+  { id: "tv-point", name: "TV aerial point", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "tv-point", mount: centredAt(0.45, PLATE), note: "Coaxial outlet; raise it behind a wall-mounted TV" },
+  { id: "data-point", name: "Data point (Ethernet)", category: "Electrics", w: PLATE, d: 0.035, h: PLATE, color: FACE, symbol: "data-point", mount: centredAt(0.45, PLATE), note: "Cat6 outlet back to the router or a patch panel" },
+  { id: "ev-charger", name: "EV charger (7 kW)", category: "Electrics", w: 0.25, d: 0.12, h: 0.35, color: "#2b2d31", symbol: "ev-charger", mount: centredAt(1.0, 0.35), outdoor: true, note: "On the drive or garage wall, on its own circuit" },
+  { id: "consumer-unit", name: "Consumer unit", category: "Electrics", w: 0.40, d: 0.12, h: 0.30, color: FACE, symbol: "consumer-unit", mount: centredAt(1.5, 0.3), note: "The fuse board; usually by the front door, under the stairs or in the garage" },
 ];
 
 /**
@@ -522,13 +594,38 @@ export function mountOf(fx: { mount?: number }, item: Pick<CatalogueItem, "mount
 
 /** Category of the owner's own pieces. */
 export const MINE = "Mine";
+/** Ceiling and wall lights: in both the Furnish and the Electrics pickers. */
+export const LIGHTING = "Lighting";
+/** Electrical points (switches, sockets, alarms, ...): only in the Electrics picker. */
+export const ELECTRICS = "Electrics";
 export const CATEGORIES = [...new Set(CATALOGUE.map((c) => c.category))];
 export const byId = (id: string) => CATALOGUE.find((c) => c.id === id);
 
-/** Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note. */
-export function filterCatalogue(query: string, category: string | "All", extra: CatalogueItem[] = []): CatalogueItem[] {
+/** Which picker is asking: Furnish (furniture and lights) or Electrics (lights and electrical points). */
+export type PickerScope = "furnish" | "electrics";
+/** The categories each picker offers, in catalogue order; "All" in a picker means all of these. */
+export const SCOPE_CATEGORIES: Record<PickerScope, string[]> = {
+  furnish: CATEGORIES.filter((c) => c !== ELECTRICS),
+  electrics: [LIGHTING, ELECTRICS],
+};
+
+/** Whether an item is a ceiling or wall light from the Lighting category (not a plug-in lamp). */
+export const isFittedLight = (item: Pick<CatalogueItem, "category">): boolean => item.category === LIGHTING;
+/**
+ * Whether an item is an electrical point for the wiring guide: every Lighting and Electrics entry. Plug-in lamps
+ * (floor, table and desk lamps, the lit mirror) are lights but not points; they stay furniture.
+ */
+export const isElectricalItem = (item: Pick<CatalogueItem, "category">): boolean => item.category === LIGHTING || item.category === ELECTRICS;
+
+/**
+ * Catalogue items matching a search and category. Case-insensitive; every word of the query must appear in the name, category or note.
+ * `scope` limits "All" (and any category) to the picker's categories: the Furnish picker never lists Electrics points.
+ */
+export function filterCatalogue(query: string, category: string | "All", extra: CatalogueItem[] = [], scope: PickerScope = "furnish"): CatalogueItem[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const allowed = SCOPE_CATEGORIES[scope];
   return [...extra, ...CATALOGUE].filter((c) => {
+    if (!allowed.includes(c.category) && !(scope === "furnish" && c.category === MINE)) return false;
     if (category !== "All" && c.category !== category) return false;
     const hay = `${c.name} ${c.category} ${c.note ?? ""}`.toLowerCase();
     return words.every((w) => hay.includes(w));

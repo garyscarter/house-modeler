@@ -173,3 +173,8 @@
 .deco-block fieldset.linked { opacity: 0.55; pointer-events: none; }
 .app[data-touch] .deco-link select { min-height: 38px; }
 .dulux-picker .dulux-item .dulux-chip { margin: 0 var(--sp-2) 0 0; }
+
+/* Electrical points: the switch's linked lights. */
+.inspector .link-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
+.inspector .link-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.app[data-touch] .inspector .link-list .link { min-width: 36px; min-height: 36px; }

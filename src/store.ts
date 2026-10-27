@@ -76,6 +76,8 @@ interface State {
   floorBeforeSite: string | null;
   /** Garden mode: the selected garden items, shared by the site editor and the Garden panel. Not persisted; cleared by a mode switch. */
   gardenSel: string[];
+  /** Electrics mode: the switch whose lights are being linked on the plan (see lib/modes.ts ModeUi). Not persisted; cleared by a mode switch. */
+  linkSwitchId: string | null;
   setMode: (m: Mode) => void;
   /** The mode Review was opened from, so closing it goes back there. Persisted. */
   modeBeforeReview: Mode | null;
@@ -152,6 +154,7 @@ interface State {
         | "selectedEdge"
         | "floorBeforeSite"
         | "gardenSel"
+        | "linkSwitchId"
         | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
@@ -276,6 +279,7 @@ export const useStore = create<State>()(
 
         mode: "build",
         gardenSel: [],
+        linkSwitchId: null,
         selectedEdge: null,
         floorBeforeSite: null,
         setMode: (m) =>
@@ -441,7 +445,7 @@ export const useStore = create<State>()(
           rawSet((st) =>
             "selectedRoomId" in p && !("selectedEdge" in p) && p.selectedRoomId !== st.selectedRoomId ? { ...p, selectedEdge: null } : p,
           ),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [] }),
+        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [], linkSwitchId: null }),
       };
     },
     {

@@ -1,5 +1,6 @@
 import { memo } from "react";
-import type { CatalogueItem } from "../../../lib/catalogue";
+import { isElectricalItem, type CatalogueItem } from "../../../lib/catalogue";
+import { snapKind } from "../../../lib/planHit";
 import type { Mode, Tool } from "../../../lib/modes";
 import { StatusLine } from "../../core";
 
@@ -14,10 +15,17 @@ export interface StatusInput {
   hasSelectedRoom: boolean;
   /** A finger, not a mouse: say Tap and touch and hold, and leave out the keyboard. */
   touch?: boolean;
+  /** Electrics: "SW1 (Kitchen)" while the lights of that switch are being picked. */
+  linking?: string | null;
 }
 
 /** What the status line says while a drawing tool is in hand (null: nothing to say). */
 export function statusTextFor(s: StatusInput): string | null {
+  if (s.linking) return s.touch ? `Linking ${s.linking}: tap lights to switch them, then Done in the panel` : `Linking ${s.linking}: tap lights to switch them, Esc when done`;
+  if (s.tool === "place" && s.placing && isElectricalItem(s.placing.item)) {
+    const where = snapKind(s.placing.item) === "wall" ? "it sits on the nearest wall" : "it goes where you put it";
+    return s.touch ? `Tap to place ${s.placing.item.name}; ${where}.` : `Click to place ${s.placing.item.name}; ${where} (Alt places freely). R turns it, Esc finishes.`;
+  }
   if (s.touch) return touchStatusFor(s);
   switch (s.tool) {
     case "canopy":
@@ -85,6 +93,8 @@ function touchHintFor(mode: Mode): string {
     ? "Tap a room, canopy, opening or wall to edit it. Drag corners; drag the background to pan, pinch to zoom. Touch and hold for actions."
     : mode === "decorate"
       ? "Tap a floor, or a wall near its edge, to decorate it. Drag the background to pan; pinch to zoom. Touch and hold for actions."
+      : mode === "electrics"
+        ? "Tap a light, switch or socket to edit it; drag to move. Add places a new one. Drag the background to pan; pinch to zoom. Touch and hold for actions."
       : mode === "furnish"
         ? "Tap an item to edit it; drag to move. Drag the background to pan; pinch to zoom. Touch and hold for actions."
         : "Drag the background to pan; pinch to zoom. Use Measure to check a distance.";
@@ -97,6 +107,8 @@ export function selectHintFor(mode: Mode, touch = false): string {
     ? "Click a room, canopy, opening or wall to edit it. Drag corners; drag the background or swipe with two fingers to pan, pinch or use the mouse wheel to zoom. Arrows nudge (Shift ×10). Shift+click a neighbouring room to knock through. Esc while dragging puts it back. Right-click for actions."
     : mode === "decorate"
       ? "Click a floor, or a wall near its edge, to decorate it. Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Right-click for actions."
+      : mode === "electrics"
+        ? "Click a light, switch or socket to edit it; drag to move (on a wall it stays on the wall). Add (A) places a new one. To link a switch to its lights, select it and use Link lights in the panel. Delete removes. Esc ends linking. Right-click for actions."
       : mode === "furnish"
         ? "Click an item to edit it; drag to move; Shift+click adds to the selection, Shift+drag selects an area, Ctrl/⌘G groups. Arrows nudge (Shift ×10) · R turns 90°, Shift+R 15° · Ctrl/⌘C, V copy and paste · Ctrl/⌘D duplicates · Delete removes. Esc while dragging puts it back. Right-click for actions."
         : "Drag the background or swipe with two fingers to pan; pinch or use the mouse wheel to zoom. Use Measure to check a distance.";
