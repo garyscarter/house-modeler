@@ -361,11 +361,34 @@ function ctx(def: GardenDef, item: GardenItem, w: number, h: number): Ctx {
   return { P: new GPartsBuilder(), r: mulberry32(plantSeed(item)), w, h, leaf: item.color ?? def.color, trunk: def.trunk ?? "#5a4030", accent: item.accent ?? def.accent, id: def.id };
 }
 
+/** How much of a potted plant's height the pot takes. */
+export const POT_SHARE = 0.26;
+
+/**
+ * A pot at the foot of a potted plant (`def.pot` is its colour): a tapered body with a rim and soil, as wide
+ * as half the spread. The plant form then grows from the soil in the remaining height.
+ */
+function potted(c: Ctx, color: string, form: (c: Ctx) => void) {
+  const { P, w, h } = c;
+  const ph = Math.min(h * POT_SHARE, w * 0.6);
+  const D = Math.min(w * 0.55, ph * 1.3);
+  const body = gmat(color, "stone");
+  P.cyl(0, 0, ph * 0.86, 0, D * 0.82, body);
+  P.cyl(0, ph * 0.55, ph * 0.86, 0, D * 0.92, body);
+  P.cyl(0, ph * 0.86, ph, 0, D, gmat(shadeColor(color, 0.9), "stone"));
+  P.cyl(0, ph * 0.9, ph * 0.97, 0, D * 0.9, gmat("#3a2e24", "soil"));
+  const start = P.out.length;
+  form({ ...c, h: h - ph });
+  for (let i = start; i < P.out.length; i++) P.out[i].p[1] += ph;
+}
+
 /** A single plant's parts in its local frame, within its spread (w) and height (h), seeded by `item.seed` or its id. */
 export function plantParts(def: GardenDef, item: GardenItem): GPart[] {
   const { w, h } = itemSize(item);
   const c = ctx(def, item, w, h);
-  (PLANTS[def.shape] ?? ((k: Ctx) => mound(k, 3)))(c);
+  const form = PLANTS[def.shape] ?? ((k: Ctx) => mound(k, 3));
+  if (def.pot) potted(c, def.pot, form);
+  else form(c);
   return c.P.out;
 }
 

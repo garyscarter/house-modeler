@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GARDEN_ITEMS, isPlant, itemSize } from "./gardenCatalogue";
 import { partBounds } from "./gardenParts";
-import { PLANT_PART_BUDGET, plantParts, runParts } from "./plantForms";
+import { PLANT_PART_BUDGET, POT_SHARE, plantParts, runParts } from "./plantForms";
 import type { GardenItem } from "../types";
 
 const plants = GARDEN_ITEMS.filter((d) => isPlant(d) && !d.run);
@@ -61,5 +61,21 @@ describe("runParts", () => {
     const parts = runParts(def, itemOf(def.id, { to: { x: 0, y: 3 } }));
     expect(parts.length).toBe(6);
     for (const p of parts) expect(Math.abs(p.p[2])).toBeLessThan(1e-9);
+  });
+});
+
+describe("potted plants", () => {
+  it("stand on a pot that takes the bottom of the height, with the tree above it", () => {
+    for (const def of GARDEN_ITEMS.filter((d) => d.pot)) {
+      const parts = plantParts(def, itemOf(def.id, { seed: 3 }));
+      const { h } = itemSize(itemOf(def.id));
+      const pot = parts.filter((p) => p.mat.finish === "stone");
+      expect(pot.length, def.id).toBeGreaterThanOrEqual(3);
+      expect(Math.min(...pot.map((p) => partBounds(p).min[1]))).toBeCloseTo(0, 5);
+      const potTop = Math.max(...pot.map((p) => partBounds(p).max[1]));
+      expect(potTop).toBeCloseTo(Math.min(h * POT_SHARE, itemSize(itemOf(def.id)).w * 0.6), 5);
+      // Everything that is not the pot or its soil starts at the pot's rim or above.
+      for (const p of parts.filter((q) => q.mat.finish !== "stone" && q.mat.finish !== "soil")) expect(partBounds(p).min[1], def.id).toBeGreaterThanOrEqual(potTop - 0.03);
+    }
   });
 });

@@ -114,6 +114,8 @@ export interface GardenDef {
   accent?: string;
   /** Trunk or stem colour of trees and shrubs. */
   trunk?: string;
+  /** Pot colour: the plant stands in a pot taking the bottom of its height (lib/plantForms.ts potted). */
+  pot?: string;
   /** Round footprint (pots, parasols, trampolines, fire pits, most plants): the plan draws a circle of diameter w. */
   round?: boolean;
   /** Placed by two points (GardenItem.to); `w` is then the run's width across. */
@@ -161,6 +163,11 @@ export const GARDEN_ITEMS: GardenDef[] = [
   { id: "pot-small", name: "Terracotta pot", category: "Pots and planters", kind: "furniture", shape: "pot", w: 0.4, d: 0.4, h: 0.4, color: "#b8693f", accent: "#4f7a3d", round: true, costLine: "gardenFurniture" },
   { id: "pot-large", name: "Large planter pot", category: "Pots and planters", kind: "furniture", shape: "pot", w: 0.6, d: 0.6, h: 0.6, color: "#55595e", accent: "#4f7a3d", round: true, costLine: "gardenFurniture" },
   { id: "pot-xl", name: "Extra large planter", category: "Pots and planters", kind: "furniture", shape: "pot", w: 0.8, d: 0.8, h: 0.8, color: "#3f4348", accent: "#4f7a3d", round: true, costLine: "gardenFurniture" },
+  // Small trees in pots: the tree form stands on a pot that takes the bottom quarter of the height.
+  { id: "potted-olive", name: "Olive tree in a pot", category: "Pots and planters", kind: "plant", shape: "olive", w: 1.0, d: 1.0, h: 1.8, color: "#8a9a73", trunk: "#7a6a55", pot: "#b8693f", round: true, costLine: "gardenPlanting" },
+  { id: "potted-plum", name: "Young plum tree in a pot", category: "Pots and planters", kind: "plant", shape: "apple", w: 0.9, d: 0.9, h: 1.8, color: "#4f7a3a", trunk: "#5a4535", accent: "#4a2a55", pot: "#55595e", round: true, costLine: "gardenPlanting" },
+  { id: "potted-bay", name: "Bay tree in a pot", category: "Pots and planters", kind: "plant", shape: "bay", w: 0.7, d: 0.7, h: 1.6, color: "#355d33", trunk: "#6b4f3a", pot: "#2f3236", round: true, costLine: "gardenPlanting" },
+  { id: "potted-acer", name: "Japanese maple in a pot", category: "Pots and planters", kind: "plant", shape: "acer", w: 1.0, d: 1.0, h: 1.2, color: "#a3322b", trunk: "#5a4030", pot: "#3f4348", round: true, costLine: "gardenPlanting" },
   { id: "planter-trough", name: "Trough planter", category: "Pots and planters", kind: "furniture", shape: "planter", w: 1.0, d: 0.4, h: 0.45, color: "#6b5137", accent: "#4f7a3d", costLine: "gardenFurniture" },
   // Structures
   { id: "shed-6x4", name: "Shed, 6 × 4 ft", category: "Structures", kind: "structure", shape: "shed", w: 1.83, d: 1.22, h: 2.1, color: "#7a6248", accent: "#3a3a3a", wall: true, shade: true, costLine: "gardenStructure" },

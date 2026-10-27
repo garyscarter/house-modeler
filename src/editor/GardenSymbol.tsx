@@ -146,7 +146,12 @@ export const GardenSymbol = memo(function GardenSymbol({ def, item, px, selected
   /** Small accent dots (flowers, fruit) in a ring round the middle of a plant. */
   const dots = (count: number, ring: number, size: number) => Array.from({ length: count }, (_, i) => dot(Math.cos(i * 2.4 + seed * 6) * ring * (0.35 + 0.6 * ((i * 0.37) % 1)), Math.sin(i * 2.4 + seed * 6) * ring * (0.35 + 0.6 * ((i * 0.37) % 1)), size, accent));
   const leafy = (lobes: number) => <path d={scallopPath(r, lobes, seed)} fill={color} fillOpacity={0.88} stroke={outline} strokeWidth={sw} strokeOpacity={selected ? 1 : 0.7} />;
-  const trunk = <circle r={Math.max(0.05, Math.min(0.12, r * 0.1))} fill={def.trunk ?? "#5a4030"} stroke={outline} strokeWidth={sw * 0.5} />;
+  const trunk = (
+    <>
+      {def.pot && <circle r={r * 0.5} fill="none" stroke={def.pot} strokeWidth={Math.max(0.03, r * 0.1)} strokeOpacity={0.9} />}
+      <circle r={Math.max(0.05, Math.min(0.12, r * 0.1))} fill={def.trunk ?? "#5a4030"} stroke={outline} strokeWidth={sw * 0.5} />
+    </>
+  );
 
   switch (def.shape) {
     case "dining-set": {
