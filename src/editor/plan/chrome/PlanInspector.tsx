@@ -56,6 +56,7 @@ export function PlanInspector({
       {editsFixtures(mode) ? (
         liveIds.length >= 2 ? (
           <MultiFixtureInspector
+            variant={variant}
             fixtures={allFixtures.filter((x) => liveIds.includes(x.id))}
             isGroup={exactGroup(allFixtures, liveIds) !== null}
             onPick={(id) => select({ fixtures: [id] })}
@@ -69,8 +70,8 @@ export function PlanInspector({
             onColour={(color) => setFixtures((all) => all.map((x) => (liveIds.includes(x.id) ? { ...x, color } : x)))}
           />
         ) : selectedFixture && selectedFixtureItem ? (
-          // TODO(Sia): pass `variant={variant}` to FixtureInspector and MultiFixtureInspector once Inspectors.tsx has the optional prop.
           <FixtureInspector
+            variant={variant}
             fixture={selectedFixture}
             item={selectedFixtureItem}
             ceiling={ceilingHeight}
