@@ -1,7 +1,7 @@
 // Begin a house: `npm run house:start <id> "<Name>"`.
 // Makes reference/<id>/ (INTAKE.md, NOTES.md, photos/) from reference/_template/, never overwriting, and remembers the
 // choice in the gitignored .storey-local.json. It does not make src/houses/<id>/ (that is house:new, run by /eras-tour).
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SLUG, fail, intakeLines, root, ticket, writeLocal } from "./_lib.mjs";
 
@@ -14,7 +14,8 @@ mkdirSync(path.join(ref, "photos"), { recursive: true });
 for (const f of ["INTAKE.md", "NOTES.md"]) {
   const from = path.join(root, "reference/_template", f);
   const to = path.join(ref, f);
-  if (existsSync(from) && !existsSync(to)) copyFileSync(from, to);
+  // The templates say <id> where the house's id goes: fill it in, so the form reads as this house's own.
+  if (existsSync(from) && !existsSync(to)) writeFileSync(to, readFileSync(from, "utf8").replaceAll("<id>", id));
 }
 const keep = path.join(ref, "photos/.gitkeep");
 if (!existsSync(keep)) writeFileSync(keep, "");

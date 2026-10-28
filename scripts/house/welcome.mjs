@@ -5,7 +5,7 @@ import { beadsOf, bracelet, houseIsIn, intakeLines, intakeState, nextEra, readLo
 
 const hook = process.argv.includes("--hook");
 const HOOK_NOTE =
-  "Storey first-run note for Claude: share the welcome below only if the person is new to this repo, asks how to start, or wants to add a house; otherwise leave it unsaid.";
+  "Storey first-run note for Claude: share the welcome below only if the person is new to this repo, asks how to start, or wants to add a house; otherwise leave it unsaid. When you share it, keep its gig framing (Ed Sheeran's support act is their intake, Taylor headlines as you building the house).";
 const quiet = process.argv.includes("--quiet");
 const out = [];
 const local = readLocal();
@@ -26,6 +26,8 @@ if (id && houseIsIn(id)) {
   }
 } else if (id) {
   if (!(intakeState(id).ready && (hook || quiet))) out.push(...intakeLines(id));
+  // A ready intake still needs its call to action in the hook, or the bracelet arrives with nothing to do next.
+  if (hook && intakeState(id).ready) out.push("Ed's set is done. Taylor's on next: in Claude Code run /eras-tour.");
   if (!quiet && (intakeState(id).ready || beadsOf(id).length)) out.push(bracelet(id));
 } else {
   // No house chosen: greet. A first-time checkout (no local file) is greeted once and then marked as welcomed.
