@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { houseKey } from "./house";
+import { activeHouseId, houseKey } from "./house";
 import { clearHistory, transact, useStore } from "../store";
 import { choose } from "../components/Dialogs";
 import {
@@ -55,6 +55,8 @@ let last: Revision | null = null;
 let dirty = false;
 let persistent = true;
 let enabled = false;
+/** Set when the server holds a different house: sync stays off for the page's life. */
+let wrongHouse = false;
 let paused = false; // "Cancel" was chosen in the conflict dialog: wait for Sync now
 let applying = false;
 let version = 0; // counts local changes, so a save can tell whether more came in while it was sent
@@ -186,7 +188,7 @@ async function conflict(server: Partial<Revision>): Promise<void> {
 
 /** Compare with the server and do what is needed. Also the first thing that runs, and what a retry does. */
 async function check(): Promise<void> {
-  if (noServer) return;
+  if (noServer || wrongHouse) return;
   if (!enabled) {
     // Read what this browser remembers before the first request, so `since` is right and an unchanged project isn't downloaded.
     const saved = readMemory();
@@ -252,6 +254,12 @@ export async function startSync(): Promise<void> {
     window.addEventListener("focus", resume);
   }
   try {
+    // A server that holds a different house must not be written to; no or a failed /api/me (dev, artifact) goes on as before.
+    const me = (await call("GET", "/api/me")).reply;
+    if (me?.status === 200 && typeof me.json.house === "string" && me.json.house !== activeHouseId()) {
+      wrongHouse = true;
+      return setStatus({ kind: "wrongHouse" });
+    }
     await serial(check);
   } catch (e) {
     console.error("Sync failed", e);

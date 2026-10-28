@@ -19,10 +19,11 @@ export interface HouseInputs {
 
 /**
  * The house to open: the server's meta tag wins, then the remembered choice, then the only house when the build has
- * one. Null means the picker must ask. Ids not in this build are ignored.
+ * one. Null means the picker must ask. A remembered id not in this build is ignored; a meta id not in this build
+ * gives null too (see `unknownMetaHouse`: the app must not open another house in its place).
  */
 export function pickHouse({ meta, stored, ids }: HouseInputs): string | null {
-  if (meta && ids.includes(meta)) return meta;
+  if (meta) return ids.includes(meta) ? meta : null;
   if (stored && ids.includes(stored)) return stored;
   if (ids.length === 1) return ids[0];
   return null;
@@ -31,6 +32,12 @@ export function pickHouse({ meta, stored, ids }: HouseInputs): string | null {
 function metaHouse(): string | null {
   if (typeof document === "undefined") return null;
   return document.querySelector<HTMLMetaElement>(`meta[name="${HOUSE_META}"]`)?.content || null;
+}
+
+/** The id the page's meta tag pins when this build does not hold it, else null. */
+export function unknownMetaHouse(): string | null {
+  const m = metaHouse();
+  return m && !(m in HOUSES) ? m : null;
 }
 
 function storedHouse(): string | null {

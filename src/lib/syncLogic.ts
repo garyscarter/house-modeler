@@ -87,7 +87,8 @@ export type SyncStatus =
   | { kind: "offline" }
   | { kind: "signedout" }
   | { kind: "paused" }
-  | { kind: "tooLarge" };
+  | { kind: "tooLarge" }
+  | { kind: "wrongHouse" };
 
 export function statusText(s: SyncStatus): string {
   switch (s.kind) {
@@ -103,6 +104,8 @@ export function statusText(s: SyncStatus): string {
       return "Signed out of the server: reload the page and sign in again";
     case "paused":
       return "Not saved: the server has a different version. Tap Sync now to choose";
+    case "wrongHouse":
+      return "This server holds a different house";
     case "tooLarge":
       return "Too large to sync (over 50 MB): remove some photos, then Sync now";
   }

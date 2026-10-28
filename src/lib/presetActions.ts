@@ -98,7 +98,7 @@ export interface ListingReview {
 
 /** Is this layout an owner's design based on the built-in house (so it can take its updates)? */
 export const isListingDesign = (model: HouseModel | undefined): boolean =>
-  !!model && model.preset?.id !== currentHouse().proposed && isBasedOnListing(model, currentHouse().main, latestListing().model);
+  !!model && (!currentHouse().proposed || model.preset?.id !== currentHouse().proposed) && isBasedOnListing(model, currentHouse().main, latestListing().model);
 
 /**
  * Work out what the latest built-in house offers the design in `variant` (Proposed by default), or undefined

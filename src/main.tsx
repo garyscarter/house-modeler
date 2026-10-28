@@ -1,7 +1,8 @@
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { HOUSES } from "./houses";
-import { activeHouseId, loadHouse } from "./lib/house";
+import { activeHouseId, loadHouse, unknownMetaHouse } from "./lib/house";
+import { BrandMark } from "./components/BrandMark";
 import { HousePicker } from "./components/HousePicker";
 import { Loader } from "./components/Loader";
 import "@fontsource-variable/bricolage-grotesque/wght.css";
@@ -28,7 +29,20 @@ function Opening({ name }: { name: string }) {
   );
 }
 
-if (!id) {
+const unknown = unknownMetaHouse();
+
+if (unknown) {
+  // The server pinned a house this build does not hold: say so, rather than open another one in its place.
+  root.render(
+    <StrictMode>
+      <div className="house-opening" role="alert">
+        <BrandMark size={40} />
+        <span>This house isn't in this build. Ask the owner to rebuild the server with it.</span>
+        <code style={{ fontFamily: "var(--font-mono)" }}>{unknown}</code>
+      </div>
+    </StrictMode>,
+  );
+} else if (!id) {
   root.render(
     <StrictMode>
       <HousePicker />

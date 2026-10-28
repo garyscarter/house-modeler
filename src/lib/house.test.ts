@@ -11,8 +11,12 @@ describe("pickHouse", () => {
     expect(pickHouse({ meta: null, stored: "a-house", ids })).toBe("a-house");
   });
   it("ignores ids that are not in the build", () => {
-    expect(pickHouse({ meta: "gone", stored: "also-gone", ids })).toBeNull();
-    expect(pickHouse({ meta: "gone", stored: null, ids: ["only"] })).toBe("only");
+    expect(pickHouse({ meta: null, stored: "also-gone", ids })).toBeNull();
+    expect(pickHouse({ meta: null, stored: "gone", ids: ["only"] })).toBe("only");
+  });
+  it("opens no house when the meta tag names one this build lacks, whatever else is there", () => {
+    expect(pickHouse({ meta: "gone", stored: "a-house", ids })).toBeNull();
+    expect(pickHouse({ meta: "gone", stored: null, ids: ["only"] })).toBeNull();
   });
   it("opens the only house, and asks when there are several", () => {
     expect(pickHouse({ ids: ["only"] })).toBe("only");
