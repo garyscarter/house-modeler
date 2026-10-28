@@ -19,7 +19,14 @@ export interface StillOptions {
   width: number;
   height: number;
   samples: number;
+  /** Tuning overrides for the sky fill and the sun, as multiples of the live scene's; normally left out. */
+  envScale?: number;
+  sunScale?: number;
 }
+
+/** The traced sky fill and sun as multiples of the live scene's environment and sun intensities (tuned against the live view). */
+const ENV_SCALE = 0.75;
+const SUN_SCALE = 1.15;
 
 /** From src/three/Lighting.tsx: environment gradient (zenith, horizon, ground), dusk zenith and horizon, and where warming starts. */
 const ENV_GRADIENT = ["#a7bcd8", "#eceef0", "#857b6c"];
@@ -167,6 +174,9 @@ export async function renderStill(
   const toneMapping = gl.toneMapping;
   const environment = scene.environment;
   const background = scene.background;
+  const environmentIntensity = scene.environmentIntensity;
+  const sunIntensity = sunOf(scene).light?.intensity ?? 0;
+  let sun: THREE.DirectionalLight | null = null;
   const hidden: THREE.Object3D[] = [];
   const parts: THREE.Mesh[] = [];
   const textures: THREE.Texture[] = [];
@@ -191,7 +201,7 @@ export async function renderStill(
     scene.updateMatrixWorld(true);
 
     // The live environment is a PMREM cube-UV map the tracer cannot sample: trace the same gradient as an equirect.
-    const { altitude } = sunOf(scene);
+    const { altitude, light: sunLight } = sunOf(scene);
     const night = altitude < NIGHT_ALTITUDE;
     const warmth = night ? 0 : THREE.MathUtils.clamp(1 - altitude / DUSK_ALTITUDE, 0, 1);
     const env = gradient(
@@ -204,6 +214,9 @@ export async function renderStill(
     textures.push(env, sky);
     scene.environment = env;
     scene.background = sky;
+    scene.environmentIntensity = environmentIntensity * (opts.envScale ?? ENV_SCALE);
+    if (sunLight) sunLight.intensity = sunIntensity * (opts.sunScale ?? SUN_SCALE);
+    sun = sunLight;
 
     gl.setPixelRatio(1);
     gl.setSize(w, h, false);
@@ -227,9 +240,11 @@ export async function renderStill(
     tracer.fadeDuration = 0;
     // Under 100k triangles the synchronous BVH build takes a moment; the worker build would need a bundled worker.
     tracer.setScene(scene, camera);
-    // The tracer has read the environment and background; the live scene gets its own back.
+    // The tracer has read the environment, background and lights; the live scene gets its own back.
     scene.environment = environment;
     scene.background = background;
+    scene.environmentIntensity = environmentIntensity;
+    if (sun) sun.intensity = sunIntensity;
     hidden.forEach((o) => (o.visible = true));
     hidden.length = 0;
     if (parts.length) scene.remove(...parts);
@@ -267,6 +282,8 @@ export async function renderStill(
     out.getContext("2d")!.drawImage(gl.domElement, 0, 0);
     return await encodePng(out);
   } finally {
+    scene.environmentIntensity = environmentIntensity;
+    if (sun) sun.intensity = sunIntensity;
     hidden.forEach((o) => (o.visible = true));
     if (parts.length) scene.remove(...parts);
     scene.environment = environment;
