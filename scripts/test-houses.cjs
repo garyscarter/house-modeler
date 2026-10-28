@@ -60,7 +60,7 @@ const houseOf = (page) => page.evaluate(() => localStorage.getItem('storey-house
   ok(/Template house/.test(title) || !title.includes(DEFAULT_NAME), `the tab title is the template's (${title})`);
 
   // Back to the listing: its project is still there, no Welcome card.
-  await page.evaluate(() => { localStorage.setItem('storey-house', DEFAULT_ID); });
+  await page.evaluate((id) => { localStorage.setItem('storey-house', id); }, DEFAULT_ID);
   await page.goto(`http://localhost:${port}/`);
   await page.waitForSelector('.dock, .tab-bar, .welcome-tile', { timeout: 60000 });
   const backRooms = await roomsOf(page);
