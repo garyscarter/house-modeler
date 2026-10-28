@@ -1,6 +1,6 @@
 # Storey (house modeler)
 
-Browser-only React + react-three-fiber + zustand app for one house the owner is buying ("listing 91770873") and its renovation. See README.md for what it does and src/houses/listing-91770873/NOTES.md for the facts behind the built-in model.
+Browser-only React + react-three-fiber + zustand app for the houses in `src/houses/` and their renovations. The owner's is `listing-91770873`, a house he is buying; each house's `NOTES.md` sits in its folder (for the owner's, src/houses/listing-91770873/NOTES.md) and holds the facts behind the built-in model. See README.md for what the app does. To add a house, run `/eras-tour`.
 
 ## Standing rules
 
@@ -20,7 +20,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
 - Check UI changes in headless Chromium with Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. In dev builds the store is on `window.__houseStore`.
 - Pure logic goes in src/lib with tests; world frame: x right, world z = plan y (+z is the front of the house).
 - Brand: the app is Storey. Follow docs/brand.md: the mark and colours come from `src/lib/brand.ts` and `BrandMark`, CSS tokens only, and every wait or busy state uses `<Loader>` (blueprint, lift or fill) beside a short label, never bare "Loading…".
-- Privacy: never put the property's address, postcode, title number or any owner's name in the repo; refer to it as "listing 91770873".
+- Privacy: never put the property's address, postcode, title number or any owner's name in the repo; refer to a house by its folder id (the owner's is "listing-91770873").
 
 ## Code map
 
@@ -34,8 +34,9 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
   - lights and electrics: `lights.ts` (which fixtures are lights, lit state, bulbs), `electrics.ts` (point kinds, rooms, numbering, links, circuits, schedule), `electricSymbols.ts` (BS EN 60617 plan symbols as data), `wiringGuide.ts` (the printable guide and CSV), `nightGlass.ts`; see docs/electrics-plan.md and docs/lighting-plan.md
   - garden: `gardenCatalogue.ts` (items and plants), `siteItems.ts` (placement, runs, shade), `surfaceCurve.ts` (smooth outlines), `dusk.ts`, `gardenParts.ts` and `plantForms.ts` (3D parts as data); see docs/garden-plan.md
   - outputs: `report.ts` (areas, changes, costs), `export.ts`, `planning.ts` (permitted-development check)
-  - built-in house: `src/houses/listing-91770873/house.ts` (+ `assets.ts`), loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
+  - built-in houses: see "Houses" below; loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
   - shared project sync with the server: `sync.ts`, `syncLogic.ts`; `migrate.ts` for old saves
+- Houses: `src/houses/<id>/` (`index.ts`, `house.ts`, `assets.ts`, `assets/`, `NOTES.md`, `house.test.ts`; `_template/` is the working starter, `listing-91770873/` the owner's). The `virtual:houses` registry is built in `vite.config.ts`; `src/lib/house.ts` holds the active house; `src/houses/default.ts` serves tests. Sources and intake for each house sit in `reference/<id>/` (templates in `reference/_template/`); the playbook is `.claude/skills/eras-tour/`.
 - `src/three/` 3D view: `Viewer.tsx`, `House.tsx`, `shell.ts` (wall and slab meshes), `Roof.tsx`, `Fixtures.tsx`, `Site.tsx`, `SiteItems.tsx` (garden items and plants), `FixtureLights.tsx` (point and spot lights for lit fixtures), `Lighting.tsx`, `textures.ts` (procedural finishes)
 - `src/editor/` 2D editors on one shared core (see docs/editor-core-plan.md): `core/` (camera, drag machine, polygon edit, keys, handles; maths in `lib/polygonEdit.ts` and `lib/editorCore.ts`), `plan/` (`PlanEditor.tsx` composition, `use*.ts` hooks, `layers/`, `chrome/`), `site/` (`SiteEditor.tsx` serves both Plot and Garden modes, `useSiteDrag.ts`, `SiteLayers.tsx`, `gardenEdit.ts`, `GardenInspectors.tsx`), `Inspectors.tsx`, symbols (`GardenSymbol.tsx` for garden items, `ElectricGlyph.tsx` for lights and electrical points), `plan/layers/Electrics.tsx` (point numbers and switch links). `npm run regress:editors -- --port <n>` runs the Playwright parity script against a dev server on that port.
 - `src/components/` side panels and dialogs (`ElectricsPanel.tsx` for the Electrics mode, `wiringGuideExport.ts` for the guide download); `server/` passcode-protected Node server; `scripts/build-hosted.mjs` the hosted single-file build
