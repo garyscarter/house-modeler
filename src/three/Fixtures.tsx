@@ -272,9 +272,11 @@ function material(color: string, finish: Finish, emissive = color): THREE.Materi
     else if (finish === "shade") m = new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: SHADE_EMISSIVE * lampLevel, roughness: 0.85 });
     else if (finish === "mirror") m = new THREE.MeshStandardMaterial({ color, roughness: 0.04, metalness: 1 });
     else if (finish === "metal") m = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.8 });
-    // Gloss (sanitaryware, appliance fronts, lacquer) is a clear coat over the colour, satin a thinner, softer one.
+    // Gloss (sanitaryware, appliance fronts, lacquer) is a clear coat over the colour. Satin stays a standard material:
+    // as a physical one it tripled the lit shader programs and turning the lights on at night stalled for seconds while
+    // they compiled (see scripts/perf-render.cjs), for a sheen nobody could see.
     else if (finish === "gloss") m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.12 });
-    else if (finish === "satin") m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, clearcoat: 0.4, clearcoatRoughness: 0.4 });
+    else if (finish === "satin") m = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
     else m = new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
     materials.set(key, m);
     if (materials.size > MATERIAL_LIMIT) {
