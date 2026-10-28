@@ -11,14 +11,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "build:hosted": "node scripts/build-hosted.mjs",
     "regress:editors": "node scripts/editor-regression.mjs",
     "house:new": "node scripts/house/new.mjs",
     "welcome": "node scripts/house/welcome.mjs",
     "house:start": "node scripts/house/start.mjs",
     "house:overlay": "node scripts/house/overlay-plan.mjs",
     "house:map": "node scripts/house/overlay-map.mjs",
-    "soundcheck": "node scripts/house/soundcheck.mjs"
+    "soundcheck": "node scripts/house/soundcheck.mjs",
+    "house:bead": "node scripts/house/bead.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

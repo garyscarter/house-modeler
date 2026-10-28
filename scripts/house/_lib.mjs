@@ -218,3 +218,63 @@ export function surpriseSong(id, pick = Math.random()) {
   const first = /:$/.test(fact.split(/(?<=\.)\s/)[0]) || fact.split(/(?<=\.)\s/)[0].length < 30 ? fact : fact.split(/(?<=\.)\s/)[0];
   return first.length > 160 ? first.slice(0, 157).trimEnd() + "…" : first;
 }
+
+// ---- Friendship bracelets: one bead per finished era, kept in reference/<id>/tour.json (committed) ----
+
+/** The eras in order: key, the letters on the bead, and whether the era is part of every show. */
+export const ERAS = [
+  { key: "debut", bead: "DEBUT", core: true },
+  { key: "fearless", bead: "FEARLESS", core: true },
+  { key: "speak-now", bead: "SPEAK NOW", core: true },
+  { key: "red", bead: "RED", core: true },
+  { key: "1989", bead: "1989", core: true },
+  { key: "reputation", bead: "REP", core: true },
+  { key: "lover", bead: "LOVER", core: false },
+  { key: "folklore", bead: "FOLKLORE", core: false },
+  { key: "taylors-version", bead: "TV", core: false },
+  { key: "encore", bead: "ENCORE", core: true },
+];
+
+const tourFile = (id) => path.join(root, "reference", id, "tour.json");
+
+/** The era keys this house has finished, in tour order. */
+export function beadsOf(id) {
+  try {
+    const got = new Set(JSON.parse(readFileSync(tourFile(id), "utf8")).eras ?? []);
+    return ERAS.filter((e) => got.has(e.key)).map((e) => e.key);
+  } catch {
+    return [];
+  }
+}
+
+/** Add an era's bead (idempotent). Returns false for an unknown era. */
+export function addBead(id, key) {
+  if (!ERAS.some((e) => e.key === key)) return false;
+  const eras = [...new Set([...beadsOf(id), key])];
+  writeFileSync(tourFile(id), JSON.stringify({ eras: ERAS.filter((e) => eras.includes(e.key)).map((e) => e.key) }, null, 2) + "\n");
+  return true;
+}
+
+/**
+ * The bracelet as one line: Ed's bead first once the intake is ready, then a lettered bead for each finished era and
+ * a plain bead for each core era still to come. Fidelity eras appear only once earned.
+ */
+export function bracelet(id) {
+  const got = new Set(beadsOf(id));
+  const ed = intakeState(id).ready || got.size > 0;
+  const beads = [ed ? "[ED]" : "·"];
+  for (const e of ERAS) {
+    if (got.has(e.key)) beads.push(`[${e.bead}]`);
+    else if (e.core) beads.push("·");
+  }
+  const core = ERAS.filter((e) => e.core);
+  const done = core.filter((e) => got.has(e.key)).length;
+  return `Your bracelet: ○─${beads.join("─")}─○  ${done} of ${core.length} eras`;
+}
+
+/** The next core era to play, or undefined when the show is complete. */
+export function nextEra(id) {
+  const got = new Set(beadsOf(id));
+  const e = ERAS.find((x) => x.core && !got.has(x.key));
+  return e && { key: e.key, name: e.key === "1989" ? "1989" : e.key.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") };
+}

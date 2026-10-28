@@ -1,5 +1,8 @@
 # Onboarding a second house: brief ("The Eras Tour")
 
+
+> **Update (2026-10-28):** the hosted Claude artifact and `npm run build:hosted` were dropped. Render deploys main and is the only hosted copy; read the artifact parts below as history.
+
 Status: agreed in outline, decisions below being settled. Plan to follow (docs/onboarding-plan.md).
 
 ## What the owner asked
