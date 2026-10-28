@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -26,12 +26,19 @@ const DEFAULT_HOUSE_ID: string = JSON.parse(fs.readFileSync(path.join(HOUSES_DIR
 function housesPlugin(): Plugin {
   const ID = "virtual:houses";
   const RESOLVED = "\0virtual:houses";
+  let housesEnv = "";
   return {
     name: "storey-houses",
+    // VITE_HOUSES may sit in a .env file as well as the environment; the environment wins.
+    configResolved(config) {
+      housesEnv = ({ ...loadEnv(config.mode, process.cwd(), "VITE_"), ...process.env } as Record<string, string | undefined>).VITE_HOUSES ?? "";
+    },
     resolveId: (id) => (id === ID ? RESOLVED : undefined),
     load(id) {
       if (id !== RESOLVED) return;
-      const wanted = (process.env.VITE_HOUSES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      // Watching the folder itself picks up a house added while the dev server runs.
+      this.addWatchFile(HOUSES_DIR);
+      const wanted = housesEnv.split(",").map((s) => s.trim()).filter(Boolean);
       const folders = fs
         .readdirSync(HOUSES_DIR, { withFileTypes: true })
         .filter((d) => d.isDirectory() && fs.existsSync(path.join(HOUSES_DIR, d.name, "index.ts")))
