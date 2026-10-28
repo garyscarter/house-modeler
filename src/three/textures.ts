@@ -2,7 +2,8 @@ import * as THREE from "three";
 import type { FloorFinish, WallCovering, WallFinish } from "../types";
 import { overflow } from "../lib/cache";
 import { wallAccent, wallBase, type Pattern } from "../lib/wallCovering";
-import { drawModern, isModern, modernBump, modernRoughness, modernTile } from "./wallTextures";
+import { drawModern, isModern, modernJointRoughness, modernNormalScale, modernRoughness, modernTile } from "./wallTextures";
+import { normalFromHeight, roughnessFromPainted, type RoughSpec } from "./normalMaps";
 import { DEFAULT_GROUT, FLOOR_COLOUR, takesGrout, type TexturedFloor } from "../lib/floorFinish";
 import { chevronBlocks, herringboneBlocks, hexagons, hexTile, parquetTile, type Block, type XY } from "../lib/floorPattern";
 
@@ -12,7 +13,8 @@ export { FLOOR_COLOUR };
  * Procedural finishes drawn on canvases once and cached. Each texture covers
  * a known patch of wall or floor in metres (TILE_M) and geometry carries UVs
  * in metres, so bricks, boards and tiles keep their real size on any wall.
- * Every finish has a matching height map used as a bump map for relief.
+ * Every finish has a matching height map; normalMaps.ts turns it into a normal map for relief and a roughness map
+ * with rougher joints (the colour does not change either, so both are shared per pattern).
  */
 
 export type Ctx = CanvasRenderingContext2D;
@@ -96,6 +98,31 @@ const FLOOR_ROUGHNESS: Record<TexturedFloor, number> = {
   hexagon: 0.4,
 };
 const WALL_ROUGHNESS: Record<WallFinish, number> = { brick: 0.95, render: 0.92, pebbledash: 1, stone: 0.95, cladding: 0.85 };
+/** Extra roughness in the joints (low in the height map), and how strongly each finish's normal map shows. Render stays flat. */
+const WALL_JOINT: Record<WallFinish, number> = { brick: 0.05, render: 0, pebbledash: 0, stone: 0.05, cladding: 0.1 };
+const WALL_NORMAL: Record<WallFinish, number> = { brick: 1, render: 0, pebbledash: 0.6, stone: 1.2, cladding: 0.8 };
+const BOARDS = { normal: 0.5, joint: 0.15, grain: 0.15 };
+const TILES = { normal: 0.8, joint: 0.5 };
+/** Floors: normal-map strength, extra roughness in joints and grout, and wood grain (see RoughSpec). */
+const FLOOR_DEPTH: Record<TexturedFloor, { normal: number; joint: number; grain?: number }> = {
+  oak: BOARDS,
+  laminate: { normal: 0.5, joint: 0.1, grain: 0.08 },
+  tile: TILES,
+  quarry: { normal: 0.8, joint: 0.25 },
+  stone: { normal: 1.2, joint: 0.15 },
+  carpet: { normal: 0.6, joint: 0 },
+  vinyl: { normal: 0.3, joint: 0.1 },
+  concrete: { normal: 0.3, joint: 0 },
+  herringbone: BOARDS,
+  chevron: BOARDS,
+  wideoak: { normal: 0.5, joint: 0.1, grain: 0.15 },
+  porcelain: { normal: 0.8, joint: 0.55 },
+  microcement: { normal: 0.2, joint: 0 },
+  terrazzo: { normal: 0.8, joint: 0.4 },
+  encaustic: { normal: 0.8, joint: 0.2 },
+  victorian: { normal: 0.8, joint: 0.4 },
+  hexagon: { normal: 0.8, joint: 0.45 },
+};
 
 /** Width of a wallpaper roll, metres; patterns repeat across it. */
 const ROLL = 0.53;
@@ -131,9 +158,11 @@ function coverTile(p: Pattern, strip: boolean): [number, number] {
 }
 const COVER_PX: Record<"stripe" | "floral" | "rose" | "trail" | "sprig" | "tiles" | "squares", number> = { stripe: 512, floral: 900, rose: 900, trail: 900, sprig: 900, tiles: 512, squares: 700 };
 const COVER_ROUGHNESS = { stripe: 0.8, floral: 0.88, rose: 0.85, trail: 0.88, sprig: 0.88, tiles: 0.28, squares: 0.3, brick: WALL_ROUGHNESS.brick };
-/** Roughness and bump strength of a wall covering (the modern ones are defined with their generators). */
+const COVER_JOINT = { stripe: 0, floral: 0, rose: 0, trail: 0, sprig: 0, tiles: 0.55, squares: 0.55, brick: WALL_JOINT.brick };
+/** Roughness, joint roughness and normal-map strength of a wall covering (the modern ones are defined with their generators). */
 const coverRoughness = (p: Pattern) => (isModern(p) ? modernRoughness(p) : COVER_ROUGHNESS[p]);
-const coverBump = (p: Pattern) => (isModern(p) ? modernBump(p) : p === "brick" ? 2 : 1);
+const coverJoint = (p: Pattern) => (isModern(p) ? modernJointRoughness(p) : COVER_JOINT[p]);
+const coverNormalScale = (p: Pattern) => (isModern(p) ? modernNormalScale(p) : p === "brick" ? WALL_NORMAL.brick : 0.8);
 
 /** Small deterministic PRNG so textures look the same on every load. */
 export function rng(seed: number) {
@@ -1458,7 +1487,8 @@ export type MatSpec =
   | { kind: "ext"; finish: WallFinish; color: string }
   | { kind: "paint"; color: string }
   | { kind: "cover"; covering: Pattern; color: string; accent: string | null }
-  | { kind: "plain"; color: string; roughness?: number; metalness?: number }
+  /** `clearcoat` (0..1) makes it a gloss-painted surface: a physical material with a clear lacquer over the paint. */
+  | { kind: "plain"; color: string; roughness?: number; metalness?: number; clearcoat?: number }
   /** Window glass; a pane's faces glow at night by their `glowSlot` vertex attribute and the material's lit-room mask (see buildShell). */
   | { kind: "glass" }
   | { kind: "floor"; finish: FloorFinish; color: string; selected?: boolean; grout?: string };
@@ -1472,7 +1502,7 @@ export function matKey(s: MatSpec): string {
     case "cover":
       return `cover|${s.covering}|${s.color}|${s.accent ?? ""}`;
     case "plain":
-      return `plain|${s.color}|${s.roughness ?? ""}|${s.metalness ?? ""}`;
+      return `plain|${s.color}|${s.roughness ?? ""}|${s.metalness ?? ""}|${s.clearcoat ?? ""}`;
     case "glass":
       return "glass";
     case "floor":
@@ -1481,7 +1511,6 @@ export function matKey(s: MatSpec): string {
 }
 
 const SELECTED = "#ffd166";
-const heightMaps = new Map<string, THREE.CanvasTexture>();
 const floorMaps = new Map<string, THREE.CanvasTexture>();
 /** Floor colour maps kept, oldest first: dragging a colour picker draws one per step. */
 const MAX_FLOOR_MAPS = 20;
@@ -1594,27 +1623,22 @@ export function setGlassMode(high: boolean, lit: boolean) {
   for (const m of glassMaterials) styleGlass(m);
 }
 
-/** Height maps are seeded, so one per pattern serves every colour. */
-function bumpFor(key: string, height: HTMLCanvasElement, tile: [number, number]) {
-  let t = heightMaps.get(key);
-  if (!t) {
-    t = toTexture(height, tile, false);
-    heightMaps.set(key, t);
-  }
-  return t;
-}
-
-const wallBump = (finish: WallFinish, painted: Painted) => bumpFor(finish, painted.height, WALL_TILE[finish]);
+/** Joints rougher than the face, in a map: the material's roughness becomes 1 and the base level is baked in. */
+const rough = (base: number, joint: number, grain?: number): RoughSpec => ({ base, joint, grain });
 
 function create(s: MatSpec): THREE.Material {
   switch (s.kind) {
     case "ext": {
       const painted = drawWall(s.finish, s.color);
+      const tile = WALL_TILE[s.finish];
+      // Render stays flat; the others take the normal and roughness maps of their (colour-free) height map.
+      const flat = s.finish === "render";
       return new THREE.MeshStandardMaterial({
-        map: toTexture(painted.color, WALL_TILE[s.finish], true),
-        bumpMap: s.finish === "render" ? null : wallBump(s.finish, painted),
-        bumpScale: s.finish === "brick" ? 2 : 1.5,
-        roughness: WALL_ROUGHNESS[s.finish],
+        map: toTexture(painted.color, tile, true),
+        normalMap: flat ? null : normalFromHeight(s.finish, painted.height, tile),
+        normalScale: new THREE.Vector2(WALL_NORMAL[s.finish], WALL_NORMAL[s.finish]),
+        roughnessMap: flat ? null : roughnessFromPainted(s.finish, painted, rough(WALL_ROUGHNESS[s.finish], WALL_JOINT[s.finish]), tile),
+        roughness: flat ? WALL_ROUGHNESS[s.finish] : 1,
       });
     }
     case "paint":
@@ -1624,46 +1648,50 @@ function create(s: MatSpec): THREE.Material {
       const strip = s.covering === "tiles" && s.accent !== null;
       const tile = coverTile(s.covering, strip);
       const painted = drawCover(s.covering, s.color, s.accent);
-      // Inside brick shares the outside brick's height map.
-      const bump = painted.height && bumpFor(s.covering === "brick" ? "brick" : `cover|${s.covering}|${strip}`, painted.height, tile);
+      // Inside brick shares the outside brick's maps.
+      const key = s.covering === "brick" ? "brick" : `cover|${s.covering}|${strip}`;
+      const normalMap = painted.height && normalFromHeight(key, painted.height, tile);
+      const roughnessMap = painted.height && roughnessFromPainted(key, painted, rough(coverRoughness(s.covering), coverJoint(s.covering)), tile);
+      const n = coverNormalScale(s.covering);
       return new THREE.MeshStandardMaterial({
         map: toTexture(painted.color, tile, true),
-        bumpMap: bump,
-        bumpScale: coverBump(s.covering),
-        roughness: coverRoughness(s.covering),
+        normalMap,
+        normalScale: new THREE.Vector2(n, n),
+        roughnessMap,
+        roughness: roughnessMap ? 1 : coverRoughness(s.covering),
       });
     }
     case "plain":
+      if (s.clearcoat)
+        return new THREE.MeshPhysicalMaterial({ color: s.color, roughness: s.roughness ?? 0.8, metalness: s.metalness ?? 0, clearcoat: s.clearcoat, clearcoatRoughness: 0.12 });
       return new THREE.MeshStandardMaterial({ color: s.color, roughness: s.roughness ?? 0.8, metalness: s.metalness ?? 0 });
     case "glass":
       return glassMaterial();
     case "floor": {
       if (s.finish === "plain") return new THREE.MeshStandardMaterial({ color: s.selected ? SELECTED : s.color, roughness: 0.85 });
       // Colour maps are drawn per colour (grout and joints keep their own colour);
-      // the pattern is seeded, so every colour shares one height map.
+      // the pattern is seeded, so every colour shares one normal and one roughness map.
       const key = `${s.finish}|${s.color}|${s.grout ?? ""}`;
+      const tile = FLOOR_TILE[s.finish];
+      const depth = FLOOR_DEPTH[s.finish];
+      let painted: Painted | null = null;
+      const paint = () => (painted ??= drawFloor(s.finish as TexturedFloor, s.color, s.grout));
       let map = floorMaps.get(key);
-      let bump = floorMaps.get(s.finish + "|h");
       if (map) {
         floorMaps.delete(key);
         floorMaps.set(key, map);
-      }
-      if (!map || !bump) {
-        const painted = drawFloor(s.finish, s.color, s.grout);
-        map = toTexture(painted.color, FLOOR_TILE[s.finish], true);
+      } else {
+        map = toTexture(paint().color, tile, true);
         floorMaps.set(key, map);
-        if (!bump) {
-          bump = toTexture(painted.height, FLOOR_TILE[s.finish], false);
-          floorMaps.set(s.finish + "|h", bump);
-        }
         dropOldFloorMaps();
       }
       return new THREE.MeshStandardMaterial({
         map,
-        bumpMap: bump,
-        bumpScale: 1,
+        normalMap: normalFromHeight(`floor|${s.finish}`, () => paint().height, tile),
+        normalScale: new THREE.Vector2(depth.normal, depth.normal),
+        roughnessMap: roughnessFromPainted(`floor|${s.finish}`, paint, rough(FLOOR_ROUGHNESS[s.finish], depth.joint, depth.grain), tile),
         color: s.selected ? SELECTED : "#ffffff",
-        roughness: FLOOR_ROUGHNESS[s.finish],
+        roughness: 1,
       });
     }
   }
@@ -1698,7 +1726,7 @@ export function inUse(): { materials: Set<THREE.Material>; textures: Set<THREE.T
 
 /** Free the oldest floor colour maps beyond the cap, with the cached materials drawn with them. Maps on screen stay. */
 function dropOldFloorMaps() {
-  const colourKeys = [...floorMaps.keys()].filter((k) => !k.endsWith("|h"));
+  const colourKeys = [...floorMaps.keys()];
   const excess = colourKeys.slice(0, Math.max(0, colourKeys.length - MAX_FLOOR_MAPS));
   if (!excess.length) return;
   const live = inUse();

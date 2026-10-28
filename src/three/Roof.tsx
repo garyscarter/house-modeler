@@ -187,8 +187,8 @@ export function Roof({ model }: { model: HouseModel }) {
     return {
       tiles: new THREE.MeshStandardMaterial({
         map: tex.map,
-        bumpMap: low ? null : tex.bump,
-        bumpScale: 2,
+        normalMap: low ? null : tex.normal,
+        normalScale: new THREE.Vector2(tex.normalScale, tex.normalScale),
         roughness: tex.roughness,
         side: THREE.DoubleSide,
       }),
