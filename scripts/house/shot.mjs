@@ -64,6 +64,8 @@ try {
   for (const v of views) {
     // The view cube buttons; Home is the camera the app opens on.
     const button = page.locator(`[aria-label="${VIEWS[v]}"]`).first();
+    await ready3d();
+    await button.waitFor({ timeout: 20000 }).catch(() => {});
     if (!(await button.count())) {
       errors.push(`No view cube button for "${v}"; skipped.`);
       continue;
