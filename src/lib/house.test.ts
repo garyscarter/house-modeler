@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_HOUSE_ID, houseList } from "../houses";
-import { currentHouse, pickHouse, storageSuffix } from "./house";
+import { chooseHouse, currentHouse, pickHouse, resolveHouse, storageSuffix } from "./house";
 
 describe("pickHouse", () => {
   const ids = ["a-house", "b-house"];
@@ -38,5 +38,40 @@ describe("the registry", () => {
     expect(houseList()[0].id).toBe(DEFAULT_HOUSE_ID);
     expect(currentHouse().id).toBe(DEFAULT_HOUSE_ID);
     expect(currentHouse().presets[currentHouse().main]).toBeTruthy();
+  });
+});
+
+describe("choosing a house when storage is blocked", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reloads on a ?house= query when localStorage throws", () => {
+    const assign = vi.fn();
+    const reload = vi.fn();
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => { throw new Error("blocked"); } });
+    vi.stubGlobal("location", { href: "https://example.test/app/?x=1", search: "?x=1", assign, reload });
+    chooseHouse("my-house");
+    expect(reload).not.toHaveBeenCalled();
+    expect(assign).toHaveBeenCalledWith("https://example.test/app/?x=1&house=my-house");
+  });
+
+  it("just reloads when the choice was remembered", () => {
+    const assign = vi.fn();
+    const reload = vi.fn();
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem });
+    vi.stubGlobal("location", { href: "https://example.test/", search: "", assign, reload });
+    chooseHouse("my-house");
+    expect(setItem).toHaveBeenCalledWith("storey-house", "my-house");
+    expect(reload).toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("reads the query after the meta tag and before localStorage", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "_template", setItem: () => undefined });
+    vi.stubGlobal("location", { href: "", search: `?house=${DEFAULT_HOUSE_ID}` });
+    expect(resolveHouse()).toBe(DEFAULT_HOUSE_ID);
+    vi.stubGlobal("document", { querySelector: () => ({ content: "gone" }) });
+    expect(resolveHouse()).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

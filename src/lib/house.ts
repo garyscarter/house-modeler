@@ -48,12 +48,31 @@ function storedHouse(): string | null {
   }
 }
 
+/** The `?house=<id>` query, the fallback when localStorage cannot remember the choice across a reload. */
+function queryHouse(): string | null {
+  try {
+    return typeof location === "undefined" ? null : new URLSearchParams(location.search).get("house");
+  } catch {
+    return null;
+  }
+}
+
 let forced: string | null = null;
 
 /** The active house, decided synchronously at startup (see `pickHouse`). */
 export function activeHouseId(): string | null {
-  if (forced) return forced;
-  return pickHouse({ meta: metaHouse(), stored: storedHouse(), ids: Object.keys(HOUSES) });
+  return forced ?? resolveHouse();
+}
+
+/** The startup rule on its own: meta tag, then the `?house=` query, then localStorage, then the only house. */
+export function resolveHouse(): string | null {
+  const ids = Object.keys(HOUSES);
+  const meta = metaHouse();
+  if (!meta) {
+    const q = queryHouse();
+    if (q && ids.includes(q)) return q;
+  }
+  return pickHouse({ meta, stored: storedHouse(), ids });
 }
 
 /** True when the server pinned the house (its passcode opens one house), so switching is hidden. */
@@ -67,7 +86,11 @@ export function chooseHouse(id: string): void {
   try {
     localStorage.setItem(HOUSE_KEY, id);
   } catch {
-    /* private mode: the reload falls back to the picker */
+    // Storage is blocked (private mode): carry the choice in the address for this visit instead.
+    const url = new URL(location.href);
+    url.searchParams.set("house", id);
+    location.assign(url.toString());
+    return;
   }
   location.reload();
 }
