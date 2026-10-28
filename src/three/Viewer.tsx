@@ -26,6 +26,8 @@ import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 import { Loader } from "../components/Loader";
 import "./Viewer.css";
+// Before any canvas compiles a shader: the variance shadows' light-bleed cut.
+import "./softShadows";
 
 interface ViewerProps {
   model: HouseModel;
@@ -166,7 +168,7 @@ function ViewerImpl(props: ViewerProps) {
       )}
       <Canvas
         key={canvasKey}
-        shadows="percentage"
+        shadows="variance"
         gl={{ toneMapping: THREE.NeutralToneMapping }}
         frameloop={frameloop}
         dpr={DPR[quality]}

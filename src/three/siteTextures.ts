@@ -492,7 +492,7 @@ export function siteTexture(kind: TextureKind): SiteTexture {
     const map = new THREE.CanvasTexture(canvas);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     map.colorSpace = THREE.SRGBColorSpace;
-    map.anisotropy = 8;
+    map.anisotropy = 16;
     map.repeat.set(1 / metres, 1 / metres);
     t = { map, metres };
     cache.set(kind, t);

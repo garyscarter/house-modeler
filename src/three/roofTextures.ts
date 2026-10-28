@@ -25,7 +25,7 @@ function texture(c: HTMLCanvasElement, sizeM: [number, number], color: boolean) 
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(1 / sizeM[0], 1 / sizeM[1]);
-  t.anisotropy = 8;
+  t.anisotropy = 16;
   if (color) t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
