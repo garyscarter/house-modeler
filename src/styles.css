@@ -125,6 +125,12 @@ main[data-tab="3d"] { --card-clear: 196px; }
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }
 .viewer-loading { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); pointer-events: none; }
+.viewer-busy {
+  position: absolute; left: 50%; bottom: calc(var(--float-gap) + 64px); transform: translateX(-50%); z-index: 2;
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: var(--pill); color: var(--text); font-size: 13px;
+  background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
+  box-shadow: var(--shadow-card); pointer-events: none;
+}
 .split { display: flex; flex: 1; min-width: 0; }
 .split .viewer + .viewer { border-left: 2px solid var(--panel); }
 .viewer { position: relative; flex: 1; min-width: 0; }

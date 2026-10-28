@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
 import { House } from "./House";
-import { lampStats } from "./lampPool";
+import { lampStats, useLampsReady } from "./lampPool";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { STICKY_MS, wheelClassifier, wheelPixels, wheelZoomFactor } from "../lib/wheelGesture";
@@ -26,6 +26,9 @@ import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
 import { Loader } from "../components/Loader";
+import { useSunInfo } from "./useSun";
+import { isLightItem, lightsMaster, lightsOn } from "../lib/lights";
+import { byId } from "../lib/catalogue";
 import "./Viewer.css";
 
 interface ViewerProps {
@@ -159,6 +162,7 @@ function ViewerImpl(props: ViewerProps) {
       {chrome && <ViewCube />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
+      {chrome && compiled !== null && !lost && <LightsWarming model={model} />}
       {(compiled === null || lost) && (
         <div className="viewer-loading" role="status">
           <Loader kind="blueprint" size={40} />
@@ -223,6 +227,24 @@ function ViewerImpl(props: ViewerProps) {
       <ContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
     </ViewedVariant.Provider>
+  );
+}
+
+/**
+ * "Switching the lights on" while the lights are wanted but their shaders are still being built (useLampWarming): the
+ * house holds them off meanwhile, so this is what the owner sees instead of a page that stops.
+ */
+function LightsWarming({ model }: { model: HouseModel }) {
+  const ready = useLampsReady();
+  const sun = useSunInfo();
+  const wanted = useStore((s) => lightsOn(lightsMaster(s.sun), sun?.active ? sun.position.altitude : null));
+  const hasLights = useMemo(() => model.floors.some((f) => (f.fixtures ?? []).some((fx) => { const item = byId(fx.type); return !!item && isLightItem(item); })), [model.floors]);
+  if (ready || !wanted || !hasLights) return null;
+  return (
+    <div className="viewer-busy" role="status">
+      <Loader kind="lift" size={18} />
+      Switching the lights on
+    </div>
   );
 }
 
