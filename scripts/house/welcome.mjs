@@ -17,7 +17,12 @@ out.push(...soundcheckLines(id));
 if (id && houseIsIn(id)) {
   const next = nextEra(id);
   // The hook shows the bracelet and the next era while the show is still on; once the encore is done it stays quiet.
-  if (hook && next) out.push(bracelet(id), `Next up: ${next.name}. In Claude Code run /eras-tour to play it.`);
+  if (hook && next)
+    out.push(
+      bracelet(id),
+      `Next up: ${next.name}. In Claude Code run /eras-tour to play it.`,
+      `Note for Claude: open your first reply by offering, in one line, to play ${next.name} now with /eras-tour, unless the person has asked for something else.`,
+    );
   if (!hook && !quiet) {
     out.push(bracelet(id));
     out.push(next ? `The show's on: run /eras-tour to play ${next.name}, or VITE_HOUSES=${id} npm run dev to see it.` : `That's the whole show. VITE_HOUSES=${id} npm run dev to see it.`);
@@ -27,7 +32,11 @@ if (id && houseIsIn(id)) {
 } else if (id) {
   if (!(intakeState(id).ready && (hook || quiet))) out.push(...intakeLines(id));
   // A ready intake still needs its call to action in the hook, or the bracelet arrives with nothing to do next.
-  if (hook && intakeState(id).ready) out.push("Ed's set is done. Taylor's on next: in Claude Code run /eras-tour.");
+  if (hook && intakeState(id).ready)
+    out.push(
+      "Ed's set is done. Taylor's on next: in Claude Code run /eras-tour.",
+      "Note for Claude: open your first reply by offering, in one line, to start /eras-tour now, unless the person has asked for something else.",
+    );
   if (!quiet && (intakeState(id).ready || beadsOf(id).length)) out.push(bracelet(id));
 } else {
   // No house chosen: greet. A first-time checkout (no local file) is greeted once and then marked as welcomed.

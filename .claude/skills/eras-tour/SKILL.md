@@ -50,7 +50,7 @@ Run `npm run welcome` first: it lists the unticked items and missing files. Then
 3. Rewrite `src/houses/<id>/house.ts` in **floorplan pixels** (wall centre lines) with the helpers at the top of `src/houses/listing-91770873/house.ts`: `rect(name, x0, y0, x1, y1, dims?)`, `poly(name, [[x,y],...], dims?)` and `op(kind, x, y, "h"|"v", widthM)`. Pass the printed sizes as `dims`. One floor object per floor, with `pxPerM`. Keep the template's preset shape and export names.
 4. `npm run house:overlay <id> [--floor n] [--out file.png]`, then **look at the image** (Read it). Fix rooms that miss the walls and openings off their edges; repeat until it lines up.
 5. Compare each room's traced area with its printed size (the lint in `src/houses/lint.ts` allows 8%); note any difference over a few per cent in NOTES.md.
-6. Take a 3D screenshot: start `VITE_HOUSES=<id> npx vite --port 5173`, adapt the pattern in `scripts/screenshots.mjs` (Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`). Look at it.
+6. Take pictures: `npm run house:shot <id>` (it starts its own dev server and saves 3D and per-floor plan pictures; it prints the paths). **Look at them** (Read them) and fix what looks wrong.
 7. `npm run check`; bump `version`; commit "Trace the <id> floorplan".
 
 ## Speak Now: the one round of questions
@@ -69,7 +69,7 @@ From the map: boundary, neighbours' footprints, drive, front garden, boundary ty
 ## Reputation: checks, and the choice
 
 1. `npm run check` and `npm run build` must pass (the house's `house.test.ts` runs the lint).
-2. Screenshots for the owner: 3D from front, rear and top, and the ground-floor plan. Send them (show the images in the reply; say where the files are).
+2. Screenshots for the owner: `npm run house:shot <id>` (3D home and top views, every floor's plan). Send them (show the images in the reply; say where the files are).
 3. Explain the fidelity pass, in these words:
 
    > The basic tiers (Debut to 1989) give a house that is the right shape, on the right plot, facing the right way: good enough to plan a layout, compare As listed with Proposed, cost it and check planning rules. The fidelity pass makes the 3D look like your house: real finishes on each wall and floor, the actual kitchen and wardrobes, radiators where they hang, windows at their real heights, the garden as it is. It costs sessions (about two for Lover, four or more for Taylor's Version), needs good photos of every room and every outside face, and each pass bumps the preset version, so your browser is offered the update and keeps your edits. You can stop after any tier and come back later.
