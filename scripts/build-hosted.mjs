@@ -3,7 +3,7 @@
 // Usage: `npm run build:hosted`, then publish dist-hosted/house-modeler.html
 // with every file under dist-hosted/assets (see CLAUDE.md).
 // `npm run build:hosted -- --house <id>` builds another house (default: the id in src/houses/default.json): only that house's code
-// and photos go into the build, and the build fails if anything from another house turns up.
+// and assets go into the build, and the build fails if anything from another house turns up.
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 

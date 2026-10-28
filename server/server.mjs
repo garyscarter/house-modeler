@@ -451,7 +451,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.requestTimeout = 180_000; // room for a slow upload of a project with photos
+server.requestTimeout = 180_000; // room for a slow upload of a project with a large floorplan image
 server.headersTimeout = 20_000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Storey listening on port ${PORT}, serving ${ROOT}`);

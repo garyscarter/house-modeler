@@ -75,7 +75,7 @@ try {
     const put = await fetch(`${base}/api/project`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: s.cookie, Origin: base },
-      body: JSON.stringify({ baseRevision: 0, data: { version: 1, variants: {}, photos: [], sites: {}, marker: who.house } }),
+      body: JSON.stringify({ baseRevision: 0, data: { version: 1, variants: {}, sites: {}, marker: who.house } }),
     });
     ok(put.ok, `${who.house}: PUT /api/project is accepted (${put.status})`);
     const back = await (await get("/api/project", s.cookie)).json();

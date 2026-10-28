@@ -19,7 +19,7 @@ Merge order: 0, then A, B, C, D in any order (no shared files after 0). Each bui
 
 ## 1. Decisions made here (agents: don't reopen these)
 
-1. **A house is a folder.** `src/houses/<id>/` with `index.ts` (default export: `HouseDef`), `house.ts` (the tracing), `assets.ts`, `assets/` (floorplan and photos), `NOTES.md`, `house.test.ts`. The id is the folder name, a slug, never an address: `listing-91770873` is the first.
+1. **A house is a folder.** `src/houses/<id>/` with `index.ts` (default export: `HouseDef`), `house.ts` (the tracing), `assets.ts`, `assets/` (the floorplan; photos stay in `reference/<id>/photos/`), `NOTES.md`, `house.test.ts`. The id is the folder name, a slug, never an address: `listing-91770873` is the first.
 2. **The registry is a virtual module.** `virtual:houses` (a tiny plugin in `vite.config.ts`) lists the folders under `src/houses/` at build time and emits `export const HOUSES = { "<id>": { id, name, load: () => import("/src/houses/<id>/index.ts") } }`. Folders whose names start with `_` are skipped unless named in `VITE_HOUSES`. When `VITE_HOUSES` (comma-separated ids) is set, only those folders are emitted, so nothing else, photos included, enters that build. The display name comes from `src/houses/<id>/meta.json` (`{ "name": "Listing 91770873" }`), read by the plugin so the picker has names without loading a house. Vitest gets the same module through the plugin (vite.config.ts is shared).
 3. **The active house is decided synchronously at startup**, in `src/lib/house.ts`: a `<meta name="storey-house" content="<id>">` injected by the server wins (and hides switching); else `localStorage["storey-house"]`; else the only house when there is one; else none, and `main.tsx` renders the picker before the app. The store module reads `activeHouseId()` at import time, so the picker must render before `App` is imported (`React.lazy` the app behind the choice). Picking writes localStorage and reloads; so does "Switch house…".
 4. **Per-house browser storage.** Persist name stays `house-modeler` for `listing-91770873` (existing saves keep working) and becomes `house-modeler/<id>` for any other house; `IMG_KEY_PREFIX` likewise (`house-modeler/img/` vs `house-modeler/<id>/img/`); every other localStorage key the app writes (remembered startup answers, sync revision, panel prefs that hold project state) is suffixed `/<id>` for non-default houses. `WRITER_LOCK` is per house too.
@@ -45,8 +45,6 @@ Merge order: 0, then A, B, C, D in any order (no shared files after 0). Each bui
     site: string;            // main site preset id
     tiles: WelcomeTile[];
     floorplan: () => Promise<string>;                       // data URL
-    photos: (onProgress?: (done: number, total: number) => void) => Promise<Photo[]>;
-    photoMarker?: string;    // a photo name that shows the built-in photos are loaded ("front-1")
     placeholderImage: () => string;
   }
   ```
@@ -59,7 +57,7 @@ Merge order: 0, then A, B, C, D in any order (no shared files after 0). Each bui
 
 ## 3. Chunk A: app wiring (Gracie Abrams)
 
-Replace every direct use of the listing with the active house. Grep for `houses/listing-91770873`, `LISTING_`, `listing91770873`, `listingSite`, `listingPhotos`, `91770873`, `Listing 91770873` outside `src/houses/`; the list at the time of writing:
+Replace every direct use of the listing with the active house. Grep for `houses/listing-91770873`, `LISTING_`, `listing91770873`, `listingSite`, `91770873`, `Listing 91770873` outside `src/houses/`; the list at the time of writing:
 
 | File | Change |
 |---|---|
@@ -78,7 +76,7 @@ Replace every direct use of the listing with the active house. Grep for `houses/
 | `src/components/Welcome.tsx` | title and tiles from `currentHouse()`; the tile loads `preset` into `variant`. |
 | `src/components/HouseMenu.tsx` | "Switch house…" when `houseList().length > 1 && !isHouseFixed()`: opens `HousePicker` in a modal. |
 | `src/components/HousePicker.tsx` | brand mark, "Which house?", one tile per house (name, id in mono), keyboard reachable, phone width. Uses `<Loader>` while reloading. |
-| `src/components/{ImportPanel,PhotosPanel,SitePanel,ListingUpdatesDialog,SettingsPanel}.tsx`, `src/editor/SiteEditor.tsx` | names, `photos()` and `photoMarker` from the house. |
+| `src/components/{ImportPanel,SitePanel,ListingUpdatesDialog,SettingsPanel}.tsx`, `src/editor/SiteEditor.tsx` | names from the house. |
 | `src/App.tsx` | `decideStartupPrompt(variants, house.presets, house.main, …)`. |
 
 Tests: `src/lib/house.test.ts` (chunk 0) plus updates where signatures gained a parameter. `scripts/shoot-chassis.cjs` and `scripts/test-*.cjs` must still run (they open the default house; no picker appears because one house is built unless `VITE_HOUSES` lists two).

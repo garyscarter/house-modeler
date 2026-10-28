@@ -10,7 +10,7 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-const data = (name) => ({ variants: { current: { floors: [], name } }, photos: [], sites: {}, costRates: {} });
+const data = (name) => ({ variants: { current: { floors: [], name } }, sites: {}, costRates: {} });
 
 describe("project store", () => {
   it("starts empty and saves revision 1 from base 0", () => {
