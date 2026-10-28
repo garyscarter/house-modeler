@@ -1,5 +1,5 @@
 // Render performance of the 3D view in headless Chromium (SwiftShader), for comparing commits.
-// Usage: npx vite --port 5253 & then PORT=5253 LABEL=head QUALITY=high EXTRA=1 node scripts/perf-render.cjs
+// Usage: npx vite --port 5253 & then PORT=5253 LABEL=head QUALITY=high EXTRA=1 LAMPS=3 node scripts/perf-render.cjs (LAMPS: fittings per room, pendants and spot bars)
 // Adds a pendant to every room (and floor lamps; EXTRA=1 gives Proposed more, so the lamp pool resizes on a switch),
 // wraps the renderer's render() with a GPU sync, then times layout switches, a sun move, a day and a night orbit, and
 // the lights switching, printing per step the span, render ms, draw calls, triangles and the shader program count.
@@ -17,7 +17,7 @@ const log = (...a) => console.log(LABEL, ...a);
   await page.locator('.welcome-tile').nth(1).click();
   await page.waitForSelector('.dock', { timeout: 120000 });
   await page.waitForTimeout(8000);
-  await page.evaluate(([q, x]) => { window.__perfQuality = q; window.__perfExtra = x; }, [QUALITY, process.env.EXTRA === '1']);
+  await page.evaluate(([q, x, n]) => { window.__perfQuality = q; window.__perfExtra = x; window.__perfLamps = n; }, [QUALITY, process.env.EXTRA === '1', Number(process.env.LAMPS || 1)]);
   // Lamps: a pendant in every room of both layouts, and a floor lamp in the first two rooms of each ground floor.
   await page.evaluate(() => {
     const s = window.__houseStore.getState();
@@ -28,7 +28,7 @@ const log = (...a) => console.log(LABEL, ...a);
         f.rooms.forEach((r, ri) => {
           const pts = r.poly || r.points || r.polygon || []; if (!pts.length) return;
           const c = pts.reduce((a, p) => [a[0] + (p.x ?? p[0]), a[1] + (p.y ?? p[1])], [0, 0]).map((v) => v / pts.length);
-          add.push({ id: `perf-pend-${k}-${f.id}-${r.id}`, type: 'pendant', x: c[0], y: c[1], rot: 0, on: true });
+          for (let n = 0; n < (window.__perfLamps || 1); n++) add.push({ id: `perf-pend-${k}-${f.id}-${r.id}-${n}`, type: n % 2 ? 'spot-bar' : 'pendant', x: c[0] + n * 25, y: c[1] - n * 15, rot: 0, on: true });
           if (fi === 0 && (ri < 2 || (window.__perfExtra && k === 'proposed'))) add.push({ id: `perf-floor-${k}-${f.id}-${r.id}`, type: 'floor-lamp', x: c[0] + 20, y: c[1] + 20, rot: 0, on: true });
         });
         s.updateFloor(k, f.id, (fl) => ({ ...fl, fixtures: [...(fl.fixtures || []), ...add] }));
