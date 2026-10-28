@@ -65,9 +65,9 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 
 ## Adding your own house
 
-A house is a folder, `src/houses/<id>/`, with its tracing, floorplan and `NOTES.md`; the id is a slug, never an address. Photos go in `reference/<id>/photos/` for Claude and the notes, not in the house folder.
+A house is a folder, `src/houses/<id>/`, with its tracing, floorplan and `NOTES.md`; the id is a slug, never an address. Your sources (floorplan, map, intake, photos) stay in `reference/<id>/`; the photos are committed with the house, because later sessions and the fidelity pass need them, but they are not part of the app.
 
-1. Run `npm run house:start <id> "<Name>"`. It makes `reference/<id>/` with `INTAKE.md` (from `reference/_template/`) and a `photos/` folder. Fill in the intake: floorplan, photos, a north-up map with a scale, and ten short answers, ticking items as you go. About 30 minutes, no Claude needed. `npm run welcome` (and `npm run soundcheck` to check Node and the install) shows where you are, including your friendship bracelet: a bead for each era Claude has finished.
+1. Run `npm run house:start <id> "<Name>"`. It makes `reference/<id>/` with `INTAKE.md` (from `reference/_template/`) and a `photos/` folder. Fill in the intake: put the floorplan, a north-up map with a scale and the photos in `reference/<id>/`, and answer about a dozen short questions (stairs, location, boundaries, the bay), ticking items as you go. Before you finish, look through the photos for the house number, a name plate or a car number plate, and replace or remove those files yourself (or tick that you are happy for them to be in the repo): Claude lists any it sees but never alters your files. About 30 minutes, no Claude needed. `npm run welcome` (and `npm run soundcheck` to check Node and the install) shows where you are, including your friendship bracelet: a bead for each era Claude has finished.
 2. When `npm run welcome` says Ready, run `/eras-tour` in Claude Code in this repo. It scaffolds the house, traces the floorplan, builds the exterior and plot, checks them, and then offers an optional fidelity pass (finishes, garden, camera-fitted heights).
 3. Ask the repo owner to add your passcode to `PASSCODES` on Render; the passcode opens your house and keeps its project separate from the others.
 
