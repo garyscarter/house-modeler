@@ -163,3 +163,58 @@ export function intakeLines(id) {
   out.push(`Tick items in reference/${id}/INTAKE.md (change "[ ]" to "[x]") as you play them.`);
   return out;
 }
+
+// ---- Soundcheck and the surprise song (used by welcome.mjs and soundcheck.mjs) ----
+
+/** Vite 8 needs Node 20.19+ or 22.12+. */
+function nodeOk(v = process.versions.node) {
+  const [maj, min] = v.split(".").map(Number);
+  return maj > 22 || (maj === 22 && min >= 12) || (maj === 20 && min >= 19) || maj === 21 || maj === 23;
+}
+
+/**
+ * Cheap checks that the checkout can run: Node version, dependencies installed, the house folder the registry will
+ * find. Returns one { ok, label, fix } per check; nothing here starts a server or a build.
+ */
+export function soundcheck(id) {
+  const checks = [];
+  checks.push({ ok: nodeOk(), label: `Node ${process.versions.node}`, fix: "Install Node 22 (22.12 or later) from nodejs.org, then reopen the terminal." });
+  const deps = existsSync(path.join(root, "node_modules/vite/package.json")) && existsSync(path.join(root, "node_modules/react/package.json"));
+  checks.push({ ok: deps, label: "dependencies installed", fix: "Run npm ci (if it fails with an edgesOut error: npx -y npm@11.6.2 ci)." });
+  checks.push({ ok: existsSync(path.join(root, "src/houses/default.json")), label: "houses registry", fix: "Pull main again: src/houses/default.json is missing." });
+  if (id && houseIsIn(id)) {
+    const meta = path.join(root, "src/houses", id, "meta.json");
+    let named = false;
+    try {
+      named = typeof JSON.parse(readFileSync(meta, "utf8")).name === "string";
+    } catch {}
+    checks.push({ ok: named, label: `src/houses/${id}/meta.json`, fix: `Give the house a name: {"name": "..."} in src/houses/${id}/meta.json.` });
+  }
+  return checks;
+}
+
+/** One line for the welcome when everything passes, else a line per failing check with its fix. */
+export function soundcheckLines(id) {
+  const bad = soundcheck(id).filter((c) => !c.ok);
+  if (!bad.length) return [];
+  return ["Soundcheck first, before anyone goes on:", ...bad.map((c) => `  [ ] ${c.label}: ${c.fix}`)];
+}
+
+/**
+ * A random fact from the house's NOTES.md: a bullet line with some substance, cut to one line. Undefined when the
+ * notes have no facts yet. `pick` is for tests (0..1).
+ */
+export function surpriseSong(id, pick = Math.random()) {
+  const file = path.join(root, "src/houses", id, "NOTES.md");
+  if (!existsSync(file)) return undefined;
+  const facts = readFileSync(file, "utf8")
+    .split("\n")
+    .filter((l) => /^\s*[-*]\s+/.test(l))
+    .map((l) => l.replace(/^\s*[-*]\s+/, "").replace(/\*\*/g, "").replace(/`/g, "").trim())
+    .filter((l) => l.length > 30);
+  if (!facts.length) return undefined;
+  const fact = facts[Math.floor(pick * facts.length) % facts.length];
+  // The first sentence, unless it is only a lead-in ("Chimney breasts:"), in which case the line itself.
+  const first = /:$/.test(fact.split(/(?<=\.)\s/)[0]) || fact.split(/(?<=\.)\s/)[0].length < 30 ? fact : fact.split(/(?<=\.)\s/)[0];
+  return first.length > 160 ? first.slice(0, 157).trimEnd() + "…" : first;
+}

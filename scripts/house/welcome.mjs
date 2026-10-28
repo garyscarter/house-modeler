@@ -1,7 +1,7 @@
 // Where am I? `npm run welcome` prints the right next step for this checkout, from the gitignored .storey-local.json.
 // --hook   for the SessionStart hook: silent unless there is something new (first welcome) or the intake is not ready yet.
 // --quiet  silent when the house is ready or no house is being set up.
-import { houseIsIn, intakeLines, intakeState, readLocal, welcomeText, writeLocal } from "./_lib.mjs";
+import { houseIsIn, intakeLines, intakeState, readLocal, soundcheckLines, surpriseSong, welcomeText, writeLocal } from "./_lib.mjs";
 
 const hook = process.argv.includes("--hook");
 const HOOK_NOTE =
@@ -11,8 +11,15 @@ const out = [];
 const local = readLocal();
 const id = local && typeof local.house === "string" ? local.house : null;
 
+// The soundcheck always comes first, hook or not: nothing else is worth saying if the checkout cannot run.
+out.push(...soundcheckLines(id));
+
 if (id && houseIsIn(id)) {
-  if (!hook && !quiet) out.push("The show's on: run /eras-tour to pick up the next era, or VITE_HOUSES=" + id + " npm run dev to see it.");
+  if (!hook && !quiet) {
+    out.push("The show's on: run /eras-tour to pick up the next era, or VITE_HOUSES=" + id + " npm run dev to see it.");
+    const song = surpriseSong(id);
+    if (song) out.push(`Tonight's surprise song: ${song}`);
+  }
 } else if (id) {
   if (!(intakeState(id).ready && (hook || quiet))) out.push(...intakeLines(id));
 } else {
