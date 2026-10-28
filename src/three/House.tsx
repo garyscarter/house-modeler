@@ -1,4 +1,4 @@
-import { Suspense, memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, memo, useEffect, useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
 import { usePanelPrefs } from "../components/panelPrefs";
@@ -122,10 +122,18 @@ export function House({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lampsOn, floorKey, model, blocked],
   );
-  // The pool of real lights is sized to the house, so its shaders change only when a light fitting is added or removed.
-  const quality = useStore((s) => s.settings.quality);
-  const pool = useRef<PoolSizes | null>(null);
-  const sizes = useMemo(() => (pool.current = poolFor(model, POOL[quality], pool.current)), [model, quality]);
+  // The pool of real lights is sized to the house, both layouts together, so its shaders change only when a light
+  // fitting is added or removed, never when the view switches between As listed and Proposed. The selector returns a
+  // string, so a change to either layout re-renders this only when the sizes move.
+  const sizeKey = useStore((s) => {
+    const models = [s.variants.current, s.variants.proposed].filter((m): m is HouseModel => !!m);
+    const p = poolFor(models.length ? models : model, POOL[s.settings.quality]);
+    return `${p.point}|${p.spot}|${p.casters}`;
+  });
+  const sizes = useMemo<PoolSizes>(() => {
+    const [point, spot, casters] = sizeKey.split("|").map(Number);
+    return { point, spot, casters };
+  }, [sizeKey]);
   const invalidate = useThree((s) => s.invalidate);
   const glow = lampGlow(true, altitude);
   useEffect(() => {

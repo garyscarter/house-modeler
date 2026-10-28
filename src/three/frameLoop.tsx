@@ -194,7 +194,9 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
           }
           // Not compileAsync's own promise: a render in between points materials back at the other variant, so poll these programs.
           const end = performance.now() + COMPILE_TIMEOUT;
-          while (!cancelled && performance.now() < end && !added.every((p) => (p as unknown as { isReady(): boolean }).isReady())) await new Promise((r) => setTimeout(r, 16));
+          // A program released in the meantime (a material disposed) drops out of the list; don't read it.
+          const ready = (p: THREE.WebGLProgram | undefined) => !p || typeof (p as unknown as { isReady?: () => boolean }).isReady !== "function" || (p as unknown as { isReady(): boolean }).isReady();
+          while (!cancelled && performance.now() < end && !added.every(ready)) await new Promise((r) => setTimeout(r, 16));
           // A program's first use checks its link and reads its uniforms, which blocks until it is linked (at once
           // where the driver can't link in parallel): do that here, a few per frame, not in the frame that switches.
           for (let i = 0; i < added.length && !cancelled; i += WARM_PER_FRAME) {

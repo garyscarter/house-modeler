@@ -142,6 +142,15 @@ describe("light fixtures", () => {
     expect(poolFor(model, POOL.high, prev)).toBe(prev);
     expect(poolFor({ ...model, floors: [g] }, POOL.high, prev)).not.toBe(prev);
   });
+  it("sized to both layouts, the pool fits whichever needs more of each kind, so a switch never changes the shader light counts", () => {
+    const bare = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [] } as unknown as Floor;
+    const none = { floors: [{ ...bare, fixtures: [] }], ceilingHeight: 2.4 };
+    const withLamps = { floors: [{ ...bare, fixtures: [fx("pendant"), fx("pendant"), fx("floor-lamp")] }], ceilingHeight: 2.4 };
+    const both = poolFor([none, withLamps], POOL.high);
+    expect(both).toEqual(poolFor(withLamps, POOL.high));
+    expect(poolFor([withLamps, none], POOL.high)).toEqual(both);
+    expect(poolFor(none, POOL.high)).toEqual({ point: 0, spot: 0, casters: 0 });
+  });
   it("gives every downlight of a grid its full lumens", () => {
     const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("downlight-grid", { id: "dg" })] } as unknown as Floor;
     const lights = floorLamps(floor, 2.4, 0, () => true);

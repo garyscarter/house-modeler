@@ -161,6 +161,8 @@ export function coneGain(angle?: number): number {
 type Quality = "high" | "balanced" | "low";
 
 /** A light pool: point lights, spot lights, and how many of the spots (the first ones) cast shadows. */
+type PoolModel = Pick<HouseModel, "floors" | "ceilingHeight">;
+
 export interface PoolSizes {
   point: number;
   spot: number;
@@ -194,10 +196,18 @@ export const POOL: Record<Quality, PoolCap> = {
  * the switch or when a floor is hidden. Over `cap.total`, each kind gets up to half and the rest goes to whichever
  * still wants it. Returns `prev` itself when the numbers are the same.
  */
-export function poolFor(model: Pick<HouseModel, "floors" | "ceilingHeight">, cap: PoolCap, prev: PoolSizes | null = null): PoolSizes {
+export function poolFor(model: PoolModel | PoolModel[], cap: PoolCap, prev: PoolSizes | null = null): PoolSizes {
+  // Several models (both layouts): the pool fits whichever needs more of each kind, so switching layouts never
+  // changes the light counts baked into the shaders (a layout with no lights against one with 24 would otherwise
+  // recompile every lit material on every switch).
   let points = 0;
   let spots = 0;
-  for (const f of model.floors) for (const l of floorLamps(f, model.ceilingHeight, 0, () => true)) if (l.spot) spots++; else points++;
+  for (const m of Array.isArray(model) ? model : [model]) {
+    let p = 0, sp = 0;
+    for (const f of m.floors) for (const l of floorLamps(f, m.ceilingHeight, 0, () => true)) if (l.spot) sp++; else p++;
+    points = Math.max(points, p);
+    spots = Math.max(spots, sp);
+  }
   const half = Math.ceil(cap.total / 2);
   const spot = Math.min(spots, Math.max(half, cap.total - points));
   const point = Math.min(points, cap.total - spot);
