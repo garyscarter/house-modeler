@@ -82,7 +82,7 @@ describe("light fixtures", () => {
     const floor = { id: "g", name: "G", level: 0, image: "", pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], fixtures: [fx("downlight-grid", { id: "dg", cols: 3, rows: 2 })] } as unknown as Floor;
     expect(bulbsWorld(floor, floor.fixtures![0], byId("downlight-grid")!, 2.4, 0)).toHaveLength(6);
     expect(floorLamps(floor, 2.4, 0, () => true)).toHaveLength(6);
-    expect(poolFor({ floors: [floor], ceilingHeight: 2.4 }, POOL.high)).toEqual({ point: 0, spot: 6, casters: 4 });
+    expect(poolFor({ floors: [floor], ceilingHeight: 2.4 }, POOL.high)).toEqual({ point: 0, spot: 6, casters: 2 });
     // Nonsense counts fall back to the spacing.
     const odd = { ...floor, fixtures: [fx("downlight-grid", { id: "dg", cols: 0, rows: NaN })] } as unknown as Floor;
     expect(floorLamps(odd, 2.4, 0, () => true)).toHaveLength(4);
@@ -130,7 +130,7 @@ describe("light fixtures", () => {
     const f1 = { ...g, id: "f1", level: 1, fixtures: [fx("downlight-grid", { id: "dg" }), fx("floor-lamp", { id: "fl" }), fx("sofa", { id: "s" })] } as unknown as Floor;
     const model = { floors: [g, f1], ceilingHeight: 2.4 };
     // The pendant bar (one light for its three drops) and 4 downlights are spots, the table and floor lamps points.
-    expect(poolFor(model, POOL.high)).toEqual({ point: 2, spot: 5, casters: 4 });
+    expect(poolFor(model, POOL.high)).toEqual({ point: 2, spot: 5, casters: 2 });
     expect(poolFor(model, POOL.low)).toEqual({ point: 2, spot: 5, casters: 0 });
     // Over the cap: half each, then the rest to the kind that still wants it.
     expect(poolFor(model, { total: 4, casters: 1 })).toEqual({ point: 2, spot: 2, casters: 1 });

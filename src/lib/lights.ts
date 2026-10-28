@@ -182,10 +182,11 @@ export interface PoolCap {
  * shaded on every pixel whether a lamp fills it or not, so the pool is sized to the house (poolFor) and this is only
  * its cap: spots and point lights share it (most ceiling fittings are spots, lamps are points). The nearest `casters`
  * spot lights cast shadows; point lights never do. Measured (software GL, high): a lit frame costs about 3x an
- * unlit one, almost all of it the shadowed spots; 24 lights against 16 is within the noise.
+ * unlit one, almost all of it the shadowed spots; 24 lights against 16 is within the noise. Two casters on high, not
+ * four: on the owner's machine four made the night view drag while panning.
  */
 export const POOL: Record<Quality, PoolCap> = {
-  high: { total: 24, casters: 4 },
+  high: { total: 24, casters: 2 },
   balanced: { total: 12, casters: 0 },
   low: { total: 8, casters: 0 },
 };
