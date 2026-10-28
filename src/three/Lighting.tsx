@@ -141,9 +141,11 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
     l.shadow.needsUpdate = true;
   }, [box, dir, quality]);
 
-  // Glass is real transmission on high quality, and lit from inside at night.
+  // Glass is the film on every quality: real transmission (refraction through the panes) made three render the whole
+  // opaque scene a second time every frame, which at night with the lamp pool lit halved the frame rate on high for a
+  // gain the review called small for 2 mm panes. The panes still light up from inside at night.
   useEffect(() => {
-    setGlassMode(quality === "high", night);
+    setGlassMode(false, night);
     invalidate();
   }, [quality, night, invalidate]);
 
