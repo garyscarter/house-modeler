@@ -1,5 +1,5 @@
 import type { HouseModel, Opening, Photo, Site } from "../types";
-import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./houses/listing91770873";
+import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "../houses/default";
 import { dropAiSettings } from "./persist";
 import { sitesFromShared, type Sites } from "./sites";
 

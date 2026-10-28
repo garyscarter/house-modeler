@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DUSK_ALTITUDE, duskHour, lightGlow } from "./dusk";
 import { dayOfYear, solarPosition, sunTimes } from "./sun";
-import { listingSite } from "./houses/listing91770873";
+import { listingSite } from "../houses/default";
 
 const site = listingSite();
 const YEAR = 2026;

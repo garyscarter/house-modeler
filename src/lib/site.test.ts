@@ -19,7 +19,7 @@ import {
 } from "./site";
 import { floor, rect } from "./testing";
 import type { HouseModel, Site } from "../types";
-import { listing91770873, listingSite } from "./houses/listing91770873";
+import { builtInHouse, listingSite } from "../houses/default";
 
 const square = rectPoly(0, 0, 4, 4);
 
@@ -107,7 +107,7 @@ describe("sideClearances", () => {
   });
 
   it("finds the listing's garage and party wall on the boundary", () => {
-    const res = sideClearances(houseOutlines(listing91770873("")), listingSite().boundary);
+    const res = sideClearances(houseOutlines(builtInHouse("")), listingSite().boundary);
     const d = Object.fromEntries(res.map((r) => [r.side, r.distance]));
     expect(d.right).toBeLessThan(0.1);
     expect(d.left).toBeLessThan(0.1);
@@ -149,7 +149,7 @@ describe("plot helpers", () => {
       floors: [floor([rect("A", 0, 0, 800, 600)])],
       ceilingHeight: 2.4,
       slabThickness: 0.25,
-      exterior: { ...listing91770873("").exterior!, partyWall: "right" },
+      exterior: { ...builtInHouse("").exterior!, partyWall: "right" },
     };
     const depths = defaultDepths(model);
     expect(depths.right).toBe(0);

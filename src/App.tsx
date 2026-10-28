@@ -17,7 +17,7 @@ import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
-import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
+import { LISTING_PRESET, PRESETS } from "./houses/default";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { editsSite, siteEditPatch } from "./lib/modes";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { electricalLayerSvg, scheduleCsv, wiringGuideHtml } from "./wiringGuide";
-import { listing91770873Proposed } from "./houses/listing91770873";
+import { builtInProposed } from "../houses/default";
 import { numberPoints, pointRows } from "./electrics";
 import { planExtent, planScale, planSvg } from "./export";
 import type { Fixture, HouseModel } from "../types";
@@ -9,7 +9,7 @@ const fx = (id: string, type: string, x: number, y: number, extra: Partial<Fixtu
 
 /** The listing's Proposed layout with points added on both floors (the built-in model has none). */
 function withPoints(): HouseModel {
-  const base = listing91770873Proposed("");
+  const base = builtInProposed("");
   const floors = [...base.floors].sort((a, b) => a.level - b.level);
   const [g, f1] = floors;
   const gr = g.rooms[0].polygon;
@@ -90,7 +90,7 @@ describe("wiring guide", () => {
   });
 
   it("an empty model says so and has no plans", () => {
-    const empty = wiringGuideHtml({ date: "d", variantLabel: "Proposed", model: listing91770873Proposed("") });
+    const empty = wiringGuideHtml({ date: "d", variantLabel: "Proposed", model: builtInProposed("") });
     expect(empty).toContain("No electrical points yet");
     expect(svgs(empty).length).toBeLessThanOrEqual(3) /* brand marks only */;
     expect(planSvg).toBeTypeOf("function");

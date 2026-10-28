@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_EXTERIOR, type Exterior, type HouseModel, type Opening, type Room, type Site } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { planningCheck, type PlanningCheck, type RuleStatus } from "./planning";
 import { rectPoly, simpleSite } from "./site";
 import { floor, rect } from "./testing";
@@ -285,7 +285,7 @@ describe("planningCheck: porches (Class D)", () => {
   });
 
   it("checks the listing's porch canopy when it is made narrower or wider", () => {
-    const a = listing91770873("");
+    const a = builtInHouse("");
     const s = listingSite();
     const narrower = structuredClone(a);
     const g = narrower.floors.find((f) => f.level === 0)!;
@@ -306,7 +306,7 @@ describe("planningCheck: porches (Class D)", () => {
 });
 
 describe("planningCheck: plot changes", () => {
-  const listingPair = () => ({ a: listing91770873(""), s: listingSite() });
+  const listingPair = () => ({ a: builtInHouse(""), s: listingSite() });
 
   it("asks for the highway authority's consent when the drive opening widens", () => {
     const { a, s } = listingPair();
@@ -350,7 +350,7 @@ describe("planningCheck: plot changes", () => {
 describe("planningCheck: listing 91770873", () => {
   const run = (wingAfter1948 = false) => {
     const s = listingSite();
-    return planningCheck(listing91770873(""), listing91770873Proposed(""), { current: s, proposed: s }, { wingAfter1948 });
+    return planningCheck(builtInHouse(""), builtInProposed(""), { current: s, proposed: s }, { wingAfter1948 });
   };
 
   it("says the two-storey side extension needs a householder planning application, and why", () => {

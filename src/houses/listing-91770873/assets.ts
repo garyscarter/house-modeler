@@ -1,6 +1,6 @@
 import type { Elevation, Photo } from "../../types";
 import { uid } from "../../types";
-import floorplanUrl from "../../assets/listing-91770873/floorplan.webp";
+import floorplanUrl from "./assets/floorplan.webp";
 
 /**
  * The listing's public floorplan and photos for listing 91770873, bundled so
@@ -8,7 +8,7 @@ import floorplanUrl from "../../assets/listing-91770873/floorplan.webp";
  * photos already placed. Room assignments were made by eye from the photos;
  * fix any in the Photos panel.
  */
-const PHOTO_URLS = import.meta.glob<string>("../../assets/listing-91770873/photos/*.jpg", { eager: true, query: "?url", import: "default" });
+const PHOTO_URLS = import.meta.glob<string>("./assets/photos/*.jpg", { eager: true, query: "?url", import: "default" });
 
 type Place = { floor: "Ground Floor" | "Floor 1"; room: string; description: string } | { elevation: Elevation; description: string };
 

@@ -59,7 +59,7 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 
 ## Listing 91770873
 
-**Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan and 37 photos are bundled (**Photos → Load listing 91770873 photos**). `reference/listing-91770873/NOTES.md` records the facts used and where each came from.
+**Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan and 37 photos are bundled (**Photos → Load listing 91770873 photos**). `src/houses/listing-91770873/NOTES.md` records the facts used and where each came from.
 
 ## Using it
 

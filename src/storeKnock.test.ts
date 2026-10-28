@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "./store";
-import { LISTING_PRESET, listing91770873, listingSite } from "./lib/houses/listing91770873";
+import { LISTING_PRESET, builtInHouse, listingSite } from "./houses/default";
 import { applyListingReview, latestListing, planListingReview } from "./lib/presetActions";
 import { floor, rect } from "./lib/testing";
 import type { HouseModel, Photo } from "./types";
@@ -10,7 +10,7 @@ const photo = (id: string, roomName: string): Photo => ({ id, name: id, dataUrl:
 
 /** The listing model with its floors swapped for two rooms side by side. */
 function twoRooms(): HouseModel {
-  return { ...listing91770873(""), floors: [floor([rect("A", 0, 0, 200, 300), rect("B", 200, 0, 450, 300)])] };
+  return { ...builtInHouse(""), floors: [floor([rect("A", 0, 0, 200, 300), rect("B", 200, 0, 450, 300)])] };
 }
 
 describe("store: knock through, copy and listing review", () => {
@@ -38,7 +38,7 @@ describe("store: knock through, copy and listing review", () => {
   });
 
   it("copyVariant to proposed sets basedOn to the source preset and drops preset and listedArea", () => {
-    const current = listing91770873("");
+    const current = builtInHouse("");
     current.listedArea = 100 as never;
     st().setVariant("current", current);
     const preset = { ...current.preset! };
@@ -54,7 +54,7 @@ describe("store: knock through, copy and listing review", () => {
     const setup = () => {
       const site = listingSite();
       site.neighbours = site.neighbours.map((n, i) => (i === 0 ? { ...n, eaves: n.eaves + 1 } : n));
-      st().setVariant("current", listing91770873(""));
+      st().setVariant("current", builtInHouse(""));
       st().copyVariant("current", "proposed");
       st().setSite(site, "proposed");
       const review = planListingReview("proposed");

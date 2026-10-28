@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HouseModel, Opening } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { changesCsv, esc, fileDate, planExtent, planScale, planSvg, printHtml, slug, toCsv } from "./export";
 import { MARK, WORDMARK } from "./brand";
 import { areaReport, diffModels, roomNotes } from "./report";
@@ -30,7 +30,7 @@ function assertWellFormed(xml: string) {
 }
 
 describe("planSvg", () => {
-  const model = listing91770873("");
+  const model = builtInHouse("");
   const site = listingSite();
   const ground = model.floors.find((f) => f.level === 0)!;
 
@@ -93,7 +93,7 @@ describe("planSvg", () => {
     expect(planScale({ x0: 0, y0: 0, x1: 2, y1: 2 })).toBe(50);
     expect(planScale({ x0: 0, y0: 0, x1: 12, y1: 9 })).toBe(100);
     expect(planScale({ x0: 0, y0: 0, x1: 30, y1: 20 })).toBe(200);
-    expect(planScale(planExtent([model, listing91770873Proposed("")]))).toBe(100);
+    expect(planScale(planExtent([model, builtInProposed("")]))).toBe(100);
   });
 });
 
@@ -103,7 +103,7 @@ describe("CSV", () => {
   });
 
   it("lists every change with rates, costs and a rough total", () => {
-    const changes = diffModels(listing91770873(""), listing91770873Proposed(""));
+    const changes = diffModels(builtInHouse(""), builtInProposed(""));
     const csv = changesCsv(changes, { newWindow: 900, contingency: 10 });
     const lines = csv.trim().split("\r\n");
     expect(lines[0]).toBe("Floor,Category,Description,Quantity,Unit,Rate (£),Cost (£),Structural advice");
@@ -115,8 +115,8 @@ describe("CSV", () => {
 
 describe("printHtml", () => {
   it("includes areas, changes, costs, notes and a plan per floor of each variant", () => {
-    const a = listing91770873("");
-    const b = listing91770873Proposed("");
+    const a = builtInHouse("");
+    const b = builtInProposed("");
     b.floors[1].rooms.find((r) => r.name === "New Room")!.notes = "Check headroom & daylight";
     const changes = diffModels(a, b);
     const html = printHtml({
@@ -144,7 +144,7 @@ describe("printHtml", () => {
   });
 
   it("is branded: mark, wordmark, house name, title, footer and embedded font", () => {
-    const a = listing91770873("");
+    const a = builtInHouse("");
     const base = { date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] };
     const html = printHtml({ ...base, houseName: "Listing 91770873", fontCss: "@font-face{font-family:X;src:url(data:font/woff2;base64,QQ==)}" });
     expect(html).toContain("Storey");
@@ -158,7 +158,7 @@ describe("printHtml", () => {
   });
 
   it("works with one variant (areas only)", () => {
-    const a = listing91770873("");
+    const a = builtInHouse("");
     const html = printHtml({ date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] });
     expect(html).toContain("Floor areas");
     expect(html).not.toContain("Changes from");
@@ -167,7 +167,7 @@ describe("printHtml", () => {
 });
 
 describe("printHtml saved views", () => {
-  const a = listing91770873("");
+  const a = builtInHouse("");
   const base = { date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] };
   it("prints each view with escaped name and a picture per layout", () => {
     const html = printHtml({ ...base, views: [{ name: "Kitchen <b>& garden", shots: [{ label: "As listed", src: "data:image/png;base64,AAAA" }, { label: "Proposed", src: "data:image/png;base64,BBBB" }] }] });

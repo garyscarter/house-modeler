@@ -1,5 +1,5 @@
 import type { GardenItem, HouseModel, Site, VariantKey } from "../types";
-import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "./houses/listing91770873";
+import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "../houses/default";
 import { areaOf } from "./site";
 import { itemsOf } from "./siteItems";
 import type { Sites } from "./sites";

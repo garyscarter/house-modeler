@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { elevationFraming, EYE_HEIGHT, houseHeight } from "./viewFraming";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 
 describe("elevationFraming", () => {
   it("fits the height when the frame is wide", () => {
@@ -26,7 +26,7 @@ describe("elevationFraming", () => {
 
 describe("houseHeight", () => {
   it("finds the listing's ridge above its two storeys", () => {
-    const model = listing91770873("data:image/png;base64,");
+    const model = builtInHouse("data:image/png;base64,");
     const h = houseHeight(model);
     const storeys = (Math.max(...model.floors.map((f) => f.level)) + 1) * (model.ceilingHeight + model.slabThickness);
     expect(h).toBeGreaterThan(storeys);

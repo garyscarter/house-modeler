@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useStore } from "../store";
 import { fileToDataUrl, resizeDataUrl } from "../lib/image";
 import { ELEVATION_LABEL, uid, type Elevation, type Photo } from "../types";
-import { listingPhotos } from "../lib/houses/listingAssets";
+import { listingPhotos } from "../houses/listing-91770873/assets";
 import { Loader } from "./Loader";
 import { floorDisplayName } from "../lib/studio";
 

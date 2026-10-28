@@ -3,7 +3,7 @@ import { ask } from "./Dialogs";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { useStore } from "../store";
 import { VARIANT_LABEL, type VariantKey } from "../types";
-import { LISTING_PRESET, PRESETS } from "../lib/houses/listing91770873";
+import { LISTING_PRESET, PRESETS } from "../houses/default";
 import { floorDisplayName } from "../lib/studio";
 import { Info } from "./Info";
 import { isListingDesign, loadListing, planListingReview, updatePreset } from "../lib/presetActions";

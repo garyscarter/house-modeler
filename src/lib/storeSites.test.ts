@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "../store";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { hasOwnSite, siteOf } from "./sites";
 
 const st = () => useStore.getState();
@@ -11,7 +11,7 @@ describe("store: a plot per layout", () => {
   });
 
   it("copies the plot with Copy As listed to start, then keeps the two apart", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().setSite(listingSite());
     st().copyVariant("current", "proposed");
     expect(st().sites.proposed).toEqual(st().sites.current);
@@ -28,8 +28,8 @@ describe("store: a plot per layout", () => {
   });
 
   it("lets Proposed borrow As listed's plot and copies it on the first edit", () => {
-    st().setVariant("current", listing91770873(""));
-    st().setVariant("proposed", listing91770873Proposed(""));
+    st().setVariant("current", builtInHouse(""));
+    st().setVariant("proposed", builtInProposed(""));
     st().setSite(listingSite(), "current");
     expect(hasOwnSite(st().sites, "proposed")).toBe(false);
     expect(siteOf(st().sites, "proposed")).toBe(st().sites.current);

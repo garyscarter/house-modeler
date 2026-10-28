@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HouseModel, Site } from "../types";
-import { listingSite } from "./houses/listing91770873";
+import { listingSite } from "../houses/default";
 import { copySiteOf, hasOwnSite, plotsDiffer, setSiteOf, siteOf, sitesFromImport, sitesFromShared, siteSource, updateSiteOf, type Sites } from "./sites";
 
 const model = {} as HouseModel;

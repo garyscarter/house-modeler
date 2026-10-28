@@ -1,6 +1,6 @@
 # Storey (house modeler)
 
-Browser-only React + react-three-fiber + zustand app for one house the owner is buying ("listing 91770873") and its renovation. See README.md for what it does and reference/listing-91770873/NOTES.md for the facts behind the built-in model.
+Browser-only React + react-three-fiber + zustand app for one house the owner is buying ("listing 91770873") and its renovation. See README.md for what it does and src/houses/listing-91770873/NOTES.md for the facts behind the built-in model.
 
 ## Standing rules
 
@@ -34,7 +34,7 @@ Browser-only React + react-three-fiber + zustand app for one house the owner is 
   - lights and electrics: `lights.ts` (which fixtures are lights, lit state, bulbs), `electrics.ts` (point kinds, rooms, numbering, links, circuits, schedule), `electricSymbols.ts` (BS EN 60617 plan symbols as data), `wiringGuide.ts` (the printable guide and CSV), `nightGlass.ts`; see docs/electrics-plan.md and docs/lighting-plan.md
   - garden: `gardenCatalogue.ts` (items and plants), `siteItems.ts` (placement, runs, shade), `surfaceCurve.ts` (smooth outlines), `dusk.ts`, `gardenParts.ts` and `plantForms.ts` (3D parts as data); see docs/garden-plan.md
   - outputs: `report.ts` (areas, changes, costs), `export.ts`, `planning.ts` (permitted-development check)
-  - built-in house: `houses/listing91770873.ts` (+ `listingAssets.ts`), loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
+  - built-in house: `src/houses/listing-91770873/house.ts` (+ `assets.ts`), loaded by `presetActions.ts`; updates flow into an edited copy via `layoutMerge.ts` and `startupPrompt.ts`
   - shared project sync with the server: `sync.ts`, `syncLogic.ts`; `migrate.ts` for old saves
 - `src/three/` 3D view: `Viewer.tsx`, `House.tsx`, `shell.ts` (wall and slab meshes), `Roof.tsx`, `Fixtures.tsx`, `Site.tsx`, `SiteItems.tsx` (garden items and plants), `FixtureLights.tsx` (point and spot lights for lit fixtures), `Lighting.tsx`, `textures.ts` (procedural finishes)
 - `src/editor/` 2D editors on one shared core (see docs/editor-core-plan.md): `core/` (camera, drag machine, polygon edit, keys, handles; maths in `lib/polygonEdit.ts` and `lib/editorCore.ts`), `plan/` (`PlanEditor.tsx` composition, `use*.ts` hooks, `layers/`, `chrome/`), `site/` (`SiteEditor.tsx` serves both Plot and Garden modes, `useSiteDrag.ts`, `SiteLayers.tsx`, `gardenEdit.ts`, `GardenInspectors.tsx`), `Inspectors.tsx`, symbols (`GardenSymbol.tsx` for garden items, `ElectricGlyph.tsx` for lights and electrical points), `plan/layers/Electrics.tsx` (point numbers and switch links). `npm run regress:editors -- --port <n>` runs the Playwright parity script against a dev server on that port.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SiteSurface } from "../types";
-import { listingSite } from "./houses/listing91770873";
+import { listingSite } from "../houses/default";
 import { edgesOf } from "./site";
 import { circleControls } from "./surfaceCurve";
 import { COURSE, boundaryWallSegments, groundAlong, groundAt, resolveFollow, wallAt, wallSegments, type GroundSample } from "./wallSteps";

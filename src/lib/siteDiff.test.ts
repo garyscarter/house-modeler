@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Site } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { boundaryPieces, changedPieces, diffSites, gardenChanges } from "./siteDiff";
 import { updateSiteOf, type Sites } from "./sites";
 import { COST_LINES, diffModels, estimateCosts } from "./report";
@@ -65,8 +65,8 @@ describe("site changes", () => {
 
   it("goes on the end of the report's change list and is priced on the garden lines", () => {
     const { current, proposed } = widenedDrive();
-    const a = listing91770873("");
-    const b = listing91770873Proposed("");
+    const a = builtInHouse("");
+    const b = builtInProposed("");
     const house = diffModels(a, b);
     const all = diffModels(a, b, { a: current, b: proposed });
     expect(all.slice(0, house.length)).toEqual(house);
@@ -227,7 +227,7 @@ describe("garden changes", () => {
     expect(diffSites(kerbed, height)).toEqual([]);
   });
   it("flows through diffModels and totals in the estimate", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const b = withItems([{ id: "p", type: "parasol", x: 1, y: 1, rot: 0 }, { id: "t", type: "apple-tree", x: 3, y: 3, rot: 0 }]);
     const changes = diffModels(m, m, { a: base(), b });
     expect(changes.filter((c) => c.category === "Garden")).toHaveLength(2);

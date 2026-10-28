@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Fixture, HouseModel, Opening } from "../types";
-import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed } from "../houses/default";
 import {
   areaReport,
   areaSummary,
@@ -79,8 +79,8 @@ describe("areas", () => {
 });
 
 describe("changes for listing 91770873", () => {
-  const a = listing91770873("");
-  const b = listing91770873Proposed("");
+  const a = builtInHouse("");
+  const b = builtInProposed("");
   const changes = diffModels(a, b);
 
   it("finds the new first-floor room and its extra area", () => {
@@ -217,15 +217,15 @@ describe("notes", () => {
 
 describe("areaSummary", () => {
   it("measures listing 91770873 within 5% of its printed 113.9 m² and leaves the garage out of the heated area", () => {
-    const s = areaSummary(listing91770873(""));
+    const s = areaSummary(builtInHouse(""));
     expect(Math.abs(s.vsListed!)).toBeLessThan(0.05);
     expect(s.unheatedRooms).toEqual(["Garage"]);
     expect(s.internal - s.heated).toBeGreaterThan(10);
-    expect(s.internal).toBeLessThan(modelArea(listing91770873("")));
+    expect(s.internal).toBeLessThan(modelArea(builtInHouse("")));
   });
 
   it("honours an explicit unheated flag over the name", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     m.floors[0].rooms.find((r) => r.name === "Garage")!.unheated = false;
     expect(areaSummary(m).unheatedRooms).toEqual([]);
   });
@@ -233,8 +233,8 @@ describe("areaSummary", () => {
 
 describe("archway between the living rooms", () => {
   it("is not reported as a change between As listed and the built-in Proposed", () => {
-    const a = listing91770873("x");
-    const b = listing91770873Proposed("x");
+    const a = builtInHouse("x");
+    const b = builtInProposed("x");
     const arch = a.floors[0].openings.find((o) => o.kind === "archway")!;
     expect(arch).toBeTruthy();
     expect(b.floors[0].openings.find((o) => o.x === arch.x && o.y === arch.y)?.kind).toBe("archway");
@@ -296,7 +296,7 @@ describe("joinery costs", () => {
   });
 
   it("finds no joinery changes between the listing variants", () => {
-    expect(diffModels(listing91770873(""), listing91770873Proposed("")).filter((c) => c.category === "Joinery")).toEqual([]);
+    expect(diffModels(builtInHouse(""), builtInProposed("")).filter((c) => c.category === "Joinery")).toEqual([]);
   });
 });
 

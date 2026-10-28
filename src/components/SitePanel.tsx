@@ -7,7 +7,7 @@ import { siteSource } from "../lib/sites";
 import { updateSitePreset } from "../lib/presetActions";
 import { confirmBoundaryUpdates } from "./startupDialog";
 import type { HouseModel, Neighbour, Site, VariantKey } from "../types";
-import { listingSite } from "../lib/houses/listing91770873";
+import { listingSite } from "../houses/default";
 import { compassPoint } from "../lib/sun";
 import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpleSite, type PlotDepths } from "../lib/site";
 import { useSiteView } from "../three/siteView";

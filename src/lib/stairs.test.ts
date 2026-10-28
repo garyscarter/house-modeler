@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 import { pointInPolygon, polygonArea, roomWorldPolygon, toWorld } from "./geometry";
 import { boxedIn, boxedPart, clipUnderFlight, flightAt, flightWinders, floorFlight, stairHeight, stairTreads, treadCount, WINDERS, type FlightShape } from "./stairs";
 
@@ -145,7 +145,7 @@ describe("clipUnderFlight", () => {
 });
 
 describe("listing 91770873", () => {
-  const m = listing91770873("");
+  const m = builtInHouse("");
   const ground = m.floors.find((x) => x.level === 0)!;
   const first = m.floors.find((x) => x.level === 1)!;
   const f = floorFlight(m, ground)!;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { holdUndo, useStore } from "./store";
-import { listing91770873 } from "./lib/houses/listing91770873";
+import { builtInHouse } from "./houses/default";
 
 const st = () => useStore.getState();
 
@@ -10,7 +10,7 @@ describe("store: modes", () => {
   });
 
   it("setMode adds no undo step and applies the switch rules", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     const before = st().past.length;
     st().setUi({ selectedRoomId: "r", selectedEdge: { edge: 1, side: "inside" } });
     st().setMode("decorate");
@@ -31,7 +31,7 @@ describe("store: modes", () => {
   });
 
   it("undo, redo and reset clear selectedEdge", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().updateModel("current", { ceilingHeight: 2.5 });
     st().setUi({ selectedEdge: { edge: 0, side: "outside" } });
     st().undo();
@@ -71,7 +71,7 @@ describe("store: modes", () => {
   });
 
   it("holdUndo makes one undo step for a whole gesture", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     const before = st().past.length;
     holdUndo(true);
     st().updateModel("current", { ceilingHeight: 2.4 });

@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { byId, mountOf, radiatorPanels } from "../catalogue";
-import { EXT_WALL_T, WALL_T, buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../geometry";
-import { bayOutline } from "../openings";
-import { convexOverlap, doorSwing, fixtureBox, fixtureSolids, outsideSide, overlappingIds, rectCorners } from "../planMath";
-import { planRoofs, roofGeometry } from "../roof";
-import { clipSegmentOutside } from "../site";
-import { gardenDef } from "../gardenCatalogue";
-import { itemFootprint, itemsOf } from "../siteItems";
-import { surfaceOutline } from "../surfaceCurve";
-import { surfaceHeightAt } from "../surfaceSlope";
-import { boundaryWallSegments } from "../wallSteps";
-import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./listing91770873";
+import { byId, mountOf, radiatorPanels } from "../../lib/catalogue";
+import { EXT_WALL_T, WALL_T, buildWalls, pointInPolygon, roomWorldPolygon, toWorld } from "../../lib/geometry";
+import { bayOutline } from "../../lib/openings";
+import { convexOverlap, doorSwing, fixtureBox, fixtureSolids, outsideSide, overlappingIds, rectCorners } from "../../lib/planMath";
+import { planRoofs, roofGeometry } from "../../lib/roof";
+import { clipSegmentOutside } from "../../lib/site";
+import { gardenDef } from "../../lib/gardenCatalogue";
+import { itemFootprint, itemsOf } from "../../lib/siteItems";
+import { surfaceOutline } from "../../lib/surfaceCurve";
+import { surfaceHeightAt } from "../../lib/surfaceSlope";
+import { boundaryWallSegments } from "../../lib/wallSteps";
+import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./house";
 
 const house = listing91770873("");
 const ground = house.floors[0];

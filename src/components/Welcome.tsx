@@ -4,7 +4,7 @@ import {
   LISTING_PRESET,
   LISTING_PROPOSED_PRESET,
   PRESETS,
-} from "../lib/houses/listing91770873";
+} from "../houses/default";
 import { loadListing } from "../lib/presetActions";
 import { roomWorldPolygon } from "../lib/geometry";
 import { fitTransform, pathFor } from "../lib/footprint";

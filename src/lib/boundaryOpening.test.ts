@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listingSite } from "./houses/listing91770873";
+import { listingSite } from "../houses/default";
 import {
   MIN_NEIGHBOUR,
   MIN_OPENING,

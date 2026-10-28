@@ -1,7 +1,7 @@
 import { transact, useStore } from "../store";
 import type { HouseModel, Site, VariantKey } from "../types";
-import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "./houses/listing91770873";
-import { listingFloorplan } from "./houses/listingAssets";
+import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, builtInHouse, builtInProposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "../houses/default";
+import { listingFloorplan } from "../houses/listing-91770873/assets";
 import { freshSiteFor } from "./sitePreset";
 import { gardenUpdates, mergeKeepingEdits, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
 import { applyChanges, isBasedOnListing, listingUpdates, type LayoutChange } from "./layoutMerge";
@@ -12,7 +12,7 @@ import { applyChanges, isBasedOnListing, listingUpdates, type LayoutChange } fro
  * from a copy of As listed's plot when there is one, so edits to it carry over.
  */
 export async function loadListing(variant: VariantKey): Promise<void> {
-  const build = variant === "current" ? listing91770873 : listing91770873Proposed;
+  const build = variant === "current" ? builtInHouse : builtInProposed;
   // The listing's own floorplan sits behind the tracing; fall back to a placeholder offline.
   const image = await listingFloorplan().catch(() => placeholderImage());
   const st = useStore.getState();

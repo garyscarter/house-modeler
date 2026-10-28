@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
-import { listingSite } from "../lib/houses/listing91770873";
+import { listingSite } from "../houses/default";
 import { bbox, pointInPolygon, polygonArea } from "../lib/geometry";
 import type { Rect } from "../lib/planMath";
 import { siteWalls } from "../lib/siteWalls";

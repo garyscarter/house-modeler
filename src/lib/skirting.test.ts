@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SKIRTING_COLOUR, skirtingColour } from "./skirting";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 
 describe("skirtingColour", () => {
   it("is white paint unless the room sets its own", () => {
@@ -10,7 +10,7 @@ describe("skirtingColour", () => {
   });
 
   it("is dark stained downstairs and white upstairs in the listing model", () => {
-    const [ground, first] = listing91770873("").floors;
+    const [ground, first] = builtInHouse("").floors;
     const dark = ["Kitchen", "Living Room (rear)", "Living Room (front)", "Hallway (stairs)"];
     for (const name of dark) {
       const room = ground.rooms.find((r) => r.name === name);
