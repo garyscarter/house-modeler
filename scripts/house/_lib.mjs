@@ -64,3 +64,82 @@ export async function screenshot(html, out) {
 }
 
 export const saveHtml = (file, html) => writeFileSync(file, html);
+
+// ---- First-run welcome and intake state (used by welcome.mjs and start.mjs) ----
+import { readdirSync } from "node:fs";
+
+export const localFile = path.join(root, ".storey-local.json");
+export const SLUG = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const IMG = /\.(png|jpe?g|webp)$/i;
+
+/** The gitignored local state: { house, name?, welcomed }, or null when there is none (or it is unreadable). */
+export function readLocal() {
+  try {
+    const v = JSON.parse(readFileSync(localFile, "utf8"));
+    return v && typeof v === "object" ? v : null;
+  } catch {
+    return null;
+  }
+}
+export const writeLocal = (v) => writeFileSync(localFile, JSON.stringify(v) + "\n");
+
+/** Ids under src/houses/ that are real houses (a folder with index.ts), minus the owner's and the template. */
+export function otherHouses() {
+  const dir = path.join(root, "src/houses");
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && d.name !== "listing-91770873")
+    .map((d) => d.name);
+}
+
+export const houseIsIn = (id) => existsSync(path.join(root, "src/houses", id, "index.ts"));
+
+const filesIn = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile()).map((d) => d.name) : []);
+
+/** The `- [ ]` / `- [x]` items of reference/<id>/INTAKE.md and which files are on disk. */
+export function intakeState(id) {
+  const ref = path.join(root, "reference", id);
+  const intakePath = path.join(ref, "INTAKE.md");
+  const text = existsSync(intakePath) ? readFileSync(intakePath, "utf8") : "";
+  const items = [...text.matchAll(/^\s*- \[( |x|X)\] (.+)$/gm)].map((m) => ({ done: m[1] !== " ", text: m[2].trim() }));
+  const refFiles = filesIn(ref);
+  const isMap = (f) => /^map/i.test(f);
+  const mapSection = text.split(/^### /m).find((s) => /^Castle on the Hill/.test(s)) ?? "";
+  const named = [...mapSection.matchAll(/`([\w.-]+\.(?:png|jpe?g|webp))`/gi)].map((m) => m[1]);
+  const files = [
+    {
+      ok: refFiles.some((f) => IMG.test(f) && !isMap(f)) || filesIn(path.join(root, "src/houses", id, "assets")).some((f) => IMG.test(f)),
+      what: "a floorplan image",
+      where: `reference/${id}/ (or src/houses/${id}/assets/)`,
+    },
+    { ok: filesIn(path.join(ref, "photos")).some((f) => f !== ".gitkeep"), what: "photos of the rooms and the outside", where: `reference/${id}/photos/` },
+    { ok: refFiles.some(isMap) || named.some((f) => refFiles.includes(f)), what: "a north-up map with a scale", where: `reference/${id}/map.png` },
+  ];
+  const unticked = items.filter((i) => !i.done);
+  const missing = files.filter((f) => !f.ok);
+  return { items, unticked, files, missing, hasIntake: !!text, ready: !!text && unticked.length === 0 && missing.length === 0 };
+}
+
+export const welcomeText = () => [
+  "Welcome to Storey: a browser app for modelling a house in 3D and planning changes to it.",
+  "To add your own house, three steps:",
+  "  1. Choose a house id: a short slug such as my-semi. Never an address, street, postcode or a name.",
+  "  2. Fill in the intake: floorplan, photos, a map and ten short answers (about 30 minutes).",
+  "  3. In Claude Code run /eras-tour; it builds the house from your intake.",
+  'Start with:  npm run house:start <id> "<Name>"',
+  "Any time, npm run welcome shows where you are.",
+];
+
+/** Lines describing the intake for the house, for the status and for start.mjs. */
+export function intakeLines(id, { cap = Infinity } = {}) {
+  const s = intakeState(id);
+  const out = [];
+  if (!s.hasIntake) return [`reference/${id}/INTAKE.md is missing. Run: npm run house:start ${id} "<Name>"`];
+  out.push(`Intake for ${id}: ${s.items.length - s.unticked.length} of ${s.items.length} items ticked.`);
+  for (const f of s.files) if (!f.ok) out.push(`  Missing ${f.what}: put it in ${f.where}`);
+  const room = Math.max(0, cap - out.length - 2);
+  s.unticked.slice(0, room).forEach((i) => out.push(`  [ ] ${i.text.length > 90 ? i.text.slice(0, 87) + "..." : i.text}`));
+  if (s.unticked.length > room) out.push(`  ...and ${s.unticked.length - room} more in reference/${id}/INTAKE.md`);
+  if (s.unticked.length) out.push(`Tick items in reference/${id}/INTAKE.md (change "[ ]" to "[x]") as you finish them.`);
+  if (s.ready) return ["Ready. In Claude Code run /eras-tour."];
+  return out;
+}

@@ -14,6 +14,8 @@
     "build:hosted": "node scripts/build-hosted.mjs",
     "regress:editors": "node scripts/editor-regression.mjs",
     "house:new": "node scripts/house/new.mjs",
+    "welcome": "node scripts/house/welcome.mjs",
+    "house:start": "node scripts/house/start.mjs",
     "house:overlay": "node scripts/house/overlay-plan.mjs",
     "house:map": "node scripts/house/overlay-map.mjs"
   },
