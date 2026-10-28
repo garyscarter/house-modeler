@@ -17,6 +17,8 @@ export interface LintOptions {
 }
 
 const POSTCODE = /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/;
+/** A colour value (hex, rgb(), hsl()), which can look like a postcode ("#F4F1EA") but is not one. */
+const COLOUR = /^\s*(#[0-9a-f]{3,8}|(rgb|hsl)a?\([^)]*\))\s*$/i;
 const STREET = /\b\d{1,4}\s+[A-Z][a-z]+\s+(Road|Street|Lane|Avenue|Close|Drive|Way)\b/;
 
 const cross = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
@@ -125,6 +127,7 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
   }
 
   for (const s of strings(json)) {
+    if (COLOUR.test(s)) continue;
     if (POSTCODE.test(s)) add(`looks like a postcode: "${s.slice(0, 40)}"`);
     if (STREET.test(s)) add(`looks like a street address: "${s.slice(0, 40)}"`);
   }

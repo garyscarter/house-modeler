@@ -68,4 +68,14 @@ describe("lintHouse", () => {
     expect(msgs).toMatch(/postcode/);
     expect(msgs).toMatch(/street address/);
   });
+
+  it("does not mistake colour values for postcodes, and still catches a real-looking one", () => {
+    const site = (tiles: string, accent: string) => ({
+      version: 1,
+      build: () => ({ ...template.sitePresets[template.site].build(), tiles, accent }) as never,
+    });
+    const withStrings = (tiles: string, accent: string) => ({ ...clone(), sitePresets: { [template.site]: site(tiles, accent) } });
+    expect(lintHouse(withStrings("#F4F1EA", "#B5A4CC")).join("\n")).not.toMatch(/postcode/);
+    expect(lintHouse(withStrings("#F4F1EA", "AB1 2CD")).join("\n")).toMatch(/postcode/);
+  });
 });

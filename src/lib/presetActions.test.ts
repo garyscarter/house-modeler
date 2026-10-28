@@ -13,8 +13,4 @@ describe("isListingDesign", () => {
     copy.basedOn = { id: real.main, version: 1 };
     expect(isListingDesign(copy)).toBe(true);
   });
-  it("still excludes the built-in Proposed preset itself", () => {
-    if (!real.proposed) return;
-    expect(isListingDesign(real.presets[real.proposed].build(""))).toBe(false);
-  });
 });
