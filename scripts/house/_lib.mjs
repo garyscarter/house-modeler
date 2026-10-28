@@ -1,6 +1,6 @@
 // Shared by the house overlay scripts: load a house definition through Vite (no extra dependency) and render an
 // HTML page to a PNG with the pre-installed Playwright.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,47 @@ export function parseArgs(argv) {
     else pos.push(argv[i]);
   }
   return { flags, pos };
+}
+
+/** Print `text` and exit 0 when argv asks for help (--help or -h). Call it first in a script, before anything else. */
+export function helpAndExit(argv, text) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(text);
+    process.exit(0);
+  }
+}
+
+/**
+ * npm swallows flags given without `--`: `npm run house:bead --house x red` sets npm_config_house=true and hands the
+ * script `x red` as plain arguments, so the flag's value turns up among the positionals. `spec` maps each flag name
+ * to a test for what its value looks like (most specific first). For each flag that is missing but has
+ * npm_config_<name> set, take its value from the environment when that holds one, else the first positional that
+ * passes its test (removed from `pos`), and print a tip once.
+ */
+export function takeSwallowed(flags, pos, spec, script) {
+  let tip;
+  for (const [name, looksRight] of Object.entries(spec)) {
+    const env = process.env[`npm_config_${name}`];
+    if (flags[name] !== undefined || env === undefined || env === "") continue;
+    let value = env === "true" ? undefined : env;
+    if (value === undefined) {
+      const at = pos.findIndex(looksRight);
+      if (at >= 0) value = pos.splice(at, 1)[0];
+    }
+    if (value !== undefined) {
+      flags[name] = value;
+      tip ??= `Tip: put -- before flags: npm run ${script} -- --${name} ${value}`;
+    }
+  }
+  if (tip) console.log(tip);
+  return flags;
+}
+
+/** The folder for a script's pictures, /tmp/storey-shots/<id>/ unless --out names another; created if missing. */
+export function shotsDir(id, out) {
+  const dir = path.resolve(out ?? path.join("/tmp/storey-shots", id));
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 export function fail(msg) {
@@ -141,7 +182,7 @@ const SONGS = [
   { song: "Shape of You", what: "the floorplan" },
   { song: "Photograph", what: "the photos" },
   { song: "Castle on the Hill", what: "the map" },
-  { song: "Thinking Out Loud", what: "the ten answers" },
+  { song: "Thinking Out Loud", what: "the twelve answers" },
   { song: "Perfect", what: "checklist ticked, slug chosen" },
 ];
 
@@ -183,7 +224,7 @@ export const welcomeText = () => [
   "Ed Sheeran's on first: that's you, getting the intake together. Taylor headlines after:",
   "that's Claude, building your house in eras. Three steps:",
   "  1. Get your ticket: choose a house id, a slug such as my-semi, never an address.",
-  "  2. Fill in the intake: floorplan, photos, a map and ten short answers (about 30 minutes).",
+  "  2. Fill in the intake: floorplan, photos, a map and twelve short answers (about 30 minutes).",
   "  3. In Claude Code run /eras-tour.",
   'Your ticket:  npm run house:start <id> "<Name>"   (the id is the name on the ticket)',
   "Any time, npm run welcome shows where you are.",

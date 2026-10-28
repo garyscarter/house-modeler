@@ -469,8 +469,15 @@ describe("the listing's garden baseline", () => {
 
 describe("the house lint", () => {
   it("finds nothing to report", () => {
-    // Loosened from the 8% default: the listing's printed sizes are internal while its tracing runs on wall
-    // centrelines (the galley is 9% under), and Bedroom 2 traces 20% over its printed size.
-    expect(lintHouse(house91, { dimsTolerance: 0.25 })).toEqual([]);
+    // Printed sizes are centre-line areas; these rooms disagree with the plan as drawn and are traced to the plan:
+    // Kitchen (galley) traces 5.2 m2 against 5.7 printed (9% under), Bedroom 2 13.8 against 11.5 (20% over), and the
+    // proposed New Room 27.1 against 24.3 (12% over).
+    expect(lintHouse(house91, {
+      dimsExceptions: {
+        "Kitchen (galley)": "printed size disagrees with the plan as drawn; traced to the plan",
+        "Bedroom 2": "printed size disagrees with the plan as drawn; traced to the plan",
+        "New Room": "the proposed room is traced to the plan; its printed size is the merged estimate",
+      },
+    })).toEqual([]);
   });
 });

@@ -1,11 +1,15 @@
 import { buildWalls } from "../lib/geometry";
 import { areaM2 } from "../lib/planMath";
+import { areaSummary } from "../lib/report";
 import type { Pt } from "../types";
 import type { HouseDef } from "./types";
 
 export interface LintOptions {
-  /** How far a room's traced area may differ from its printed size, as a fraction (default 0.08). */
-  dimsTolerance?: number;
+  /**
+   * Rooms whose printed size is allowed to disagree with the tracing by more than 8%, by room name, each with the
+   * reason. A name that matches no room, or a room that now passes, is itself reported, so exceptions cannot go stale.
+   */
+  dimsExceptions?: Record<string, string>;
 }
 
 const POSTCODE = /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/;
@@ -53,7 +57,12 @@ function strings(value: unknown, out: string[] = []): string[] {
  */
 export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
   const problems: string[] = [];
-  const tolerance = options.dimsTolerance ?? 0.08;
+  const tolerance = 0.08;
+  /** Whole-building area against the listing figure: the app's internal area must be within this fraction. */
+  const listedTolerance = 0.03;
+  const exceptions = options.dimsExceptions ?? {};
+  const roomNames = new Set<string>();
+  const failing = new Set<string>();
   const add = (msg: string) => problems.push(msg);
   const json: unknown[] = [{ id: def.id, name: def.name, tiles: def.tiles.map((t) => ({ ...t, caption: t.caption(0) })) }];
 
@@ -66,17 +75,25 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
       continue;
     }
     json.push(model);
+    if (model.listedArea && pid === def.main) {
+      const internal = areaSummary(model).internal;
+      if (Math.abs(internal - model.listedArea) / model.listedArea > listedTolerance) {
+        add(`${pid}: the internal area is ${internal.toFixed(1)} m² but the listing says ${model.listedArea.toFixed(1)} m² (more than ${Math.round(listedTolerance * 100)}% apart): the floorplan scale is probably wrong`);
+      }
+    }
     for (const f of model.floors) {
       const at = `${pid} / ${f.name}`;
       if (!(f.pxPerM > 0)) add(`${at}: pxPerM must be above 0`);
       for (const r of f.rooms) {
+        roomNames.add(r.name);
         if (r.polygon.length < 3) add(`${at}: room "${r.name}" has fewer than 3 corners`);
         else if (!isSimplePolygon(r.polygon)) add(`${at}: room "${r.name}" crosses itself`);
         if (r.dims && r.polygon.length >= 3 && f.pxPerM > 0) {
           const printed = r.dims.w * r.dims.h;
           const traced = areaM2(r.polygon, f.pxPerM);
           if (printed > 0 && Math.abs(traced - printed) / printed > tolerance) {
-            add(`${at}: room "${r.name}" traces ${traced.toFixed(1)} m² but its printed size is ${printed.toFixed(1)} m² (more than ${Math.round(tolerance * 100)}% apart)`);
+            failing.add(r.name);
+            if (!(r.name in exceptions)) add(`${at}: room "${r.name}" traces ${traced.toFixed(1)} m² but its printed size is ${printed.toFixed(1)} m² (more than ${Math.round(tolerance * 100)}% apart)`);
           }
         }
       }
@@ -85,6 +102,11 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
         if (placed !== f.openings.length) add(`${at}: ${f.openings.length - placed} opening(s) are not on a room edge`);
       }
     }
+  }
+  for (const [name, reason] of Object.entries(exceptions)) {
+    if (!reason.trim()) add(`dims exception for "${name}" needs a reason`);
+    if (!roomNames.has(name)) add(`dims exception names "${name}", which is not a room`);
+    else if (!failing.has(name)) add(`dims exception for "${name}" is not needed: the room is within 8% of its printed size`);
   }
   if (!(def.main in def.presets)) add(`main preset "${def.main}" is not in presets`);
   if (def.proposed && !(def.proposed in def.presets)) add(`proposed preset "${def.proposed}" is not in presets`);
