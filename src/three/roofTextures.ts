@@ -1,14 +1,11 @@
 import * as THREE from "three";
 import type { TileStyle } from "../types";
 import { canvas } from "./textures";
-import { normalFromHeight } from "./normalMaps";
 
-/** A colour map (near white, tinted by the material colour) and a normal map from the painted height, repeating every `size` metres. */
+/** A colour map (near white, tinted by the material colour) and a bump map, repeating every `size` metres. */
 export interface RoofTexture {
   map: THREE.CanvasTexture;
-  normal: THREE.CanvasTexture;
-  /** How strongly the normal map shows (material `normalScale`): clay and concrete tiles 1.4, thin slates 0.7, so the courses read as strongly as the old bump map's. */
-  normalScale: number;
+  bump: THREE.CanvasTexture;
   roughness: number;
 }
 
@@ -59,7 +56,6 @@ interface Layout {
   shadow: number;
   vary: number;
   roughness: number;
-  normalScale: number;
   /** Optional brightness profile across one unit (0..1 -> multiplier), for tile rolls. */
   profile?: (x: number) => number;
   /** Width jitter of individual units (slates are not all the same width). */
@@ -70,7 +66,7 @@ interface Layout {
 
 const LAYOUTS: Record<TileStyle, Layout> = {
   // 265 x 165 mm plain clay tiles at a 100 mm gauge, broken bond.
-  plain: { across: 6, courses: 8, size: [0.99, 0.8], stagger: true, shadow: 9, vary: 0.2, roughness: 0.85, normalScale: 1.4, hue: [0.07, 0.01, -0.05] },
+  plain: { across: 6, courses: 8, size: [0.99, 0.8], stagger: true, shadow: 9, vary: 0.2, roughness: 0.85, hue: [0.07, 0.01, -0.05] },
   // Double roman style concrete tiles: 300 mm cover, 340 mm gauge, straight bond with two rolls each.
   concrete: {
     across: 4,
@@ -80,7 +76,6 @@ const LAYOUTS: Record<TileStyle, Layout> = {
     shadow: 16,
     vary: 0.08,
     roughness: 0.9,
-    normalScale: 1.4,
     hue: [0.03, 0.01, -0.02],
     profile: (x) => {
       const roll = (c: number, w: number) => Math.max(0, 1 - ((x - c) / w) ** 2);
@@ -88,7 +83,7 @@ const LAYOUTS: Record<TileStyle, Layout> = {
     },
   },
   // 500 x 250 mm natural slates at about a 200 mm gauge.
-  slate: { across: 4, courses: 6, size: [1.0, 1.2], stagger: true, shadow: 4, vary: 0.28, roughness: 0.62, normalScale: 0.7, jitter: 0.12, hue: [-0.03, -0.01, 0.05] },
+  slate: { across: 4, courses: 6, size: [1.0, 1.2], stagger: true, shadow: 4, vary: 0.28, roughness: 0.62, jitter: 0.12, hue: [-0.03, -0.01, 0.05] },
 };
 
 /** Tiles or slates, cached per style. Courses run along u; v increases up the slope. */
@@ -175,7 +170,7 @@ export function tileTextures(style: TileStyle): RoofTexture {
     colCtx.fillRect(-r, -r, 2 * r, 2 * r);
     colCtx.restore();
   }
-  const out = { map: texture(colC, L.size, true), normal: normalFromHeight(`roof|${style}`, bmpC, L.size), normalScale: L.normalScale, roughness: L.roughness };
+  const out = { map: texture(colC, L.size, true), bump: texture(bmpC, L.size, false), roughness: L.roughness };
   cache.set(style, out);
   return out;
 }

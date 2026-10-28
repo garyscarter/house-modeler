@@ -803,14 +803,14 @@ function neighbourWallBase(color: string): THREE.MeshStandardMaterial {
   const finish = hsl.s > 0.25 && hsl.l < 0.7 ? "brick" : "render";
   return neighbourBase(`wall|${finish}|${color}`, () => {
     const m = (getMaterial({ kind: "ext", finish, color: mixToGrey(color, WALL_DESAT) }) as THREE.MeshStandardMaterial).clone();
-    m.normalScale.multiplyScalar(NEIGHBOUR_BUMP);
+    m.bumpScale *= NEIGHBOUR_BUMP;
     return m;
   });
 }
 function neighbourRoofBase(color: string): THREE.MeshStandardMaterial {
   return neighbourBase(`roof|${color}`, () => {
     const tex = tileTextures("plain");
-    return new THREE.MeshStandardMaterial({ color: mixToGrey(color, ROOF_DESAT), map: tex.map, normalMap: tex.normal, normalScale: new THREE.Vector2(tex.normalScale * NEIGHBOUR_BUMP, tex.normalScale * NEIGHBOUR_BUMP), roughness: tex.roughness, side: THREE.DoubleSide });
+    return new THREE.MeshStandardMaterial({ color: mixToGrey(color, ROOF_DESAT), map: tex.map, bumpMap: tex.bump, bumpScale: 2 * NEIGHBOUR_BUMP, roughness: tex.roughness, side: THREE.DoubleSide });
   });
 }
 function quietBase(color: string): THREE.MeshStandardMaterial {

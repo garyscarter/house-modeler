@@ -82,9 +82,6 @@ function leafColour(op: Opening): string {
   return op.kind === "door" ? "#c9a26b" : "#b3202e";
 }
 
-/** Front and garage doors are gloss-painted: a full clear coat over the leaf and its panels. Others are matt or oiled. */
-const glossLeaf = (op: Opening | null): number | undefined => (op?.kind === "front" || op?.kind === "garage" ? 1 : undefined);
-
 /** Painted internal woodwork: linings, architraves and window boards unless an opening says otherwise. */
 const JOINERY_WHITE = DEFAULT_LINING;
 
@@ -111,11 +108,11 @@ function partSpec(mat: PartMat, op: Opening | null, trim: string, side?: 1 | -1)
       // Stone or concrete sills are pale; uPVC sills match the frame.
       return op?.sillStyle === "upvc" ? { kind: "plain", color: frame, roughness: 0.5 } : { kind: "plain", color: "#d6d2c8", roughness: 0.85 };
     case "leaf":
-      return { kind: "plain", color: leafBase(), roughness: 0.55, clearcoat: glossLeaf(op) };
+      return { kind: "plain", color: leafBase(), roughness: 0.55 };
     case "panel": {
       // Raised panels catch the light: a lighter shade, or a slightly darker one on white doors.
       const c = leafBase();
-      return { kind: "plain", color: shade(c, new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l > 0.8 ? 0.95 : 1.14), roughness: 0.5, clearcoat: glossLeaf(op) };
+      return { kind: "plain", color: shade(c, new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }).l > 0.8 ? 0.95 : 1.14), roughness: 0.5 };
     }
     case "groove":
       return { kind: "plain", color: shade(leafBase(), 0.55), roughness: 0.8 };

@@ -7,7 +7,7 @@ import { blotches, canvas, css, grain, rng, tint, vary, type Ctx } from "./textu
  * Modern wall finishes (panelling, boards, metro and zellige tiles, limewash,
  * deco and leaf wallpapers, microcement), drawn once on small canvases. Like
  * the other coverings each covers a known patch of wall in metres, so sizes
- * stay real; each has a height map for normal-mapped relief where it has any.
+ * stay real; each has a height map for bump relief where it has any.
  *
  * Only functions here use the helpers imported from textures.ts (the two
  * files import each other), never anything at module level.
@@ -81,38 +81,22 @@ const ROUGHNESS: Record<ModernCover, number> = {
 };
 export const modernRoughness = (p: ModernCover) => ROUGHNESS[p];
 
-/** How strongly the normal map (from the height map) shows: tiles 0.8, boards and panels 0.5, plasterwork barely. */
-const NORMAL_SCALE: Record<ModernCover, number> = {
-  panelling: 0.5,
-  panellingFull: 0.5,
-  batten: 0.5,
-  tongue: 0.5,
-  metro: 0.8,
-  metroSplash: 0.8,
-  zellige: 0.8,
-  limewash: 0.3,
-  deco: 0.5,
-  leaves: 0.5,
-  jungle: 0.5,
-  microcement: 0.2,
+/** How strongly the height map shows. */
+const BUMP: Record<ModernCover, number> = {
+  panelling: 1.4,
+  panellingFull: 1.4,
+  batten: 1.4,
+  tongue: 1.2,
+  metro: 1.2,
+  metroSplash: 1.2,
+  zellige: 1,
+  limewash: 0.35,
+  deco: 1,
+  leaves: 1,
+  jungle: 1,
+  microcement: 0.25,
 };
-export const modernNormalScale = (p: ModernCover) => NORMAL_SCALE[p];
-/** How much rougher the joints (low in the height map) are than the face: grout on glazed tiles most. */
-const JOINT_ROUGHNESS: Record<ModernCover, number> = {
-  panelling: 0.1,
-  panellingFull: 0.1,
-  batten: 0.1,
-  tongue: 0.1,
-  metro: 0.55,
-  metroSplash: 0.55,
-  zellige: 0.55,
-  limewash: 0,
-  deco: 0,
-  leaves: 0,
-  jungle: 0,
-  microcement: 0,
-};
-export const modernJointRoughness = (p: ModernCover) => JOINT_ROUGHNESS[p];
+export const modernBump = (p: ModernCover) => BUMP[p];
 
 type Drawn = { color: HTMLCanvasElement; height: HTMLCanvasElement | null };
 

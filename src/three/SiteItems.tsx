@@ -22,10 +22,10 @@ import { GROUND_Y } from "./Site";
  * (lib/gardenParts.ts, lib/plantForms.ts) are placed on the ground under it,
  * turned by its rotation, and merged into one geometry per finish, colours
  * riding on vertex colours, so a garden of any size costs a handful of draw
- * calls. Festoon bulbs are one instanced mesh for the site. Lights' bulbs
- * glow (emissive, stronger as the sun goes down), with a soft halo and a
- * painted pool of light on the ground; their real light comes from the
- * house's lamp light pool (lib/siteLights.ts, fed to LampLights in House.tsx).
+ * calls. Festoon bulbs are one instanced mesh for the site. Lights have no
+ * real light: their bulbs glow (emissive, stronger as the sun goes down),
+ * with a soft halo and, for bollards and wall lights, a pool of light on the
+ * ground.
  */
 export function SiteItems({ site, quiet, buildings = [] }: { site: Site; quiet: boolean; buildings?: V2[][] }) {
   const built = useMemo(

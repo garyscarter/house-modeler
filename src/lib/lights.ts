@@ -192,11 +192,10 @@ export const POOL: Record<Quality, PoolCap> = {
  * The pool a house needs: a slot per lamp bulb it has (spot or point), counted over every floor and every light
  * fitting whether switched on or not, so the size changes only when a light fitting is added or removed, never at
  * the switch or when a floor is hidden. Over `cap.total`, each kind gets up to half and the rest goes to whichever
- * still wants it. `extraPoints` adds point-light demand from outside the house (the garden's lights, lib/siteLights.ts
- * gardenPoolDemand). Returns `prev` itself when the numbers are the same.
+ * still wants it. Returns `prev` itself when the numbers are the same.
  */
-export function poolFor(model: Pick<HouseModel, "floors" | "ceilingHeight">, cap: PoolCap, prev: PoolSizes | null = null, extraPoints = 0): PoolSizes {
-  let points = Math.max(0, extraPoints);
+export function poolFor(model: Pick<HouseModel, "floors" | "ceilingHeight">, cap: PoolCap, prev: PoolSizes | null = null): PoolSizes {
+  let points = 0;
   let spots = 0;
   for (const f of model.floors) for (const l of floorLamps(f, model.ceilingHeight, 0, () => true)) if (l.spot) spots++; else points++;
   const half = Math.ceil(cap.total / 2);
