@@ -44,9 +44,10 @@ export function LampLights({ lamps, sizes }: { lamps: LampLight[]; sizes: PoolSi
   const invalidate = useThree((s) => s.invalidate);
   const group = useRef<THREE.Group>(null);
   useLampPool(group);
-  // The first run is the mount, which Precompile's own pass covers.
+  // The first run is the mount, which Precompile's own pass covers. A layout effect, so the lights are held off (see
+  // useLampWarming) before the frame that would draw the new size and stall on its shaders.
   const sized = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (sized.current) lampPoolChanged(gl);
     sized.current = true;
   }, [gl, sizes]);

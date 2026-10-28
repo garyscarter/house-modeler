@@ -3,7 +3,7 @@ import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "../types"
 import type { V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { SunControls } from "../components/SunControls";
-import { Viewer } from "./Viewer";
+import { LightsWarming, Viewer } from "./Viewer";
 import { ViewCube } from "./ViewCube";
 import "./Wipe.css";
 
@@ -82,6 +82,7 @@ export function WipeCompare(p: WipeCompareProps) {
         )}
         <ViewCube />
         <SunControls />
+        {model && <LightsWarming model={model} />}
       </div>
     );
   }
@@ -163,6 +164,7 @@ export function WipeCompare(p: WipeCompareProps) {
 
       <ViewCube />
       <SunControls />
+      <LightsWarming model={proposed} />
     </div>
   );
 }

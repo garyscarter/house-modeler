@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { useStore } from "../store";
 import { useSiteView } from "./siteView";
 import { trackScene } from "./textures";
-import { lampPoolsOf, lampStats, onLampPoolChange } from "./lampPool";
+import { lampPoolsOf, lampStats, onLampPoolChange, setLampWarming } from "./lampPool";
 
 /** Frames to redraw the shadow map for after mounting, while the scene settles. */
 const MOUNT_FRAMES = 3;
@@ -124,8 +124,8 @@ export function useOffstageCompile(objects: THREE.Object3D[]) {
 
 /** Longest wait for shaders to compile before drawing anyway, ms. */
 const COMPILE_TIMEOUT = 5000;
-/** Programs given their first use per frame while the other lamp state is built in the background. */
-const WARM_PER_FRAME = 2;
+/** Main-thread time per frame for building the other lamp state's programs in the background, ms. */
+const WARM_SLICE_MS = 8;
 /** Quiet time after the renderer's programs last grew before the other lamp state is built for the newcomers, ms. */
 const REWARM_MS = 600;
 
@@ -157,6 +157,9 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
 
   useEffect(() => {
     let cancelled = false;
+    // This run's mark in the warming set: lights are held off until the other lamp state is built.
+    const warmKey = {};
+    setLampWarming(warmKey, true);
     lampStats.litReady = false;
     // compileAsync picks each program while it is called; only the wait for linking is async. `added` lists the programs this call created.
     const compileNow = () => {
@@ -175,43 +178,109 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
     };
     let stopWatch = () => {};
     let rewarm = 0;
-    let running: Promise<void> | null = null;
+    // The pass in flight, resolving to the pool generation it built for.
+    let running: Promise<number> | null = null;
+    // Pool size changes (a light fitting added or removed), counted from the start, so one that lands during a pass
+    // makes that pass go again: its programs were for the old size.
+    let poolGen = 0;
+    let onPool = () => {};
+    const stopPool = onLampPoolChange(gl, () => {
+      poolGen++;
+      onPool();
+    });
     // The other lamp state, in the background: three bakes the light counts into every lit material's shader, so with
     // the lamp pool hidden (no lamp lit) the lit programs don't exist yet, and with it shown the unlit ones don't.
-    // Building that variant now means switching lights compiles nothing.
+    // Building that variant now means switching lights compiles nothing. It goes a material at a time, a few
+    // milliseconds a frame, so a driver that compiles on the main thread never stops the page for long.
+    const isReady = (p: THREE.WebGLProgram) => (p as unknown as { isReady(): boolean }).isReady();
     const otherLampState = () =>
       (running ??= (async () => {
         const pools = lampPoolsOf(gl);
+        const target = offscreen ? new THREE.WebGLRenderTarget(1, 1) : null;
+        // The pool this pass builds for: taken when it reads the scene, so a change after that sends warmFully round again.
+        let gen = -1;
         try {
           await nextFrame();
           await nextFrame();
-          if (cancelled) return;
-          const was = pools.map((o) => o.visible);
-          let added: THREE.WebGLProgram[] = [];
-          try {
-            for (const o of pools) o.visible = !o.visible;
-            added = compileNow().added();
-          } finally {
-            pools.forEach((o, i) => (o.visible = was[i]));
+          if (cancelled) return gen;
+          gen = poolGen;
+          // One object per material (and the offstage stand-ins): compiling it compiles that material's program.
+          const reps = new Map<THREE.Material, THREE.Object3D>();
+          const take = (o: THREE.Object3D) => {
+            const m = (o as THREE.Mesh).material;
+            for (const mm of m ? (Array.isArray(m) ? m : [m]) : []) if (!reps.has(mm)) reps.set(mm, o);
+          };
+          scene.traverseVisible(take);
+          for (const o of offstage.get(gl) ?? []) take(o);
+          const entries = [...reps];
+          // Still drawn: its object still wears the material, and is still in this scene or still a stand-in. One that
+          // went in the meantime (unmounted, recoloured) is skipped, or compiling it would build a program nothing frees.
+          const live = (m: THREE.Material, o: THREE.Object3D) => {
+            const cur = (o as THREE.Mesh).material;
+            if (!(Array.isArray(cur) ? cur.includes(m) : cur === m)) return false;
+            if (offstage.get(gl)?.has(o)) return true;
+            let root: THREE.Object3D = o;
+            while (root.parent) root = root.parent;
+            return root === scene;
+          };
+          const added: THREE.WebGLProgram[] = [];
+          // Picks one object's programs for the other lamp state, as Precompile's first pass does for the scene.
+          const compileOne = (o: THREE.Object3D) => {
+            const had = new Set<THREE.WebGLProgram>(gl.info.programs ?? []);
+            const was = pools.map((x) => x.visible);
+            const previous = gl.getRenderTarget();
+            try {
+              for (const x of pools) x.visible = !x.visible;
+              gl.setRenderTarget(target);
+              gl.compile(o, camera, scene);
+            } finally {
+              gl.setRenderTarget(previous);
+              pools.forEach((x, i) => (x.visible = was[i]));
+            }
+            for (const p of gl.info.programs ?? []) if (!had.has(p)) added.push(p);
+          };
+          // Submitting is cheap (the driver links in the background); a program's first use checks its link and reads
+          // its uniforms, which waits for that link. So: submit everything a slice at a time, let the driver finish
+          // where it says when (KHR_parallel_shader_compile), then give each program its first use a slice at a time.
+          const firstUse = (p: THREE.WebGLProgram) => {
+            if ((gl.info.programs ?? []).includes(p)) p.getUniforms();
+          };
+          const done = new Set<THREE.Object3D>();
+          for (let i = 0; i < entries.length && !cancelled; ) {
+            const t0 = performance.now();
+            do {
+              const [m, o] = entries[i++];
+              if (done.has(o) || !live(m, o)) continue;
+              done.add(o);
+              compileOne(o);
+            } while (i < entries.length && performance.now() - t0 < WARM_SLICE_MS);
+            await nextFrame();
           }
-          // Not compileAsync's own promise: a render in between points materials back at the other variant, so poll these programs.
           const end = performance.now() + COMPILE_TIMEOUT;
-          // A program released in the meantime (a material disposed) drops out of the list; don't read it.
-          const ready = (p: THREE.WebGLProgram | undefined) => !p || typeof (p as unknown as { isReady?: () => boolean }).isReady !== "function" || (p as unknown as { isReady(): boolean }).isReady();
-          while (!cancelled && performance.now() < end && !added.every(ready)) await new Promise((r) => setTimeout(r, 16));
-          // A program's first use checks its link and reads its uniforms, which blocks until it is linked (at once
-          // where the driver can't link in parallel): do that here, a few per frame, not in the frame that switches.
-          for (let i = 0; i < added.length && !cancelled; i += WARM_PER_FRAME) {
-            const live = new Set(gl.info.programs ?? []);
-            for (const p of added.slice(i, i + WARM_PER_FRAME)) if (live.has(p)) p.getUniforms();
+          // A program released in the meantime (a material disposed) is settled: a deleted program never reports ready.
+          const settled = () => {
+            const alive = new Set(gl.info.programs ?? []);
+            return added.every((p) => !alive.has(p) || typeof (p as unknown as { isReady?: () => boolean }).isReady !== "function" || isReady(p));
+          };
+          while (!cancelled && performance.now() < end && !settled()) await new Promise((r) => setTimeout(r, 16));
+          for (let j = 0; j < added.length && !cancelled; ) {
+            const t0 = performance.now();
+            do firstUse(added[j++]);
+            while (j < added.length && performance.now() - t0 < WARM_SLICE_MS);
             await nextFrame();
           }
         } catch {
           // Only an optimisation.
         } finally {
+          target?.dispose();
           running = null;
         }
+        return gen;
       })());
+    // A pass that is current for the pool it ends with: again while the pool changed size during it.
+    const warmFully = async () => {
+      while (!cancelled && (await otherLampState()) !== poolGen);
+    };
     void (async () => {
       try {
         await prepare.current?.();
@@ -225,17 +294,23 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       }
       if (cancelled) return;
       done.current(token);
-      await otherLampState();
+      await warmFully();
       if (cancelled) return;
       lampStats.litReady = true;
+      setLampWarming(warmKey, false);
       // Materials that first appear later (a new colour, a fitting added) were compiled only for the lamp state they
       // appeared in, and a pool that changes size (a light fitting added or removed) needs both states again: once the
       // renderer's programs stop growing, or the pool settles, build the other variant too.
       let known = gl.info.programs?.length ?? 0;
-      const later = () => {
+      const later = (hold = false) => {
+        // A pool that changed size holds the lights off until both its states are built.
+        if (hold) setLampWarming(warmKey, true);
         window.clearTimeout(rewarm);
         rewarm = window.setTimeout(() => {
-          void otherLampState().then(() => (known = gl.info.programs?.length ?? 0));
+          void warmFully().then(() => {
+            known = gl.info.programs?.length ?? 0;
+            if (!cancelled) setLampWarming(warmKey, false);
+          });
         }, REWARM_MS);
       };
       const stopAfter = addAfterEffect(() => {
@@ -244,16 +319,15 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
         known = n;
         later();
       });
-      const stopPool = onLampPoolChange(gl, later);
-      stopWatch = () => {
-        stopAfter();
-        stopPool();
-      };
+      onPool = () => later(true);
+      stopWatch = stopAfter;
     })();
     return () => {
       cancelled = true;
       stopWatch();
+      stopPool();
       window.clearTimeout(rewarm);
+      setLampWarming(warmKey, false);
     };
   }, [gl, scene, camera, token, offscreen]);
   return null;

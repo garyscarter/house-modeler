@@ -10,6 +10,7 @@ import { ceilingY } from "../lib/ceiling";
 import { Roof } from "./Roof";
 import { Fixtures, setLampGlow } from "./Fixtures";
 import { LampLights } from "./FixtureLights";
+import { useLampsReady } from "./lampPool";
 import { useSunInfo } from "./useSun";
 import { nightDark } from "./Lighting";
 import { byId } from "../lib/catalogue";
@@ -102,7 +103,9 @@ export function House({
   const sun = useSunInfo();
   const altitude = sun?.active ? sun.position.altitude : null;
   const master = useStore((s) => lightsMaster(s.sun));
-  const lampsOn = !ghost && masterAllows(master, altitude);
+  // Held off while the lit shaders are still being built (useLampWarming), so the switch never waits on a compile.
+  const lampsReady = useLampsReady();
+  const lampsOn = !ghost && lampsReady && masterAllows(master, altitude);
   // Tenths, so a playing sun re-renders the floors only when the ceilings visibly change.
   const ceilingGlow = Math.round((1 - nightDark(altitude)) * 10) / 10;
   const floorKey = floors.map((f) => f.id).join();
