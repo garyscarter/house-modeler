@@ -5,11 +5,15 @@
 // Plot boundary in red, neighbours in blue, the house footprint (each ground-floor room) in green.
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fail, loadHouse, parseArgs, root, screenshot } from "./_lib.mjs";
+import { fail, helpAndExit, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed } from "./_lib.mjs";
 
+const usage = `Usage: npm run house:map -- <id> <map.png> --scale <px per m> --origin <x,y> [--bearing deg] [--out file.png]
+Draws the plot over the map image. The picture goes to /tmp/storey-shots/<id>/map-overlay.png unless --out names a file.
+Flags need -- after the script name when run through npm.`;
+helpAndExit(process.argv.slice(2), usage);
 const { flags, pos } = parseArgs(process.argv.slice(2));
+takeSwallowed(flags, ["scale", "origin", "bearing", "out"], "house:map");
 const [id, mapFile] = pos;
-const usage = "Usage: npm run house:map <id> <map.png> --scale <px per m> --origin <x,y> [--bearing deg] [--out file.png]";
 if (!id || !mapFile) fail(usage);
 const scale = Number(flags.scale);
 const origin = (flags.origin ?? "").split(",").map(Number);
@@ -41,7 +45,7 @@ const data = {
   scale,
   bearing,
 };
-const out = path.resolve(flags.out ?? `map-${id}.png`);
+const out = flags.out ? path.resolve(flags.out) : path.join(shotsDir(id), "map-overlay.png");
 const html = `<!doctype html><meta charset="utf-8"><style>body{margin:0}svg{display:block}</style>
 <svg id="s" xmlns="http://www.w3.org/2000/svg"></svg>
 <script>
@@ -68,4 +72,4 @@ im.onload = () => {
 im.src = "data:image/${ext || "png"};base64,${map.toString("base64")}";
 </script>`;
 await screenshot(html, out);
-console.log(`Wrote ${path.relative(root, out) || out} (boundary ${site.boundary.length} corners, ${site.neighbours.length} neighbours, front faces ${bearing} deg)`);
+console.log(`Wrote ${out} (boundary ${site.boundary.length} corners, ${site.neighbours.length} neighbours, front faces ${bearing} deg)`);

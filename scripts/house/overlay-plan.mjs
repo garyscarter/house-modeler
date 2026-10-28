@@ -2,11 +2,16 @@
 // Usage: npm run house:overlay <id> [--floor n] [--out file.png] [--variant <preset id>]
 // Rooms are red, openings are coloured by kind (key in the corner), stairs are a purple box with an arrow.
 import path from "node:path";
-import { fail, floorplanDataUrl, loadHouse, parseArgs, root, screenshot } from "./_lib.mjs";
+import { fail, floorplanDataUrl, helpAndExit, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed } from "./_lib.mjs";
 
+const usage = `Usage: npm run house:overlay -- <id> [--floor n] [--out file.png] [--variant <preset id>]
+Draws the traced rooms over the floorplan image. The picture goes to /tmp/storey-shots/<id>/overlay-floor<n>.png
+unless --out names a file. Flags need -- after the script name when run through npm.`;
+helpAndExit(process.argv.slice(2), usage);
 const { flags, pos } = parseArgs(process.argv.slice(2));
+takeSwallowed(flags, ["floor", "out", "variant"], "house:overlay");
 const id = pos[0];
-if (!id) fail("Usage: npm run house:overlay <id> [--floor n] [--out file.png] [--variant <preset id>]");
+if (!id) fail(usage);
 const { def } = await loadHouse(id);
 const preset = flags.variant ?? def.main;
 if (!def.presets[preset]) fail(`House ${id} has no preset "${preset}" (has: ${Object.keys(def.presets).join(", ")}).`);
@@ -14,7 +19,7 @@ const model = def.presets[preset].build("");
 const level = flags.floor === undefined ? 0 : Number(flags.floor);
 const floor = model.floors.find((f) => f.level === level) ?? model.floors[level];
 if (!floor) fail(`No floor ${flags.floor ?? 0} (levels: ${model.floors.map((f) => f.level).join(", ")}).`);
-const out = path.resolve(flags.out ?? `overlay-${id}-floor${floor.level}.png`);
+const out = flags.out ? path.resolve(flags.out) : path.join(shotsDir(id), `overlay-floor${floor.level}.png`);
 
 const COLOURS = { door: "#ff8c00", window: "#00a0ff", patio: "#00a078", bay: "#00c8ff", front: "#dc0000", garage: "#965000", gap: "#888888", french: "#00a078", bifold: "#00a078", archway: "#c800c8" };
 const data = {
@@ -66,4 +71,4 @@ function draw() {
 draw();
 </script>`;
 await screenshot(html, out);
-console.log(`Wrote ${path.relative(root, out) || out} (${floor.name}, ${floor.rooms.length} rooms, ${floor.openings.length} openings${floor.stairs ? ", stairs" : ""}${floorplanDataUrl(id) ? "" : "; no floorplan image yet"})`);
+console.log(`Wrote ${out} (${floor.name}, ${floor.rooms.length} rooms, ${floor.openings.length} openings${floor.stairs ? ", stairs" : ""}${floorplanDataUrl(id) ? "" : "; no floorplan image yet"})`);

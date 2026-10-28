@@ -1,6 +1,10 @@
 // `npm run soundcheck`: can this checkout run Storey? Node version, dependencies and the houses registry, and the
 // house folder when one is being set up, and a browser for the screenshot steps. Exits 1 when a check fails.
-import { browserAvailable, readLocal, soundcheck } from "./_lib.mjs";
+import { browserAvailable, helpAndExit, readLocal, soundcheck } from "./_lib.mjs";
+
+helpAndExit(process.argv.slice(2), `Usage: npm run soundcheck
+Checks this checkout can run Storey: Node version, dependencies, houses registry, the local house folder and a browser
+for screenshots. Prints a line per check; exits 1 when one fails.`);
 
 const local = readLocal();
 const id = local && typeof local.house === "string" ? local.house : null;

@@ -1,8 +1,12 @@
 // Where am I? `npm run welcome` prints the right next step for this checkout, from the gitignored .storey-local.json.
 // --hook   for the SessionStart hook: silent unless there is something new (first welcome) or the intake is not ready yet.
 // --quiet  silent when the house is ready or no house is being set up.
-import { beadsOf, bracelet, houseIsIn, intakeLines, intakeState, nextEra, readLocal, soundcheckLines, surpriseSong, welcomeText, writeLocal } from "./_lib.mjs";
+import { beadsOf, bracelet, helpAndExit, houseIsIn, intakeLines, intakeState, nextEra, readLocal, soundcheckLines, surpriseSong, welcomeText, writeLocal } from "./_lib.mjs";
 
+helpAndExit(process.argv.slice(2), `Usage: npm run welcome [-- --hook | --quiet]
+Prints the right next step for this checkout, from the gitignored .storey-local.json.
+--hook   for the SessionStart hook: silent unless there is something new or the intake is not ready.
+--quiet  silent when the house is ready or no house is being set up.`);
 const hook = process.argv.includes("--hook");
 const HOOK_NOTE =
   "Storey first-run note for Claude: share the welcome below only if the person is new to this repo, asks how to start, or wants to add a house; otherwise leave it unsaid. When you share it, keep its gig framing (Ed Sheeran's support act is their intake, Taylor headlines as you building the house).";

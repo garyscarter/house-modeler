@@ -1,6 +1,6 @@
 // Shared by the house overlay scripts: load a house definition through Vite (no extra dependency) and render an
 // HTML page to a PNG with the pre-installed Playwright.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,38 @@ export function parseArgs(argv) {
     else pos.push(argv[i]);
   }
   return { flags, pos };
+}
+
+/** Print `text` and exit 0 when argv asks for help (--help or -h). Call it first in a script, before anything else. */
+export function helpAndExit(argv, text) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(text);
+    process.exit(0);
+  }
+}
+
+/**
+ * npm swallows flags given without `--` (`npm run house:bead --house x red` sets npm_config_house instead of passing
+ * the flag on). For each named flag that is missing, take the value from npm_config_<name> and print a tip once.
+ */
+export function takeSwallowed(flags, names, script) {
+  let tipped = false;
+  for (const n of names) {
+    const v = process.env[`npm_config_${n}`];
+    if (flags[n] === undefined && v !== undefined && v !== "" && v !== "true") {
+      flags[n] = v;
+      if (!tipped) console.log(`Tip: put -- before flags: npm run ${script} -- --${n} ${v}`);
+      tipped = true;
+    }
+  }
+  return flags;
+}
+
+/** The folder for a script's pictures, /tmp/storey-shots/<id>/ unless --out names another; created if missing. */
+export function shotsDir(id, out) {
+  const dir = path.resolve(out ?? path.join("/tmp/storey-shots", id));
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 export function fail(msg) {
