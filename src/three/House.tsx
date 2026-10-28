@@ -14,6 +14,8 @@ import { Roof } from "./Roof";
 import { Fixtures, setLampGlow } from "./Fixtures";
 import { LampLights } from "./FixtureLights";
 import { useSunInfo } from "./useSun";
+import { useViewedSite } from "./viewedVariant";
+import { gardenLamps, gardenPoolDemand } from "../lib/siteLights";
 import { nightDark } from "./Lighting";
 import { byId } from "../lib/catalogue";
 import { controlIndex } from "../lib/electrics";
@@ -117,15 +119,21 @@ export function House({
   // Lights held dark by a wall switch that is off (switches may sit on another floor), by id; the set keeps its identity until that changes.
   const blockedKey = useMemo(() => [...controlIndex(model)].filter(([, sws]) => sws.some((c) => !c.on)).map(([id]) => id).sort().join(), [model]);
   const blocked = useMemo<ReadonlySet<string>>(() => new Set(blockedKey ? blockedKey.split(",") : []), [blockedKey]);
-  const lamps = useMemo(
+  const houseLamps = useMemo(
     () => (lampsOn ? floors.flatMap((f) => floorLamps(f, model.ceilingHeight, floorBaseY(model, f), (fx) => switchedOn(fx) && !blocked.has(fx.id))) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lampsOn, floorKey, model, blocked],
   );
+  // The garden's lights (lib/siteLights.ts) share the pool, competing for its slots by distance to the view's focus.
+  const site = useViewedSite();
+  const showSite = useStore((s) => s.showSite);
+  const garden = useMemo(() => (!ghost && showSite ? gardenLamps(site, master, altitude, GROUND_Y) : []), [ghost, showSite, site, master, altitude]);
+  const lamps = useMemo(() => (garden.length ? [...houseLamps, ...garden] : houseLamps), [houseLamps, garden]);
+  const gardenDemand = useMemo(() => gardenPoolDemand(site), [site]);
   // The pool of real lights is sized to the house, so its shaders change only when a light fitting is added or removed.
   const quality = useStore((s) => s.settings.quality);
   const pool = useRef<PoolSizes | null>(null);
-  const sizes = useMemo(() => (pool.current = poolFor(model, POOL[quality], pool.current)), [model, quality]);
+  const sizes = useMemo(() => (pool.current = poolFor(model, POOL[quality], pool.current, gardenDemand)), [model, quality, gardenDemand]);
   const invalidate = useThree((s) => s.invalidate);
   const glow = lampGlow(true, altitude);
   useEffect(() => {
