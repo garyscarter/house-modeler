@@ -57,6 +57,15 @@ npm run build && PASSCODE=choose-a-passcode npm start
 
 Then open <http://localhost:10000> (set `PORT` to change it). The server refuses to start without a `PASSCODE`.
 
+## Adding your own house
+
+A house is a folder, `src/houses/<id>/`, with its tracing, floorplan, photos and `NOTES.md`; the id is a slug, never an address.
+
+1. Copy `reference/_template/INTAKE.md` to `reference/<id>/INTAKE.md` and fill it in: floorplan, photos, a north-up map with a scale, and ten short answers. About 30 minutes, no Claude needed.
+2. In Claude Code in this repo, run `/eras-tour`. It scaffolds the house, traces the floorplan, builds the exterior and plot, checks them, and then offers an optional fidelity pass (finishes, garden, camera-fitted heights).
+3. Ask the repo owner to add your passcode to `PASSCODES` on Render; the passcode opens your house and keeps its project separate from the others.
+4. Optionally publish your own single-file build with `npm run build:hosted -- --house <id>`.
+
 ## Listing 91770873
 
 **Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan and 37 photos are bundled (**Photos → Load listing 91770873 photos**). `src/houses/listing-91770873/NOTES.md` records the facts used and where each came from.
