@@ -1,5 +1,6 @@
 // Render performance of the 3D view in headless Chromium (SwiftShader), for comparing commits.
 // Usage: npx vite --port 5253 & then PORT=5253 LABEL=head QUALITY=high EXTRA=1 LAMPS=3 node scripts/perf-render.cjs (LAMPS: fittings per room, pendants and spot bars)
+// PROJECT=/path/to/export.json measures a real project instead (loaded like Import JSON; the synthetic lamps are skipped).
 // Adds a pendant to every room (and floor lamps; EXTRA=1 gives Proposed more, so the lamp pool resizes on a switch),
 // wraps the renderer's render() with a GPU sync, then times layout switches, a sun move, a day and a night orbit, and
 // the lights switching, printing per step the span, render ms, draw calls, triangles and the shader program count.
@@ -18,8 +19,15 @@ const log = (...a) => console.log(LABEL, ...a);
   await page.waitForSelector('.dock', { timeout: 120000 });
   await page.waitForTimeout(8000);
   await page.evaluate(([q, x, n]) => { window.__perfQuality = q; window.__perfExtra = x; window.__perfLamps = n; }, [QUALITY, process.env.EXTRA === '1', Number(process.env.LAMPS || 1)]);
+  // PROJECT=path: load an exported project (Settings, Project, Export JSON) the way Import JSON does, instead of the built-in house's synthetic lamps.
+  if (process.env.PROJECT) {
+    const data = JSON.parse(require('fs').readFileSync(process.env.PROJECT, 'utf8'));
+    const ok = await page.evaluate(async (d) => (await import('/src/lib/sync.ts')).applyProject(d), data);
+    log('project loaded', ok, await page.evaluate(() => { const s = window.__houseStore.getState(); const n = (m) => m ? m.floors.reduce((a, f) => a + f.rooms.length, 0) + ' rooms, ' + m.floors.reduce((a, f) => a + (f.fixtures || []).length, 0) + ' fixtures' : 'none'; return `current ${n(s.variants.current)}; proposed ${n(s.variants.proposed)}`; }));
+    await page.waitForTimeout(8000);
+  }
   // Lamps: a pendant in every room of both layouts, and a floor lamp in the first two rooms of each ground floor.
-  await page.evaluate(() => {
+  if (!process.env.PROJECT) await page.evaluate(() => {
     const s = window.__houseStore.getState();
     for (const k of ['current', 'proposed']) {
       const m = s.variants[k]; if (!m) continue;
