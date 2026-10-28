@@ -71,10 +71,12 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
     if (dirty.current <= 0) return;
     // Every casting light keeps its own flag (shadow.autoUpdate false, set where the light is made), so a spot that
     // moves slot redraws only its own map. Here the scene changed, so every lit caster redraws; a light at intensity 0
-    // (the sun below the horizon) has nothing to show and its 4096 map is the dearest pass there is.
+    // (the sun below the horizon) has nothing to show and its 4096 map is the dearest pass there is. A map that has
+    // never been drawn must be drawn regardless: the lit shaders sample it, and an unallocated one fails every draw
+    // call (GL_INVALID_OPERATION, a blank scene when the page opens straight into night).
     scene.traverse((o) => {
       const light = o as THREE.Light & { shadow?: THREE.LightShadow };
-      if (light.isLight && light.castShadow && light.shadow) light.shadow.needsUpdate = light.intensity > 0;
+      if (light.isLight && light.castShadow && light.shadow && (light.intensity > 0 || !light.shadow.map)) light.shadow.needsUpdate = true;
     });
     gl.shadowMap.needsUpdate = true;
     dirty.current--;
