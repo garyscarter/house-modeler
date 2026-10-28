@@ -1,6 +1,8 @@
 # Listing 91770873: reference notes
 
-Facts used to build the built-in model (`house.ts` beside this file), and where each came from. Assets are in `assets/` (the listing's floorplan and 37 photos).
+The listing's 37 photos are not part of the app: they are in `reference/listing-91770873/photos/` (the names cited below, such as front-1 or rear-4, are their file names).
+
+Facts used to build the built-in model (`house.ts` beside this file), and where each came from. The listing's floorplan is in `assets/`.
 
 ## The house
 

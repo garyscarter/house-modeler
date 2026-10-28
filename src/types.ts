@@ -889,14 +889,6 @@ export interface SiteSurface {
   kerbHeight?: number;
 }
 
-export type Elevation = "front" | "rear" | "left" | "right";
-export const ELEVATION_LABEL: Record<Elevation, string> = {
-  front: "Front (bottom of plan)",
-  rear: "Rear (top of plan)",
-  left: "Left side",
-  right: "Right side",
-};
-
 export type VariantKey = "current" | "proposed";
 
 export const VARIANT_LABEL: Record<VariantKey, string> = {
