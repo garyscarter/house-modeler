@@ -61,6 +61,8 @@ interface ViewerProps {
 /** Post-processing (and its libraries) load only when "high" quality turns it on. */
 const loadEffects = () => import("./Effects");
 const Effects = lazy(() => loadEffects().then((m) => ({ default: m.Effects })));
+/** The experimental passes, a second lazy chunk that Effects mounts only while a toggle is on. */
+const loadExperimental = () => import("./ExperimentalEffects");
 
 /**
  * The 3D view. While hidden (`active` false) it keeps its WebGL context,
@@ -110,7 +112,8 @@ function ViewerImpl(props: ViewerProps) {
   }, []);
   useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
   const frameloop = active && compiled === quality ? "demand" : "never";
-  const before = useCallback(() => (quality === "high" ? loadEffects() : Promise.resolve()), [quality]);
+  const experimental = useStore((s) => s.settings.quality === "high" && !!s.settings.effects?.reflections);
+  const before = useCallback(() => (quality === "high" ? Promise.all([loadEffects(), experimental && loadExperimental()]) : Promise.resolve()), [quality, experimental]);
 
   // Right-click menu on a room. The handler is kept stable (it reads the latest props through a ref) so floors stay memoised.
   const [menu, setMenu] = useState<MenuState | null>(null);
