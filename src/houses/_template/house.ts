@@ -210,8 +210,10 @@ export function templateHouse(image: string): HouseModel {
       flatRoofSkirt: { sides: ["front"], depth: 1.2, pitchDeg: 30, returns: 0.8 },
     },
     preset: { ...TEMPLATE_PRESET },
-    // The total area printed on the floorplan (m²), to check the tracing against; leave it out when none is printed.
-    // listedArea: 100,
+    // The total area printed on the floorplan (m²). The lint holds the model's internal area (the Report's "measured
+    // like the listing" figure) to within 3% of it, which is how a wrong floorplan scale shows up. Leave it out only
+    // when no total is printed.
+    listedArea: 90,
   };
 }
 
