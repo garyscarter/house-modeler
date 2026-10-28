@@ -1,0 +1,6 @@
+/* The Render dialog sits in a corner over a clear backdrop, so the still can be watched building up in the 3D view. */
+.modal-backdrop:has(> .render-dialog) { background: transparent; align-items: flex-end; justify-content: flex-end; }
+.render-dialog .render-progress { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; font-variant-numeric: tabular-nums; }
+.render-dialog .render-preview { display: block; width: 100%; height: auto; border-radius: var(--radius-s); border: 1px solid var(--line); margin-bottom: 14px; }
+.render-dialog .row { display: flex; gap: 8px; justify-content: flex-end; }
+.app[data-chassis="phone"] .modal-backdrop:has(> .render-dialog) { justify-content: stretch; }

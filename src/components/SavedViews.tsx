@@ -4,6 +4,7 @@ import { VARIANT_LABEL, type SavedView, type VariantKey } from "../types";
 import { shotTargets, viewsCoverAll } from "../lib/savedViews";
 import { captureIds, useCaptureIds } from "../three/captureRegistry";
 import { frames } from "./savedViewActions";
+import { openRender } from "./renderRequest";
 import "./SavedViews.css";
 
 // Loaded on demand, like the report's snapshots, so the 3D libraries stay out of the app shell.
@@ -114,7 +115,12 @@ export function SavedViewsSection({ views }: { views: SavedView[] }) {
       <div className="sv-review-list">
         {views.map((v) => (
           <div key={v.id} className="sv-review-view">
-            <h3>{v.name}</h3>
+            <div className="sv-review-head">
+              <h3>{v.name}</h3>
+              <button onClick={() => targets[0] && openRender({ id: targets[0].id, pose: v, maxLevel: v.maxLevel ?? null, label: v.name, stamp: false })} disabled={busy || targets.length === 0} title="A path-traced still from this view">
+                Render
+              </button>
+            </div>
             <div className="sv-figures">
               {present.map((k) => {
                 const shot = pictures[v.id]?.find((s) => s.label === VARIANT_LABEL[k]);

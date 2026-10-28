@@ -24,7 +24,13 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         // React rarely changes between releases, so it gets a chunk of its own that browsers keep cached.
-        codeSplitting: { groups: [{ name: "react", test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] },
+        // The path tracer (and its BVH library, not drei's older copy) loads only when a still is rendered.
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: "pathtrace", test: /^(?!.*[\\/]drei[\\/]).*[\\/]node_modules[\\/](three-gpu-pathtracer|three-mesh-bvh)[\\/]/ },
+          ],
+        },
       },
     },
   },

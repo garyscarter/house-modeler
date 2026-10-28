@@ -162,6 +162,7 @@ export function buildCommands(c: CommandContext): Command[] {
     for (const [side, title] of sides) add(`camera:${side}`, title, "Camera", () => c.dispatch("house:view", { side }), { keywords: ["camera"] });
     add("measure:3d", "Measure in 3D", "View", () => c.setUi({ measureTool: true }), { hint: "M", keywords: ["measure", "tape", "ruler", "distance", "height", "length"] });
     add("camera:save", "Save this camera view", "Camera", c.saveView, { keywords: ["bookmark", "view"] });
+    add("render:still", "Render a still of the 3D view", "View", () => c.dispatch("house:render", {}), { keywords: ["render", "path trace", "picture", "photo", "image", "still", "realistic"] });
   }
   for (const v of c.savedViews) add(`savedview:${v.id}`, `Go to view: ${v.name}`, "Camera", () => c.goToView(v.id), { keywords: ["camera", "bookmark", "saved"] });
 
