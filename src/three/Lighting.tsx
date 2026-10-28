@@ -22,16 +22,11 @@ const DUSK_KEY = 0.7;
 const DUSK_DIM = 0.35;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
 /**
- * The sun's shadows are variance shadow maps (the canvas sets `shadows="variance"`): the map holds depth and
- * its square, blurred, so the edge is a filtered penumbra rather than a stencil. The blur is set in metres,
- * so the penumbra is the same width at every quality; a coarser map just takes fewer taps to reach it.
+ * The sun's shadows are percentage-closer filtered (three's 5-tap Vogel disc, dithered per pixel), blurred over
+ * `SHADOW_RADIUS` texels. Variance shadow maps were tried for a wider penumbra and reverted: their lit shaders took
+ * seconds to compile and every redraw blurred the whole map twice, which stalled the night view (scripts/perf-render.cjs).
  */
-const PENUMBRA = 0.12;
-/** Blur taps per axis (the blur runs only when the shadow map is redrawn, not every frame). */
-const SHADOW_SAMPLES = { high: 16, balanced: 12, low: 8 } as const;
-/** Blur radius limits, in shadow-map texels. */
-const MIN_RADIUS = 1.5;
-const MAX_RADIUS = 12;
+const SHADOW_RADIUS = { high: 3, balanced: 2, low: 1 } as const;
 
 /** The sun's colour at 50 degrees; lower suns warm from it by the sky model's atmospheric transmittance. */
 const WHITE_SUN = new THREE.Color("#fff3e2");
@@ -145,15 +140,14 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
       // The blur's intermediate target is sized once, so it goes too.
       l.shadow.map?.dispose();
       l.shadow.map = null;
-      l.shadow.mapPass?.dispose();
-      l.shadow.mapPass = null;
     }
-    // A texel's footprint sets the blur radius and how much bias is needed to avoid acne.
+    l.shadow.radius = SHADOW_RADIUS[quality];
+    // A texel's footprint sets how much bias is needed to avoid acne.
     const texel = Math.max(x1 - x0, y1 - y0) / mapSize;
-    l.shadow.radius = THREE.MathUtils.clamp(PENUMBRA / texel, MIN_RADIUS, MAX_RADIUS);
-    l.shadow.blurSamples = SHADOW_SAMPLES[quality];
-    l.shadow.normalBias = Math.max(0.01, texel);
-    l.shadow.bias = -0.0005;
+    l.shadow.normalBias = Math.max(0.01, texel * 1.5);
+    l.shadow.bias = -0.0002;
+    // Redrawn only when ShadowUpdates says the scene changed (never for a lamp moving slot), and never while the sun is down.
+    l.shadow.autoUpdate = false;
     l.shadow.needsUpdate = true;
   }, [box, dir, quality]);
 

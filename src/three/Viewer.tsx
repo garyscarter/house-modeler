@@ -29,8 +29,6 @@ import { SectionCut } from "./SectionCut";
 import { Loader } from "../components/Loader";
 import { Measure, MeasureButton } from "./Measure";
 import "./Viewer.css";
-// Before any canvas compiles a shader: the variance shadows' light-bleed cut.
-import "./softShadows";
 
 interface ViewerProps {
   model: HouseModel;
@@ -177,7 +175,7 @@ function ViewerImpl(props: ViewerProps) {
       )}
       <Canvas
         key={canvasKey}
-        shadows="variance"
+        shadows="percentage"
         gl={{ toneMapping: THREE.NeutralToneMapping }}
         frameloop={frameloop}
         dpr={DPR[quality]}

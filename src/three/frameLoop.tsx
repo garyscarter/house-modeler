@@ -65,9 +65,17 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView, sectionHeight]);
 
+  const scene = useThree((s) => s.scene);
   useFrame(() => {
     gl.shadowMap.autoUpdate = false;
     if (dirty.current <= 0) return;
+    // Every casting light keeps its own flag (shadow.autoUpdate false, set where the light is made), so a spot that
+    // moves slot redraws only its own map. Here the scene changed, so every lit caster redraws; a light at intensity 0
+    // (the sun below the horizon) has nothing to show and its 4096 map is the dearest pass there is.
+    scene.traverse((o) => {
+      const light = o as THREE.Light & { shadow?: THREE.LightShadow };
+      if (light.isLight && light.castShadow && light.shadow) light.shadow.needsUpdate = light.intensity > 0;
+    });
     gl.shadowMap.needsUpdate = true;
     dirty.current--;
     if (dirty.current > 0) invalidate();

@@ -111,7 +111,11 @@ function PoolSpot({ light: l, cast }: { light?: LampLight; cast: boolean }) {
   const id = l?.id;
   // A layout effect, so the next frame (the first that samples the new map) draws it first.
   useLayoutEffect(() => {
-    if (!cast) return;
+    const s = ref.current;
+    if (!cast || !s) return;
+    // Only this map: the other casters (the sun's 4096 map above all) keep theirs until the scene changes.
+    s.shadow.autoUpdate = false;
+    s.shadow.needsUpdate = true;
     gl.shadowMap.needsUpdate = true;
     invalidate();
   }, [cast, id, pos, gl, invalidate]);

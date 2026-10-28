@@ -41,8 +41,8 @@ const log = (...a) => console.log(LABEL, ...a);
   // Instrument the renderer.
   await page.evaluate(() => {
     const gl = window.__houseRenderer; const orig = gl.render.bind(gl);
-    window.__perf = { renders: [], last: performance.now() };
-    const ctx = gl.getContext(); gl.render = (sc, cam) => { const t0 = performance.now(); orig(sc, cam); ctx.finish(); const t1 = performance.now(); window.__perf.renders.push({ t: t1, dur: t1 - t0, calls: gl.info.render.calls, tris: gl.info.render.triangles }); window.__perf.last = t1; };
+    window.__perf = { renders: [], all: [], last: performance.now(), step: 'load' };
+    const ctx = gl.getContext(); gl.render = (sc, cam) => { const p0 = gl.info.programs.length; const t0 = performance.now(); orig(sc, cam); ctx.finish(); const t1 = performance.now(); const rec = { t: t1, dur: t1 - t0, calls: gl.info.render.calls, tris: gl.info.render.triangles, p: gl.info.programs.length - p0, step: window.__perf.step }; window.__perf.renders.push(rec); window.__perf.all.push(rec); window.__perf.last = t1; };
     window.__perfPrograms = () => gl.info.programs.length;
   });
   const settle = async (quietMs = 1500, max = 240000, minMs = 2500) => {
@@ -51,9 +51,10 @@ const log = (...a) => console.log(LABEL, ...a);
     for (;;) { const q = await page.evaluate(() => performance.now() - window.__perf.last); if (q > quietMs) break; if (Date.now() - t0 > max) { log('settle timeout'); break; } await page.waitForTimeout(250); }
   };
   const take = async () => page.evaluate(() => { const r = window.__perf.renders; window.__perf.renders = []; return r; });
-  const sum = (r) => ({ n: r.length, ms: Math.round(r.reduce((a, x) => a + x.dur, 0)), maxMs: Math.round(Math.max(0, ...r.map((x) => x.dur))), calls: r.length ? Math.round(r.reduce((a, x) => a + x.calls, 0) / r.length) : 0, tris: r.length ? Math.round(r.reduce((a, x) => a + x.tris, 0) / r.length) : 0 });
+  const sum = (r) => ({ n: r.length, ms: Math.round(r.reduce((a, x) => a + x.dur, 0)), maxMs: Math.round(Math.max(0, ...r.map((x) => x.dur))), stallMs: Math.round(r.filter((x) => x.dur > 300).reduce((a, x) => a + x.dur, 0)), calls: r.length ? Math.round(r.reduce((a, x) => a + x.calls, 0) / r.length) : 0, tris: r.length ? Math.round(r.reduce((a, x) => a + x.tris, 0) / r.length) : 0 });
+  const setStep = (name) => page.evaluate((n) => { window.__perf.step = n; }, name);
   const step = async (name, fn) => {
-    await settle(1500); await take();
+    await settle(1500); await take(); await setStep(name);
     const p0 = await page.evaluate(() => window.__perfPrograms());
     const t0 = Date.now(); await fn(); await settle(1500);
     const r = await take(); const p1 = await page.evaluate(() => window.__perfPrograms());
@@ -64,7 +65,7 @@ const log = (...a) => console.log(LABEL, ...a);
   const sun = (patch) => page.evaluate((p) => window.__houseStore.getState().setSun(p), patch);
   const views = ['home', 'front', 'rear', 'left', 'right'];
   const orbit = async (name) => {
-    await settle(1500); await take();
+    await settle(1500); await take(); await setStep(name);
     const durs = [];
     for (const side of views) { await view({ side }); await settle(1200); const r = await take(); durs.push(sum(r)); }
     const frames = durs.reduce((a, d) => a + d.n, 0), ms = durs.reduce((a, d) => a + d.ms, 0), maxMs = Math.max(...durs.map((d) => d.maxMs));
@@ -72,7 +73,7 @@ const log = (...a) => console.log(LABEL, ...a);
   };
   // A pan: the home view, then the camera and its target slid sideways 0.8 m at a time (the lamp pool re-picks past 1 m).
   const pan = async (name) => {
-    await view({ side: 'home' }); await settle(1500); await take();
+    await view({ side: 'home' }); await settle(1500); await take(); await setStep(name);
     const base = await page.evaluate(() => { const c = window.__houseCamera; const p = c.camera.position, t = c.controls.target; return { p: [p.x, p.y, p.z], t: [t.x, t.y, t.z] }; });
     const durs = [];
     for (let i = 1; i <= 6; i++) {
@@ -97,5 +98,10 @@ const log = (...a) => console.log(LABEL, ...a);
   await step('night: lights off', () => sun({ lights: 'off' }));
   await step('night: lights on', () => sun({ lights: 'on' }));
   await step('night switch->current', () => ui({ activeVariant: 'current' }));
+  // The whole run: every render over 300 ms, tagged with its step and whether shader programs were created in it.
+  await settle(1500);
+  const all = await page.evaluate(() => window.__perf.all);
+  const stalls = all.filter((r) => r.dur > 300).map((r) => ({ step: r.step, ms: Math.round(r.dur), newPrograms: r.p }));
+  log('SUMMARY', JSON.stringify({ renders: all.length, totalMs: Math.round(all.reduce((a, r) => a + r.dur, 0)), stallMs: Math.round(stalls.reduce((a, r) => a + r.ms, 0)), programs: await page.evaluate(() => window.__perfPrograms()), stalls }));
   await browser.close();
 })().catch((e) => { console.error(LABEL, 'FAILED', e.message); process.exit(1); });
