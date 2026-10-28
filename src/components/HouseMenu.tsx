@@ -10,7 +10,6 @@ import { OPEN_SHORTCUTS } from "../lib/studio";
 import { useListingUpdateCount } from "./ImportPanel";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
-import { openPhotos } from "./PhotosDialog";
 import { ProjectActions, AboutLine, RenderQuality, StorageStatus, SyncStatus } from "./SettingsPanel";
 import type { WheelMode } from "../lib/wheelGesture";
 import { houseList } from "../houses";
@@ -32,7 +31,6 @@ export function HouseMenu({ name }: { name: string }) {
   // Switching is offered when this build has more than one house and the server has not pinned one.
   const canSwitch = houseList().length > 1 && !isHouseFixed();
   const root = useRef<HTMLDivElement>(null);
-  const photos = useStore((s) => s.photos.length);
   const proposed = useStore((s) => s.variants.proposed);
   const updates = useListingUpdateCount("proposed");
   const look = usePanelPrefs((s) => s.look);
@@ -88,10 +86,6 @@ export function HouseMenu({ name }: { name: string }) {
               <span className="hm-hint">{updates.all ? `${updates.all} available` : "up to date"}</span>
             </button>
           )}
-          <button className="hm-item" role="menuitem" onClick={run(openPhotos)}>
-            <Icon name="image" />
-            <span>Photos ({photos})…</span>
-          </button>
           {canSwitch && (
             <button className="hm-item" role="menuitem" onClick={run(() => setPicking(true))}>
               <Icon name="house" />

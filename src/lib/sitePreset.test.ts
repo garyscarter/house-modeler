@@ -238,7 +238,7 @@ describe("telling edited plots from unedited ones", () => {
 describe("updating through the store", () => {
   const st = () => useStore.getState();
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], activeVariant: "current" });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], activeVariant: "current" });
   });
 
   it("replaces a legacy plot with the latest one, in one undo step", () => {

@@ -41,7 +41,7 @@ export function HousePicker({ current, onClose }: { current?: string; onClose?: 
     <section className="house-picker" role={onClose ? "dialog" : undefined} aria-modal={onClose ? true : undefined} aria-labelledby="house-picker-title">
       <BrandMark outline size={56} />
       <h1 id="house-picker-title">Which house?</h1>
-      <p className="house-picker-lede">Each house keeps its own layouts, plot and photos on this device.</p>
+      <p className="house-picker-lede">Each house keeps its own layouts and plot on this device.</p>
       <div className="house-picker-tiles">
         {houses.map((h, i) => (
           <button

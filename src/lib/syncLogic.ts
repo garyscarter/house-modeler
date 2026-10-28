@@ -1,7 +1,7 @@
-import type { HouseModel, MyPiece, Photo, SavedView, VariantKey } from "../types";
+import type { HouseModel, MyPiece, SavedView, VariantKey } from "../types";
 import { sanitizePieces } from "./myFurniture";
 import { parseSavedViews } from "./savedViews";
-import { migrateModel, migratePhotos, migrateSites } from "./migrate";
+import { migrateModel, migrateSites } from "./migrate";
 import { sitesFromImport, type Sites } from "./sites";
 
 /**
@@ -15,7 +15,6 @@ import { sitesFromImport, type Sites } from "./sites";
 /** What the project is, in the same shape as Settings → Export JSON. */
 export interface ProjectData {
   variants: Partial<Record<VariantKey, HouseModel>>;
-  photos: Photo[];
   sites: Sites;
   costRates: Record<string, number>;
   /** The owner's own furniture (absent in older copies). */
@@ -36,7 +35,7 @@ export type SyncAction = "none" | "load" | "upload" | "conflict";
  * - `local`: the revision this browser last matched (null: never synced).
  * - `server`: the server's current revision (null: nothing saved there).
  * - `dirty`: this browser has changes the server has not seen.
- * - `localEmpty`: this browser has no layouts and no photos.
+ * - `localEmpty`: this browser has no layouts.
  */
 export function decideSync(i: { local: Revision | null; server: Revision | null; dirty: boolean; localEmpty: boolean }): SyncAction {
   // A browser that has never synced but holds a project counts as having unsynced changes.
@@ -107,38 +106,36 @@ export function statusText(s: SyncStatus): string {
     case "wrongHouse":
       return "This server holds a different house";
     case "tooLarge":
-      return "Too large to sync (over 50 MB): remove some photos, then Sync now";
+      return "Too large to sync (over 50 MB): remove the floorplan image, then Sync now";
   }
 }
 
 /** True for a reply that came from the Storey server (a static host answers with HTML instead). */
 export const isJsonReply = (contentType: string | null) => /\bapplication\/json\b/i.test(contentType ?? "");
 
-export const isProjectEmpty = (p: { variants: ProjectData["variants"]; photos: Photo[] }) =>
-  !p.variants.current && !p.variants.proposed && p.photos.length === 0;
+export const isProjectEmpty = (p: { variants: ProjectData["variants"] }) => !p.variants.current && !p.variants.proposed;
 
 const looksLikeModel = (m: unknown): m is HouseModel => !!m && Array.isArray((m as HouseModel).floors);
 
 /**
  * Read a project (a server copy or an imported file) into what the store should hold,
- * or null when it is not a Storey project. Older files with one shared `site` are accepted.
+ * or null when it is not a Storey project. Older files with one shared `site` are accepted, and a `photos` list (removed) is ignored.
  */
 export function parseProject(data: unknown, costRatesNow: Record<string, number>, opts: { allowEmpty?: boolean } = {}): ProjectData | null {
   if (!data || typeof data !== "object") return null;
-  const d = data as { variants?: Record<string, unknown>; photos?: unknown; sites?: unknown; site?: unknown; costRates?: Record<string, number>; pieces?: unknown; savedViews?: unknown };
+  const d = data as { variants?: Record<string, unknown>; sites?: unknown; site?: unknown; costRates?: Record<string, number>; pieces?: unknown; savedViews?: unknown };
   const current = looksLikeModel(d.variants?.current) ? d.variants?.current : undefined;
   const proposed = looksLikeModel(d.variants?.proposed) ? d.variants?.proposed : undefined;
   if (!current && !proposed) {
     // An emptied project (after Reset) is a valid server copy, but not a valid import.
     const emptied = opts.allowEmpty && !!d.variants && typeof d.variants === "object" && !Array.isArray(d.variants) && Object.keys(d.variants).length === 0;
-    return emptied ? { variants: {}, photos: [], sites: {}, costRates: d.costRates ?? costRatesNow, pieces: sanitizePieces(d.pieces), savedViews: parseSavedViews(d.savedViews) } : null;
+    return emptied ? { variants: {}, sites: {}, costRates: d.costRates ?? costRatesNow, pieces: sanitizePieces(d.pieces), savedViews: parseSavedViews(d.savedViews) } : null;
   }
   const variants: ProjectData["variants"] = {};
   if (current) variants.current = migrateModel(current);
   if (proposed) variants.proposed = migrateModel(proposed);
   return {
     variants,
-    photos: Array.isArray(d.photos) ? migratePhotos(d.photos as Photo[]) : [],
     sites: migrateSites(sitesFromImport({ sites: d.sites, site: d.site, variants })),
     costRates: d.costRates ?? costRatesNow,
     pieces: sanitizePieces(d.pieces),

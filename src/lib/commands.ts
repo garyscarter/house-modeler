@@ -198,11 +198,9 @@ export function buildCommands(c: CommandContext): Command[] {
     add(`quality:${q}`, `Render quality: ${q[0].toUpperCase()}${q.slice(1)}`, "Settings", () => c.setSettings({ quality: q }), { keywords: ["graphics", "settings"] });
   }
 
-  // Canvas and photo pins are per-browser panel preferences, so these write them directly.
-  const prefs = usePanelPrefs.getState();
+  // The canvas look is a per-browser panel preference, so these write it directly.
   add("canvas:quiet", "Canvas: Quiet", "Settings", () => usePanelPrefs.getState().setPrefs({ quiet: true }), { keywords: ["canvas", "neighbours", "ground", "calm"] });
   add("canvas:full", "Canvas: Full", "Settings", () => usePanelPrefs.getState().setPrefs({ quiet: false }), { keywords: ["canvas", "neighbours", "ground", "textures"] });
-  add("pins:toggle", `Photo pins: ${prefs.showPins ? "hide" : "show"}`, "View", () => usePanelPrefs.getState().setPrefs({ showPins: !usePanelPrefs.getState().showPins }), { keywords: ["photos", "pins", "cameras"] });
   return out;
 }
 

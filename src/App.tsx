@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
-import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
@@ -8,7 +7,6 @@ import { RenderDialogHost } from "./components/RenderDialog";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
-import { PhotosDialog } from "./components/PhotosDialog";
 import { TopBar, LayoutSwitch } from "./components/TopBar";
 import { Dock } from "./components/Dock";
 import { InspectorCard } from "./components/InspectorCard";
@@ -47,7 +45,6 @@ const SiteEditor = lazy(() => import("./editor/SiteEditor").then((m) => ({ defau
 
 export default function App() {
   const variants = useStore((s) => s.variants);
-  const photos = useStore((s) => s.photos);
   const activeVariant = useStore((s) => s.activeVariant);
   const viewMode = useStore((s) => s.viewMode);
   const showLabels = useStore((s) => s.showLabels);
@@ -201,7 +198,6 @@ export default function App() {
                 <Viewer
                   active={show3d}
                   model={model}
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -222,7 +218,6 @@ export default function App() {
                       captureId={k}
                       variant={k}
                       model={variants[k]!}
-                      photos={photos}
                       showLabels={showLabels}
                       showCeilings={showCeilings}
                       doorsOpen={doorsOpen}
@@ -243,7 +238,6 @@ export default function App() {
                   ghost={otherModel}
                   variant={activeVariant}
                   ghostVariant={other}
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -257,7 +251,6 @@ export default function App() {
               )}
               {effectiveViewMode === "wipe" && (
                 <WipeCompare
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -304,7 +297,6 @@ export default function App() {
       </main>
       {model && chassis === "phone" && <TabBar />}
 
-      <PhotoLightbox />
       <Dialogs />
       <CommandPalette />
       <ShortcutSheet />
@@ -312,7 +304,6 @@ export default function App() {
       <ReviewPage />
       <ListingUpdatesDialog />
       <LayoutsDialog />
-      <PhotosDialog />
     </div>
   );
 }

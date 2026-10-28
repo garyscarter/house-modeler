@@ -94,11 +94,20 @@ describe("replies and projects", () => {
   it("parses the export shape, and refuses anything that is not a project", () => {
     const p = parseProject({ variants: { current: model }, photos: [{ id: "p" }], costRates: { a: 1 } }, { z: 2 });
     expect(p?.variants).toEqual({ current: model });
-    expect(p?.photos).toHaveLength(1);
+    expect(p).not.toHaveProperty("photos");
     expect(p?.costRates).toEqual({ a: 1 });
     expect(parseProject({ variants: {} }, {})).toBeNull();
     expect(parseProject("nope", {})).toBeNull();
     expect(parseProject(null, {})).toBeNull();
+  });
+  it("reads an old export that still has photos and a photo floor, and drops both", () => {
+    const old = { floors: [{ id: "f", name: "Ground Floor", openings: [], fixtures: [], rooms: [{ id: "r", name: "Kitchen", polygon: [], floorPhotoId: "p1" }] }] };
+    const photos = [{ id: "p1", name: "kitchen-1", dataUrl: "data:image/jpeg;base64,AAAA", floorName: "Ground Floor", roomName: "Kitchen" }];
+    const p = parseProject({ variants: { current: old }, photos, sites: {}, costRates: {} }, {});
+    expect(p).not.toBeNull();
+    expect(p).not.toHaveProperty("photos");
+    expect(p?.variants.current?.floors[0].rooms[0]).not.toHaveProperty("floorPhotoId");
+    expect(p?.variants.current?.floors[0].rooms[0].name).toBe("Kitchen");
   });
   it("round-trips saved views, and leaves them undefined when absent", () => {
     const views = [{ id: "v1", name: "Kitchen", position: { x: 1, y: 2, z: 3 }, target: { x: 0, y: 1, z: 0 }, maxLevel: null }];
@@ -107,17 +116,16 @@ describe("replies and projects", () => {
     expect(parseProject({ variants: {}, savedViews: views }, {}, { allowEmpty: true })?.savedViews).toEqual(views);
   });
   it("accepts an emptied project only from the server", () => {
-    expect(parseProject({ variants: {} }, { z: 2 }, { allowEmpty: true })).toEqual({ variants: {}, photos: [], sites: {}, costRates: { z: 2 } });
+    expect(parseProject({ variants: {} }, { z: 2 }, { allowEmpty: true })).toEqual({ variants: {}, sites: {}, costRates: { z: 2 } });
     expect(parseProject({ variants: {} }, { z: 2 })).toBeNull();
     expect(parseProject({}, {}, { allowEmpty: true })).toBeNull();
   });
   it("says when the project is too large to sync", () => {
     expect(statusText({ kind: "tooLarge" })).toContain("Too large to sync (over 50 MB)");
   });
-  it("keeps the current cost rates when the file has none, and treats missing photos as none", () => {
+  it("keeps the current cost rates when the file has none", () => {
     const p = parseProject({ variants: { proposed: model } }, { z: 2 });
     expect(p?.costRates).toEqual({ z: 2 });
-    expect(p?.photos).toEqual([]);
   });
   it("reads the owner's pieces, ignoring junk, and leaves them undefined for older copies", () => {
     const p = parseProject({ variants: { current: model }, pieces: [{ id: "a", name: "Sofa", kind: "sofa-3", w: 2, d: 1, h: 1 }, 7] }, {});
@@ -126,7 +134,7 @@ describe("replies and projects", () => {
     expect(parseProject({ variants: {}, pieces: [] }, {}, { allowEmpty: true })?.pieces).toEqual([]);
   });
   it("knows an empty project", () => {
-    expect(isProjectEmpty({ variants: {}, photos: [] })).toBe(true);
-    expect(isProjectEmpty({ variants: {}, photos: [{ id: "p" } as never] })).toBe(false);
+    expect(isProjectEmpty({ variants: {} })).toBe(true);
+    expect(isProjectEmpty({ variants: { current: model as never } })).toBe(false);
   });
 });

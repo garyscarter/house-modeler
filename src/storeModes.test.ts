@@ -6,7 +6,7 @@ const st = () => useStore.getState();
 
 describe("store: modes", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], mode: "build", tab: "3d", editFloorId: null, floorBeforeSite: null, selectedRoomId: null, selectedEdge: null });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], mode: "build", tab: "3d", editFloorId: null, floorBeforeSite: null, selectedRoomId: null, selectedEdge: null });
   });
 
   it("setMode adds no undo step and applies the switch rules", () => {

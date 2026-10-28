@@ -181,25 +181,10 @@ input[type="number"], .num { font-family: var(--font-mono); }
 label .row input { width: auto; flex: 1; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 
-.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
-.photo-card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--radius-s); cursor: zoom-in; }
-.photo-card select { width: 100%; margin-top: 4px; font-size: 12px; }
-.thumbs { display: flex; gap: 4px; flex-wrap: wrap; }
-.thumbs img { width: 60px; height: 45px; object-fit: cover; border-radius: 3px; cursor: zoom-in; }
 
 .room-label { background: rgba(255,255,255,0.9); border: 1px solid #c8ccd2; border-radius: 4px; padding: 2px 6px; font-size: 12px; font-weight: 600; white-space: nowrap; display: flex; flex-direction: column; align-items: center; }
 .room-label span { font-weight: 400; color: var(--muted); font-size: 11px; }
-.pin-badge { background: var(--accent); color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
 
-.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: calc(var(--z-modal) + 10); display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; }
-.lightbox figure { margin: 0; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; }
-.lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 6px; -webkit-user-drag: none; }
-.lightbox figcaption { color: #fff; margin-top: 10px; text-align: center; padding: 0 12px; }
-.lightbox-count { display: block; margin-top: 4px; color: #cbd5e1; font-size: 12px; font-variant-numeric: tabular-nums; }
-.lightbox-close { position: absolute; top: 10px; right: 10px; font-size: 28px; line-height: 1; background: none; border: 0; color: #fff; padding: 6px 12px; }
-.lightbox .nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 40px; background: none; border: 0; color: #fff; padding: 20px; }
-.lightbox .prev { left: 10px; }
-.lightbox .next { right: 10px; }
 
 /* Collapsible sections */
 .sect { border-bottom: 1px solid var(--line); }

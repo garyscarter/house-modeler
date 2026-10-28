@@ -3,15 +3,7 @@ import { areaM2 } from "../lib/planMath";
 import type { Pt } from "../types";
 import type { HouseDef } from "./types";
 
-/** Where a photo was taken, as a house's assets.ts records it (room photos name a floor and room). */
-export type PhotoPlaces = Record<string, { floor: string; room: string } | { elevation: string }>;
-
 export interface LintOptions {
-  /**
-   * The house's photo places (the PLACES table in its assets.ts). The def's own `photos()` loader is async and
-   * fetches files, so it cannot be linted here; a house that exports its table passes it in to be checked.
-   */
-  photoPlaces?: PhotoPlaces;
   /** How far a room's traced area may differ from its printed size, as a fraction (default 0.08). */
   dimsTolerance?: number;
 }
@@ -58,15 +50,11 @@ function strings(value: unknown, out: string[] = []): string[] {
 /**
  * Check a house definition for the mistakes tracing tends to make. Returns one message per problem; an empty list
  * means the house passes. Run it from the house's own test (`expect(lintHouse(house)).toEqual([])`).
- *
- * What it cannot see: the photos themselves (`def.photos()` is async and fetches files), so room photos are checked
- * only when the house's PLACES table is passed in `options.photoPlaces`.
  */
 export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
   const problems: string[] = [];
   const tolerance = options.dimsTolerance ?? 0.08;
   const add = (msg: string) => problems.push(msg);
-  const floorRooms = new Map<string, Set<string>>();
   const json: unknown[] = [{ id: def.id, name: def.name, tiles: def.tiles.map((t) => ({ ...t, caption: t.caption(0) })) }];
 
   for (const [pid, preset] of Object.entries(def.presets)) {
@@ -81,7 +69,6 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
     for (const f of model.floors) {
       const at = `${pid} / ${f.name}`;
       if (!(f.pxPerM > 0)) add(`${at}: pxPerM must be above 0`);
-      if (pid === def.main) floorRooms.set(f.name, new Set(f.rooms.map((r) => r.name)));
       for (const r of f.rooms) {
         if (r.polygon.length < 3) add(`${at}: room "${r.name}" has fewer than 3 corners`);
         else if (!isSimplePolygon(r.polygon)) add(`${at}: room "${r.name}" crosses itself`);
@@ -117,13 +104,6 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
     for (const k of ["latitude", "longitude", "frontBearing"] as const) {
       if (typeof site[k] !== "number" || !Number.isFinite(site[k])) add(`main site: ${k} is not set`);
     }
-  }
-
-  for (const [name, place] of Object.entries(options.photoPlaces ?? {})) {
-    if (!("room" in place)) continue;
-    const rooms = floorRooms.get(place.floor);
-    if (!rooms) add(`photo ${name}: no floor named "${place.floor}"`);
-    else if (!rooms.has(place.room)) add(`photo ${name}: no room "${place.room}" on ${place.floor}`);
   }
 
   for (const s of strings(json)) {

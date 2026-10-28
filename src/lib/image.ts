@@ -1,4 +1,4 @@
-/** Image helpers for loading and shrinking photos. */
+/** Image helpers for loading and shrinking images. */
 
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

@@ -130,11 +130,9 @@ export function BuildRoomPanel({
   onHighlightEdge?: (edge: number | null) => void;
 }) {
   const updateFloor = useStore((s) => s.updateFloor);
-  const photos = useStore((s) => s.photos);
   const setUi = useStore((s) => s.setUi);
   // The corner that stays put when the size changes: top-left unless Advanced says otherwise.
   const [anchor, setAnchor] = useState<Corner>("tl");
-  const roomPhotos = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
   const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor, room.id]);
   const ppm = floor.pxPerM;
   const r = axisRect(room.polygon, 0.5);
@@ -209,7 +207,7 @@ export function BuildRoomPanel({
         )}
       </Section>
 
-      <Section id="build.room.details" title="Details" summary={detailsSummary(room, roomPhotos.length)}>
+      <Section id="build.room.details" title="Details" summary={detailsSummary(room)}>
         <label>
           Notes
           <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
@@ -223,13 +221,6 @@ export function BuildRoomPanel({
         <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
           <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Extension room (gets its own roof)
         </label>
-        {roomPhotos.length > 0 && (
-          <div className="thumbs">
-            {roomPhotos.map((p) => (
-              <img key={p.id} src={p.dataUrl} title={p.description} onClick={() => setUi({ selectedPhotoId: p.id })} />
-            ))}
-          </div>
-        )}
       </Section>
 
       {neighbours.length > 0 && (

@@ -2,8 +2,8 @@ import { placeholderImage } from "./house";
 
 /**
  * The house's floorplan, bundled from `assets/floorplan.(webp|png|jpg)` beside this file. Until there is one the
- * tracing is drawn over a placeholder. Photos are not bundled: they go in reference/<id>/photos/ for Claude and the
- * notes, and the owner adds their own through the Photos panel.
+ * tracing is drawn over a placeholder. Photos are not part of the app: they go in reference/<id>/photos/ for Claude
+ * and the notes.
  */
 const FLOORPLAN = import.meta.glob<string>("./assets/floorplan.{webp,png,jpg}", { eager: true, query: "?url", import: "default" });
 

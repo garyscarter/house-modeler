@@ -24,7 +24,7 @@ const big = (c: string) => "data:image/png;base64," + c.repeat(2000);
 describe("image refs", () => {
   it("replaces large data URLs with refs and restores them", () => {
     const img = big("A");
-    const state = { variants: { current: { floors: [{ image: img }, { image: img }] } }, photos: [{ dataUrl: big("B"), name: "x" }], note: "data:small" };
+    const state = { variants: { current: { floors: [{ image: img }, { image: img }] } }, gallery: [{ dataUrl: big("B"), name: "x" }], note: "data:small" };
     const ids = new Map<string, string>();
     const { json, used } = dehydrate(state, (u) => ids.get(u) ?? (ids.set(u, "id" + ids.size), ids.get(u)!));
     expect(used.size).toBe(2);
@@ -83,15 +83,15 @@ describe("image GC across tabs", () => {
     vi.useFakeTimers();
     try {
       db.clear();
-      type St = { photos: string[]; n: number };
+      type St = { gallery: string[]; n: number };
       const a = imageAwareStorage<St>(10, 50, { locks: null });
       const b = imageAwareStorage<St>(10, 50, { locks: null });
-      a.setItem("k", { state: { photos: [], n: 1 }, version: 1 });
+      a.setItem("k", { state: { gallery: [], n: 1 }, version: 1 });
       await vi.advanceTimersByTimeAsync(100);
-      b.setItem("k", { state: { photos: [big("B")], n: 1 }, version: 1 });
+      b.setItem("k", { state: { gallery: [big("B")], n: 1 }, version: 1 });
       await vi.advanceTimersByTimeAsync(100);
       expect(imgKeys()).toHaveLength(1);
-      a.setItem("k", { state: { photos: [], n: 2 }, version: 1 });
+      a.setItem("k", { state: { gallery: [], n: 2 }, version: 1 });
       await vi.advanceTimersByTimeAsync(100);
       expect(imgKeys()).toHaveLength(1);
     } finally {
@@ -103,14 +103,41 @@ describe("image GC across tabs", () => {
     vi.useFakeTimers();
     try {
       db.clear();
-      type St = { photos: string[] };
+      type St = { gallery: string[] };
       const a = imageAwareStorage<St>(10, 50, { locks: null });
-      a.setItem("k", { state: { photos: [big("A"), big("C")] }, version: 1 });
+      a.setItem("k", { state: { gallery: [big("A"), big("C")] }, version: 1 });
       await vi.advanceTimersByTimeAsync(100);
       expect(imgKeys()).toHaveLength(2);
-      a.setItem("k", { state: { photos: [big("A")] }, version: 1 });
+      a.setItem("k", { state: { gallery: [big("A")] }, version: 1 });
       await vi.advanceTimersByTimeAsync(100);
       expect(imgKeys()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("images from before photos were removed", () => {
+  it("drops photo images no longer referenced, and keeps the floorplan image", async () => {
+    vi.useFakeTimers();
+    try {
+      db.clear();
+      type St = { variants: { current: { image: string } } };
+      const prefix = "house-modeler/img/";
+      const plan = big("P");
+      // An old save: a floorplan image (id plan1) and two photo images (ids ph1, ph2), all stored as refs.
+      db.set(prefix + "plan1", plan);
+      db.set(prefix + "ph1", big("Q"));
+      db.set(prefix + "ph2", big("R"));
+      db.set("k", JSON.stringify({ state: { variants: { current: { image: "@@img:plan1" } }, photos: [{ dataUrl: "@@img:ph1" }, { dataUrl: "@@img:ph2" }] }, version: 6 }));
+      const a = imageAwareStorage<St>(10, 50, { locks: null });
+      const raw = JSON.parse(db.get("k") as string);
+      expect(raw.state.photos).toHaveLength(2);
+      await a.getItem("k");
+      // The migrated state has no photos, so the next save lets go of their images.
+      a.setItem("k", { state: { variants: { current: { image: plan } } }, version: 7 });
+      await vi.advanceTimersByTimeAsync(100);
+      expect([...db.keys()].filter((k) => k.startsWith(prefix))).toEqual([prefix + "plan1"]);
     } finally {
       vi.useRealTimers();
     }

@@ -7,7 +7,7 @@ const merge = (persisted: unknown) => useStore.persist.getOptions().merge!(persi
 
 describe("store: studio", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], mode: "build", modeBeforeReview: null, tab: "3d", editFloorId: null, activeVariant: "current", viewMode: "single", peek: false, peekReturn: null, hoveredRoomId: null });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], mode: "build", modeBeforeReview: null, tab: "3d", editFloorId: null, activeVariant: "current", viewMode: "single", peek: false, peekReturn: null, hoveredRoomId: null });
   });
 
   it("Review remembers the mode it came from and leaveReview goes back", () => {

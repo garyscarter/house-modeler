@@ -40,7 +40,6 @@ export function DecoratePanel({
 }) {
   const setUi = useStore((s) => s.setUi);
   const frontBearing = useSite(variant)?.frontBearing;
-  const photos = useStore((s) => s.photos);
 
   if (edge && edge.edge >= 0 && edge.edge < room.polygon.length) {
     const i = edge.edge;
@@ -108,20 +107,6 @@ export function DecoratePanel({
         {takesGrout(room.floorFinish) && (
           <SwatchField label="Grout" value={groutColour(room) ?? "#b9b4aa"} isSet={!!room.floorGrout} onChange={(floorGrout) => onChange({ floorGrout })} onReset={() => onChange({ floorGrout: undefined })} />
         )}
-        <Section id="decorate.floor.photo" title="Use a photo as the floor" summary={photos.find((p) => p.id === room.floorPhotoId)?.name ?? "None"}>
-          {photos.length === 0 ? (
-            <p className="muted small">Add photos to the house first, then pick one here.</p>
-          ) : (
-            <select aria-label="Floor photo" value={room.floorPhotoId ?? ""} onChange={(e) => onChange({ floorPhotoId: e.target.value || undefined })}>
-              <option value="">None</option>
-              {photos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </Section>
         </fieldset>
       </div>
 

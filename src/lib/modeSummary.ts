@@ -101,10 +101,9 @@ export function shapeSummary(room: Room, ppm: number): string {
   return room.dims ? `${base} · printed ${room.dims.w} × ${room.dims.h}` : base;
 }
 
-/** "Heated · 2 photos · has notes" */
-export function detailsSummary(room: Room, photoCount: number): string {
+/** "Heated · has notes" */
+export function detailsSummary(room: Room): string {
   const parts = [isUnheated(room) ? "Not heated" : "Heated"];
-  if (photoCount > 0) parts.push(plural(photoCount, "photo", "photos"));
   if (room.notes?.trim()) parts.push("has notes");
   return parts.join(" · ");
 }

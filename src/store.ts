@@ -1,10 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Floor, HouseModel, MyPiece, Photo, Room, SavedView, Site, VariantKey } from "./types";
+import type { Floor, HouseModel, MyPiece, Room, SavedView, Site, VariantKey } from "./types";
 import { applyPiece, unlinkPiece } from "./lib/myFurniture";
 import type { LightsMaster } from "./lib/lights";
 import { imageAwareStorage, useHydration } from "./lib/persist";
-import { renamePhotos } from "./lib/modelOps";
 import { setLink, syncLinks } from "./lib/roomLinks";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
@@ -39,14 +38,12 @@ export interface SunState {
 
 interface Snapshot {
   variants: Partial<Record<VariantKey, HouseModel>>;
-  photos: Photo[];
   sites: Sites;
   pieces: MyPiece[];
 }
 
 interface State {
   variants: Partial<Record<VariantKey, HouseModel>>;
-  photos: Photo[];
   /**
    * Plot, neighbours and orientation for each variant (see lib/sites.ts).
    * Kept beside the models rather than inside them so a plot edit leaves the
@@ -98,7 +95,6 @@ interface State {
   editFloorId: string | null;
   viewMode: ViewMode;
   selectedRoomId: string | null;
-  selectedPhotoId: string | null;
   showLabels: boolean;
   showCeilings: boolean;
   /** Draw swing doors open (at their open angle) rather than shut. Persisted. */
@@ -111,7 +107,7 @@ interface State {
   maxLevel: number | null;
   /** Section cut in the 3D view: hide everything above this many metres over the ground floor (null = off). Not persisted. */
   sectionHeight: number | null;
-  /** Draw roofs, canopies and exterior photo pins. */
+  /** Draw roofs and canopies. */
   showExterior: boolean;
   /** Draw the plot, garden and neighbouring buildings. */
   showSite: boolean;
@@ -133,7 +129,7 @@ interface State {
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
   /**
    * Knock two rooms that share a wall through into one (see lib/mergeRooms.ts), as one undo step.
-   * The kept room ("a" or "b") survives and is selected; photos of the other room follow it.
+   * The kept room ("a" or "b") survives and is selected.
    */
   knockThrough: (k: VariantKey, floorId: string, aId: string, bId: string, keep: "a" | "b") => MergeResult;
   updateModel: (k: VariantKey, patch: Partial<HouseModel>) => void;
@@ -141,9 +137,6 @@ interface State {
   setSite: (site: Site | undefined, k?: VariantKey) => void;
   /** Edit a variant's plot (the active one's by default). Proposed borrowing As listed's gets its own copy first. */
   updateSite: (patch: Partial<Site> | ((s: Site) => Site), k?: VariantKey) => void;
-  addPhotos: (p: Photo[]) => void;
-  updatePhoto: (id: string, patch: Partial<Photo>) => void;
-  removePhoto: (id: string) => void;
   /** Add a piece of the owner's furniture; returns its id. */
   addPiece: (p: Omit<MyPiece, "id">) => string;
   /** Edit a piece; every placement in both layouts follows, as one undo step. */
@@ -165,7 +158,6 @@ interface State {
         | "gardenSel"
         | "linkSwitchId"
         | "linkGang"
-        | "selectedPhotoId"
         | "showLabels"
         | "showCeilings"
         | "doorsOpen"
@@ -183,7 +175,7 @@ interface State {
   reset: () => void;
 }
 
-type Persisted = Pick<State, "variants" | "photos" | "sites" | "pieces" | "settings" | "sun" | "costRates" | "savedViews" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
+type Persisted = Pick<State, "variants" | "sites" | "pieces" | "settings" | "sun" | "costRates" | "savedViews" | "doorsOpen" | "planImage" | "planWalls" | "mode" | "tab" | "editFloorId" | "viewMode" | "modeBeforeReview">;
 
 const HISTORY_LIMIT = 60;
 /** Edits closer together than this (drags, typing) collapse into one undo step. */
@@ -207,7 +199,7 @@ export function transact(fn: () => void) {
   const st = useStore.getState();
   const wasHeld = held;
   const wasPushed = heldPushed;
-  const past = [...st.past, { variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces }].slice(-HISTORY_LIMIT);
+  const past = [...st.past, { variants: st.variants, sites: st.sites, pieces: st.pieces }].slice(-HISTORY_LIMIT);
   useStore.setState({ past, future: [] });
   lastPush = Date.now();
   held = true;
@@ -226,10 +218,6 @@ export function clearHistory() {
   useStore.setState({ past: [], future: [] });
 }
 
-/** The variant photos are matched against (rooms are named from it). */
-const photoSource = (variants: State["variants"]): VariantKey | undefined =>
-  variants.current ? "current" : variants.proposed ? "proposed" : undefined;
-
 
 /** Load the saved project again (another tab saved newer work); set once the store exists. */
 let reloadSaved: () => Promise<void> | void = () => {};
@@ -237,14 +225,14 @@ let reloadSaved: () => Promise<void> | void = () => {};
 export const useStore = create<State>()(
   persist(
     (rawSet, get) => {
-      /** Apply a model/photo/site mutation, recording an undo step first. */
+      /** Apply a model/site mutation, recording an undo step first. */
       const setState: typeof rawSet = (partial) => {
         const st = get();
         const patch = typeof partial === "function" ? partial(st) : partial;
-        const touches = "variants" in patch || "photos" in patch || "sites" in patch || "pieces" in patch;
+        const touches = "variants" in patch || "sites" in patch || "pieces" in patch;
         if (touches) {
           const now = Date.now();
-          const snap: Snapshot = { variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces };
+          const snap: Snapshot = { variants: st.variants, sites: st.sites, pieces: st.pieces };
           const coalesce = held ? heldPushed && st.past.length > 0 : now - lastPush < COALESCE_MS && st.past.length > 0;
           const past = coalesce ? st.past : [...st.past, snap].slice(-HISTORY_LIMIT);
           lastPush = now;
@@ -252,10 +240,9 @@ export const useStore = create<State>()(
           rawSet({ ...patch, past, future: [] });
         } else rawSet(patch);
       };
-      const snapshot = (st: State): Snapshot => ({ variants: st.variants, photos: st.photos, sites: st.sites, pieces: st.pieces });
+      const snapshot = (st: State): Snapshot => ({ variants: st.variants, sites: st.sites, pieces: st.pieces });
       return {
         variants: {},
-        photos: [],
         sites: {},
         pieces: [],
         settings: { quality: "high" },
@@ -318,7 +305,6 @@ export const useStore = create<State>()(
         editFloorId: null,
         viewMode: "single",
         selectedRoomId: null,
-        selectedPhotoId: null,
         showLabels: false,
         showCeilings: false,
         doorsOpen: false,
@@ -374,13 +360,7 @@ export const useStore = create<State>()(
             const m = s.variants[k];
             if (!m) return {};
             const floors = m.floors.map((f) => (f.id === floorId ? res.floor : f));
-            // Photos of the room that went follow the merged room, unless a third room shares either name.
-            const clash = res.floor.rooms.some((r) => r.id !== res.room.id && (r.name === res.removed.name || r.name === res.room.name));
-            const photos =
-              photoSource(s.variants) === k && !clash && res.removed.name !== res.room.name
-                ? renamePhotos(s.photos, floor.name, { room: res.removed.name }, { room: res.room.name })
-                : s.photos;
-            return { variants: { ...s.variants, [k]: { ...m, floors } }, ...(photos !== s.photos ? { photos } : {}), selectedRoomId: res.room.id };
+            return { variants: { ...s.variants, [k]: { ...m, floors } }, selectedRoomId: res.room.id };
           });
           return res;
         },
@@ -388,23 +368,13 @@ export const useStore = create<State>()(
           setState((st) => {
             const m = st.variants[k];
             if (!m) return {};
-            const old = m.floors.find((f) => f.id === floorId);
             const floors = m.floors.map((f) => (f.id === floorId ? (typeof patch === "function" ? patch(f) : { ...f, ...patch }) : f));
-            const renamed = floors.find((f) => f.id === floorId);
-            let photos = st.photos;
-            // Photos follow a renamed floor, unless another floor shares either name (that would mix two floors' photos).
-            const shared = (name: string) => m.floors.some((f) => f.id !== floorId && f.name === name);
-            if (old && renamed && old.name !== renamed.name && photoSource(st.variants) === k && !shared(old.name) && !shared(renamed.name)) {
-              photos = renamePhotos(photos, old.name, { floor: old.name }, { floor: renamed.name });
-            }
-            return { variants: { ...st.variants, [k]: { ...m, floors } }, ...(photos !== st.photos ? { photos } : {}) };
+            return { variants: { ...st.variants, [k]: { ...m, floors } } };
           }),
         updateRoom: (k, floorId, roomId, patch) =>
           setState((st) => {
             const m = st.variants[k];
             if (!m) return {};
-            const floor = m.floors.find((f) => f.id === floorId);
-            const old = floor?.rooms.find((r) => r.id === roomId);
             const { floorFrom, wallsFrom, ...rest } = patch;
             let floors = m.floors.map((f) =>
               f.id === floorId ? { ...f, rooms: f.rooms.map((r) => (r.id === roomId ? { ...r, ...rest } : r)) } : f,
@@ -412,19 +382,7 @@ export const useStore = create<State>()(
             if ("floorFrom" in patch) floors = setLink(floors, floorId, roomId, "floor", floorFrom);
             if ("wallsFrom" in patch) floors = setLink(floors, floorId, roomId, "walls", wallsFrom);
             floors = syncLinks(floors, roomId);
-            let photos = st.photos;
-            if (
-              floor &&
-              old &&
-              patch.name !== undefined &&
-              patch.name !== old.name &&
-              photoSource(st.variants) === k &&
-              // Only move photos when no other room on the floor has the old or the new name (that would mix two rooms' photos).
-              !floor.rooms.some((r) => r.id !== roomId && (r.name === old.name || r.name === patch.name))
-            ) {
-              photos = renamePhotos(photos, floor.name, { room: old.name }, { room: patch.name });
-            }
-            return { variants: { ...st.variants, [k]: { ...m, floors } }, ...(photos !== st.photos ? { photos } : {}) };
+            return { variants: { ...st.variants, [k]: { ...m, floors } } };
           }),
         setSite: (site, k) => setState((st) => ({ sites: setSiteOf(st.sites, k ?? st.activeVariant, site) })),
         updateSite: (patch, k) =>
@@ -432,9 +390,6 @@ export const useStore = create<State>()(
             const sites = updateSiteOf(st.sites, k ?? st.activeVariant, patch);
             return sites === st.sites ? {} : { sites };
           }),
-        addPhotos: (p) => setState((st) => ({ photos: [...st.photos, ...p] })),
-        updatePhoto: (id, patch) => setState((st) => ({ photos: st.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
-        removePhoto: (id) => setState((st) => ({ photos: st.photos.filter((p) => p.id !== id) })),
         addPiece: (p) => {
           const id = `piece-${Math.random().toString(36).slice(2, 10)}`;
           setState((st) => ({ pieces: [...st.pieces, { ...p, id }] }));
@@ -466,7 +421,7 @@ export const useStore = create<State>()(
             const q = p.tab && p.tab !== "3d" ? { ...p, measureTool: false } : p;
             return "selectedRoomId" in q && !("selectedEdge" in q) && q.selectedRoomId !== st.selectedRoomId ? { ...q, selectedEdge: null } : q;
           }),
-        reset: () => setState({ variants: {}, photos: [], sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, selectedPhotoId: null, gardenSel: [], linkSwitchId: null, linkGang: 0 }),
+        reset: () => setState({ variants: {}, sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, gardenSel: [], linkSwitchId: null, linkGang: 0 }),
       };
     },
     {
@@ -475,7 +430,6 @@ export const useStore = create<State>()(
       storage: imageAwareStorage<Persisted>(undefined, undefined, { onTakeover: () => reloadSaved(), suffix: storageSuffix(activeHouseId()) }),
       partialize: (s): Persisted => ({
         variants: s.variants,
-        photos: s.photos,
         sites: s.sites,
         pieces: s.pieces,
         settings: s.settings,
@@ -503,7 +457,8 @@ export const useStore = create<State>()(
         const isObj = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
         if (!isObj(merged.variants)) merged.variants = {};
         if (!isObj(merged.sites)) merged.sites = {};
-        if (!Array.isArray(merged.photos)) merged.photos = [];
+        // Saves from before photos were removed: never let the old field into the state.
+        delete (merged as { photos?: unknown }).photos;
         for (const k of Object.keys(merged.variants) as VariantKey[]) {
           const m = merged.variants[k] as { floors?: unknown } | undefined;
           if (!m || !Array.isArray(m.floors)) delete merged.variants[k];

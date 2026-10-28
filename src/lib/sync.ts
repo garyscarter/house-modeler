@@ -104,8 +104,8 @@ async function call(method: "GET" | "PUT", url: string, body?: unknown, timeoutM
 }
 
 const currentProject = (): ProjectData => {
-  const { variants, photos, sites, costRates, pieces, savedViews } = useStore.getState();
-  return { variants, photos, sites, costRates, pieces, savedViews };
+  const { variants, sites, costRates, pieces, savedViews } = useStore.getState();
+  return { variants, sites, costRates, pieces, savedViews };
 };
 
 /** Put a project into the store the way Import JSON does. Returns false when it isn't a project. */
@@ -120,7 +120,7 @@ export function applyProject(data: unknown, fromServer = false): boolean {
       if (project.savedViews) useStore.setState({ savedViews: project.savedViews });
       useStore.getState().setVariant("current", project.variants.current);
       useStore.getState().setVariant("proposed", project.variants.proposed);
-      useStore.setState({ photos: project.photos, sites: project.sites });
+      useStore.setState({ sites: project.sites });
       if (project.pieces) useStore.setState({ pieces: project.pieces });
     });
     // Undo must not cross a load from the server: it would put the old project back and upload it over the server's.
@@ -209,7 +209,7 @@ async function check(): Promise<void> {
     enabled = true;
     useStore.subscribe((s, prev) => {
       if (applying) return;
-      if (s.variants !== prev.variants || s.photos !== prev.photos || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
+      if (s.variants !== prev.variants || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
     });
   }
   const server: Revision | null = reply.status === 404 ? null : { revision: reply.json.revision, savedAt: reply.json.savedAt };

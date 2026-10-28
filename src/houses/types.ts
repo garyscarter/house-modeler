@@ -1,4 +1,4 @@
-import type { HouseModel, Photo, Site, VariantKey } from "../types";
+import type { HouseModel, Site, VariantKey } from "../types";
 
 /** A built-in layout: bump `version` whenever `build` changes, so browsers holding an older copy are offered the update. */
 export interface LayoutPreset {
@@ -33,9 +33,6 @@ export interface HouseDef {
   tiles: WelcomeTile[];
   /** The floorplan image as a data URL. */
   floorplan: () => Promise<string>;
-  photos?: (onProgress?: (done: number, total: number) => void) => Promise<Photo[]>;
-  /** A photo name that shows the built-in photos are loaded ("front-1"). */
-  photoMarker?: string;
   placeholderImage: () => string;
 }
 

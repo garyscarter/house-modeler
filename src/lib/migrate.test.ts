@@ -31,16 +31,23 @@ describe("persisted-state migration", () => {
     expect(st.sites?.proposed?.boundary).toEqual(listingSite().boundary);
   });
 
-  it("is at version 6", () => expect(PERSIST_VERSION).toBe(6));
+  it("is at version 7", () => expect(PERSIST_VERSION).toBe(7));
 
-  it("renames the attached neighbour's buildings and photo note in a version 5 save", () => {
+  it("renames the attached neighbour's buildings in a version 5 save", () => {
     const site = listingSite();
     const old = { ...site, neighbours: site.neighbours.map((n) => ({ ...n, name: n.name.replace("Attached neighbour's ", "No. 9 ").replace("Attached neighbour", "No. 9 (attached)") })) };
-    const photo = { id: "p", name: "rear-3", dataUrl: "", description: "Rear towards No. 9 and its conservatory." };
-    const st = migratePersisted({ variants: {}, sites: { current: old, proposed: null }, photos: [photo] }, 5);
+    const st = migratePersisted({ variants: {}, sites: { current: old, proposed: null } }, 5);
     expect(st.sites?.current?.neighbours.map((n) => n.name)).toEqual(site.neighbours.map((n) => n.name));
     expect(st.sites?.proposed).toBeNull();
-    expect(st.photos?.[0].description).toBe("Rear towards the attached neighbour and its conservatory.");
+  });
+
+  it("drops photos and a room's photo floor from a version 6 save", () => {
+    const withPhotoFloor = JSON.parse(JSON.stringify(builtInHouse("")));
+    withPhotoFloor.floors[0].rooms[0].floorPhotoId = "p1";
+    const st = migratePersisted({ variants: { current: withPhotoFloor }, photos: [{ id: "p1", name: "kitchen-1", dataUrl: "" }] }, 6);
+    expect(st).not.toHaveProperty("photos");
+    expect(st.variants?.current.floors[0].rooms[0]).not.toHaveProperty("floorPhotoId");
+    expect(st.variants?.current.floors[0].rooms.length).toBe(withPhotoFloor.floors[0].rooms.length);
   });
 
   it("leaves neighbours the owner named alone", () => {

@@ -54,7 +54,7 @@ export default function ReviewDocument() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".modal-backdrop, .dialog-backdrop, .lightbox")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".modal-backdrop, .dialog-backdrop")) {
         e.preventDefault();
         closeReview();
       }
