@@ -469,8 +469,10 @@ describe("the listing's garden baseline", () => {
 
 describe("the house lint", () => {
   it("finds nothing to report", () => {
-    // Loosened from the 8% default: the listing's printed sizes are internal while its tracing runs on wall
-    // centrelines (the galley is 9% under), and Bedroom 2 traces 20% over its printed size.
-    expect(lintHouse(house91, { dimsTolerance: 0.25 })).toEqual([]);
+    // 8% default does not hold for six rooms, measured on inner faces (centre line less half the wall): Kitchen
+    // (galley) is 23% under its printed 5.7 m2 (the printed size is not to the inner faces), Living Room (front)
+    // 12%, Living Room (rear) 11%, Bedroom 1 11% and the Garage 9% under, Bedroom 2 9% over. 0.23 is the smallest
+    // value that passes; the tracing, not the lint, is what to revisit.
+    expect(lintHouse(house91, { dimsTolerance: 0.23 })).toEqual([]);
   });
 });

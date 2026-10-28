@@ -1,9 +1,52 @@
 import { describe, expect, it } from "vitest";
 import template from "./_template/index";
-import { isSimplePolygon, lintHouse } from "./lint";
+import type { Room } from "../types";
+import { innerAreaM2, isSimplePolygon, lintHouse } from "./lint";
 import type { HouseDef } from "./types";
 
 const clone = (): HouseDef => ({ ...template, presets: { ...template.presets }, sitePresets: { ...template.sitePresets } });
+
+const rect = (id: string, x0: number, y0: number, x1: number, y1: number): Room =>
+  ({ id, name: id, polygon: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] }) as Room;
+
+describe("innerAreaM2", () => {
+  // 100 px per metre. A room traced on wall centre lines 4.25 x 3.25 m, one side shared with a neighbour: its walls
+  // are three external (0.25 thick) and one partition (0.1), so the inside is (4.25-.125-.05) x (3.25-.125-.125).
+  it("shrinks a centre-line rectangle to its inner faces", () => {
+    const room = rect("a", 0, 0, 425, 325);
+    const next = rect("b", 425, 0, 700, 325);
+    expect(innerAreaM2(room, [room, next], 100)).toBeCloseTo(4.075 * 3.0, 3);
+  });
+
+  it("uses the external thickness on every side of a lone room", () => {
+    const room = rect("a", 0, 0, 400, 300);
+    expect(innerAreaM2(room, [room], 100)).toBeCloseTo(3.75 * 2.75, 3);
+  });
+
+  it("is the same for a polygon wound the other way", () => {
+    const room = rect("a", 0, 0, 400, 300);
+    const rev = { ...room, polygon: [...room.polygon].reverse() } as Room;
+    expect(innerAreaM2(rev, [rev], 100)).toBeCloseTo(3.75 * 2.75, 3);
+  });
+
+  it("lets a correctly traced room pass at the default tolerance", () => {
+    const def = clone();
+    const base = template.presets[template.main];
+    def.presets[def.main] = {
+      version: 1,
+      build: (img) => {
+        const m = base.build(img);
+        const f = m.floors[0];
+        const r = f.rooms[0];
+        const inner = innerAreaM2(r, f.rooms, f.pxPerM);
+        r.dims = { w: Math.sqrt(inner), h: Math.sqrt(inner) };
+        return m;
+      },
+    };
+    const first = template.presets[template.main].build("").floors[0].rooms[0].name;
+    expect(lintHouse(def).filter((m) => m.includes(`"${first}"`) && /inside its walls/.test(m))).toEqual([]);
+  });
+});
 
 describe("lintHouse", () => {
   it("passes the template", () => {

@@ -1,10 +1,13 @@
-import { buildWalls } from "../lib/geometry";
+import { buildWalls, EXT_WALL_T, WALL_T } from "../lib/geometry";
 import { areaM2 } from "../lib/planMath";
-import type { Pt } from "../types";
+import type { Pt, Room } from "../types";
 import type { HouseDef } from "./types";
 
 export interface LintOptions {
-  /** How far a room's traced area may differ from its printed size, as a fraction (default 0.08). */
+  /**
+   * How far a room's inner area (the tracing on wall centre lines, moved in by half each wall's thickness) may differ
+   * from its printed size, which is to the inner faces, as a fraction (default 0.08).
+   */
   dimsTolerance?: number;
 }
 
@@ -38,6 +41,52 @@ export function isSimplePolygon(poly: Pt[]): boolean {
     }
   }
   return true;
+}
+
+/** Distance from point p to segment ab. */
+function distToSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * The area, in m², of a room's inside: its traced polygon (on wall centre lines, in pixels) with every edge moved in
+ * by half its wall's thickness. This is the figure a printed room size (to the inner faces) compares with.
+ * An edge is an external wall (EXT_WALL_T) when no other room on the floor touches it, else a partition (WALL_T),
+ * the same split the app uses to build the walls (geometry.ts).
+ */
+export function innerAreaM2(room: Room, rooms: Room[], pxPerM: number): number {
+  const poly = room.polygon;
+  const n = poly.length;
+  const sign = Math.sign(poly.reduce((s, p, i) => s + (p.x * poly[(i + 1) % n].y - poly[(i + 1) % n].x * p.y), 0)) || 1;
+  const touch = 0.15 * pxPerM;
+  const others = rooms.filter((r) => r !== room && r.polygon.length >= 3);
+  const lines = poly.map((a, i) => {
+    const b = poly[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const shared = [0.25, 0.5, 0.75].some((t) => {
+      const m = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      return others.some((r) => r.polygon.some((c, j) => distToSegment(m, c, r.polygon[(j + 1) % r.polygon.length]) < touch));
+    });
+    const d = ((shared ? WALL_T : EXT_WALL_T) / 2) * pxPerM;
+    // Inward normal: to the left of the edge for a counter-clockwise polygon (y down flips it with the sign).
+    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+    const nrm = { x: -dir.y * sign, y: dir.x * sign };
+    return { p: { x: a.x + nrm.x * d, y: a.y + nrm.y * d }, dir, nrm, d };
+  });
+  const inner = poly.map((v, i) => {
+    const prev = lines[(i + n - 1) % n];
+    const next = lines[i];
+    const den = prev.dir.x * next.dir.y - prev.dir.y * next.dir.x;
+    // Collinear neighbours: slide the corner straight in.
+    if (Math.abs(den) < 1e-9) return { x: v.x + next.nrm.x * next.d, y: v.y + next.nrm.y * next.d };
+    const t = ((next.p.x - prev.p.x) * next.dir.y - (next.p.y - prev.p.y) * next.dir.x) / den;
+    return { x: prev.p.x + prev.dir.x * t, y: prev.p.y + prev.dir.y * t };
+  });
+  return areaM2(inner, pxPerM);
 }
 
 function strings(value: unknown, out: string[] = []): string[] {
@@ -74,9 +123,9 @@ export function lintHouse(def: HouseDef, options: LintOptions = {}): string[] {
         else if (!isSimplePolygon(r.polygon)) add(`${at}: room "${r.name}" crosses itself`);
         if (r.dims && r.polygon.length >= 3 && f.pxPerM > 0) {
           const printed = r.dims.w * r.dims.h;
-          const traced = areaM2(r.polygon, f.pxPerM);
+          const traced = innerAreaM2(r, f.rooms, f.pxPerM);
           if (printed > 0 && Math.abs(traced - printed) / printed > tolerance) {
-            add(`${at}: room "${r.name}" traces ${traced.toFixed(1)} m² but its printed size is ${printed.toFixed(1)} m² (more than ${Math.round(tolerance * 100)}% apart)`);
+            add(`${at}: room "${r.name}" measures ${traced.toFixed(1)} m² inside its walls but its printed size is ${printed.toFixed(1)} m² (more than ${Math.round(tolerance * 100)}% apart)`);
           }
         }
       }
