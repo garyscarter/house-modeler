@@ -14,8 +14,9 @@ const commit = (() => {
   }
 })();
 
-const DEFAULT_HOUSE_ID = "listing-91770873";
 const HOUSES_DIR = path.resolve(import.meta.dirname, "src/houses");
+/** The owner's house: its saves keep the original storage names. Shared with the server (server/houses.mjs). */
+const DEFAULT_HOUSE_ID: string = JSON.parse(fs.readFileSync(path.join(HOUSES_DIR, "default.json"), "utf8")).id;
 
 /**
  * `virtual:houses`: the house registry, one entry per folder under src/houses/ that has an index.ts. Folders starting
