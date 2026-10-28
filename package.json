@@ -12,7 +12,10 @@
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
     "build:hosted": "node scripts/build-hosted.mjs",
-    "regress:editors": "node scripts/editor-regression.mjs"
+    "regress:editors": "node scripts/editor-regression.mjs",
+    "house:new": "node scripts/house/new.mjs",
+    "house:overlay": "node scripts/house/overlay-plan.mjs",
+    "house:map": "node scripts/house/overlay-map.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
