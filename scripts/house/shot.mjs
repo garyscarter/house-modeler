@@ -15,7 +15,7 @@ and plan-<floor>.png for every floor. Saved in /tmp/storey-shots/<id>/ unless --
 Flags need -- after the script name when run through npm.`;
 helpAndExit(process.argv.slice(2), usage);
 const { flags, pos } = parseArgs(process.argv.slice(2));
-takeSwallowed(flags, ["out", "variant", "views"], "house:shot");
+takeSwallowed(flags, pos, { views: (v) => v.split(",").every((x) => x in VIEWS), out: (v) => /[\/\\]/.test(v), variant: (v) => v === "current" || v === "proposed" }, "house:shot");
 const id = pos[0];
 if (!id) fail(usage);
 const views = (flags.views ?? "home,top").split(",").map((v) => v.trim()).filter(Boolean);

@@ -12,7 +12,8 @@ Draws the plot over the map image. The picture goes to /tmp/storey-shots/<id>/ma
 Flags need -- after the script name when run through npm.`;
 helpAndExit(process.argv.slice(2), usage);
 const { flags, pos } = parseArgs(process.argv.slice(2));
-takeSwallowed(flags, ["scale", "origin", "bearing", "out"], "house:map");
+const num = (v) => Number.isFinite(Number(v));
+takeSwallowed(flags, pos, { origin: (v) => /^-?[\d.]+,-?[\d.]+$/.test(v), out: (v) => /\.png$/i.test(v) && v !== pos[1], scale: num, bearing: num }, "house:map");
 const [id, mapFile] = pos;
 if (!id || !mapFile) fail(usage);
 const scale = Number(flags.scale);

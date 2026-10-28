@@ -2,14 +2,14 @@
 // Usage: npm run house:overlay <id> [--floor n] [--out file.png] [--variant <preset id>]
 // Rooms are red, openings are coloured by kind (key in the corner), stairs are a purple box with an arrow.
 import path from "node:path";
-import { fail, floorplanDataUrl, helpAndExit, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed } from "./_lib.mjs";
+import { fail, floorplanDataUrl, helpAndExit, houseIsIn, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed } from "./_lib.mjs";
 
 const usage = `Usage: npm run house:overlay -- <id> [--floor n] [--out file.png] [--variant <preset id>]
 Draws the traced rooms over the floorplan image. The picture goes to /tmp/storey-shots/<id>/overlay-floor<n>.png
 unless --out names a file. Flags need -- after the script name when run through npm.`;
 helpAndExit(process.argv.slice(2), usage);
 const { flags, pos } = parseArgs(process.argv.slice(2));
-takeSwallowed(flags, ["floor", "out", "variant"], "house:overlay");
+takeSwallowed(flags, pos, { floor: (v) => /^\d+$/.test(v), out: (v) => /[\/\\]|\.png$/i.test(v), variant: (v) => !houseIsIn(v) }, "house:overlay");
 const id = pos[0];
 if (!id) fail(usage);
 const { def } = await loadHouse(id);

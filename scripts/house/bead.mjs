@@ -4,14 +4,14 @@
 // taylors-version encore.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { addBead, bracelet, ERAS, fail, helpAndExit, nextEra, parseArgs, readLocal, root, takeSwallowed } from "./_lib.mjs";
+import { addBead, bracelet, ERAS, fail, helpAndExit, houseIsIn, nextEra, parseArgs, readLocal, root, takeSwallowed } from "./_lib.mjs";
 
 helpAndExit(process.argv.slice(2), `Usage: npm run house:bead [<era> [<house id>]] [-- --house <id>]
 Threads the bead for a finished era onto the bracelet (reference/<id>/tour.json) and prints it; with no era, only prints.
 The house is the second argument, --house, or the local house from npm run house:start.
 Eras: ${ERAS.map((e) => e.key).join(" ")}`);
 const { flags, pos } = parseArgs(process.argv.slice(2));
-takeSwallowed(flags, ["house"], "house:bead");
+takeSwallowed(flags, pos, { house: houseIsIn }, "house:bead");
 const id = flags.house ?? pos[1] ?? readLocal()?.house;
 const era = pos[0];
 if (!id) fail('No house: run npm run house:start <id> "<Name>" first, or pass --house <id>.');
