@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose } from "./cameraViews";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 
 const project = (pose: ReturnType<typeof homeView>, p: { x: number; y: number; z: number }, fov: number, aspect: number) => {
   const f = { x: pose.target.x - pose.position.x, y: pose.target.y - pose.position.y, z: pose.target.z - pose.position.z };
@@ -146,8 +146,8 @@ describe("faceDirection and easing", () => {
 
 describe("frameFor", () => {
   const img = "data:,";
-  const A = listing91770873(img);
-  const B = listing91770873Proposed(img);
+  const A = builtInHouse(img);
+  const B = builtInProposed(img);
   const plot = listingSite().boundary;
 
   it("contains each model's own box", () => {
@@ -198,7 +198,7 @@ describe("poseFits", () => {
     expect(poseFits(at({ x: 5, y: 1, z: 5 }, 200), box, 120)).toBe(false);
   });
   it("accepts the listing's home view for both layouts", () => {
-    const f = frameFor([listing91770873("data:,"), listing91770873Proposed("data:,")]);
+    const f = frameFor([builtInHouse("data:,"), builtInProposed("data:,")]);
     expect(poseFits(homeView(f, 45, 1.6), f, 60)).toBe(true);
   });
 });

@@ -1,13 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
-import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
+import { RenderDialogHost } from "./components/RenderDialog";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
-import { PhotosDialog } from "./components/PhotosDialog";
 import { TopBar, LayoutSwitch } from "./components/TopBar";
 import { Dock } from "./components/Dock";
 import { InspectorCard } from "./components/InspectorCard";
@@ -16,7 +15,7 @@ import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
-import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
+import { currentHouse } from "./lib/house";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { editsSite, siteEditPatch } from "./lib/modes";
@@ -46,7 +45,6 @@ const SiteEditor = lazy(() => import("./editor/SiteEditor").then((m) => ({ defau
 
 export default function App() {
   const variants = useStore((s) => s.variants);
-  const photos = useStore((s) => s.photos);
   const activeVariant = useStore((s) => s.activeVariant);
   const viewMode = useStore((s) => s.viewMode);
   const showLabels = useStore((s) => s.showLabels);
@@ -82,7 +80,8 @@ export default function App() {
       // Load the server's copy first (if there is a server), so the prompt below looks at what was loaded.
       await startSync();
       const { variants, sites } = useStore.getState();
-      const prompt = decideStartupPrompt(variants, PRESETS, LISTING_PRESET.id, readRemembered(), decideSiteUpdate(variants, sites));
+      const house = currentHouse();
+      const prompt = decideStartupPrompt(variants, house.presets, house.main, readRemembered(), decideSiteUpdate(variants, sites));
       // The first-run Welcome card handles "load"; only the update questions are asked as dialogs.
       if (prompt && prompt.kind !== "load") void runStartupPrompt(prompt);
     })();
@@ -199,7 +198,6 @@ export default function App() {
                 <Viewer
                   active={show3d}
                   model={model}
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -220,7 +218,6 @@ export default function App() {
                       captureId={k}
                       variant={k}
                       model={variants[k]!}
-                      photos={photos}
                       showLabels={showLabels}
                       showCeilings={showCeilings}
                       doorsOpen={doorsOpen}
@@ -241,7 +238,6 @@ export default function App() {
                   ghost={otherModel}
                   variant={activeVariant}
                   ghostVariant={other}
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -255,7 +251,6 @@ export default function App() {
               )}
               {effectiveViewMode === "wipe" && (
                 <WipeCompare
-                  photos={photos}
                   showLabels={showLabels}
                   showCeilings={showCeilings}
                   doorsOpen={doorsOpen}
@@ -302,14 +297,13 @@ export default function App() {
       </main>
       {model && chassis === "phone" && <TabBar />}
 
-      <PhotoLightbox />
       <Dialogs />
       <CommandPalette />
       <ShortcutSheet />
+      <RenderDialogHost />
       <ReviewPage />
       <ListingUpdatesDialog />
       <LayoutsDialog />
-      <PhotosDialog />
     </div>
   );
 }

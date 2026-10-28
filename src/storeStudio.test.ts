@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
-import { listing91770873 } from "./lib/houses/listing91770873";
+import { builtInHouse } from "./houses/default";
 
 const st = () => useStore.getState();
 const merge = (persisted: unknown) => useStore.persist.getOptions().merge!(persisted, st()) as unknown as Record<string, unknown>;
 
 describe("store: studio", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], mode: "build", modeBeforeReview: null, tab: "3d", editFloorId: null, activeVariant: "current", viewMode: "single", peek: false, peekReturn: null, hoveredRoomId: null });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], mode: "build", modeBeforeReview: null, tab: "3d", editFloorId: null, activeVariant: "current", viewMode: "single", peek: false, peekReturn: null, hoveredRoomId: null });
   });
 
   it("Review remembers the mode it came from and leaveReview goes back", () => {
@@ -48,10 +48,10 @@ describe("store: studio", () => {
   });
 
   it("setPeek swaps the layout without an undo step, and only when both exist", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().setPeek(true);
     expect(st().peek).toBe(false);
-    st().setVariant("proposed", listing91770873(""));
+    st().setVariant("proposed", builtInHouse(""));
     st().setUi({ activeVariant: "proposed" });
     const before = st().past.length;
     st().setPeek(true);
@@ -64,7 +64,7 @@ describe("store: studio", () => {
   });
 
   it("undo clears the hovered room, and the image defaults to 30%", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().setUi({ hoveredRoomId: "x" });
     st().undo();
     expect(st().hoveredRoomId).toBeNull();

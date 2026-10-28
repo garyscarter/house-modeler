@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "../store";
-import { listing91770873, listing91770873Proposed, listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "../houses/default";
 import { applyBoundaryUpdate, planBoundaryUpdate, updatePreset, updateSitePreset } from "./presetActions";
 import { setOpeningWidth } from "./boundaryOpening";
 import { decideSiteUpdate, freshSiteFor, hasPlotEdits, isListingPlot, isStaleSite, looksLikeListingSite } from "./sitePreset";
@@ -60,7 +60,7 @@ describe("isStaleSite", () => {
     expect(isStaleSite(s, asListed)).toBe(true);
   });
   it("never offers a plot the user made", () => {
-    const model = listing91770873("");
+    const model = builtInHouse("");
     const simple = simpleSite(model, { front: 6, rear: 10, left: 1, right: 1 });
     expect(isStaleSite(simple, asListed)).toBe(false);
     // Even one that keeps the listing's bearing and location is a different size.
@@ -104,7 +104,7 @@ describe("decideSiteUpdate", () => {
     expect(decideSiteUpdate(v, { current: listingSite(), proposed: edited })).toEqual({ version: LISTING_SITE_PRESET.version, current: false, proposed: "own" });
   });
   it("ignores a cleared Proposed plot and a user-made one", () => {
-    const simple = simpleSite(listing91770873(""), { front: 6, rear: 10, left: 1, right: 1 });
+    const simple = simpleSite(builtInHouse(""), { front: 6, rear: 10, left: 1, right: 1 });
     expect(decideSiteUpdate(v, { current: legacySite(), proposed: null })?.proposed).toBeUndefined();
     expect(decideSiteUpdate(v, { current: simple })).toBeNull();
     expect(decideSiteUpdate(v, { current: listingSite(), proposed: simple })).toBeNull();
@@ -231,18 +231,18 @@ describe("telling edited plots from unedited ones", () => {
     expect(isListingPlot(listingSite(), {})).toBe(false);
     expect(isListingPlot(listingSite(), undefined)).toBe(false);
     expect(isListingPlot(undefined, asListed)).toBe(false);
-    expect(isListingPlot(simpleSite(listing91770873(""), { front: 6, rear: 10, left: 1, right: 1 }), asListed)).toBe(false);
+    expect(isListingPlot(simpleSite(builtInHouse(""), { front: 6, rear: 10, left: 1, right: 1 }), asListed)).toBe(false);
   });
 });
 
 describe("updating through the store", () => {
   const st = () => useStore.getState();
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], activeVariant: "current" });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], activeVariant: "current" });
   });
 
   it("replaces a legacy plot with the latest one, in one undo step", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     useStore.setState({ sites: { current: legacySite() }, past: [] });
     updateSitePreset("current");
     expect(st().sites.current!.preset).toEqual(LISTING_SITE_PRESET);
@@ -252,8 +252,8 @@ describe("updating through the store", () => {
     expect(st().sites.current!.preset).toBeUndefined();
   });
   it("leaves Proposed's own plot alone unless asked, and it follows As listed when it has none", () => {
-    st().setVariant("current", listing91770873(""));
-    st().setVariant("proposed", listing91770873Proposed(""));
+    st().setVariant("current", builtInHouse(""));
+    st().setVariant("proposed", builtInProposed(""));
     const edited = { ...legacySite(), longitude: -2.6201 };
     useStore.setState({ sites: { current: legacySite(), proposed: edited } });
     updateSitePreset("current");
@@ -265,12 +265,12 @@ describe("updating through the store", () => {
     expect(st().sites.proposed).toBeUndefined();
   });
   it("does nothing for a layout with no plot", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     updateSitePreset("current");
     expect(st().sites.current).toBeUndefined();
   });
   it("updates layouts and plots together in a single undo step", () => {
-    st().setVariant("current", { ...listing91770873(""), preset: { ...LISTING_PRESET, version: 1 } });
+    st().setVariant("current", { ...builtInHouse(""), preset: { ...LISTING_PRESET, version: 1 } });
     useStore.setState({ sites: { current: legacySite() }, past: [] });
     updatePreset("current");
     updateSitePreset("current");
@@ -280,8 +280,8 @@ describe("updating through the store", () => {
     expect(st().sites.current!.preset).toBeUndefined();
   });
   it("updates the boundaries of an edited plot, keeps the widened drive, and undoes in one step", () => {
-    st().setVariant("current", listing91770873(""));
-    st().setVariant("proposed", listing91770873Proposed(""));
+    st().setVariant("current", builtInHouse(""));
+    st().setVariant("proposed", builtInProposed(""));
     const mine = setOpeningWidth(legacySite(), 6, 4.0, "start");
     useStore.setState({ sites: { current: legacySite(), proposed: mine }, past: [] });
     const plan = planBoundaryUpdate("proposed")!;
@@ -299,7 +299,7 @@ describe("updating through the store", () => {
     expect(st().sites.proposed).toBe(mine);
   });
   it("has nothing to plan for a layout with no plot of its own", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     expect(planBoundaryUpdate("proposed")).toBeUndefined();
   });
 });

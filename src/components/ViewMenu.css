@@ -23,3 +23,16 @@
 .compare-row[aria-checked="true"] { color: var(--accent); font-weight: 600; }
 .compare-row[aria-checked="true"] .radio { border-color: var(--accent); }
 .compare-row[aria-checked="true"] .radio::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+/* Section cut: a switch, then the height slider with floor stops as ticks and chips. */
+.section-cut { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.section-cut-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 10px 8px; }
+.section-cut-slider { width: 100%; min-width: 200px; margin: 0; accent-color: var(--accent); }
+.section-cut-reading { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.section-cut-stops { display: flex; flex-wrap: wrap; gap: 4px; }
+.section-chip { padding: 3px 8px; font-size: 12px; border-radius: var(--radius-s); background: var(--surface-2); color: var(--text); }
+.section-chip.active { background: var(--accent-soft); color: var(--accent); }
+
+/* Touch: a taller slider thumb track and bigger chips to hit. */
+.app[data-touch] .section-cut-slider { min-height: 32px; }
+.app[data-touch] .section-chip { padding: 8px 12px; font-size: 13px; }

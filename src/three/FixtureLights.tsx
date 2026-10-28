@@ -13,7 +13,10 @@ export const LAMP_SCALE = 0.06;
 export const SPOT_SCALE = 0.03;
 /** Re-pick the nearest lamps once the view's focus has moved this far (metres). */
 const REPICK_M = 1;
+/** A pan or orbit re-picks the lights only once the camera has been still this long, so no shadow map redraws mid-motion. */
+const SETTLE_MS = 180;
 const _dir = new THREE.Vector3();
+const _focus = new THREE.Vector3();
 /** Where an empty slot's light waits: far below the house, dark and with a tiny reach, so it lights and shadows nothing. */
 const PARK: [number, number, number] = [0, -500, 0];
 
@@ -50,19 +53,39 @@ export function LampLights({ lamps, sizes }: { lamps: LampLight[]; sizes: PoolSi
   }, [gl, sizes]);
   const [slots, setSlots] = useState<Slots>(() => assignSlots(null, [], [0, 0, 0], sizes));
   const last = useRef<{ focus: THREE.Vector3; lamps: LampLight[] | null; sizes: PoolSizes }>({ focus: new THREE.Vector3(Infinity, 0, 0), lamps: null, sizes });
+  // Where the camera last looked and when it last moved: a pick caused by motion waits for the motion to stop.
+  const still = useRef({ at: new THREE.Vector3(Infinity, 0, 0), t: 0, timer: 0 });
   const repick = () => {
     const l = last.current;
     const eye = camera.position;
     const d = camera.getWorldDirection(_dir);
     const focus = focusPoint([eye.x, eye.y, eye.z], [d.x, d.y, d.z]);
-    if (l.lamps === lamps && l.sizes === sizes && l.focus.distanceTo(_dir.set(focus[0], focus[1], focus[2])) < REPICK_M) return;
-    l.focus.set(focus[0], focus[1], focus[2]);
+    _focus.set(focus[0], focus[1], focus[2]);
+    const changed = l.lamps !== lamps || l.sizes !== sizes;
+    if (!changed && l.focus.distanceTo(_focus) < REPICK_M) return;
+    if (!changed) {
+      // Camera motion: each shadow-casting spot that changes slot redraws its map, so wait until the view settles,
+      // and ask for a frame then (frames are on demand, so nothing would otherwise run this again).
+      const s = still.current;
+      const now = performance.now();
+      if (s.at.distanceToSquared(_focus) > 1e-6) {
+        s.at.copy(_focus);
+        s.t = now;
+      }
+      if (now - s.t < SETTLE_MS) {
+        window.clearTimeout(s.timer);
+        s.timer = window.setTimeout(() => invalidate(), SETTLE_MS);
+        return;
+      }
+    }
+    l.focus.copy(_focus);
     l.lamps = lamps;
     l.sizes = sizes;
     setSlots((prev) => assignSlots(prev, lamps, focus, sizes));
   };
   useEffect(repick);
   useFrame(repick);
+  useEffect(() => () => window.clearTimeout(still.current.timer), []);
   useEffect(() => invalidate(), [slots, invalidate]);
   const byId = useMemo(() => new Map(lamps.map((l) => [l.id, l])), [lamps]);
   // For the dev hook window.__houseLights: lights in use and the pool.
@@ -112,7 +135,11 @@ function PoolSpot({ light: l, cast }: { light?: LampLight; cast: boolean }) {
   const id = l?.id;
   // A layout effect, so the next frame (the first that samples the new map) draws it first.
   useLayoutEffect(() => {
-    if (!cast) return;
+    const s = ref.current;
+    if (!cast || !s) return;
+    // Only this map: the other casters (the sun's 4096 map above all) keep theirs until the scene changes.
+    s.shadow.autoUpdate = false;
+    s.shadow.needsUpdate = true;
     gl.shadowMap.needsUpdate = true;
     invalidate();
   }, [cast, id, pos, gl, invalidate]);

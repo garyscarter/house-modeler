@@ -17,7 +17,7 @@ import { gridOf, type Symbol } from "./catalogue";
 export interface WiringGuideInput {
   /** Long date for the title blocks and footer, already formatted. */
   date: string;
-  /** "Listing 91770873". */
+  /** The house name, e.g. "Template house". */
   houseName?: string;
   /** The layout the guide is of (the Proposed one when it exists), e.g. "Proposed". */
   variantLabel: string;

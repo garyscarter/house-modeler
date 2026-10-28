@@ -20,7 +20,11 @@ const KEY_SUN = 5;
 const DUSK_KEY = 0.7;
 const DUSK_DIM = 0.35;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
-/** Shadow edge softness in shadow-map texels. */
+/**
+ * The sun's shadows are percentage-closer filtered (three's 5-tap Vogel disc, dithered per pixel), blurred over
+ * `SHADOW_RADIUS` texels. Variance shadow maps were tried for a wider penumbra and reverted: their lit shaders took
+ * seconds to compile and every redraw blurred the whole map twice, which stalled the night view (scripts/perf-render.cjs).
+ */
 const SHADOW_RADIUS = { high: 3, balanced: 2, low: 1 } as const;
 
 const WHITE_SUN = new THREE.Color("#fff3e2");
@@ -123,6 +127,7 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
     const mapSize = SHADOW_MAP[quality];
     if (l.shadow.mapSize.x !== mapSize) {
       l.shadow.mapSize.set(mapSize, mapSize);
+      // The blur's intermediate target is sized once, so it goes too.
       l.shadow.map?.dispose();
       l.shadow.map = null;
     }
@@ -131,12 +136,16 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
     const texel = Math.max(x1 - x0, y1 - y0) / mapSize;
     l.shadow.normalBias = Math.max(0.01, texel * 1.5);
     l.shadow.bias = -0.0002;
+    // Redrawn only when ShadowUpdates says the scene changed (never for a lamp moving slot), and never while the sun is down.
+    l.shadow.autoUpdate = false;
     l.shadow.needsUpdate = true;
   }, [box, dir, quality]);
 
-  // Glass is real transmission on high quality, and lit from inside at night.
+  // Glass is the film on every quality: real transmission (refraction through the panes) made three render the whole
+  // opaque scene a second time every frame, which at night with the lamp pool lit halved the frame rate on high for a
+  // gain the review called small for 2 mm panes. The panes still light up from inside at night.
   useEffect(() => {
-    setGlassMode(quality === "high", night);
+    setGlassMode(false, night);
     invalidate();
   }, [quality, night, invalidate]);
 

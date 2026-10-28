@@ -2,12 +2,15 @@ import { useState } from "react";
 import { del, delMany, get, getMany, keys } from "idb-keyval";
 import { BrandMark } from "./BrandMark";
 import { Loader } from "./Loader";
-import { IMG_KEY_PREFIX, refIds } from "../lib/persist";
+import { imgKeyPrefix, refIds } from "../lib/persist";
+import { activeHouseId, houseKey, storageSuffix } from "../lib/house";
 import { downloadPrefix } from "../lib/brand";
 import { fileDate } from "../lib/fileNames";
 import "./Recovery.css";
 
-const STATE_KEY = "house-modeler";
+// The active house's saved project (the default house keeps the old names).
+const STATE_KEY = houseKey("house-modeler");
+const IMG_KEY_PREFIX = imgKeyPrefix(storageSuffix(activeHouseId()));
 
 /** A readable line for whatever was thrown. */
 export const errorText = (e: unknown): string => (e instanceof Error ? `${e.name}: ${e.message}` : typeof e === "string" ? e : e ? String(e) : "Unknown error");
@@ -54,7 +57,7 @@ export function Recovery({ error, kind = "render", onRetry }: { error: unknown; 
       const imgs = (await keys()).filter((k): k is string => typeof k === "string" && k.startsWith(IMG_KEY_PREFIX));
       if (imgs.length) await delMany(imgs);
       try {
-        localStorage.removeItem("house-modeler/sync");
+        localStorage.removeItem(houseKey("house-modeler/sync"));
       } catch {
         // blocked storage: nothing to forget
       }

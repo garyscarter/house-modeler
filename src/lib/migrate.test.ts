@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { migrateModel, migratePersisted, migrateSite, PERSIST_VERSION } from "./migrate";
 
 describe("persisted-state migration", () => {
   it("moves the shared plot of a version 4 save onto both layouts", () => {
     const site = { ...listingSite(), frontBearing: 150 };
-    const saved = JSON.parse(JSON.stringify({ variants: { current: listing91770873(""), proposed: listing91770873Proposed("") }, photos: [], site, settings: { quality: "low" } }));
+    const saved = JSON.parse(JSON.stringify({ variants: { current: builtInHouse(""), proposed: builtInProposed("") }, photos: [], site, settings: { quality: "low" } }));
     const st = migratePersisted(saved, 4);
     expect(st.site).toBeUndefined();
     expect(st.sites?.current).toEqual(site);
@@ -15,7 +15,7 @@ describe("persisted-state migration", () => {
   });
 
   it("puts it on As listed alone when that is the only layout", () => {
-    const st = migratePersisted({ variants: { current: listing91770873("") }, site: listingSite() }, 4);
+    const st = migratePersisted({ variants: { current: builtInHouse("") }, site: listingSite() }, 4);
     expect(Object.keys(st.sites ?? {})).toEqual(["current"]);
   });
 
@@ -24,23 +24,30 @@ describe("persisted-state migration", () => {
   });
 
   it("still gives a very old listing save the listing's plot, now per layout", () => {
-    const current = listing91770873("");
+    const current = builtInHouse("");
     delete (current as { exterior?: unknown }).exterior;
-    const st = migratePersisted({ variants: { current, proposed: listing91770873Proposed("") } }, 2);
+    const st = migratePersisted({ variants: { current, proposed: builtInProposed("") } }, 2);
     expect(st.sites?.current?.frontBearing).toBe(listingSite().frontBearing);
     expect(st.sites?.proposed?.boundary).toEqual(listingSite().boundary);
   });
 
-  it("is at version 6", () => expect(PERSIST_VERSION).toBe(6));
+  it("is at version 7", () => expect(PERSIST_VERSION).toBe(7));
 
-  it("renames the attached neighbour's buildings and photo note in a version 5 save", () => {
+  it("renames the attached neighbour's buildings in a version 5 save", () => {
     const site = listingSite();
     const old = { ...site, neighbours: site.neighbours.map((n) => ({ ...n, name: n.name.replace("Attached neighbour's ", "No. 9 ").replace("Attached neighbour", "No. 9 (attached)") })) };
-    const photo = { id: "p", name: "rear-3", dataUrl: "", description: "Rear towards No. 9 and its conservatory." };
-    const st = migratePersisted({ variants: {}, sites: { current: old, proposed: null }, photos: [photo] }, 5);
+    const st = migratePersisted({ variants: {}, sites: { current: old, proposed: null } }, 5);
     expect(st.sites?.current?.neighbours.map((n) => n.name)).toEqual(site.neighbours.map((n) => n.name));
     expect(st.sites?.proposed).toBeNull();
-    expect(st.photos?.[0].description).toBe("Rear towards the attached neighbour and its conservatory.");
+  });
+
+  it("drops photos and a room's photo floor from a version 6 save", () => {
+    const withPhotoFloor = JSON.parse(JSON.stringify(builtInHouse("")));
+    withPhotoFloor.floors[0].rooms[0].floorPhotoId = "p1";
+    const st = migratePersisted({ variants: { current: withPhotoFloor }, photos: [{ id: "p1", name: "kitchen-1", dataUrl: "" }] }, 6);
+    expect(st).not.toHaveProperty("photos");
+    expect(st.variants?.current.floors[0].rooms[0]).not.toHaveProperty("floorPhotoId");
+    expect(st.variants?.current.floors[0].rooms.length).toBe(withPhotoFloor.floors[0].rooms.length);
   });
 
   it("leaves neighbours the owner named alone", () => {
@@ -51,7 +58,7 @@ describe("persisted-state migration", () => {
 
 describe("migrateModel", () => {
   const withOpening = (o: Record<string, unknown>) => {
-    const m = JSON.parse(JSON.stringify(listing91770873("")));
+    const m = JSON.parse(JSON.stringify(builtInHouse("")));
     m.floors[0].openings = [{ id: "o1", ...o }];
     return m;
   };
@@ -66,7 +73,7 @@ describe("migrateModel", () => {
     expect(migrateModel(m).floors[0].openings[0]).toEqual({ id: "o1", kind: "door", style: "panel" });
   });
   it("adds a hip roof and party wall to a listing exterior without one", () => {
-    const m = JSON.parse(JSON.stringify(listing91770873("")));
+    const m = JSON.parse(JSON.stringify(builtInHouse("")));
     m.exterior = { ...m.exterior };
     delete m.exterior.roofStyle;
     const out = migrateModel(m);
@@ -77,7 +84,7 @@ describe("migrateModel", () => {
 
 describe("old TV presets", () => {
   it("become the sized TV items, a 65 keeping its size and a 55 taking the default", () => {
-    const base = listing91770873("");
+    const base = builtInHouse("");
     const f0 = base.floors[0];
     const m = { ...base, floors: [{ ...f0, fixtures: [{ id: "a", type: "tv-wall-65", x: 0, y: 0, rot: 0 }, { id: "b", type: "tv-stand-55", x: 0, y: 0, rot: 0 }, { id: "c", type: "tv-stand-65", x: 0, y: 0, rot: 0, w: 1.6 }] }, ...base.floors.slice(1)] };
     const out = migrateModel(m);

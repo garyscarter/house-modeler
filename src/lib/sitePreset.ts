@@ -1,13 +1,20 @@
 import type { GardenItem, HouseModel, Site, VariantKey } from "../types";
-import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, SITE_PRESETS } from "./houses/listing91770873";
+import { currentHouse } from "./house";
 import { areaOf } from "./site";
 import { itemsOf } from "./siteItems";
 import type { Sites } from "./sites";
 
 export type SiteRegistry = Record<string, { version: number; build: () => Site }>;
 
-/** Layout presets whose plot is the listing's. */
-const LISTING_LAYOUTS = new Set([LISTING_PRESET.id, LISTING_PROPOSED_PRESET.id]);
+/** The active house's built-in plots. */
+const houseSites = (): SiteRegistry => currentHouse().sitePresets;
+/** The active house's main plot preset id. */
+const houseSiteId = (): string => currentHouse().site;
+/** The active house's built-in layouts, whose plot is the house's. */
+const houseLayouts = (): Set<string> => {
+  const h = currentHouse();
+  return new Set(h.proposed ? [h.main, h.proposed] : [h.main]);
+};
 
 const extent = (pts: { x: number; y: number }[]) => {
   const xs = pts.map((p) => p.x);
@@ -18,7 +25,7 @@ const round = (v: number) => Math.round(v * 20) / 20;
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol * Math.max(Math.abs(a), Math.abs(b), 1e-9);
 
 /**
- * True when a plot without a preset marker is, in all likelihood, a copy of the listing's plot saved by an
+ * True when a plot without a preset marker is, in all likelihood, a copy of the built-in house's plot saved by an
  * earlier release: same orientation and location, and a boundary of about the same size. A plot made from
  * scratch or by "Create a simple site" differs in size, bearing or location and fails.
  */
@@ -35,28 +42,28 @@ export function looksLikeListingSite(site: Site, reference: Site): boolean {
  * Is this saved plot an out-of-date copy of a built-in one?
  *
  * Yes when it carries a built-in plot's marker with an older version than the registry. A plot with no marker
- * counts only when its layout is a built-in listing layout (`model.preset`) and it looks like the listing's
+ * counts only when its layout is a built-in layout (`model.preset`) and it looks like the built-in house's
  * plot (a save from before plots were versioned). Anything else, including every plot the user made, is theirs.
  */
-export function isStaleSite(site: Site | null | undefined, model: Pick<HouseModel, "preset"> | undefined, registry: SiteRegistry = SITE_PRESETS): boolean {
+export function isStaleSite(site: Site | null | undefined, model: Pick<HouseModel, "preset"> | undefined, registry: SiteRegistry = houseSites()): boolean {
   if (!site) return false;
   if (site.preset) {
     const latest = registry[site.preset.id]?.version;
     return latest !== undefined && latest > site.preset.version;
   }
-  const entry = registry[LISTING_SITE_PRESET.id];
-  if (!entry || !model?.preset || !LISTING_LAYOUTS.has(model.preset.id)) return false;
+  const entry = registry[houseSiteId()];
+  if (!entry || !model?.preset || !houseLayouts().has(model.preset.id)) return false;
   return looksLikeListingSite(site, entry.build());
 }
 
-/** True when a layout is one of the built-in listing layouts, whose plot is the listing's. */
-export const isListingLayout = (model: Pick<HouseModel, "preset"> | undefined): boolean => !!model?.preset && LISTING_LAYOUTS.has(model.preset.id);
+/** True when a layout is one of the built-in layouts, whose plot is the built-in house's. */
+export const isListingLayout = (model: Pick<HouseModel, "preset"> | undefined): boolean => !!model?.preset && houseLayouts().has(model.preset.id);
 
-/** Is this the listing's plot, or a copy of it that the owner may have edited? Offers the boundary update. */
-export function isListingPlot(site: Site | null | undefined, model: Pick<HouseModel, "preset"> | undefined, registry: SiteRegistry = SITE_PRESETS): boolean {
+/** Is this the built-in house's plot, or a copy of it that the owner may have edited? Offers the boundary update. */
+export function isListingPlot(site: Site | null | undefined, model: Pick<HouseModel, "preset"> | undefined, registry: SiteRegistry = houseSites()): boolean {
   if (!site || !isListingLayout(model)) return false;
-  if (site.preset) return site.preset.id === LISTING_SITE_PRESET.id;
-  const entry = registry[LISTING_SITE_PRESET.id];
+  if (site.preset) return site.preset.id === houseSiteId();
+  const entry = registry[houseSiteId()];
   return !!entry && looksLikeListingSite(site, entry.build());
 }
 
@@ -83,9 +90,9 @@ export function hasPlotEdits(site: Site, fresh: Site): boolean {
   return itemsOf(site).some((i) => !builtIn.has(key(i)));
 }
 
-/** The built-in plot to put in place of a stale `site`: the one its marker names, else the listing's. */
-export function freshSiteFor(site: Site, registry: SiteRegistry = SITE_PRESETS): Site | undefined {
-  return (registry[site.preset?.id ?? LISTING_SITE_PRESET.id] ?? registry[LISTING_SITE_PRESET.id])?.build();
+/** The built-in plot to put in place of a stale `site`: the one its marker names, else the built-in house's. */
+export function freshSiteFor(site: Site, registry: SiteRegistry = houseSites()): Site | undefined {
+  return (registry[site.preset?.id ?? houseSiteId()] ?? registry[houseSiteId()])?.build();
 }
 
 /** The plot update on offer at startup. */
@@ -110,7 +117,7 @@ export type SiteUpdate = {
 export function decideSiteUpdate(
   variants: Partial<Record<VariantKey, Pick<HouseModel, "preset">>>,
   sites: Sites,
-  registry: SiteRegistry = SITE_PRESETS,
+  registry: SiteRegistry = houseSites(),
 ): SiteUpdate | null {
   const current = isStaleSite(sites.current, variants.current, registry);
   let proposed: SiteUpdate["proposed"];
@@ -120,7 +127,7 @@ export function decideSiteUpdate(
   }
   if (!current && !proposed) return null;
   const involved = [current ? sites.current : undefined, proposed ? sites.proposed : undefined];
-  const version = Math.max(...involved.filter((s): s is Site => !!s).map((s) => registry[s.preset?.id ?? LISTING_SITE_PRESET.id]?.version ?? 0));
+  const version = Math.max(...involved.filter((s): s is Site => !!s).map((s) => registry[s.preset?.id ?? houseSiteId()]?.version ?? 0));
   const fresh = current && sites.current ? freshSiteFor(sites.current, registry) : undefined;
   const currentEdited = !!fresh && hasPlotEdits(sites.current!, fresh);
   return { version, current, proposed, ...(currentEdited ? { currentEdited } : {}) };

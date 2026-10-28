@@ -22,24 +22,28 @@ The app picks a layout from the screen (`src/lib/chassis.ts`): on a **phone**, a
 `render.yaml` describes a small Node web service (`server/server.mjs`, no extra dependencies) that serves the built site only to people who have entered a passcode, so it can be opened on a desktop, iPad or phone. Once signed in, a browser stays signed in for 30 days.
 
 1. In the [Render dashboard](https://dashboard.render.com) choose **New → Blueprint** and connect this GitHub repository.
-2. When prompted, type a value for `PASSCODE` (at least 4 characters). It is never stored in the repository. `SESSION_SECRET` is generated for you.
+2. When prompted, type a value for `PASSCODES` or `PASSCODE` (each passcode at least 4 characters). Neither is ever stored in the repository. `SESSION_SECRET` is generated for you.
+   - **One house:** set `PASSCODE` only; it opens the owner's house (or the house named in `DEFAULT_HOUSE`). Leave `PASSCODES` empty.
+   - **Several houses:** set `PASSCODES` to one passcode per house, as `<house>=<passcode>` pairs separated by commas, where `<house>` is the folder name under `src/houses/` (for example `PASSCODES=<owner's house>=first-passcode,my-house=second-passcode`). Passcodes may not contain `,` or `=`, and no two houses may share one. When `PASSCODES` is set, `PASSCODE` is ignored.
 3. Apply the Blueprint and wait for the first deploy to finish (a few minutes).
 4. Open the `onrender.com` URL shown for the service, enter the passcode and, on an iPad or phone, **Add to Home Screen**.
 
-To change the passcode, edit `PASSCODE` under the service's **Environment** tab and save. Render redeploys, and everyone is signed out. Visiting `/logout` signs out the current browser.
+The passcode picks the house: once signed in, the app opens that house only and offers no **Switch house…** (someone who holds two passcodes signs out at `/logout` and back in with the other). `/api/me` tells the app which house the session opened.
 
-Wrong passcodes are limited to 10 per 15 minutes for each address, and to 60 per hour in all. The address comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` proxies from the end (default 1, as Render adds one; set it to 0 if the server is reached directly, so the header is ignored). The server logs a warning at startup if the passcode is shorter than 10 characters.
+To change a passcode, edit it under the service's **Environment** tab and save. Render redeploys, and the people signed in to that house are signed out; the other houses stay signed in (changing `SESSION_SECRET` signs everyone out). Visiting `/logout` signs out the current browser.
+
+Wrong passcodes are limited to 10 per 15 minutes for each address, and to 60 per hour in all. The address comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` proxies from the end (default 1, as Render adds one; set it to 0 if the server is reached directly, so the header is ignored). The server logs a warning at startup for each passcode shorter than 10 characters, and refuses to start when neither `PASSCODES` nor `PASSCODE` is set, or when `PASSCODES` is malformed.
 
 ### Keeping one project on every device
 
-Each browser keeps its own copy of the project (layouts, photos, plots, cost rates) in its own storage. On Render the server also holds **one shared copy**, so a laptop and an iPad see the same project:
+Each browser keeps its own copy of the project (layouts, plots, cost rates) in its own storage. On Render the server also holds **one shared copy per house**, so a laptop and an iPad see the same project. Each house has its own shared copy, reached only with that house's passcode:
 
 - When the app opens, it asks the server for the shared copy. If the server's copy is newer than the one this browser last synced, it is loaded (the startup prompt about listing updates then runs on what was loaded). A browser that has never synced uploads its project if the server has none.
 - About 3 seconds after you stop editing, the project is saved to the server. If the shared copy was changed on another device in the meantime, nothing is overwritten: a dialog offers **Load that version**, **Keep mine and overwrite** or **Cancel**. **Cancel** leaves things as they are until you tap **Sync now**.
 - **Settings → Project** shows the state ("Synced with the server · saved 14:02", "Saving…", "Couldn't reach the server, will retry") and has a **Sync now** button. Opening the app again, or coming back to its tab, also checks for changes made elsewhere. Camera, tabs and other view settings are not synced, only the project (the same data as Export JSON).
-- Where there is no server (`npm run dev`, or the hosted Claude artifact), sync is off and nothing is shown.
+- Where there is no server (`npm run dev`), sync is off and nothing is shown.
 
-The server stores the shared copy as one file, `project.json`, in the folder named by the `DATA_DIR` environment variable (without it, `./data` next to the app, which is in `.gitignore`). Photos are embedded, so saves can be large (up to 50 MB).
+The server stores each house's shared copy as one file in the folder named by the `DATA_DIR` environment variable (without it, `./data` next to the app, which is in `.gitignore`): `project.json` for the owner's house (the file that was there before houses were added) and `project-<house>.json` for any other.
 
 **The shared copy only survives deploys and restarts if `DATA_DIR` is on a persistent disk.** Render's free instances have no disk: anything written next to the app is wiped on every deploy or restart. `render.yaml` therefore asks for a paid instance (`plan: starter`) with a 1 GB disk mounted at `/var/data` and sets `DATA_DIR=/var/data`. How much that costs depends on Render's [pricing](https://render.com/pricing), so check there. A service with a disk is deployed with a short downtime instead of zero-downtime (and cannot be scaled to several instances). If `DATA_DIR` is not set, the server logs a loud warning and tells the app, which then adds "Server copy isn't permanent" to the status line. Each browser still keeps its own copy, and **Export JSON** is still the way to make a backup you control.
 
@@ -53,13 +57,23 @@ To run it locally:
 
 ```bash
 npm run build && PASSCODE=choose-a-passcode npm start
+# or, one passcode per house:
+npm run build && PASSCODES="my-house=first-passcode,_template=second-passcode" npm start
 ```
 
-Then open <http://localhost:10000> (set `PORT` to change it). The server refuses to start without a `PASSCODE`.
+Then open <http://localhost:10000> (set `PORT` to change it). The server refuses to start without `PASSCODES` or `PASSCODE`. A house named in `PASSCODES` must also be in the build to open (a plain `npm run build` includes every house folder whose name does not start with `_`; set `VITE_HOUSES` to choose).
+
+## Adding your own house
+
+A house is a folder, `src/houses/<id>/`, with its tracing, floorplan and `NOTES.md`; the id is a slug, never an address. Photos go in `reference/<id>/photos/` for Claude and the notes, not in the house folder.
+
+1. Run `npm run house:start <id> "<Name>"`. It makes `reference/<id>/` with `INTAKE.md` (from `reference/_template/`) and a `photos/` folder. Fill in the intake: floorplan, photos, a north-up map with a scale, and ten short answers, ticking items as you go. About 30 minutes, no Claude needed. `npm run welcome` (and `npm run soundcheck` to check Node and the install) shows where you are, including your friendship bracelet: a bead for each era Claude has finished.
+2. When `npm run welcome` says Ready, run `/eras-tour` in Claude Code in this repo. It scaffolds the house, traces the floorplan, builds the exterior and plot, checks them, and then offers an optional fidelity pass (finishes, garden, camera-fitted heights).
+3. Ask the repo owner to add your passcode to `PASSCODES` on Render; the passcode opens your house and keeps its project separate from the others.
 
 ## Listing 91770873
 
-**Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan and 37 photos are bundled (**Photos → Load listing 91770873 photos**). `reference/listing-91770873/NOTES.md` records the facts used and where each came from.
+**Load listing 91770873** (and its proposed two-storey side extension) is built in: traced from the listing's floorplan, checked against its photos, placed on its plot from the OS map with the neighbours, and orientated to the compass so the sun study is right. The listing's floorplan is bundled; its 37 photos are reference material in `reference/listing-91770873/photos/`, not part of the app. `src/houses/listing-91770873/NOTES.md` records the facts used and where each came from.
 
 ## Using it
 
@@ -70,7 +84,6 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 - **Electrics**: place every electrical point on the plan (ceiling and wall lights with UK plan symbols, switches, sockets, fused spurs, cooker and shower points, alarms, TV and data points, the consumer unit), each snapped to a wall at a standard UK height you can change. Link switches to the lights they control and switch them off to see the rooms go dark at the Night preset. Export a **wiring guide** for the electrician: a marked plan per floor with numbered points, switch-to-light links and a legend, a per-room schedule with mounting heights and circuits, and the schedule as CSV; the Report costs the new points as electrical works.
 - **Garden**: design the garden the way the rooms are furnished. Draw lawns, patios, paths and beds as rectangles, circles or polygons, with curved edges and a kerb (brick, timber sleeper, corten or render) at any height; add plants (trees, shrubs, grasses, hedges and climbers, drawn as low-poly forms that cast shade in the sun study), garden furniture, a BBQ or fire pit, pots, a shed, pergola, playhouse or mud kitchen, a bin store, stepping stones and lights, including festoons strung between two points. Items snap to walls, turn, resize and duplicate as furniture does, and the lights glow: the **Dusk** button in the Sun study sets the clock to sunset so they read. As listed starts with what the photos show (the dining set and parasol, the washing line, the conifer and buddleia, the bin store), and the Report lists garden changes with their own cost lines.
 - **Site**: plot boundary, fences and walls (brick-on-edge or coping tops, piers, and pierced screen blocks let into a wall's top), garden surfaces and neighbouring houses, edited on a plan with distances to the boundary. Each layout has its own plot, so a change for Proposed (say, taking out part of the front garden wall to widen the drive) doesn't show in As listed: pick Proposed, then edit its plot in the Site panel or **Check plan → Site**. A Proposed layout with no plot of its own uses As listed's until you first change it, and a note in the Site panel says which layout's plot you are editing. Side by side, each view shows its own plot; the overlay marks boundary walls and fences that differ. The **Sun study** shows the sun and shadows for any day and time, and how many hours of sun each part of the garden gets.
-- **Photos**: load the listing photos or add your own and assign each to a room or side of the house; they appear as pins in 3D and can be used as floor textures.
 - **Report**: room, floor and house areas for both variants. It also checks the model's area, measured the way a listing measures it, against the listing's printed total, and gives the heated area. It lists the changes from As listed to Proposed, flagging likely structural work, plot changes included (boundary walls shortened or removed, drive openings widened, surfaces added or resized), and gives a rough cost from your own rates. The exports are PNG snapshots, scale plan drawings (SVG), a print / save-as-PDF report, a .glb 3D model and a CSV of the changes.
 - **Settings**: render quality (lower it on older iPads), and project export and import as JSON (images included), and, on the Render server, the sync status and **Sync now**.
 
@@ -86,4 +99,4 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 - The plan is traced by eye from a marketing floorplan, so corners can be a few centimetres out. **Check plan** lets you nudge them.
 - Room areas in the tables run to the wall centre lines. The "measured like the listing" figure in the Report is the one to compare with a listing or an EPC.
 - Rough costs use only the rates you enter. They are not a quote, and the structural flags are prompts to get advice, not advice.
-- The photos are used as reference and texture only; there is no photogrammetry.
+- Photos are reference material for building a house, not part of the app; there is no photogrammetry.

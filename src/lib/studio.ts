@@ -1,5 +1,6 @@
 import type { Floor, HouseModel, VariantKey } from "../types";
 import type { Tab, ViewMode } from "../store";
+import { belongsToHouse, useHouse } from "./house";
 
 /** Window events the top bar (and anything else) dispatches to open the palette and the shortcut sheet. */
 export const OPEN_PALETTE = "house:open-palette";
@@ -16,17 +17,18 @@ export const isLook = (v: unknown): v is Look => v === "studio" || v === "glass"
 const NUMBERED_FLOOR = ["First", "Second", "Third"];
 
 export function floorDisplayName(name: string): string {
-  // The built-in listing calls its upper storey "Floor 1"; read it as a person would.
+  // The built-in house calls its upper storey "Floor 1"; read it as a person would.
   const n = /^floor (\d)$/i.exec(name.trim());
   if (n && NUMBERED_FLOOR[+n[1] - 1]) return `${NUMBERED_FLOOR[+n[1] - 1]} floor`;
   if (!/^(lower ground|ground|first|second|third|top) floor$/i.test(name)) return name;
   return name[0].toUpperCase() + name.slice(1).toLowerCase();
 }
 
-/** The name shown for a house: the built-in listing by its public id, else "House". */
+/** The name shown for a house: the active house's name when the layout is (or is based on) one of its built-ins, else "House". */
 export function houseName(m: HouseModel | undefined): string {
   const id = m?.preset?.id ?? m?.basedOn?.id;
-  return id && id.startsWith("listing-91770873") ? "Listing 91770873" : "House";
+  const house = useHouse.getState().house;
+  return house && belongsToHouse(house, id) ? house.name : "House";
 }
 
 /** Floors from the lowest level up (does not mutate). */

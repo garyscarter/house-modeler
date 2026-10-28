@@ -1,3 +1,4 @@
+import { BUILT_IN_NAME, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "../houses/default";
 import { describe, expect, it } from "vitest";
 import { dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
 import type { Floor, HouseModel } from "../types";
@@ -20,8 +21,8 @@ describe("floorDisplayName", () => {
 
 describe("houseName", () => {
   it("names the listing by preset or basedOn, else House", () => {
-    expect(houseName({ preset: { id: "listing-91770873", version: 1 } } as HouseModel)).toBe("Listing 91770873");
-    expect(houseName({ basedOn: { id: "listing-91770873-proposed", version: 1 } } as HouseModel)).toBe("Listing 91770873");
+    expect(houseName({ preset: { id: LISTING_PRESET.id, version: 1 } } as HouseModel)).toBe(BUILT_IN_NAME);
+    expect(houseName({ basedOn: { id: LISTING_PROPOSED_PRESET.id, version: 1 } } as HouseModel)).toBe(BUILT_IN_NAME);
     expect(houseName({} as HouseModel)).toBe("House");
     expect(houseName(undefined)).toBe("House");
   });

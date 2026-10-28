@@ -5,6 +5,7 @@ import { usePanelPrefs } from "../components/panelPrefs";
 import { useChassis } from "../components/useChassis";
 import { FEATURES } from "./chassis";
 import { floorDisplayName, type Look } from "./studio";
+import { sectionStops } from "./sectionCut";
 
 export interface Command {
   id: string;
@@ -153,11 +154,15 @@ export function buildCommands(c: CommandContext): Command[] {
   add("toggle:doors", c.doorsOpen ? "Close doors" : "Open doors", "View", () => c.setUi({ doorsOpen: !c.doorsOpen }), { keywords: ["toggle", "doors open"] });
   toggle("exterior", "exterior", c.showExterior, "showExterior");
   toggle("site", "site", c.showSite, "showSite");
+  if (model) for (const st of sectionStops(model)) if (st.kind === "floor") add(`section:${st.id}`, `Section cut: ${st.label}`, "View", () => c.setUi({ tab: "3d", sectionHeight: st.height }), { keywords: ["cut", "slice", "doll's house", "look inside"] });
+  add("section:off", "Section cut: off", "View", () => c.setUi({ sectionHeight: null }), { keywords: ["cut", "slice"] });
 
   if (c.tab === "3d") {
     const sides: [ViewSide, string][] = [["front", "Look at the front"], ["rear", "Look at the rear"], ["left", "Look at the left"], ["right", "Look at the right"], ["top", "Look at the top"], ["home", "Home view"]];
     for (const [side, title] of sides) add(`camera:${side}`, title, "Camera", () => c.dispatch("house:view", { side }), { keywords: ["camera"] });
+    add("measure:3d", "Measure in 3D", "View", () => c.setUi({ measureTool: true }), { hint: "M", keywords: ["measure", "tape", "ruler", "distance", "height", "length"] });
     add("camera:save", "Save this camera view", "Camera", c.saveView, { keywords: ["bookmark", "view"] });
+    add("render:still", "Render a still of the 3D view", "View", () => c.dispatch("house:render", {}), { keywords: ["render", "path trace", "picture", "photo", "image", "still", "realistic"] });
   }
   for (const v of c.savedViews) add(`savedview:${v.id}`, `Go to view: ${v.name}`, "Camera", () => c.goToView(v.id), { keywords: ["camera", "bookmark", "saved"] });
 
@@ -193,11 +198,9 @@ export function buildCommands(c: CommandContext): Command[] {
     add(`quality:${q}`, `Render quality: ${q[0].toUpperCase()}${q.slice(1)}`, "Settings", () => c.setSettings({ quality: q }), { keywords: ["graphics", "settings"] });
   }
 
-  // Canvas and photo pins are per-browser panel preferences, so these write them directly.
-  const prefs = usePanelPrefs.getState();
+  // The canvas look is a per-browser panel preference, so these write it directly.
   add("canvas:quiet", "Canvas: Quiet", "Settings", () => usePanelPrefs.getState().setPrefs({ quiet: true }), { keywords: ["canvas", "neighbours", "ground", "calm"] });
   add("canvas:full", "Canvas: Full", "Settings", () => usePanelPrefs.getState().setPrefs({ quiet: false }), { keywords: ["canvas", "neighbours", "ground", "textures"] });
-  add("pins:toggle", `Photo pins: ${prefs.showPins ? "hide" : "show"}`, "View", () => usePanelPrefs.getState().setPrefs({ showPins: !usePanelPrefs.getState().showPins }), { keywords: ["photos", "pins", "cameras"] });
   return out;
 }
 

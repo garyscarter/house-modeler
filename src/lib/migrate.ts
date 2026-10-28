@@ -1,10 +1,11 @@
-import type { HouseModel, Opening, Photo, Site } from "../types";
-import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./houses/listing91770873";
+import type { HouseModel, Opening, Room, Site } from "../types";
+import { DEFAULT_HOUSE_ID } from "../houses";
+import { useHouse } from "./house";
 import { dropAiSettings } from "./persist";
 import { sitesFromShared, type Sites } from "./sites";
 
 /** Version of the persisted state written by this build. */
-export const PERSIST_VERSION = 6;
+export const PERSIST_VERSION = 7;
 
 /** The persisted fields a migration touches; the rest pass through. */
 export interface PersistedLike {
@@ -12,7 +13,8 @@ export interface PersistedLike {
   /** Before version 5: the one plot both variants shared. */
   site?: Site;
   sites?: Sites;
-  photos?: Photo[];
+  /** Before version 7: the project's photos (removed). */
+  photos?: unknown;
   settings?: { quality?: string } & Record<string, unknown>;
   [k: string]: unknown;
 }
@@ -25,17 +27,39 @@ const OLD_TVS: Record<string, { type: string; w?: number; h?: number; d?: number
   "tv-stand-65": { type: "tv-stand", w: 1.45, h: 0.88, d: 0.28 },
 };
 
-const isListing = (m?: HouseModel) => m?.preset?.id === LISTING_PRESET.id || m?.preset?.id === LISTING_PROPOSED_PRESET.id;
+/** The default house, when it is the active one: the listing-only steps below are about its old saves. */
+const defaultHouse = () => {
+  const h = useHouse.getState().house;
+  return h?.id === DEFAULT_HOUSE_ID ? h : undefined;
+};
+const isListing = (m?: HouseModel) => {
+  const h = defaultHouse();
+  return !!h && !!m?.preset && (m.preset.id === h.main || m.preset.id === h.proposed);
+};
 
 /**
  * Fix old shapes in one model (a saved project, an import or a server copy). Idempotent.
  * - A door with `style: "garage"` becomes `kind: "garage"` (`style` is now a valid DoorStyle, so only that case).
  * - The built-in listing with an exterior but no `roofStyle` becomes a hipped semi joined on the right.
+ * - A room's `floorPhotoId` (photos as floor textures, removed) is dropped.
  * - The old TV presets (`tv-wall-55`, `tv-wall-65`, `tv-stand-55`, `tv-stand-65`) become the sized items `tv-wall` and
  *   `tv-stand`, a 65 keeping its size.
  */
 export function migrateModel(m: HouseModel): HouseModel {
   let out = m;
+  if (m.floors.some((f) => f.rooms.some((r) => "floorPhotoId" in r))) {
+    out = {
+      ...out,
+      floors: out.floors.map((f) => ({
+        ...f,
+        rooms: f.rooms.map((r) => {
+          if (!("floorPhotoId" in r)) return r;
+          const { floorPhotoId: _gone, ...rest } = r as Room & { floorPhotoId?: string };
+          return rest as Room;
+        }),
+      })),
+    };
+  }
   if (m.floors.some((f) => (f.fixtures ?? []).some((fx) => fx.type in OLD_TVS))) {
     out = {
       ...out,
@@ -70,9 +94,8 @@ export function migrateModel(m: HouseModel): HouseModel {
 
 /** The built-in plot used to name the attached neighbour's buildings by house number; they are now just "Attached neighbour". */
 const OLD_NEIGHBOUR = /^No\. \d+ (\(attached\)|conservatory|side extension)$/;
-const OLD_REAR_PHOTO = /^Rear towards No\. \d+ and its conservatory\.$/;
 
-/** Rename the attached neighbour's buildings in a plot, and the listing photo that named it. Idempotent. */
+/** Rename the attached neighbour's buildings in a plot, Idempotent. */
 export function migrateSite(site: Site): Site {
   if (!site.neighbours.some((n) => OLD_NEIGHBOUR.test(n.name))) return site;
   const rename = (name: string) => {
@@ -81,10 +104,6 @@ export function migrateSite(site: Site): Site {
     return m[1] === "(attached)" ? "Attached neighbour" : `Attached neighbour's ${m[1]}`;
   };
   return { ...site, neighbours: site.neighbours.map((n) => ({ ...n, name: rename(n.name) })) };
-}
-
-export function migratePhotos(photos: Photo[]): Photo[] {
-  return photos.map((p) => (p.description && OLD_REAR_PHOTO.test(p.description) ? { ...p, description: "Rear towards the attached neighbour and its conservatory." } : p));
 }
 
 export function migrateSites(sites: Sites): Sites {
@@ -102,7 +121,7 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
     for (const k of Object.keys(variants)) variants[k] = migrateModel(variants[k]);
   }
   if (version < 3) {
-    if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = listingSite();
+    if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = defaultHouse()!.sitePresets[defaultHouse()!.site].build();
     if (st.settings && !st.settings.quality) st.settings = { ...st.settings, quality: "high" };
   }
   if (version < 4) st.settings = dropAiSettings(st.settings) as PersistedLike["settings"];
@@ -113,7 +132,12 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
   }
   if (version < 6) {
     if (st.sites) st.sites = migrateSites(st.sites);
-    if (Array.isArray(st.photos)) st.photos = migratePhotos(st.photos);
+  }
+  if (version < 7) {
+    // Photos were removed: drop the list and any room's photo floor. migrateModel does the rooms.
+    delete st.photos;
+    const variants = st.variants ?? {};
+    for (const k of Object.keys(variants)) variants[k] = migrateModel(variants[k]);
   }
   return st;
 }

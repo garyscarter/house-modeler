@@ -1444,7 +1444,7 @@ function toTexture(img: HTMLCanvasElement, tile: [number, number], srgb: boolean
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(1 / tile[0], 1 / tile[1]);
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-  t.anisotropy = 8; // three clamps this to what the GPU supports
+  t.anisotropy = 16; // three clamps this to what the GPU supports
   t.generateMipmaps = true;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   return t;

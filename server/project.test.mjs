@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProjectStore, originMatchesHost, parsePutBody } from "./project.mjs";
+import { createProjectStore, createProjectStores, originMatchesHost, parsePutBody, projectFileName } from "./project.mjs";
 
 let dir;
 beforeEach(() => {
@@ -10,7 +10,7 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-const data = (name) => ({ variants: { current: { floors: [], name } }, photos: [], sites: {}, costRates: {} });
+const data = (name) => ({ variants: { current: { floors: [], name } }, sites: {}, costRates: {} });
 
 describe("project store", () => {
   it("starts empty and saves revision 1 from base 0", () => {
@@ -70,5 +70,20 @@ describe("parsePutBody", () => {
     expect(parsePutBody(JSON.stringify({ baseRevision: -1, data: data("a") }))).toBeNull();
     expect(parsePutBody(JSON.stringify({ baseRevision: 1, data: {} }))).toBeNull();
     expect(parsePutBody(JSON.stringify({ baseRevision: 1, data: [] }))).toBeNull();
+  });
+});
+
+describe("per-house project stores", () => {
+  it("keeps the default house in project.json and every other house in its own file", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-houses-"));
+    expect(projectFileName("home-a", "home-a")).toBe("project.json");
+    expect(projectFileName("_template", "home-a")).toBe("project-_template.json");
+    const stores = createProjectStores(dir, ["home-a", "_template"], "home-a");
+    expect(stores.get("home-a").save(0, { a: 1 }).ok).toBe(true);
+    expect(stores.get("_template").meta()).toBeNull();
+    expect(stores.get("_template").save(0, { t: 1 }).ok).toBe(true);
+    expect(fs.readdirSync(dir).sort()).toEqual(["project-_template.json", "project.json"]);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, "project.json"), "utf8")).data).toEqual({ a: 1 });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -154,16 +154,23 @@ describe("studio commands", () => {
     expect(rankCommands("sockets", cmds)[0]?.title).toBe("Mode: Electrics");
     expect(rankCommands("circuits", cmds).some((x) => x.title === "Mode: Electrics")).toBe(true);
   });
-  it("has canvas and photo pin commands that write the panel preferences", () => {
+  it("has canvas commands that write the panel preferences", () => {
     const cmds = buildCommands(ctx({}));
     cmds.find((x) => x.title === "Canvas: Full")!.run();
     expect(usePanelPrefs.getState().quiet).toBe(false);
     cmds.find((x) => x.title === "Canvas: Quiet")!.run();
     expect(usePanelPrefs.getState().quiet).toBe(true);
-    usePanelPrefs.getState().setPrefs({ showPins: false });
-    buildCommands(ctx({})).find((x) => x.title === "Photo pins: show")!.run();
-    expect(usePanelPrefs.getState().showPins).toBe(true);
-    expect(buildCommands(ctx({})).some((x) => x.title === "Photo pins: hide")).toBe(true);
-    usePanelPrefs.getState().setPrefs({ showPins: false });
+  });
+});
+
+describe("section cut commands", () => {
+  it("offers a cut per floor and an off switch", () => {
+    const setUi = vi.fn();
+    const cmds = buildCommands(ctx({ setUi }));
+    const first = cmds.find((x) => x.id === "section:f:floor");
+    expect(first?.title).toBe("Section cut: First floor");
+    first?.run();
+    expect(setUi).toHaveBeenCalledWith({ tab: "3d", sectionHeight: expect.any(Number) });
+    expect(cmds.some((x) => x.id === "section:off")).toBe(true);
   });
 });

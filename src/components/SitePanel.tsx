@@ -7,7 +7,7 @@ import { siteSource } from "../lib/sites";
 import { updateSitePreset } from "../lib/presetActions";
 import { confirmBoundaryUpdates } from "./startupDialog";
 import type { HouseModel, Neighbour, Site, VariantKey } from "../types";
-import { listingSite } from "../lib/houses/listing91770873";
+import { useCurrentHouse } from "../lib/house";
 import { compassPoint } from "../lib/sun";
 import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpleSite, type PlotDepths } from "../lib/site";
 import { useSiteView } from "../three/siteView";
@@ -33,9 +33,10 @@ export function SitePanel() {
   const ghost = useSiteView((s) => s.ghostNeighbours);
   const trueColours = useSiteView((s) => s.trueNeighbourColours);
   const setSiteView = useSiteView((s) => s.setSiteView);
+  const house = useCurrentHouse();
 
   const loadListing = async () => {
-    if (!site || (await ask("Replace the current site with the one for listing 91770873?", { ok: "Replace" }))) setSite(listingSite());
+    if (!site || (await ask(`Replace the current site with the one for ${house.name}?`, { ok: "Replace" }))) setSite(house.sitePresets[house.site].build());
   };
 
   return (
@@ -51,7 +52,7 @@ export function SitePanel() {
       <StalePlotNote />
       {!site ? (
         <>
-          <button onClick={loadListing}>Load site for listing 91770873</button>
+          <button onClick={loadListing}>Load site for {house.name}</button>
           {model && <SimpleSiteForm model={model} site={site} />}
         </>
       ) : (
@@ -126,7 +127,7 @@ export function SitePanel() {
 
           <h4>Start again</h4>
           <div className="row">
-            <button onClick={loadListing}>Load site for listing 91770873</button>
+            <button onClick={loadListing}>Load site for {house.name}</button>
             <button
               className="danger"
               onClick={async () => {
@@ -145,8 +146,9 @@ export function SitePanel() {
 }
 
 /** Plot and garden areas and the distance from each side of the house to the boundary. */
-/** Shown when the plot on screen is an older copy of the built-in one for listing 91770873. */
+/** Shown when the plot on screen is an older copy of the house's built-in one. */
 function StalePlotNote() {
+  const house = useCurrentHouse();
   const sites = useStore((s) => s.sites);
   const variants = useStore((s) => s.variants);
   const active = useStore((s) => s.activeVariant);
@@ -162,11 +164,11 @@ function StalePlotNote() {
   }, [site, stale]);
   if (!source || !stale) return null;
   const update = async () => {
-    if (await ask("Replace this plot with the latest one for listing 91770873? Your edits to the plot are lost. You can undo it.", { ok: "Update" })) updateSitePreset(source);
+    if (await ask(`Replace this plot with the latest one for ${house.name}? Your edits to the plot are lost. You can undo it.`, { ok: "Update" })) updateSitePreset(source);
   };
   return (
     <div className="note small site-stale-note">
-      <p>A newer plot for listing 91770873 is available.</p>
+      <p>A newer plot for {house.name} is available.</p>
       <div className="row">
         <button onClick={update}>Update the plot</button>
         {edited && <BoundaryUpdateButton source={source} label="Update the boundaries and neighbours only (keep my edits)" />}
@@ -187,8 +189,9 @@ function BoundaryUpdateButton({ source, label }: { source: VariantKey; label: st
   );
 }
 
-/** Always-available boundary update, for a plot that is the listing's (or a copy of it) even when it is not flagged out of date. */
+/** Always-available boundary update, for a plot that is the built-in house's (or a copy of it) even when it is not flagged out of date. */
 function BoundaryUpdateAction() {
+  const house = useCurrentHouse();
   const sites = useStore((s) => s.sites);
   const variants = useStore((s) => s.variants);
   const active = useStore((s) => s.activeVariant);
@@ -199,7 +202,7 @@ function BoundaryUpdateAction() {
   if (!source || !show) return null;
   return (
     <div className="site-boundary-update">
-      <BoundaryUpdateButton source={source} label="Update boundaries and neighbours from listing 91770873" />
+      <BoundaryUpdateButton source={source} label={`Update boundaries and neighbours from ${house.name}`} />
       <span className="muted small">Brings the walls, fences, hedges and neighbouring buildings up to date and keeps your other plot edits.</span>
     </div>
   );

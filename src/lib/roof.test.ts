@@ -20,7 +20,7 @@ import {
 import { EXT_WALL_T, openingHeights, windowSill } from "./geometry";
 import { SKIRT_FASCIA, SOIL_R, assignDownpipes, cutBoxes, footAt, roofParts, skirtEaves, skirtEnd, skirtParts, skirtRun, skirtedEdges, soilStack, type RoofParts } from "./roofParts";
 import type { FlatRoofSkirt, HouseModel } from "../types";
-import { listing91770873, listing91770873Proposed } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed } from "../houses/default";
 
 const base: RoofBlock = { x0: 0, z0: 0, x1: 10, z1: 6, y: 5, axis: "x", pitchDeg: 45, overhang: 0.3, start: "gable", end: "gable", wallT: 0.2 };
 
@@ -87,7 +87,7 @@ describe("roofGeometry", () => {
 
 describe("planRoofs", () => {
   it("gives the listing a hipped roof that stops at the party wall", () => {
-    const plan = planRoofs(listing91770873(""));
+    const plan = planRoofs(builtInHouse(""));
     expect(plan.blocks).toHaveLength(1);
     expect(plan.blocks[0].start).toBe("hip");
     expect(plan.blocks[0].end).toBe("flush");
@@ -95,13 +95,13 @@ describe("planRoofs", () => {
   });
 
   it("keeps the proposed extension under one hipped roof by default", () => {
-    const plan = planRoofs(listing91770873Proposed(""));
+    const plan = planRoofs(builtInProposed(""));
     expect(plan.blocks).toHaveLength(1);
     expect(plan.blocks[0].x0).toBeLessThan(-4);
   });
 
   it("gives a separate extension roof its own block that meets the main roof flush", () => {
-    const m = listing91770873Proposed("");
+    const m = builtInProposed("");
     m.exterior = { ...m.exterior!, extensionRoof: "separate" };
     const plan = planRoofs(m);
     expect(plan.blocks).toHaveLength(2);
@@ -195,7 +195,7 @@ describe("eaves seated on the walls", () => {
   });
 
   it("keeps the soffit just above the top-floor window heads of the listing, at any pitch", () => {
-    for (const m of [listing91770873(""), listing91770873Proposed("")]) {
+    for (const m of [builtInHouse(""), builtInProposed("")]) {
       for (const pitchDeg of [m.exterior!.pitchDeg, 35, 45]) {
         const plan = planRoofs({ ...m, exterior: { ...m.exterior!, pitchDeg } });
         const first = m.floors.find((f) => f.level === 1)!;
@@ -222,7 +222,7 @@ describe("eaves seated on the walls", () => {
 
 describe("extension roofs", () => {
   const separate = (drop?: number) => {
-    const m = listing91770873Proposed("");
+    const m = builtInProposed("");
     m.exterior = { ...m.exterior!, extensionRoof: "separate", extensionDrop: drop };
     return planRoofs(m);
   };
@@ -264,7 +264,7 @@ describe("extension roofs", () => {
 
 describe("flat roofs", () => {
   it("roofs the listing's L-shaped single-storey part right up to the two-storey walls", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const plan = planRoofs(m);
     const main = plan.blocks[0];
     const fr = plan.flatRoofs[0];
@@ -286,7 +286,7 @@ describe("flat roofs", () => {
   });
 
   it("draws the porch ceiling as its own part, horizontal and facing down", () => {
-    const { ceiling } = roofParts(planRoofs(listing91770873("")), { gutters: false });
+    const { ceiling } = roofParts(planRoofs(builtInHouse("")), { gutters: false });
     expect(ceiling.length).toBeGreaterThan(0);
     for (let i = 0; i + 8 < ceiling.length; i += 9) {
       const [a, b, c] = [0, 3, 6].map((o) => ceiling.slice(i + o, i + o + 3));
@@ -299,7 +299,7 @@ describe("flat roofs", () => {
   });
 
   it("marks the porch canopy as open so it gets a ceiling", () => {
-    const fr = planRoofs(listing91770873("")).flatRoofs[0];
+    const fr = planRoofs(builtInHouse("")).flatRoofs[0];
     expect(fr.open).toHaveLength(1);
     expect(fr.open[0].x0).toBeCloseTo(-4.589, 2);
   });
@@ -340,7 +340,7 @@ describe("porch lean-to", () => {
   };
 
   it("falls away from the garage wall and takes the canopy out of the flat roof", () => {
-    const plan = leanTo(listing91770873(""));
+    const plan = leanTo(builtInHouse(""));
     expect(plan.leanTos).toHaveLength(1);
     const l = plan.leanTos[0];
     expect(l.axis).toBe("x");
@@ -354,13 +354,13 @@ describe("porch lean-to", () => {
   });
 
   it("only needs a flashing against the proposed two-storey wall", () => {
-    expect(leanTo(listing91770873Proposed("")).leanTos[0].tallWall).toBe(true);
+    expect(leanTo(builtInProposed("")).leanTos[0].tallWall).toBe(true);
   });
 });
 
 describe("chimneys and downpipes", () => {
   it("starts a new chimney on the ridge, straddling the party wall", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const c = defaultChimney(m, "c");
     const main = planRoofs(m).blocks[0];
     expect(c.x).toBeCloseTo(main.x1);
@@ -368,7 +368,7 @@ describe("chimneys and downpipes", () => {
   });
 
   it("rises the given height above the ridge from below the slope it stands on", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     m.exterior = { ...m.exterior!, chimneys: [{ id: "c", x: 4, y: -3.5, w: 0.6, d: 0.6, height: 1, pots: 2 }] };
     const plan = planRoofs(m);
     const s = plan.chimneys[0];
@@ -382,7 +382,7 @@ describe("chimneys and downpipes", () => {
   });
 
   it("seats a shared stack centred over the neighbour's side of the party wall on the house's roof, not the ground", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const main = planRoofs(m).blocks[0];
     m.exterior = { ...m.exterior!, chimneys: [{ id: "c", x: main.x1 + 0.3, y: -3, w: 0.8, d: 1.2, height: 1, pots: 0 }] };
     const plan = planRoofs(m);
@@ -392,13 +392,13 @@ describe("chimneys and downpipes", () => {
   });
 
   it("drops downpipes onto a flat roof below, or to the ground", () => {
-    const plan = planRoofs(listing91770873(""));
+    const plan = planRoofs(builtInHouse(""));
     expect(footAt(plan, -2, 0, 5)).toBeCloseTo(plan.flatRoofs[0].top);
     expect(footAt(plan, 4, 3, 5)).toBeCloseTo(plan.groundY);
   });
 
   it("assembles every part, with gutters only when asked", () => {
-    const plan = planRoofs(listing91770873(""));
+    const plan = planRoofs(builtInHouse(""));
     const on = roofParts(plan, { gutters: true });
     expect(on.tiles.uv.length / 2).toBe(on.tiles.pos.length / 3);
     expect(on.membrane.uv.length / 2).toBe(on.membrane.pos.length / 3);
@@ -452,7 +452,7 @@ describe("downpipes where the model puts them", () => {
   });
 
   it("places the listing's: front on the west side wall, rear by the patio doors, and one off the flat roof", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const ext = exteriorOf(m);
     const plan = planRoofs(m);
     const main = plan.blocks[0];
@@ -473,7 +473,7 @@ describe("downpipes where the model puts them", () => {
   });
 
   it("drops spots on a skirted flat-roof edge or far from any wall, and keeps the skirt's own downpipes", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const ext = exteriorOf(m);
     const plan = planRoofs(m);
     const front = (620 - 430) / 73 + EXT_WALL_T / 2 + 0.1;
@@ -488,7 +488,7 @@ describe("downpipes where the model puts them", () => {
   });
 
   it("stands a soil stack against the nearest wall, from the roof below up through the eaves", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const plan = planRoofs(m);
     const main = plan.blocks[0];
     const s = soilStack(plan, -0.8, 0.75)!;
@@ -530,7 +530,7 @@ describe("flat roof skirt", () => {
   });
   const verts = (pos: number[]) => Array.from({ length: pos.length / 3 }, (_, i) => pos.slice(i * 3, i * 3 + 3));
   const listing = (canopies?: { x: number; y: number }[][]) => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     if (canopies) m.floors.find((f) => f.level === 0)!.canopies = canopies;
     const plan = planRoofs(m);
     return { m, plan, fr: plan.flatRoofs[0], skirt: exteriorOf(m).flatRoofSkirt!, main: plan.blocks[0] };
@@ -744,7 +744,7 @@ describe("flat roof skirt", () => {
   });
 
   it("keeps the slope under the first-floor front windows, as listed and with the extension", () => {
-    for (const m of [listing91770873(""), listing91770873Proposed("")]) {
+    for (const m of [builtInHouse(""), builtInProposed("")]) {
       const plan = planRoofs(m);
       const skirt = exteriorOf(m).flatRoofSkirt!;
       const fr = plan.flatRoofs[0];

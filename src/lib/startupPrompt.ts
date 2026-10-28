@@ -1,6 +1,7 @@
 import { VARIANT_LABEL, type HouseModel, type VariantKey } from "../types";
 import type { SiteUpdate } from "./sitePreset";
 import { reviewedVersion } from "./layoutMerge";
+import { activeHouseId, activeHouseName, storageSuffix } from "./house";
 
 /** What the startup prompt should offer, or nothing. */
 export type StartupPrompt =
@@ -107,17 +108,17 @@ export const notNowRemembers = (p: UpdatePrompt): Answer[] => [
 
 const REVIEW_LABEL = "review updates for my Proposed";
 const REVIEW_NOTE =
-  " Your Proposed design is your own and is never replaced, but you can review the listing's newer changes (roof, radiators, stairs and so on) and choose which to bring into it.";
+  " Your Proposed design is your own and is never replaced, but you can review the built-in house's newer changes (roof, radiators, stairs and so on) and choose which to bring into it.";
 
 /**
  * The question and buttons for an "update" prompt. A choice with a null plan does nothing and remembers
  * `notNowRemembers`. Proposed's own edited plot is only replaced by the choice that says so.
  */
-export function describeUpdate(prompt: UpdatePrompt): { message: string; choices: UpdateChoice[] } {
-  if (!prompt.review) return describeLayoutUpdate(prompt);
+export function describeUpdate(prompt: UpdatePrompt, houseName: string = activeHouseName()): { message: string; choices: UpdateChoice[] } {
+  if (!prompt.review) return describeLayoutUpdate(prompt, houseName);
   if (!prompt.variants.length && !prompt.site) {
     return {
-      message: `Listing 91770873 has changed since your Proposed design was copied from it.${REVIEW_NOTE} You can undo it.`,
+      message: `${houseName} has changed since your Proposed design was copied from it.${REVIEW_NOTE} You can undo it.`,
       choices: [
         { label: "Review updates for my Proposed", plan: { layouts: [], sites: [], review: true, remember: [] } },
         { label: "Not now", plan: null },
@@ -126,7 +127,7 @@ export function describeUpdate(prompt: UpdatePrompt): { message: string; choices
   }
   // The review goes with the update that keeps the owner's plot edits when there is one (the same spirit), else
   // with the plain update. Choosing another update leaves the review to be offered on its own next time.
-  const { message, choices } = describeLayoutUpdate(prompt);
+  const { message, choices } = describeLayoutUpdate(prompt, houseName);
   const base = Math.max(0, choices.findIndex((c) => !!c.plan?.boundaries?.length));
   const plan = choices[base].plan!;
   const label = plan.boundaries?.length ? `Update, keep my plot edits, and ${REVIEW_LABEL}` : `${choices[base].label}, and ${REVIEW_LABEL}`;
@@ -136,12 +137,12 @@ export function describeUpdate(prompt: UpdatePrompt): { message: string; choices
   };
 }
 
-function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices: UpdateChoice[] } {
+function describeLayoutUpdate(prompt: UpdatePrompt, houseName: string): { message: string; choices: UpdateChoice[] } {
   const { variants: layouts, site } = prompt;
   const names = layouts.map((k) => VARIANT_LABEL[k]).join(" and ");
   if (!site) {
     return {
-      message: `Newer plans for listing 91770873 are available. Update? This replaces any edits you made to the built-in ${names} layout${layouts.length > 1 ? "s" : ""}; layouts you copied or made yourself are not touched. You can undo it.`,
+      message: `Newer plans for ${houseName} are available. Update? This replaces any edits you made to the built-in ${names} layout${layouts.length > 1 ? "s" : ""}; layouts you copied or made yourself are not touched. You can undo it.`,
       choices: [
         { label: "Update", plan: { layouts, sites: [], remember: [] } },
         { label: "Keep mine", plan: null },
@@ -165,7 +166,7 @@ function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices:
   if (!layouts.length && !sites.length) {
     // Only Proposed's own plot is out of date.
     return {
-      message: `A newer plot for listing 91770873 is available. Proposed has a plot of its own; updating it replaces your plot edits there.${tail}`,
+      message: `A newer plot for ${houseName} is available. Proposed has a plot of its own; updating it replaces your plot edits there.${tail}`,
       choices: [
         { label: "Update Proposed's plot (your plot edits there are lost)", plan: { layouts: [], sites: ["proposed"], remember: [] } },
         boundaryChoice([], []),
@@ -185,17 +186,19 @@ function describeLayoutUpdate(prompt: UpdatePrompt): { message: string; choices:
   if (own) choices.push({ label: "Update, and Proposed's plot too (your plot edits there are lost)", plan: { layouts, sites: [...sites, "proposed"], remember: [] } });
   choices.push({ label: "Not now", plan: null });
   return {
-    message: `${layouts.length ? `A newer version of listing 91770873 is available: ${parts.join(" and ")}.` : "A newer plot for listing 91770873 is available."} Update? This replaces any edits you made to ${edits.join(" and ")}.${ownNote}${keepNote}${tail}`,
+    message: `${layouts.length ? `A newer version of ${houseName} is available: ${parts.join(" and ")}.` : `A newer plot for ${houseName} is available.`} Update? This replaces any edits you made to ${edits.join(" and ")}.${ownNote}${keepNote}${tail}`,
     choices,
   };
 }
 
-const KEY = "house-modeler/startup-prompt";
+const BASE_KEY = "house-modeler/startup-prompt";
+/** Per house: the default house keeps the old key, so its remembered answers carry over. */
+const key = () => BASE_KEY + storageSuffix(activeHouseId());
 
 /** Read the remembered answers; storage can throw or hold junk, so fall back to none. */
 export function readRemembered(storage: Pick<Storage, "getItem"> | undefined = safeStorage()): Remembered {
   try {
-    const raw = storage?.getItem(KEY);
+    const raw = storage?.getItem(key());
     const v = raw ? (JSON.parse(raw) as Remembered) : {};
     const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? n : undefined);
     return { load: num(v.load), update: num(v.update), site: num(v.site), review: num(v.review) };
@@ -206,7 +209,7 @@ export function readRemembered(storage: Pick<Storage, "getItem"> | undefined = s
 
 export function remember(kind: keyof Remembered, version: number, storage: Pick<Storage, "getItem" | "setItem"> | undefined = safeStorage()) {
   try {
-    storage?.setItem(KEY, JSON.stringify({ ...readRemembered(storage), [kind]: version }));
+    storage?.setItem(key(), JSON.stringify({ ...readRemembered(storage), [kind]: version }));
   } catch {
     // Private mode or a full quota: the prompt may come back next time, which is harmless.
   }

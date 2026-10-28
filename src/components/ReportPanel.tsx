@@ -31,6 +31,8 @@ import { downloadPrefix } from "../lib/brand";
 import { stampMark } from "./stampMark";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
+import { openRender } from "./renderRequest";
+import { useChassis } from "./useChassis";
 import { exportWiringGuide, reportFontCss } from "./wiringGuideExport";
 import { numberPoints } from "../lib/electrics";
 
@@ -430,6 +432,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const guideModel = variants.proposed ?? variants[active];
   const noPoints = useMemo(() => !guideModel || numberPoints(guideModel).length === 0, [guideModel]);
   const no3d = ids.length === 0;
+  const phone = useChassis((c) => c.chassis === "phone");
   return (
     <div className="rp-export">
       <div className="rp-export-group">
@@ -485,6 +488,14 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
             {busy === "glb" ? <><Loader kind="lift" size={14} />Exporting…</> : "3D model (GLB)"}
           </button>
         </div>
+        <div className="row">
+          {(no3d ? ["main"] : ids).map((id) => (
+            <button key={id} onClick={() => openRender({ id, pose: null, label: captureLabel(id, active), stamp })} disabled={no3d || busy !== null} title="A path-traced still of the view as it is now: true bounced light, sky light and glass">
+              {ids.length > 1 ? `Render ${captureLabel(id, active)}` : "Render"}
+            </button>
+          ))}
+        </div>
+        {phone && <p className="muted small">Slow on a phone</p>}
         <label className="small">
           <input type="checkbox" checked={stamp} onChange={(e) => setStamp(e.target.checked)} /> Add the Storey mark
         </label>

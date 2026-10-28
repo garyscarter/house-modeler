@@ -1,11 +1,8 @@
-import { Suspense, memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo } from "react";
 import * as THREE from "three";
-import { Billboard, Html, Image as DreiImage } from "@react-three/drei";
-import { usePanelPrefs } from "../components/panelPrefs";
-import { usePhotoThumb } from "./photoThumbs";
-import { useLoader, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { Elevation, Floor, HouseModel, Photo, Room } from "../types";
+import type { Floor, HouseModel, Room } from "../types";
 import { exteriorOf } from "../lib/roof";
 import { roomColor } from "../lib/roomColor";
 import { wallThickness } from "../lib/walls";
@@ -36,8 +33,6 @@ import {
   WALL_T,
   buildWalls,
   diffWalls,
-  modelBounds,
-  polygonCentroid,
   roomWorldPolygon,
   type V2,
   type WallPiece,
@@ -47,7 +42,6 @@ export { WALL_T, roomColor };
 
 interface HouseProps {
   model: HouseModel;
-  photos: Photo[];
   ghost?: boolean;
   showLabels?: boolean;
   showCeilings?: boolean;
@@ -67,7 +61,7 @@ interface HouseProps {
    * from it are highlighted green (what the renovation adds).
    */
   diffAgainst?: HouseModel;
-  /** Draw roofs, canopies and exterior photo pins. */
+  /** Draw roofs and canopies. */
   showExterior?: boolean;
 }
 
@@ -76,7 +70,6 @@ const block = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 export function House({
   model,
-  photos,
   ghost,
   showLabels = true,
   showCeilings = false,
@@ -94,8 +87,12 @@ export function House({
   const floors = model.floors.filter((f) => shown(f.level));
   // Labels go on the topmost visible floor only: lower floors' labels would
   // be read through the floors and walls above them (see RoomLabels).
-  const labelLevel = floors.length ? Math.max(...floors.map((f) => f.level)) : null;
-  const showPins = usePanelPrefs((s) => s.showPins);
+  // A section cut makes the highest floor it leaves standing the top one.
+  const cut = useStore((s) => s.sectionHeight);
+  const standing = cut === null ? floors : floors.filter((f) => floorBaseY(model, f) < cut);
+  const labelLevel = standing.length ? Math.max(...standing.map((f) => f.level)) : null;
+  // Cut below the top labelled floor's ceiling, the roof over it is gone.
+  const roofCut = cut !== null && labelLevel !== null && cut < (labelLevel + 1) * (model.ceilingHeight + model.slabThickness);
   // Stairwells depend on structure only, so recolouring leaves them (and every floor group's props) as they were.
   const structure = modelStructure(model);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,10 +117,18 @@ export function House({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lampsOn, floorKey, model, blocked],
   );
-  // The pool of real lights is sized to the house, so its shaders change only when a light fitting is added or removed.
-  const quality = useStore((s) => s.settings.quality);
-  const pool = useRef<PoolSizes | null>(null);
-  const sizes = useMemo(() => (pool.current = poolFor(model, POOL[quality], pool.current)), [model, quality]);
+  // The pool of real lights is sized to the house, both layouts together, so its shaders change only when a light
+  // fitting is added or removed, never when the view switches between As listed and Proposed. The selector returns a
+  // string, so a change to either layout re-renders this only when the sizes move.
+  const sizeKey = useStore((s) => {
+    const models = [s.variants.current, s.variants.proposed].filter((m): m is HouseModel => !!m);
+    const p = poolFor(models.length ? models : model, POOL[s.settings.quality]);
+    return `${p.point}|${p.spot}|${p.casters}`;
+  });
+  const sizes = useMemo<PoolSizes>(() => {
+    const [point, spot, casters] = sizeKey.split("|").map(Number);
+    return { point, spot, casters };
+  }, [sizeKey]);
   const invalidate = useThree((s) => s.invalidate);
   const glow = lampGlow(true, altitude);
   useEffect(() => {
@@ -134,17 +139,14 @@ export function House({
     <group>
       {!ghost && <LampLights lamps={lamps} sizes={sizes} />}
       {showExterior && !ghost && ext.showRoof && (onPickWall ? <group onClick={block}><Roof model={model} /></group> : <Roof model={model} />)}
-      {showExterior && !ghost && showPins && <ExteriorPins model={model} photos={photos} />}
       {floors.map((floor) => (
         <FloorGroup
           key={floor.id}
           model={model}
           floor={floor}
-          photos={photos}
           ghost={!!ghost}
           showLabels={showLabels && floor.level === labelLevel}
-          showPins={showPins && !ghost && floor.level === labelLevel}
-          roofOver={!!showExterior && !ghost && ext.showRoof}
+          roofOver={!!showExterior && !ghost && ext.showRoof && !roofCut}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
@@ -177,10 +179,8 @@ const FloorGroup = memo(FloorGroupInner, (a, b) => {
 function FloorGroupInner({
   model,
   floor,
-  photos,
   ghost,
   showLabels,
-  showPins,
   roofOver,
   showCeilings,
   doorsOpen,
@@ -197,11 +197,8 @@ function FloorGroupInner({
 }: {
   model: HouseModel;
   floor: Floor;
-  photos: Photo[];
   ghost: boolean;
   showLabels: boolean;
-  /** Photo pins for this floor (the label level only, and only when the person has them switched on). */
-  showPins: boolean;
   /** The roof is drawn over this floor, so only the selected room is labelled. */
   roofOver: boolean;
   showCeilings: boolean;
@@ -274,7 +271,6 @@ function FloorGroupInner({
         model={model}
         floor={floor}
         walls={allWalls}
-        photos={photos}
         selectedRoomId={selectedRoomId}
         onSelectRoom={onSelectRoom}
         onContextRoom={onContextRoom}
@@ -307,10 +303,6 @@ function FloorGroupInner({
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
 
-      {showPins &&
-        floor.rooms
-          .filter((room) => !roofOver || room.id === selectedRoomId)
-          .map((room) => <PhotoPin key={room.id} floor={floor} room={room} photos={photos} />)}
     </group>
   );
 }
@@ -324,7 +316,6 @@ function FloorShell({
   model,
   floor,
   walls,
-  photos,
   selectedRoomId,
   onSelectRoom,
   onContextRoom,
@@ -342,7 +333,6 @@ function FloorShell({
   litRooms: Set<string>;
   /** The flight up from this floor (see FloorGroup). */
   flight: FlightShape | null;
-  photos: Photo[];
   selectedRoomId?: string | null;
   onSelectRoom?: (floor: Floor, room: Room) => void;
   onContextRoom?: (floor: Floor, room: Room, x: number, y: number) => void;
@@ -433,7 +423,6 @@ function FloorShell({
           key={room.id}
           room={room}
           polys={polys[i]}
-          photos={photos}
           selected={room.id === selectedRoomId}
           onSelect={() => onSelectRoom?.(floor, room)}
           onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
@@ -446,7 +435,6 @@ function FloorShell({
             key={"bay" + i}
             room={room}
             polys={[b.poly]}
-            photos={photos}
             selected={room.id === selectedRoomId}
             onSelect={() => onSelectRoom?.(floor, room)}
             onContext={onContextRoom && ((x, y) => onContextRoom(floor, room, x, y))}
@@ -512,7 +500,7 @@ if (typeof window !== "undefined")
     true,
   );
 
-function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { room: Room; polys: V2[][]; photos: Photo[]; selected: boolean; onSelect: () => void; onContext?: (x: number, y: number) => void }) {
+function RoomFloor({ room, polys, selected, onSelect, onContext }: { room: Room; polys: V2[][]; selected: boolean; onSelect: () => void; onContext?: (x: number, y: number) => void }) {
   const setUi = useUiSetter();
   // Shape coordinates are metres, so the UVs keep boards and tiles at their real size;
   // a floor angle turns them about the plan's origin, so rooms laid the same way line up.
@@ -530,7 +518,6 @@ function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { roo
     return g;
   }, [polys, angle]);
   useEffect(() => () => geom.dispose(), [geom]);
-  const photo = room.floorPhotoId ? photos.find((p) => p.id === room.floorPhotoId) : undefined;
   const material = getMaterial(floorSpec(room, selected));
   return (
     <mesh
@@ -538,7 +525,7 @@ function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { roo
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, FLOOR_SURFACE, 0]}
       receiveShadow
-      material={photo ? undefined : material}
+      material={material}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
@@ -566,13 +553,7 @@ function RoomFloor({ room, polys, photos, selected, onSelect, onContext }: { roo
           onContext(n.clientX, n.clientY);
         })
       }
-    >
-      {photo && (
-        <Suspense fallback={<primitive object={material} attach="material" />}>
-          <PhotoFloorMaterial url={photo.dataUrl} tint={selected ? "#ffd166" : "#ffffff"} />
-        </Suspense>
-      )}
-    </mesh>
+    />
   );
 }
 
@@ -611,14 +592,6 @@ function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
       ))}
     </group>
   );
-}
-
-function PhotoFloorMaterial({ url, tint }: { url: string; tint: string }) {
-  const tex = useLoader(THREE.TextureLoader, url);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(0.5, 0.5);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return <meshStandardMaterial map={tex} color={tint} roughness={0.8} />;
 }
 
 /** Ceilings glow faintly by day so rooms read bright from above; `glow` is the share of that left (none at night). */
@@ -702,85 +675,6 @@ const OVERLAY_REMOVED = "#b42318";
 /** Painted understairs panelling and beige stair carpet, as in the listing photos. */
 const UNDERSTAIRS: MatSpec = { kind: "paint", color: "#f1eee8" };
 const STAIR_CARPET: MatSpec = { kind: "plain", color: "#c7b9a5", roughness: 1 };
-
-const CAMERA_GLYPH = (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-    <path d="M2 5.5h2.2L5.4 4h5.2l1.2 1.5H14v7H2z" strokeLinejoin="round" />
-    <circle cx="8" cy="8.8" r="2.2" />
-  </svg>
-);
-
-/** A small camera badge at the room's floor level; a click opens the room's first photo in the lightbox. */
-function PhotoPin({ floor, room, photos }: { floor: Floor; room: Room; photos: Photo[] }) {
-  const mine = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
-  const c = useMemo(() => polygonCentroid(roomWorldPolygon(floor, room)), [floor, room]);
-  const setUi = useUiSetter();
-  if (!mine.length) return null;
-  const first = mine[0];
-  return (
-    <Html position={[c.x, 0.1, c.y]} center zIndexRange={[10, 0]}>
-      <button type="button" className="photo-pin" title={`${room.name}: ${mine.length} photo${mine.length > 1 ? "s" : ""}`} onClick={() => setUi({ selectedRoomId: room.id, selectedPhotoId: first.id })}>
-        {CAMERA_GLYPH}
-        {mine.length > 1 && mine.length}
-      </button>
-    </Html>
-  );
-}
-
-/** One exterior photo on a Billboard, drawn from its 256 px thumbnail. */
-function ExteriorThumb({ photo, count, position }: { photo: Photo; count: number; position: [number, number, number] }) {
-  const setUi = useUiSetter();
-  const url = usePhotoThumb(photo);
-  return (
-    <Billboard position={position}>
-      <Suspense fallback={null}>
-        <DreiImage
-          url={url}
-          scale={[1.8, 1.35]}
-          transparent
-          onClick={(ev) => {
-            ev.stopPropagation();
-            setUi({ selectedPhotoId: photo.id });
-          }}
-        />
-      </Suspense>
-      {count > 1 && (
-        <Html position={[0.8, 0.6, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-          <div className="pin-badge">{count}</div>
-        </Html>
-      )}
-    </Billboard>
-  );
-}
-
-/** Exterior photos: one pin beside each side of the house that has any (its first photo). */
-function ExteriorPins({ model, photos }: { model: HouseModel; photos: Photo[] }) {
-  const b = useMemo(() => modelBounds(model.floors), [model]);
-  const bySide = new Map<Elevation, Photo[]>();
-  for (const p of photos) if (p.elevation) bySide.set(p.elevation, [...(bySide.get(p.elevation) ?? []), p]);
-  const cx = (b.x0 + b.x1) / 2;
-  const cz = (b.y0 + b.y1) / 2;
-  const GAP = 2.6;
-  const place = (e: Elevation): [number, number, number] => {
-    switch (e) {
-      case "front":
-        return [cx, 1.8, b.y1 + GAP];
-      case "rear":
-        return [cx, 1.8, b.y0 - GAP];
-      case "left":
-        return [b.x0 - GAP, 1.8, cz];
-      case "right":
-        return [b.x1 + GAP, 1.8, cz];
-    }
-  };
-  return (
-    <group>
-      {[...bySide.entries()].map(([e, list]) => (
-        <ExteriorThumb key={e} photo={list[0]} count={list.length} position={place(e)} />
-      ))}
-    </group>
-  );
-}
 
 import { useStore } from "../store";
 function useUiSetter() {

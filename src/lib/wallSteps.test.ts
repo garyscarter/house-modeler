@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SiteSurface } from "../types";
-import { listingSite } from "./houses/listing91770873";
+import { listingSite } from "../houses/default";
 import { edgesOf } from "./site";
 import { circleControls } from "./surfaceCurve";
 import { COURSE, boundaryWallSegments, groundAlong, groundAt, resolveFollow, wallAt, wallSegments, type GroundSample } from "./wallSteps";
@@ -145,7 +145,7 @@ describe("ground along a boundary edge", () => {
   });
 });
 
-describe("listing 91770873", () => {
+describe("the built-in house", () => {
   const site = listingSite();
   const edges = edgesOf(site);
   const segs = (i: number) => boundaryWallSegments(site.boundary, edges[i], i, site.surfaces);

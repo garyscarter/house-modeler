@@ -70,8 +70,7 @@ export function hoverRoom(id: string) {
 
 /**
  * A name input that commits when you leave it or press Enter (Escape undoes
- * the edit), so a rename is one undo step and photos follow the room or floor
- * from its old name to the new one, never to a half-typed name on the way.
+ * the edit), so a rename is one undo step and never records a half-typed name.
  */
 export function NameField({ value, onCommit, className, label }: { value: string; onCommit: (v: string) => void; className?: string; label?: string }) {
   const [text, setText] = useState(value);
@@ -130,11 +129,9 @@ export function BuildRoomPanel({
   onHighlightEdge?: (edge: number | null) => void;
 }) {
   const updateFloor = useStore((s) => s.updateFloor);
-  const photos = useStore((s) => s.photos);
   const setUi = useStore((s) => s.setUi);
   // The corner that stays put when the size changes: top-left unless Advanced says otherwise.
   const [anchor, setAnchor] = useState<Corner>("tl");
-  const roomPhotos = photos.filter((p) => p.floorName === floor.name && p.roomName === room.name);
   const neighbours = useMemo(() => knockThroughNeighbours(floor, room.id), [floor, room.id]);
   const ppm = floor.pxPerM;
   const r = axisRect(room.polygon, 0.5);
@@ -209,7 +206,7 @@ export function BuildRoomPanel({
         )}
       </Section>
 
-      <Section id="build.room.details" title="Details" summary={detailsSummary(room, roomPhotos.length)}>
+      <Section id="build.room.details" title="Details" summary={detailsSummary(room)}>
         <label>
           Notes
           <textarea rows={3} value={room.notes ?? ""} placeholder="Snags, ideas, quotes…" onChange={(e) => onChange({ notes: e.target.value || undefined })} />
@@ -223,13 +220,6 @@ export function BuildRoomPanel({
         <label className="check" title="Tag top-floor rooms that belong to an extension so they can get their own roof">
           <input type="checkbox" checked={room.roofGroup === "extension"} onChange={(e) => onChange({ roofGroup: e.target.checked ? "extension" : undefined })} /> Extension room (gets its own roof)
         </label>
-        {roomPhotos.length > 0 && (
-          <div className="thumbs">
-            {roomPhotos.map((p) => (
-              <img key={p.id} src={p.dataUrl} title={p.description} onClick={() => setUi({ selectedPhotoId: p.id })} />
-            ))}
-          </div>
-        )}
       </Section>
 
       {neighbours.length > 0 && (
@@ -905,7 +895,7 @@ export function FixtureInspector({
         </label>
       )}
       {!(item.symbol === "rug" && rugPattern(fixture)) && (
-        <SwatchField label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
+        <SwatchField dulux={item.id.startsWith("wardrobe")} label="Colour" value={fixture.color ?? item.color} isSet={!!fixture.color} onChange={(color) => onChange({ color })} onReset={() => onChange({ color: undefined })} />
       )}
       {(isJoinery(item) || item.symbol === "shaker-wardrobe") && <JoineryFields fixture={fixture} item={item} ceiling={ceiling} locked={locked} onChange={onChange} onRefit={onRefit} />}
       {hasWorktop(item) && (

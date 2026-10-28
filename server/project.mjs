@@ -1,4 +1,4 @@
-// The one shared project: a single JSON file `{ revision, savedAt, data }` in DATA_DIR.
+// Each house's shared project: a single JSON file `{ revision, savedAt, data }` in DATA_DIR.
 // Revision is an integer that goes up by one on every save; a save must name the
 // revision it was based on, so two devices can never silently overwrite each other.
 import fs from "node:fs";
@@ -7,8 +7,16 @@ import path from "node:path";
 export const MAX_PROJECT_BODY_BYTES = 50 * 1024 * 1024;
 const FILE_NAME = "project.json";
 
-export function createProjectStore(dir) {
-  const file = path.join(dir, FILE_NAME);
+/** The file a house's project lives in: `project.json` for the default house (the data already on disk), `project-<id>.json` otherwise. */
+export const projectFileName = (house, defaultHouse) => (!house || house === defaultHouse ? FILE_NAME : `project-${house}.json`);
+
+/** One store per house, keyed by house id. */
+export function createProjectStores(dir, houses, defaultHouse) {
+  return new Map([...houses].map((house) => [house, createProjectStore(dir, projectFileName(house, defaultHouse))]));
+}
+
+export function createProjectStore(dir, fileName = FILE_NAME) {
+  const file = path.join(dir, fileName);
   let meta = null; // { revision, savedAt } of what is on disk, null when nothing is saved
   try {
     const saved = JSON.parse(fs.readFileSync(file, "utf8"));

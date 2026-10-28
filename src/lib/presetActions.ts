@@ -1,27 +1,28 @@
 import { transact, useStore } from "../store";
 import type { HouseModel, Site, VariantKey } from "../types";
-import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, listing91770873, listing91770873Proposed, listingSite, placeholderImage, PRESETS, SITE_PRESETS } from "./houses/listing91770873";
-import { listingFloorplan } from "./houses/listingAssets";
+import { currentHouse } from "./house";
 import { freshSiteFor } from "./sitePreset";
 import { gardenUpdates, mergeKeepingEdits, neighbourUpdates, type BoundaryMerge, type PlotChange } from "./siteMerge";
 import { applyChanges, isBasedOnListing, listingUpdates, type LayoutChange } from "./layoutMerge";
 
 /**
- * Load the built-in listing into a variant, with its floorplan image and, if
- * that layout has no plot of its own yet, the listing's plot. Proposed starts
- * from a copy of As listed's plot when there is one, so edits to it carry over.
+ * Load the active house's built-in layout into a variant (its main layout for As listed, its Proposed one, or
+ * `preset` when given), with its floorplan image and, if that layout has no plot of its own yet, the house's plot.
+ * Proposed starts from a copy of As listed's plot when there is one, so edits to it carry over.
  */
-export async function loadListing(variant: VariantKey): Promise<void> {
-  const build = variant === "current" ? listing91770873 : listing91770873Proposed;
-  // The listing's own floorplan sits behind the tracing; fall back to a placeholder offline.
-  const image = await listingFloorplan().catch(() => placeholderImage());
+export async function loadBuiltIn(variant: VariantKey, preset?: string): Promise<void> {
+  const house = currentHouse();
+  const id = preset ?? (variant === "current" ? house.main : (house.proposed ?? house.main));
+  const build = house.presets[id].build;
+  // The house's own floorplan sits behind the tracing; fall back to a placeholder offline.
+  const image = await house.floorplan().catch(() => house.placeholderImage());
   const st = useStore.getState();
   transact(() => {
     st.setVariant(variant, build(image));
     const sites = useStore.getState().sites;
     if (!sites[variant]) {
       const from = variant === "proposed" ? sites.current : undefined;
-      st.setSite(from ? structuredClone(from) : listingSite(), variant);
+      st.setSite(from ? structuredClone(from) : house.sitePresets[house.site].build(), variant);
     }
     st.setUi({ activeVariant: variant });
   });
@@ -31,10 +32,12 @@ export async function loadListing(variant: VariantKey): Promise<void> {
 export function updatePreset(variant: VariantKey): void {
   const st = useStore.getState();
   const model = st.variants[variant];
-  if (!model?.preset || !PRESETS[model.preset.id]) return;
+  const house = currentHouse();
+  if (!model?.preset || !house.presets[model.preset.id]) return;
   // Never overwrite a Proposed design that is an old copy of As listed (it still carries As listed's tag).
-  if (variant === "proposed" && model.preset.id === LISTING_PRESET.id) return;
-  const preset = PRESETS[model.preset.id];
+  if (variant === "proposed" && model.preset.id === house.main) return;
+  const preset = house.presets[model.preset.id];
+  const placeholderImage = house.placeholderImage;
   const fresh = preset.build(model.floors[0]?.image ?? placeholderImage());
   // Keep the user's floorplan image if they set one at the same pixel size.
   const keepImage = model.floors[0] && model.floors[0].imageW === fresh.floors[0].imageW;
@@ -71,17 +74,18 @@ export function applyBoundaryUpdate(variant: VariantKey, merged: BoundaryMerge):
   useStore.getState().setSite(merged.site, variant);
 }
 
-let latestCache: { version: number; model: HouseModel; site?: Site } | undefined;
-/** The latest built-in As listed house and plot, built once (their uids are random, so the same build keeps change ids stable). */
+let latestCache: { house: string; version: number; model: HouseModel; site?: Site } | undefined;
+/** The latest built-in As listed house and plot, built once per house and version (their uids are random, so the same build keeps change ids stable). */
 export function latestListing(): { version: number; model: HouseModel; site?: Site } {
-  const version = PRESETS[LISTING_PRESET.id].version;
-  if (latestCache?.version !== version) {
-    latestCache = { version, model: PRESETS[LISTING_PRESET.id].build(""), site: SITE_PRESETS[LISTING_SITE_PRESET.id]?.build() };
+  const house = currentHouse();
+  const version = house.presets[house.main].version;
+  if (latestCache?.house !== house.id || latestCache.version !== version) {
+    latestCache = { house: house.id, version, model: house.presets[house.main].build(""), site: house.sitePresets[house.site]?.build() };
   }
   return latestCache;
 }
 
-/** Everything the "Bring in updates from listing 91770873" dialog offers for a design, worked out but not applied. */
+/** Everything the "Bring in updates from <house>" dialog offers for a design, worked out but not applied. */
 export interface ListingReview {
   variant: VariantKey;
   /** The design as it was when the review was worked out. */
@@ -92,13 +96,13 @@ export interface ListingReview {
   plot?: { variant: VariantKey; site: Site; changes: PlotChange[] };
 }
 
-/** Is this layout an owner's design based on the built-in listing (so it can take its updates)? */
+/** Is this layout an owner's design based on the built-in house (so it can take its updates)? */
 export const isListingDesign = (model: HouseModel | undefined): boolean =>
-  !!model && model.preset?.id !== LISTING_PROPOSED_PRESET.id && isBasedOnListing(model, LISTING_PRESET.id, latestListing().model);
+  !!model && (!currentHouse().proposed || model.preset?.id !== currentHouse().proposed) && isBasedOnListing(model, currentHouse().main, latestListing().model);
 
 /**
  * Work out what the latest built-in house offers the design in `variant` (Proposed by default), or undefined
- * when that layout isn't a design based on the listing.
+ * when that layout isn't a design based on the built-in house.
  */
 export function planListingReview(variant: VariantKey = "proposed"): ListingReview | undefined {
   const st = useStore.getState();
@@ -117,7 +121,7 @@ export function planListingReview(variant: VariantKey = "proposed"): ListingRevi
 }
 
 /**
- * Put in the ticked changes of a review and record the listing version the design has now been reviewed
+ * Put in the ticked changes of a review and record the built-in version the design has now been reviewed
  * against (`basedOn`), so the startup prompt stops offering it; it stays the owner's own design, never a
  * built-in. The layout and its plot change through the store together: one undo step, and project sync and
  * the checks see an ordinary edit.
@@ -126,7 +130,7 @@ export function applyListingReview(review: ListingReview, selected: Iterable<str
   const ids = [...selected];
   const st = useStore.getState();
   const model = applyChanges(review.model, review.changes, ids);
-  model.basedOn = { id: LISTING_PRESET.id, version: review.version };
+  model.basedOn = { id: currentHouse().main, version: review.version };
   transact(() => {
     st.setVariant(review.variant, model);
     if (review.plot) {

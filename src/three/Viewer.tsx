@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
+import type { Floor, HouseModel, Room, VariantKey } from "../types";
 import { House } from "./House";
 import { lampStats, useLampsReady } from "./lampPool";
 import { modelBounds, type V2 } from "../lib/geometry";
@@ -25,16 +25,18 @@ import { SunControls } from "../components/SunControls";
 import { ViewedVariant } from "./viewedVariant";
 import { SiteDiff } from "./SiteDiff";
 import { FrameOnCommit, Precompile, ShadowUpdates, TrackScene } from "./frameLoop";
+import { SectionCut } from "./SectionCut";
 import { Loader } from "../components/Loader";
 import { useSunInfo } from "./useSun";
-import { isLightItem, lightsMaster, lightsOn } from "../lib/lights";
+import { isLightItem, lightsMaster, lightsOn, switchedOn } from "../lib/lights";
+import { controlIndex } from "../lib/electrics";
 import { byId } from "../lib/catalogue";
+import { Measure, MeasureButton } from "./Measure";
 import "./Viewer.css";
 
 interface ViewerProps {
   model: HouseModel;
   ghost?: HouseModel;
-  photos: Photo[];
   showLabels: boolean;
   showCeilings: boolean;
   doorsOpen?: boolean;
@@ -69,7 +71,7 @@ const Effects = lazy(() => loadEffects().then((m) => ({ default: m.Effects })));
 export const Viewer = memo(ViewerImpl, (prev, next) => prev.active === false && next.active === false);
 
 function ViewerImpl(props: ViewerProps) {
-  const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
+  const { model, ghost, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
   // Subscribed only while shown: a store subscription would re-render this hidden view on every plan edit, memo or not.
   const liveVariants = useStore((s) => (active ? s.variants : null));
   const seenVariants = useRef(liveVariants ?? useStore.getState().variants);
@@ -108,7 +110,9 @@ function ViewerImpl(props: ViewerProps) {
     setCanvasKey((k) => k + 1);
   }, []);
   useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
-  const frameloop = active && compiled === quality ? "demand" : "never";
+  // A path-traced still draws into this canvas itself; the on-demand loop must not draw over it.
+  const tracing = useStore((s) => s.rendering?.id === (captureId ?? "main"));
+  const frameloop = active && compiled === quality && !tracing ? "demand" : "never";
   const before = useCallback(() => (quality === "high" ? loadEffects() : Promise.resolve()), [quality]);
 
   // Right-click menu on a room. The handler is kept stable (it reads the latest props through a ref) so floors stay memoised.
@@ -160,6 +164,7 @@ function ViewerImpl(props: ViewerProps) {
     <div className="viewer">
       {chrome && title && <div className="viewer-title">{title}</div>}
       {chrome && <ViewCube />}
+      {chrome && <MeasureButton />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
       {chrome && compiled !== null && !lost && <LightsWarming model={model} />}
@@ -196,7 +201,6 @@ function ViewerImpl(props: ViewerProps) {
         <Lighting centre={centre} size={size} />
         <House
           model={model}
-          photos={photos}
           showLabels={showLabels}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
@@ -208,7 +212,7 @@ function ViewerImpl(props: ViewerProps) {
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}
         />
-        {ghost && <House model={ghost} photos={[]} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
+        {ghost && <House model={ghost} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
         <SiteScene centre={centre} size={size} model={model} />
         {ghost && variant && ghostVariant && <SiteDiff variant={variant} other={ghostVariant} />}
         {/* Hidden views are stale until shown again, so exports only see the visible ones. */}
@@ -218,10 +222,12 @@ function ViewerImpl(props: ViewerProps) {
             <Effects />
           </Suspense>
         )}
-        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
+        <SectionCut />
+        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality]} />
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
         <TrackScene />
+        <Measure />
         <FrameOnCommit />
       </Canvas>
       <ContextMenu menu={menu} onClose={() => setMenu(null)} />
@@ -234,11 +240,18 @@ function ViewerImpl(props: ViewerProps) {
  * "Switching the lights on" while the lights are wanted but their shaders are still being built (useLampWarming): the
  * house holds them off meanwhile, so this is what the owner sees instead of a page that stops.
  */
-function LightsWarming({ model }: { model: HouseModel }) {
+export function LightsWarming({ model }: { model: HouseModel }) {
   const ready = useLampsReady();
   const sun = useSunInfo();
   const wanted = useStore((s) => lightsOn(lightsMaster(s.sun), sun?.active ? sun.position.altitude : null));
-  const hasLights = useMemo(() => model.floors.some((f) => (f.fixtures ?? []).some((fx) => { const item = byId(fx.type); return !!item && isLightItem(item); })), [model.floors]);
+  // A light that would come on: switched on, and not held dark by a wall switch that is off (as House decides).
+  const hasLights = useMemo(() => {
+    const blocked = new Set([...controlIndex(model)].filter(([, sws]) => sws.some((c) => !c.on)).map(([id]) => id));
+    return model.floors.some((f) => (f.fixtures ?? []).some((fx) => {
+      const item = byId(fx.type);
+      return !!item && isLightItem(item) && switchedOn(fx) && !blocked.has(fx.id);
+    }));
+  }, [model]);
   if (ready || !wanted || !hasLights) return null;
   return (
     <div className="viewer-busy" role="status">

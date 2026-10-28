@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Fixture } from "../types";
 import { byId } from "./catalogue";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 import { defaultFit, fitProblem, fitRecess, fitWindow, floorFaces, refitFixture } from "./recess";
 import { floor, rect } from "./testing";
 
-const listing = listing91770873("").floors[0];
+const listing = builtInHouse("").floors[0];
 const alcove = byId("built-in-alcove")!;
 const seat = byId("window-seat")!;
 const near = (a: number | undefined, b: number, tol: number) => expect(Math.abs((a ?? NaN) - b)).toBeLessThanOrEqual(tol);

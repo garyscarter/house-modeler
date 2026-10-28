@@ -2,8 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
-dist-hosted
 data/
 
 # Subagent git worktrees
 .claude/worktrees/
+
+# Local state for first-run guidance (scripts/house/welcome.mjs)
+.storey-local.json

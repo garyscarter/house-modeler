@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { activeHouseId, houseKey } from "./house";
 import { clearHistory, transact, useStore } from "../store";
 import { choose } from "../components/Dialogs";
 import {
@@ -21,7 +22,8 @@ import {
  * the first request does not get a JSON reply, sync stays off and nothing shows.
  */
 
-const STORAGE_KEY = "house-modeler/sync";
+/** The remembered revision, per house. */
+const storageKey = () => houseKey("house-modeler/sync");
 const SAVE_DELAY_MS = 3000;
 const RETRY_MS = 20_000;
 const PROBE_TIMEOUT_MS = 6000;
@@ -35,14 +37,14 @@ interface Memory extends Partial<Revision> {
 }
 const readMemory = (): Memory => {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
+    return JSON.parse(localStorage.getItem(storageKey()) ?? "{}") ?? {};
   } catch {
     return {};
   }
 };
 const writeMemory = (m: Memory) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+    localStorage.setItem(storageKey(), JSON.stringify(m));
   } catch {
     // private window or blocked storage: carry on, a reload then just asks again
   }
@@ -53,6 +55,8 @@ let last: Revision | null = null;
 let dirty = false;
 let persistent = true;
 let enabled = false;
+/** Set when the server holds a different house: sync stays off for the page's life. */
+let wrongHouse = false;
 let paused = false; // "Cancel" was chosen in the conflict dialog: wait for Sync now
 let applying = false;
 let version = 0; // counts local changes, so a save can tell whether more came in while it was sent
@@ -100,8 +104,8 @@ async function call(method: "GET" | "PUT", url: string, body?: unknown, timeoutM
 }
 
 const currentProject = (): ProjectData => {
-  const { variants, photos, sites, costRates, pieces, savedViews } = useStore.getState();
-  return { variants, photos, sites, costRates, pieces, savedViews };
+  const { variants, sites, costRates, pieces, savedViews } = useStore.getState();
+  return { variants, sites, costRates, pieces, savedViews };
 };
 
 /** Put a project into the store the way Import JSON does. Returns false when it isn't a project. */
@@ -116,7 +120,7 @@ export function applyProject(data: unknown, fromServer = false): boolean {
       if (project.savedViews) useStore.setState({ savedViews: project.savedViews });
       useStore.getState().setVariant("current", project.variants.current);
       useStore.getState().setVariant("proposed", project.variants.proposed);
-      useStore.setState({ photos: project.photos, sites: project.sites });
+      useStore.setState({ sites: project.sites });
       if (project.pieces) useStore.setState({ pieces: project.pieces });
     });
     // Undo must not cross a load from the server: it would put the old project back and upload it over the server's.
@@ -184,7 +188,7 @@ async function conflict(server: Partial<Revision>): Promise<void> {
 
 /** Compare with the server and do what is needed. Also the first thing that runs, and what a retry does. */
 async function check(): Promise<void> {
-  if (noServer) return;
+  if (noServer || wrongHouse) return;
   if (!enabled) {
     // Read what this browser remembers before the first request, so `since` is right and an unchanged project isn't downloaded.
     const saved = readMemory();
@@ -205,7 +209,7 @@ async function check(): Promise<void> {
     enabled = true;
     useStore.subscribe((s, prev) => {
       if (applying) return;
-      if (s.variants !== prev.variants || s.photos !== prev.photos || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
+      if (s.variants !== prev.variants || s.sites !== prev.sites || s.costRates !== prev.costRates || s.pieces !== prev.pieces || s.savedViews !== prev.savedViews) onChange();
     });
   }
   const server: Revision | null = reply.status === 404 ? null : { revision: reply.json.revision, savedAt: reply.json.savedAt };
@@ -250,6 +254,12 @@ export async function startSync(): Promise<void> {
     window.addEventListener("focus", resume);
   }
   try {
+    // A server that holds a different house must not be written to; no or a failed /api/me (dev, artifact) goes on as before.
+    const me = (await call("GET", "/api/me")).reply;
+    if (me?.status === 200 && typeof me.json.house === "string" && me.json.house !== activeHouseId()) {
+      wrongHouse = true;
+      return setStatus({ kind: "wrongHouse" });
+    }
     await serial(check);
   } catch (e) {
     console.error("Sync failed", e);

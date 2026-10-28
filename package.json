@@ -11,8 +11,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "build:hosted": "node scripts/build-hosted.mjs",
-    "regress:editors": "node scripts/editor-regression.mjs"
+    "regress:editors": "node scripts/editor-regression.mjs",
+    "house:new": "node scripts/house/new.mjs",
+    "welcome": "node scripts/house/welcome.mjs",
+    "house:start": "node scripts/house/start.mjs",
+    "house:overlay": "node scripts/house/overlay-plan.mjs",
+    "house:map": "node scripts/house/overlay-map.mjs",
+    "soundcheck": "node scripts/house/soundcheck.mjs",
+    "house:bead": "node scripts/house/bead.mjs",
+    "house:shot": "node scripts/house/shot.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
@@ -26,6 +33,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.185.1",
+    "three-gpu-pathtracer": "^0.0.27",
+    "three-mesh-bvh": "^0.9.16",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -33,6 +42,7 @@
     "@types/react-dom": "^19.1.0",
     "@types/three": "^0.185.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "playwright-core": "1.63.0",
     "typescript": "^5.9.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

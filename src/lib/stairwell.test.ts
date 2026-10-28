@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 import { polygonArea, roomWorldPolygon } from "./geometry";
 import { balustrades, cutWells, stairwells, subtractRect, type Rect } from "./stairwell";
 
@@ -40,8 +40,8 @@ describe("subtractRect", () => {
   });
 });
 
-describe("listing 91770873 stairwell", () => {
-  const model = listing91770873("");
+describe("the built-in house's stairwell", () => {
+  const model = builtInHouse("");
   const [well] = stairwells(model);
 
   it("opens the floor above over the flight, in the stairs room and on through the landing's west end to the head", () => {

@@ -19,9 +19,9 @@ const contentSignature = (gl: THREE.WebGLRenderer) => `${gl.info.memory.geometri
  * only redrawn when something in the scene may have changed, never for a
  * frame that only moves the camera. The map is marked dirty (and a frame
  * requested) on mount, in the commit of any change to what the scene is built
- * from (`deps` from the viewer, plus site, sun, variant and site view), and
+ * from (`deps` from the viewer, plus site, sun, variant, site view and section cut), and
  * whenever the renderer's geometry, texture or program counts change, which
- * catches photos and other content that arrive asynchronously. Err on the
+ * catches textures and other content that arrive asynchronously. Err on the
  * side of redrawing: a stale shadow is a visible bug, a spare redraw is not.
  */
 export function ShadowUpdates({ deps }: { deps: unknown[] }) {
@@ -38,6 +38,7 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
   const showSite = useStore((s) => s.showSite);
   const activeVariant = useStore((s) => s.activeVariant);
   const siteView = useSiteView((s) => s);
+  const sectionHeight = useStore((s) => s.sectionHeight);
 
   useLayoutEffect(() => {
     gl.shadowMap.autoUpdate = false;
@@ -62,11 +63,21 @@ export function ShadowUpdates({ deps }: { deps: unknown[] }) {
 
   // Runs in the same commit as the scene change, so the shadow pass sees the new geometry.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView]);
+  useLayoutEffect(() => mark.current(), [...deps, sun, sites, showSite, activeVariant, siteView, sectionHeight]);
 
+  const scene = useThree((s) => s.scene);
   useFrame(() => {
     gl.shadowMap.autoUpdate = false;
     if (dirty.current <= 0) return;
+    // Every casting light keeps its own flag (shadow.autoUpdate false, set where the light is made), so a spot that
+    // moves slot redraws only its own map. Here the scene changed, so every lit caster redraws; a light at intensity 0
+    // (the sun below the horizon) has nothing to show and its 4096 map is the dearest pass there is. A map that has
+    // never been drawn must be drawn regardless: the lit shaders sample it, and an unallocated one fails every draw
+    // call (GL_INVALID_OPERATION, a blank scene when the page opens straight into night).
+    scene.traverse((o) => {
+      const light = o as THREE.Light & { shadow?: THREE.LightShadow };
+      if (light.isLight && light.castShadow && light.shadow && (light.intensity > 0 || !light.shadow.map)) light.shadow.needsUpdate = true;
+    });
     gl.shadowMap.needsUpdate = true;
     dirty.current--;
     if (dirty.current > 0) invalidate();
@@ -167,7 +178,16 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
     };
     let stopWatch = () => {};
     let rewarm = 0;
-    let running: Promise<void> | null = null;
+    // The pass in flight, resolving to the pool generation it built for.
+    let running: Promise<number> | null = null;
+    // Pool size changes (a light fitting added or removed), counted from the start, so one that lands during a pass
+    // makes that pass go again: its programs were for the old size.
+    let poolGen = 0;
+    let onPool = () => {};
+    const stopPool = onLampPoolChange(gl, () => {
+      poolGen++;
+      onPool();
+    });
     // The other lamp state, in the background: three bakes the light counts into every lit material's shader, so with
     // the lamp pool hidden (no lamp lit) the lit programs don't exist yet, and with it shown the unlit ones don't.
     // Building that variant now means switching lights compiles nothing. It goes a material at a time, a few
@@ -177,10 +197,13 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       (running ??= (async () => {
         const pools = lampPoolsOf(gl);
         const target = offscreen ? new THREE.WebGLRenderTarget(1, 1) : null;
+        // The pool this pass builds for: taken when it reads the scene, so a change after that sends warmFully round again.
+        let gen = -1;
         try {
           await nextFrame();
           await nextFrame();
-          if (cancelled) return;
+          if (cancelled) return gen;
+          gen = poolGen;
           // One object per material (and the offstage stand-ins): compiling it compiles that material's program.
           const reps = new Map<THREE.Material, THREE.Object3D>();
           const take = (o: THREE.Object3D) => {
@@ -189,7 +212,17 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
           };
           scene.traverseVisible(take);
           for (const o of offstage.get(gl) ?? []) take(o);
-          const objects = [...new Set(reps.values())];
+          const entries = [...reps];
+          // Still drawn: its object still wears the material, and is still in this scene or still a stand-in. One that
+          // went in the meantime (unmounted, recoloured) is skipped, or compiling it would build a program nothing frees.
+          const live = (m: THREE.Material, o: THREE.Object3D) => {
+            const cur = (o as THREE.Mesh).material;
+            if (!(Array.isArray(cur) ? cur.includes(m) : cur === m)) return false;
+            if (offstage.get(gl)?.has(o)) return true;
+            let root: THREE.Object3D = o;
+            while (root.parent) root = root.parent;
+            return root === scene;
+          };
           const added: THREE.WebGLProgram[] = [];
           // Picks one object's programs for the other lamp state, as Precompile's first pass does for the scene.
           const compileOne = (o: THREE.Object3D) => {
@@ -212,14 +245,24 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
           const firstUse = (p: THREE.WebGLProgram) => {
             if ((gl.info.programs ?? []).includes(p)) p.getUniforms();
           };
-          for (let i = 0; i < objects.length && !cancelled; ) {
+          const done = new Set<THREE.Object3D>();
+          for (let i = 0; i < entries.length && !cancelled; ) {
             const t0 = performance.now();
-            do compileOne(objects[i++]);
-            while (i < objects.length && performance.now() - t0 < WARM_SLICE_MS);
+            do {
+              const [m, o] = entries[i++];
+              if (done.has(o) || !live(m, o)) continue;
+              done.add(o);
+              compileOne(o);
+            } while (i < entries.length && performance.now() - t0 < WARM_SLICE_MS);
             await nextFrame();
           }
           const end = performance.now() + COMPILE_TIMEOUT;
-          while (!cancelled && performance.now() < end && !added.every(isReady)) await new Promise((r) => setTimeout(r, 16));
+          // A program released in the meantime (a material disposed) is settled: a deleted program never reports ready.
+          const settled = () => {
+            const alive = new Set(gl.info.programs ?? []);
+            return added.every((p) => !alive.has(p) || typeof (p as unknown as { isReady?: () => boolean }).isReady !== "function" || isReady(p));
+          };
+          while (!cancelled && performance.now() < end && !settled()) await new Promise((r) => setTimeout(r, 16));
           for (let j = 0; j < added.length && !cancelled; ) {
             const t0 = performance.now();
             do firstUse(added[j++]);
@@ -232,7 +275,12 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
           target?.dispose();
           running = null;
         }
+        return gen;
       })());
+    // A pass that is current for the pool it ends with: again while the pool changed size during it.
+    const warmFully = async () => {
+      while (!cancelled && (await otherLampState()) !== poolGen);
+    };
     void (async () => {
       try {
         await prepare.current?.();
@@ -246,7 +294,7 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       }
       if (cancelled) return;
       done.current(token);
-      await otherLampState();
+      await warmFully();
       if (cancelled) return;
       lampStats.litReady = true;
       setLampWarming(warmKey, false);
@@ -259,7 +307,7 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
         if (hold) setLampWarming(warmKey, true);
         window.clearTimeout(rewarm);
         rewarm = window.setTimeout(() => {
-          void otherLampState().then(() => {
+          void warmFully().then(() => {
             known = gl.info.programs?.length ?? 0;
             if (!cancelled) setLampWarming(warmKey, false);
           });
@@ -271,15 +319,13 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
         known = n;
         later();
       });
-      const stopPool = onLampPoolChange(gl, () => later(true));
-      stopWatch = () => {
-        stopAfter();
-        stopPool();
-      };
+      onPool = () => later(true);
+      stopWatch = stopAfter;
     })();
     return () => {
       cancelled = true;
       stopWatch();
+      stopPool();
       window.clearTimeout(rewarm);
       setLampWarming(warmKey, false);
     };

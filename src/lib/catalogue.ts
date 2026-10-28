@@ -264,6 +264,7 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "floating-shelves", name: "Floating shelves (stack of 3)", category: "Joinery", w: 1.0, d: 0.25, h: 0.74, color: WOOD, symbol: "shelf", mount: 1.2, joinery: { shelves: 3, shelfT: 0.04 }, note: "Set how many shelves, their spacing and thickness" },
   { id: "wall-cube", name: "Wall cube (open)", category: "Joinery", w: 0.4, d: 0.3, h: 0.4, color: PAINTED, symbol: "wall-box", mount: 1.4, joinery: { front: "open", bays: 1, shelves: 0 }, note: "Open box on the wall; set bays and shelves for a grid" },
   { id: "wall-cupboard", name: "Wall cupboard", category: "Joinery", w: 0.8, d: 0.3, h: 0.5, color: PAINTED, symbol: "wall-box", mount: 1.5, joinery: { front: "slab", shelves: 1 }, note: "Wall-hung cupboard for a living room or study" },
+  { id: "wall-bookshelf-kids", name: "Wall bookshelf (kids, 4 tier)", category: "Joinery", w: 0.595, d: 0.12, h: 1.12, color: "#b9bcbd", symbol: "wall-box", mount: 0.3, joinery: { front: "open", bays: 1, shelves: 3 }, note: "Shallow wall-hung book shelf, 59.5 × 12 × 112 cm (like Dunelm's Amber kids shelf); set the height above the floor" },
 
   // Dining
   { id: "table-4", name: "Dining table (4)", category: "Dining", w: 1.20, d: 0.80, h: 0.75, color: WOOD, symbol: "table" },

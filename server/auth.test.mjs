@@ -6,6 +6,9 @@ import {
   clientIp,
   createSessionToken,
   deriveKey,
+  houseForPasscode,
+  injectHouseMeta,
+  parsePasscodes,
   parseCookies,
   passcodeMatches,
   resolveSafePath,
@@ -15,7 +18,8 @@ import {
 } from "./auth.mjs";
 import { renderLoginPage } from "./page.mjs";
 
-const key = deriveKey("secret", "pass1234");
+const key = deriveKey("secret", "pass1234", "home-a");
+const keyFor = (house) => (house === "home-a" ? key : undefined);
 const NOW = 1_800_000_000_000;
 
 describe("passcodeMatches", () => {
@@ -29,30 +33,89 @@ describe("passcodeMatches", () => {
   });
 });
 
+describe("parsePasscodes", () => {
+  it("reads one passcode per house, trimming whitespace", () => {
+    const m = parsePasscodes({ PASSCODES: " home-a = abcdefghij , _template=klmnopqrst ," }, "home-a");
+    expect([...m]).toEqual([
+      ["home-a", "abcdefghij"],
+      ["_template", "klmnopqrst"],
+    ]);
+  });
+  it("falls back to PASSCODE for DEFAULT_HOUSE, or the default house", () => {
+    expect([...parsePasscodes({ PASSCODE: "pass1234" }, "home-a")]).toEqual([["home-a", "pass1234"]]);
+    expect([...parsePasscodes({ PASSCODE: "pass1234", DEFAULT_HOUSE: "home-b" }, "home-a")]).toEqual([["home-b", "pass1234"]]);
+    expect(parsePasscodes({}, "home-a").size).toBe(0);
+  });
+  it("prefers PASSCODES over PASSCODE", () => {
+    expect([...parsePasscodes({ PASSCODES: "home-b=abcdefghij", PASSCODE: "pass1234" }, "home-a")]).toEqual([["home-b", "abcdefghij"]]);
+  });
+  it("refuses malformed lists, bad ids, repeats and shared passcodes", () => {
+    expect(() => parsePasscodes({ PASSCODES: "home-a" }, "x")).toThrow(/house>=<passcode/);
+    expect(() => parsePasscodes({ PASSCODES: "home-a=a=b" }, "x")).toThrow();
+    expect(() => parsePasscodes({ PASSCODES: "Home A=abcd" }, "x")).toThrow(/not a house id/);
+    expect(() => parsePasscodes({ PASSCODES: "home-a=" }, "x")).toThrow(/no passcode/);
+    expect(() => parsePasscodes({ PASSCODES: "home-a=abcd,home-a=efgh" }, "x")).toThrow(/twice/);
+    expect(() => parsePasscodes({ PASSCODES: "home-a=abcd,home-b=abcd" }, "x")).toThrow(/share/);
+  });
+});
+
+describe("houseForPasscode", () => {
+  const map = new Map([
+    ["home-a", "abcdefghij"],
+    ["home-b", "klmnopqrst"],
+  ]);
+  it("names the house whose passcode it is", () => {
+    expect(houseForPasscode("abcdefghij", map)).toBe("home-a");
+    expect(houseForPasscode("klmnopqrst", map)).toBe("home-b");
+    expect(houseForPasscode("nope", map)).toBeNull();
+    expect(houseForPasscode(undefined, map)).toBeNull();
+  });
+});
+
 describe("session tokens", () => {
-  it("round-trips and lasts 30 days", () => {
-    const token = createSessionToken(key, NOW);
-    expect(token).toMatch(/^\d+\.[0-9a-f]{64}$/);
-    expect(verifySessionToken(token, key, NOW)).toBe(true);
-    expect(verifySessionToken(token, key, NOW + (SESSION_SECONDS - 5) * 1000)).toBe(true);
-    expect(verifySessionToken(token, key, NOW + (SESSION_SECONDS + 5) * 1000)).toBe(false);
+  it("round-trips, names its house and lasts 30 days", () => {
+    const token = createSessionToken("home-a", key, NOW);
+    expect(token).toMatch(/^home-a\.\d+\.[0-9a-f]{64}$/);
+    expect(verifySessionToken(token, keyFor, NOW)).toBe("home-a");
+    expect(verifySessionToken(token, keyFor, NOW + (SESSION_SECONDS - 5) * 1000)).toBe("home-a");
+    expect(verifySessionToken(token, keyFor, NOW + (SESSION_SECONDS + 5) * 1000)).toBeNull();
   });
 
-  it("rejects tampering", () => {
-    const [expiry, sig] = createSessionToken(key, NOW).split(".");
+  it("rejects tampering, including a changed house", () => {
+    const [house, expiry, sig] = createSessionToken("home-a", key, NOW).split(".");
     const flipped = sig.slice(0, 63) + (sig.endsWith("0") ? "1" : "0");
-    expect(verifySessionToken(`${Number(expiry) + 1000}.${sig}`, key, NOW)).toBe(false);
-    expect(verifySessionToken(`${expiry}.${flipped}`, key, NOW)).toBe(false);
-    expect(verifySessionToken(`${expiry}.${sig.slice(0, 62)}`, key, NOW)).toBe(false);
-    expect(verifySessionToken("", key, NOW)).toBe(false);
-    expect(verifySessionToken("garbage", key, NOW)).toBe(false);
-    expect(verifySessionToken(undefined, key, NOW)).toBe(false);
+    expect(verifySessionToken(`${house}.${Number(expiry) + 1000}.${sig}`, keyFor, NOW)).toBeNull();
+    expect(verifySessionToken(`${house}.${expiry}.${flipped}`, keyFor, NOW)).toBeNull();
+    expect(verifySessionToken(`${house}.${expiry}.${sig.slice(0, 62)}`, keyFor, NOW)).toBeNull();
+    // Signed for home-a, presented as home-b (even with home-a's key on offer).
+    expect(verifySessionToken(`home-b.${expiry}.${sig}`, () => key, NOW)).toBeNull();
+    expect(verifySessionToken(`${expiry}.${sig}`, keyFor, NOW)).toBeNull();
+    expect(verifySessionToken("", keyFor, NOW)).toBeNull();
+    expect(verifySessionToken("garbage", keyFor, NOW)).toBeNull();
+    expect(verifySessionToken(undefined, keyFor, NOW)).toBeNull();
   });
 
-  it("is invalidated by changing the passcode or the secret", () => {
-    const token = createSessionToken(key, NOW);
-    expect(verifySessionToken(token, deriveKey("secret", "other-pass"), NOW)).toBe(false);
-    expect(verifySessionToken(token, deriveKey("other-secret", "pass1234"), NOW)).toBe(false);
+  it("is invalidated by changing that house's passcode or the secret, and only that house's", () => {
+    const token = createSessionToken("home-a", key, NOW);
+    expect(verifySessionToken(token, () => deriveKey("secret", "other-pass", "home-a"), NOW)).toBeNull();
+    expect(verifySessionToken(token, () => deriveKey("other-secret", "pass1234", "home-a"), NOW)).toBeNull();
+    const keyB = deriveKey("secret", "klmnopqrst", "home-b");
+    const both = (h) => (h === "home-a" ? key : h === "home-b" ? deriveKey("secret", "new-pass-b", "home-b") : undefined);
+    expect(verifySessionToken(token, both, NOW)).toBe("home-a");
+    expect(verifySessionToken(createSessionToken("home-b", keyB, NOW), both, NOW)).toBeNull();
+  });
+
+  it("does not open a house the server no longer has", () => {
+    expect(verifySessionToken(createSessionToken("home-a", key, NOW), () => undefined, NOW)).toBeNull();
+  });
+});
+
+describe("injectHouseMeta", () => {
+  it("adds the house meta tag right after <head>", () => {
+    expect(injectHouseMeta('<!doctype html><html><head lang="en"><title>x</title></head></html>', "home-a")).toBe(
+      '<!doctype html><html><head lang="en"><meta name="storey-house" content="home-a"><title>x</title></head></html>',
+    );
+    expect(injectHouseMeta("<head></head>", "bad id\"")).toBe("<head></head>");
   });
 });
 

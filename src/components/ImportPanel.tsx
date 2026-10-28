@@ -3,10 +3,10 @@ import { ask } from "./Dialogs";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { useStore } from "../store";
 import { VARIANT_LABEL, type VariantKey } from "../types";
-import { LISTING_PRESET, PRESETS } from "../lib/houses/listing91770873";
+import { useCurrentHouse } from "../lib/house";
 import { floorDisplayName } from "../lib/studio";
 import { Info } from "./Info";
-import { isListingDesign, loadListing, planListingReview, updatePreset } from "../lib/presetActions";
+import { isListingDesign, loadBuiltIn, planListingReview, updatePreset } from "../lib/presetActions";
 
 const DOOR_KINDS = new Set(["door", "front", "garage", "patio", "french", "bifold", "archway", "gap"]);
 const WINDOW_KINDS = new Set(["window", "bay"]);
@@ -29,6 +29,7 @@ export function useListingUpdateCount(variant: VariantKey): { all: number; sugge
 
 export function ImportPanel({ variant }: { variant: VariantKey }) {
   const model = useStore((s) => s.variants[variant]);
+  const house = useCurrentHouse();
   const setVariant = useStore((s) => s.setVariant);
   const setUi = useStore((s) => s.setUi);
   const copyVariant = useStore((s) => s.copyVariant);
@@ -42,11 +43,11 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         {VARIANT_LABEL[variant]}
         <Info>
           {variant === "current"
-            ? "The listing as marketed, traced from its floorplan. Load it to see it in 3D, then check the plan against the original."
-            : "Your redesign, to compare against As listed. Start from a copy of As listed or load the listing with its two-storey side extension."}
+            ? `${house.name} as traced from its floorplan. Load it to see it in 3D, then check the plan against the original.`
+            : `Your redesign, to compare against As listed. Start from a copy of As listed${house.proposed ? " or load the built-in Proposed with its two-storey side extension" : ""}.`}
         </Info>
       </h3>
-      {model?.preset && !(variant === "proposed" && model.preset.id === LISTING_PRESET.id) && PRESETS[model.preset.id] && PRESETS[model.preset.id].version > model.preset.version && (
+      {model?.preset && !(variant === "proposed" && model.preset.id === house.main) && house.presets[model.preset.id] && house.presets[model.preset.id].version > model.preset.version && (
         <p className="note">
           A newer tracing of this built-in house is available.{" "}
           <button
@@ -63,7 +64,7 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
             title="Pick changes made to the built-in house since your design was copied from it (roof, radiators, stairs, neighbours…) and bring them in without losing your edits"
             onClick={() => void openListingReview(variant)}
           >
-            Bring in updates from listing 91770873…
+            Bring in updates from {house.name}…
           </button>
           <span className="muted">{counts.all ? `${counts.all} available, ${counts.suggested} suggested` : "up to date"}</span>
         </div>
@@ -101,11 +102,9 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         )}
         {!model && (
           <>
-            <button
-              onClick={() => void loadListing(variant)}
-            >
-              {variant === "current" ? "Load listing 91770873" : "Load listing 91770873 with two-storey extension"}
-            </button>
+            {(variant === "current" || house.proposed) && (
+              <button onClick={() => void loadBuiltIn(variant)}>{variant === "current" ? `Load ${house.name}` : `Load ${house.name} with the planned changes`}</button>
+            )}
             {variant === "proposed" && hasCurrent && (
               <button
                 title="Start the proposed design from a copy of the As listed model, then edit it in Plan"

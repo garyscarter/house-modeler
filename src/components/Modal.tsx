@@ -3,7 +3,7 @@ import { Icon } from "./icons";
 import "./Modal.css";
 
 /** Overlays that stack above a modal and stay live when one opens. */
-const OVERLAYS = ".modal-backdrop, .dialog-backdrop, .lightbox, .cmdk-backdrop";
+const OVERLAYS = ".modal-backdrop, .dialog-backdrop, .cmdk-backdrop";
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -28,7 +28,7 @@ export function Modal({ title, onClose, width = 760, className = "", children }:
     }
     const onKey = (e: KeyboardEvent) => {
       // A confirm dialog opened from here answers Esc itself.
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".dialog-backdrop, .lightbox")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector(".dialog-backdrop")) {
         e.preventDefault();
         closeRef.current();
       }

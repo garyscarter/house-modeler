@@ -3,7 +3,7 @@ import { joinRoofs, planRoofs, roofGeometry, roofHeightAt, roofTrim, subtractReg
 import { roofParts } from "./roofParts";
 import { EXT_WALL_T } from "./geometry";
 import type { HouseModel } from "../types";
-import { listing91770873, listing91770873Proposed, listingSite } from "./houses/listing91770873";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { planningCheck } from "./planning";
 
 describe("cutting one roof where another covers it", () => {
@@ -46,7 +46,7 @@ describe("cutting one roof where another covers it", () => {
 
 /** The listing's Proposed, its New Room's front wall set back `s` metres, and the garage's below too if asked. */
 function setBack(s: number, opts: { ground?: boolean; mode?: "continue" | "separate"; style?: "hip" | "gable" } = {}): HouseModel {
-  const m = listing91770873Proposed("");
+  const m = builtInProposed("");
   const px = s * 73;
   const first = m.floors.find((f) => f.level === 1)!;
   const room = first.rooms.find((r) => r.name === "New Room")!;
@@ -122,7 +122,7 @@ function expectOneSurface(blocks: RoofBlock[]) {
 }
 
 /** The listing's roof pitch, which a set-back extension keeps. */
-const PITCH = listing91770873Proposed("").exterior!.pitchDeg;
+const PITCH = builtInProposed("").exterior!.pitchDeg;
 const tanP = Math.tan((PITCH * Math.PI) / 180);
 const half = EXT_WALL_T / 2;
 
@@ -234,7 +234,7 @@ describe("a set-back side extension", () => {
   });
 
   it("gives a narrower two-storey rear extension its own roof, run in under the main rear slope", () => {
-    const m = listing91770873("");
+    const m = builtInHouse("");
     const first = m.floors.find((f) => f.level === 1)!;
     first.rooms.push({
       id: "rear",
@@ -272,7 +272,7 @@ describe("a set-back side extension", () => {
 describe("a set-back extension interlocking with the house", () => {
   /** The built-in Proposed with the landing run on 71 px into the extension, which is notched round it and set back. */
   function interlocked(setBackPx: number) {
-    const m = listing91770873Proposed("");
+    const m = builtInProposed("");
     const first = m.floors.find((f) => f.level === 1)!;
     const landing = first.rooms.find((r) => r.name === "Landing")!;
     landing.polygon = [
@@ -339,7 +339,7 @@ describe("a set-back extension interlocking with the house", () => {
 describe("planning check on a set-back extension", () => {
   const rules = (s: number) => {
     const site = listingSite();
-    const r = planningCheck(listing91770873(""), setBack(s), { current: site, proposed: site });
+    const r = planningCheck(builtInHouse(""), setBack(s), { current: site, proposed: site });
     return { ridge: r.rules.find((x) => x.id.endsWith("-ridge"))!, pitch: r.rules.find((x) => x.id.endsWith("-pitch"))! };
   };
   const metres = (text: string) => [...text.matchAll(/about ([\d.]+) m/g)].map((m) => Number(m[1]));
