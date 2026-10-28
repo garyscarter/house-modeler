@@ -1,0 +1,34 @@
+/* "Which house?": the picker before the app, and the House menu's "Switch house…" modal. */
+.house-picker-page { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+.house-picker {
+  width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 32px 28px 22px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card);
+}
+.house-picker > .brand-outline { color: var(--brand); }
+.house-picker h1 { margin: 12px 0 6px; font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.house-picker-lede { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+.house-picker-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; }
+.house-picker-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 76px; padding: 14px 14px 16px; text-align: left;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.house-picker-tile:hover:not(:disabled), .house-picker-tile:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-card); transform: translateY(-1px); }
+.house-picker-tile.current { border-color: var(--accent); background: var(--accent-soft); }
+.house-picker-tile:disabled { cursor: progress; }
+.house-picker-tile:disabled:not([aria-busy="true"]) { opacity: .5; }
+.house-picker-name { font-weight: 600; font-size: 15px; }
+.house-picker-id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.house-picker-here { font-size: 12px; color: var(--accent); }
+.house-picker-busy { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.house-picker-busy .loader { margin: 0; }
+.house-picker-cancel { margin-top: 16px; font-size: 13px; min-height: 32px; }
+@media (max-width: 600px) {
+  .house-picker { padding: 24px 16px 18px; }
+  .house-picker h1 { font-size: 22px; }
+  .house-picker-tiles { grid-template-columns: 1fr; }
+  .house-picker-tile, .house-picker-cancel { min-height: 44px; }
+}
+
+/* While a house and the app load. */
+.house-opening { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--bg); color: var(--muted); font-family: var(--font-ui); font-size: 14px; }

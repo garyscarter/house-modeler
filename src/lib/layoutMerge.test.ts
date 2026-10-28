@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyChanges, applyListingUpdates, defaultSelection, isBasedOnListing, listingUpdates, onWall, reviewedVersion, type LayoutChange } from "./layoutMerge";
 import { floor, rect } from "./testing";
 import { DEFAULT_EXTERIOR, type Fixture, type HouseModel, type Opening } from "../types";
-import { LISTING_PRESET, PRESETS } from "./houses/listing91770873";
+import { LISTING_PRESET, PRESETS } from "../houses/default";
 import { frontUnit, withSidelight } from "./openings";
 import { wallRun } from "./planMath";
 
@@ -265,7 +265,7 @@ describe("which designs are based on the listing", () => {
   });
 });
 
-describe("listing 91770873", () => {
+describe("the built-in house", () => {
   /** As listed today, as an owner's copy from before the roof and radiators: 28° roof, 0.35 m eaves, no radiators. */
   function oldCopy(): HouseModel {
     const m = PRESETS[LISTING_PRESET.id].build("");

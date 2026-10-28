@@ -3,11 +3,12 @@ import { create } from "zustand";
 import "./Dialogs.css";
 import "./ListingUpdatesDialog.css";
 import { VARIANT_LABEL, type VariantKey } from "../types";
+import { activeHouseName } from "../lib/house";
 import { applyListingReview, planListingReview, type ListingReview } from "../lib/presetActions";
 import { defaultSelection, UPDATE_GROUP_LABEL, UPDATE_GROUP_ORDER, type Change, type UpdateGroup } from "../lib/layoutMerge";
 
 /**
- * "Bring in updates from listing 91770873": a checklist of what the latest built-in house has that the
+ * "Bring in updates from <house>": a checklist of what the latest built-in house has that the
  * owner's design doesn't, grouped, with sensible ticks. Apply puts the ticked ones in as one undo step.
  */
 type Open = { review: ListingReview; resolve: (applied: boolean) => void };
@@ -15,7 +16,7 @@ const useReview = create<{ open: Open | null }>(() => ({ open: null }));
 
 /**
  * Work out and show the review for a design (Proposed by default). Resolves true when the owner applied it,
- * false when they cancelled, or when the layout isn't a design based on the listing.
+ * false when they cancelled, or when the layout isn't a design based on the built-in house.
  */
 export function openListingReview(variant: VariantKey = "proposed"): Promise<boolean> {
   const review = planListingReview(variant);
@@ -76,11 +77,11 @@ function ReviewSheet({ open }: { open: Open }) {
           }
         }}
       >
-        <h3 id="review-title">Bring in updates from listing 91770873</h3>
+        <h3 id="review-title">Bring in updates from {activeHouseName()}</h3>
         <p>
           {all.length
             ? `The built-in house has changed since your ${VARIANT_LABEL[review.variant]} design was copied from it. Tick the changes to bring in. Your rooms, walls and your own furniture stay as they are, and nothing you leave unticked changes. You can undo it.${plotNote}`
-            : `Your ${VARIANT_LABEL[review.variant]} design already has everything from the latest listing 91770873 that can be brought in. Mark it as up to date?`}
+            : `Your ${VARIANT_LABEL[review.variant]} design already has everything from the latest ${activeHouseName()} that can be brought in. Mark it as up to date?`}
         </p>
         {groups.length > 0 && (
           <div className="review-groups">

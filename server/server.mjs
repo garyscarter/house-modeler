@@ -2,7 +2,8 @@
 //
 //   npm run build && PASSCODE=... npm start
 //
-// Environment: PASSCODE (required, 4+ characters), SESSION_SECRET (optional but
+// Environment: PASSCODES ("<house>=<code>,<house>=<code>", one passcode per house; the passcode picks the house) or
+// PASSCODE (one passcode, for the house in DEFAULT_HOUSE, default the owner's; 4+ characters), SESSION_SECRET (optional but
 // recommended), TRUSTED_PROXY_HOPS (proxies in front whose x-forwarded-for entries are
 // trusted; default 1 for Render, 0 when reached directly), PORT (default 10000), DATA_DIR (where the shared project is saved;
 // without it the saved project is lost on restart and the app is told so).
@@ -20,21 +21,34 @@ import {
   createSessionToken,
   deriveKey,
   parseCookies,
-  passcodeMatches,
+  houseForPasscode,
+  injectHouseMeta,
+  parsePasscodes,
   resolveSafePath,
   safeRedirectTarget,
   sessionCookie,
   verifySessionToken,
 } from "./auth.mjs";
 import { renderLoginPage } from "./page.mjs";
-import { MAX_PROJECT_BODY_BYTES, createProjectStore, originMatchesHost, parsePutBody } from "./project.mjs";
+import { MAX_PROJECT_BODY_BYTES, createProjectStores, originMatchesHost, parsePutBody } from "./project.mjs";
+import { DEFAULT_HOUSE_ID } from "./houses.mjs";
 
-const PASSCODE = process.env.PASSCODE;
-if (typeof PASSCODE !== "string" || PASSCODE.length < MIN_PASSCODE_LENGTH) {
-  console.error(
-    `Refusing to start: set the PASSCODE environment variable to a passcode of at least ${MIN_PASSCODE_LENGTH} characters.`,
-  );
+let PASSCODES;
+try {
+  PASSCODES = parsePasscodes(process.env, DEFAULT_HOUSE_ID);
+} catch (err) {
+  console.error(`Refusing to start: ${err.message}.`);
   process.exit(1);
+}
+if (!PASSCODES.size) {
+  console.error("Refusing to start: set PASSCODES (<house>=<passcode>,…) or PASSCODE.");
+  process.exit(1);
+}
+for (const [house, code] of PASSCODES) {
+  if (code.length < MIN_PASSCODE_LENGTH) {
+    console.error(`Refusing to start: the passcode for ${house} must be at least ${MIN_PASSCODE_LENGTH} characters.`);
+    process.exit(1);
+  }
 }
 
 let SESSION_SECRET = process.env.SESSION_SECRET;
@@ -42,14 +56,15 @@ if (!SESSION_SECRET) {
   SESSION_SECRET = randomBytes(32).toString("hex");
   console.warn("SESSION_SECRET is not set: generated a random one, so everyone is logged out whenever the server restarts.");
 }
-if (PASSCODE.length < 10) {
-  console.warn("The passcode is shorter than 10 characters: consider a longer one, as the sign-in is open to the internet.");
+for (const [house, code] of PASSCODES) {
+  if (code.length < 10) console.warn(`The passcode for ${house} is shorter than 10 characters: consider a longer one, as the sign-in is open to the internet.`);
 }
 // Number of proxies in front of this server whose x-forwarded-for entries are trusted.
 // Render adds one, so the default is 1; use 0 when the server is reached directly.
 const hopsEnv = Number(process.env.TRUSTED_PROXY_HOPS);
 const TRUSTED_PROXY_HOPS = process.env.TRUSTED_PROXY_HOPS !== undefined && Number.isInteger(hopsEnv) && hopsEnv >= 0 ? hopsEnv : 1;
-const KEY = deriveKey(SESSION_SECRET, PASSCODE);
+/** One signing key per house, so changing one passcode signs out only that house. */
+const KEYS = new Map([...PASSCODES].map(([house, code]) => [house, deriveKey(SESSION_SECRET, code, house)]));
 
 const PORT = Number(process.env.PORT) || 10000;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
@@ -66,7 +81,8 @@ if (!PERSISTENT) {
     "WARNING: DATA_DIR is not set, so the shared project is NOT permanent: it is lost on every deploy or restart. Attach a persistent disk and set DATA_DIR to its mount path.",
   );
 }
-const project = createProjectStore(DATA_DIR);
+const projects = createProjectStores(DATA_DIR, PASSCODES.keys(), DEFAULT_HOUSE_ID);
+console.log(`Houses: ${[...PASSCODES.keys()].join(", ")}`);
 
 const MAX_BODY_BYTES = 4096;
 const perIp = new RateLimiter({ limit: 10, windowMs: 15 * 60 * 1000 });
@@ -144,9 +160,10 @@ function sendHtml(res, status, html, headers = {}) {
   send(res, status, html, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...headers });
 }
 
-function isAuthenticated(req) {
+/** The house the request's session opens, or null when it is not signed in. */
+function sessionHouse(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-  return token !== undefined && verifySessionToken(token, KEY);
+  return token === undefined ? null : verifySessionToken(token, (house) => KEYS.get(house));
 }
 
 function wantsHtml(req) {
@@ -181,7 +198,8 @@ function sendJson(res, status, body, headers = {}) {
 }
 
 // /api/project: GET (?since=<revision> leaves the data out when nothing changed) and PUT.
-async function handleProject(req, res, url) {
+async function handleProject(req, res, url, house) {
+  const project = projects.get(house);
   const method = req.method ?? "GET";
   if (method === "GET" || method === "HEAD") {
     const meta = project.meta();
@@ -238,7 +256,8 @@ async function handleLogin(req, res) {
     return;
   }
 
-  if (!passcodeMatches(form.get("passcode") ?? "", PASSCODE)) {
+  const house = houseForPasscode(form.get("passcode") ?? "", PASSCODES);
+  if (!house) {
     perIp.recordFailure(ip);
     overall.recordFailure("*");
     console.warn(`Failed login from ${ip} at ${new Date().toISOString()}`);
@@ -250,7 +269,7 @@ async function handleLogin(req, res) {
   send(res, 303, "", {
     Location: next,
     "Cache-Control": "no-store",
-    "Set-Cookie": sessionCookie(createSessionToken(KEY), { secure: isSecure(req) }),
+    "Set-Cookie": sessionCookie(createSessionToken(house, KEYS.get(house)), { secure: isSecure(req) }),
   });
 }
 
@@ -322,7 +341,15 @@ function serveFile(req, res, file, st) {
   stream.pipe(res);
 }
 
-function serveStatic(req, res, pathname) {
+/** The app's page with the session's house pinned in a meta tag, so the app opens that house and hides switching. */
+function serveIndex(req, res, file, house) {
+  const html = injectHouseMeta(fs.readFileSync(file, "utf8"), house);
+  const headers = { "Content-Type": MIME[".html"], "Cache-Control": "no-cache", Vary: "Accept-Encoding, Cookie" };
+  if (acceptsGzip(req)) send(res, 200, zlib.gzipSync(html), { ...headers, "Content-Encoding": "gzip" });
+  else send(res, 200, html, headers);
+}
+
+function serveStatic(req, res, pathname, house) {
   let decoded = pathname;
   try {
     decoded = decodeURIComponent(pathname);
@@ -353,6 +380,7 @@ function serveStatic(req, res, pathname) {
     send(res, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
     return;
   }
+  if (house && path.extname(file).toLowerCase() === ".html") return serveIndex(req, res, file, house);
   serveFile(req, res, file, st);
 }
 
@@ -379,9 +407,12 @@ const server = http.createServer((req, res) => {
 
     // The API never falls through to the static files or index.html.
     if (pathname === "/api" || pathname.startsWith("/api/")) {
-      if (!isAuthenticated(req)) return sendJson(res, 401, { error: "sign in required" });
+      const house = sessionHouse(req);
+      if (!house) return sendJson(res, 401, { error: "sign in required" });
+      // Which house this session's passcode opened.
+      if (pathname === "/api/me" && (method === "GET" || method === "HEAD")) return sendJson(res, 200, { house });
       if (pathname !== "/api/project") return sendJson(res, 404, { error: "not found" });
-      handleProject(req, res, new URL(rawUrl, "http://x")).catch((err) => {
+      handleProject(req, res, new URL(rawUrl, "http://x"), house).catch((err) => {
         console.error("Project request failed:", err?.message ?? err);
         if (!res.headersSent) sendJson(res, 500, { error: "server error" });
         else res.destroy();
@@ -394,7 +425,8 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    const authed = isAuthenticated(req);
+    const house = sessionHouse(req);
+    const authed = house !== null;
 
     if (!authed && !PUBLIC_PATHS.has(pathname)) {
       if (pathname === "/login" || wantsHtml(req)) {
@@ -411,7 +443,7 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    serveStatic(req, res, pathname);
+    serveStatic(req, res, pathname, house);
   } catch (err) {
     console.error("Request failed:", err?.message ?? err);
     if (!res.headersSent) send(res, 500, "", { "Cache-Control": "no-store" });

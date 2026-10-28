@@ -1,6 +1,6 @@
 import type { Floor, GardenItem, HouseModel, Neighbour, Opening, Pt, Room, Site, SiteSurface, SurfaceFinish, WPt } from "../../types";
 import { DEFAULT_EXTERIOR, uid } from "../../types";
-import { circleControls } from "../surfaceCurve";
+import { circleControls } from "../../lib/surfaceCurve";
 
 /**
  * Rightmove listing 91770873, traced from the Giraffe360 floorplan image

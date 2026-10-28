@@ -14,7 +14,7 @@
  *   --grep TEXT   run just the checks whose name contains TEXT
  *   --perf        also run the perf checks (store writes during a corner drag)
  *
- * Test rooms, openings and fixtures are found from the loaded data (listing 91770873), never hard-coded.
+ * Test rooms, openings and fixtures are found from the loaded data (the default house), never hard-coded.
  * A check marked `expected: "post-core"` describes the behaviour AFTER the editors move onto src/editor/core
  * (the unifications in docs/editor-core-plan.md section 1.8); it is skipped now and the chunk that makes it
  * true removes the marker.
@@ -326,7 +326,7 @@ async function reset(suite) {
   // Reload the house, then change mode and back: the editor drops its tool, selection and drag, and refits to the new floor.
   // (Switching to the 3D tab and back would also do it, but software GL makes the 3D view very slow.)
   await page.evaluate(async (suite) => {
-    await (await import("/src/lib/presetActions.ts")).loadListing("current");
+    await (await import("/src/lib/presetActions.ts")).loadBuiltIn("current");
     window.__houseStore.getState().setMode(suite === "plan" ? "furnish" : "build");
   }, suite);
   await page.waitForTimeout(150);

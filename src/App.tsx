@@ -17,7 +17,7 @@ import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
 import { runStartupPrompt } from "./components/startupDialog";
-import { LISTING_PRESET, PRESETS } from "./lib/houses/listing91770873";
+import { currentHouse } from "./lib/house";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
 import { editsSite, siteEditPatch } from "./lib/modes";
@@ -83,7 +83,8 @@ export default function App() {
       // Load the server's copy first (if there is a server), so the prompt below looks at what was loaded.
       await startSync();
       const { variants, sites } = useStore.getState();
-      const prompt = decideStartupPrompt(variants, PRESETS, LISTING_PRESET.id, readRemembered(), decideSiteUpdate(variants, sites));
+      const house = currentHouse();
+      const prompt = decideStartupPrompt(variants, house.presets, house.main, readRemembered(), decideSiteUpdate(variants, sites));
       // The first-run Welcome card handles "load"; only the update questions are asked as dialogs.
       if (prompt && prompt.kind !== "load") void runStartupPrompt(prompt);
     })();

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 import { houseHeight } from "./viewFraming";
 import { BOTTOM_MARGIN, CEILING_GAP, clampSection, defaultSection, describeSection, FLOOR_CUT, nearestStop, sectionRange, sectionStops, snapSection, TOP_MARGIN } from "./sectionCut";
 import type { HouseModel } from "../types";
 
-const listing = listing91770873("data:image/png;base64,");
+const listing = builtInHouse("data:image/png;base64,");
 const box = (levels: number[], over: Partial<HouseModel> = {}): HouseModel =>
   ({ floors: levels.map((l) => ({ id: `f${l}`, name: l === 0 ? "Ground floor" : `Level ${l}`, level: l, rooms: [] })), ceilingHeight: 2.5, slabThickness: 0.3, ...over }) as unknown as HouseModel;
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
-import { listing91770873 } from "./lib/houses/listing91770873";
+import { builtInHouse } from "./houses/default";
 
 const st = () => useStore.getState();
 const fixturesOf = (k: "current" | "proposed") => st().variants[k]!.floors.flatMap((f) => f.fixtures ?? []);
@@ -8,7 +8,7 @@ const fixturesOf = (k: "current" | "proposed") => st().variants[k]!.floors.flatM
 describe("store: my furniture", () => {
   beforeEach(() => {
     useStore.setState({ variants: {}, sites: {}, photos: [], pieces: [], past: [], future: [] });
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().copyVariant("current", "proposed");
   });
 

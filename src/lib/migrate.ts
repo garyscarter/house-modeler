@@ -1,5 +1,6 @@
 import type { HouseModel, Opening, Photo, Site } from "../types";
-import { listingSite, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "./houses/listing91770873";
+import { DEFAULT_HOUSE_ID } from "../houses";
+import { useHouse } from "./house";
 import { dropAiSettings } from "./persist";
 import { sitesFromShared, type Sites } from "./sites";
 
@@ -25,7 +26,15 @@ const OLD_TVS: Record<string, { type: string; w?: number; h?: number; d?: number
   "tv-stand-65": { type: "tv-stand", w: 1.45, h: 0.88, d: 0.28 },
 };
 
-const isListing = (m?: HouseModel) => m?.preset?.id === LISTING_PRESET.id || m?.preset?.id === LISTING_PROPOSED_PRESET.id;
+/** The default house, when it is the active one: the listing-only steps below are about its old saves. */
+const defaultHouse = () => {
+  const h = useHouse.getState().house;
+  return h?.id === DEFAULT_HOUSE_ID ? h : undefined;
+};
+const isListing = (m?: HouseModel) => {
+  const h = defaultHouse();
+  return !!h && !!m?.preset && (m.preset.id === h.main || m.preset.id === h.proposed);
+};
 
 /**
  * Fix old shapes in one model (a saved project, an import or a server copy). Idempotent.
@@ -102,7 +111,7 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
     for (const k of Object.keys(variants)) variants[k] = migrateModel(variants[k]);
   }
   if (version < 3) {
-    if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = listingSite();
+    if (!st.site && (isListing(st.variants?.current) || isListing(st.variants?.proposed))) st.site = defaultHouse()!.sitePresets[defaultHouse()!.site].build();
     if (st.settings && !st.settings.quality) st.settings = { ...st.settings, quality: "high" };
   }
   if (version < 4) st.settings = dropAiSettings(st.settings) as PersistedLike["settings"];

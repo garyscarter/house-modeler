@@ -1,6 +1,6 @@
 # Listing 91770873: reference notes
 
-Facts used to build the built-in model (`src/lib/houses/listing91770873.ts`), and where each came from. Assets are in `src/assets/listing-91770873/` (the listing's floorplan and 37 photos).
+Facts used to build the built-in model (`house.ts` beside this file), and where each came from. Assets are in `assets/` (the listing's floorplan and 37 photos).
 
 ## The house
 

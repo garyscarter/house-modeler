@@ -1,6 +1,6 @@
 import type { Elevation, Photo } from "../../types";
 import { uid } from "../../types";
-import floorplanUrl from "../../assets/listing-91770873/floorplan.webp";
+import floorplanUrl from "./assets/floorplan.webp";
 
 /**
  * The listing's public floorplan and photos for listing 91770873, bundled so
@@ -8,11 +8,11 @@ import floorplanUrl from "../../assets/listing-91770873/floorplan.webp";
  * photos already placed. Room assignments were made by eye from the photos;
  * fix any in the Photos panel.
  */
-const PHOTO_URLS = import.meta.glob<string>("../../assets/listing-91770873/photos/*.jpg", { eager: true, query: "?url", import: "default" });
+const PHOTO_URLS = import.meta.glob<string>("./assets/photos/*.jpg", { eager: true, query: "?url", import: "default" });
 
 type Place = { floor: "Ground Floor" | "Floor 1"; room: string; description: string } | { elevation: Elevation; description: string };
 
-const PLACES: Record<string, Place> = {
+export const PHOTO_PLACES: Record<string, Place> = {
   "kitchen-1": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen: cream shaker units, exposed brick pier, patterned vinyl floor." },
   "kitchen-2": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining area towards the hall doors." },
   "kitchen-3": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining table with the brick wall and rear windows." },
@@ -75,7 +75,7 @@ export async function listingPhotos(onProgress?: (done: number, total: number) =
   return Promise.all(
     entries.map(async ([path, url]) => {
       const name = path.split("/").pop()!.replace(/\.jpg$/, "");
-      const place = PLACES[name];
+      const place = PHOTO_PLACES[name];
       const photo: Photo = { id: uid(), name, dataUrl: await toDataUrl(url), description: place?.description };
       if (place && "room" in place) Object.assign(photo, { floorName: place.floor, roomName: place.room });
       else if (place) photo.elevation = place.elevation;

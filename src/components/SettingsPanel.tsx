@@ -108,9 +108,11 @@ export function SyncStatus() {
         {sync.kind === "saving" && <Loader kind="lift" size={14} />}
         {statusText(sync)}
       </span>
-      <button onClick={syncNow} disabled={sync.kind === "saving"}>
-        Sync now
-      </button>
+      {sync.kind !== "wrongHouse" && (
+        <button onClick={syncNow} disabled={sync.kind === "saving"}>
+          Sync now
+        </button>
+      )}
     </p>
   );
 }

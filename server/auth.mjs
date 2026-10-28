@@ -17,34 +17,94 @@ export function passcodeMatches(input, passcode) {
   return timingSafeEqual(digest(input), digest(passcode));
 }
 
+/** A house id: a folder name under src/houses/ (lower-case slug; "_" allowed, so "_template" works). */
+export const HOUSE_ID = /^[a-z0-9_-]{1,40}$/;
+
 /**
- * Signing key derived from both secrets, so changing either the passcode or the
- * session secret invalidates every existing session.
+ * The passcode for each house, from the environment. `PASSCODES="<house>=<code>,<house>=<code>"` (whitespace
+ * trimmed; ids and codes may not contain "," or "="); without it, `PASSCODE` alone opens `DEFAULT_HOUSE`
+ * (default `defaultHouse`). Throws with a readable message on a malformed list, a bad id, a repeated id or two
+ * houses sharing one passcode (the passcode must pick the house).
  */
-export function deriveKey(secret, passcode) {
-  return createHmac("sha256", String(secret)).update("house-modeler/session/v1\0").update(String(passcode)).digest();
+export function parsePasscodes(env, defaultHouse) {
+  const map = new Map();
+  const list = typeof env.PASSCODES === "string" ? env.PASSCODES.trim() : "";
+  if (list) {
+    for (const raw of list.split(",")) {
+      const entry = raw.trim();
+      if (!entry) continue;
+      const parts = entry.split("=");
+      if (parts.length !== 2) throw new Error(`PASSCODES: "${entry.split("=")[0]}=…" should be <house>=<passcode>`);
+      const house = parts[0].trim();
+      const code = parts[1].trim();
+      if (!HOUSE_ID.test(house)) throw new Error(`PASSCODES: "${house}" is not a house id`);
+      if (!code) throw new Error(`PASSCODES: no passcode for ${house}`);
+      if (map.has(house)) throw new Error(`PASSCODES: ${house} is listed twice`);
+      map.set(house, code);
+    }
+  } else if (typeof env.PASSCODE === "string" && env.PASSCODE) {
+    const house = (env.DEFAULT_HOUSE ?? "").trim() || defaultHouse;
+    if (!HOUSE_ID.test(house)) throw new Error(`DEFAULT_HOUSE: "${house}" is not a house id`);
+    map.set(house, env.PASSCODE);
+  }
+  const codes = [...map.values()];
+  if (new Set(codes).size !== codes.length) throw new Error("PASSCODES: two houses share a passcode, so it could not tell which house to open");
+  return map;
 }
 
-function sign(key, expiry) {
-  return createHmac("sha256", key).update(String(expiry)).digest("hex");
+/**
+ * The house whose passcode `input` is, or null. Compares against every entry in constant time, with no early
+ * exit, so the time taken does not say which house (if any) matched.
+ */
+export function houseForPasscode(input, passcodes) {
+  let found = null;
+  for (const [house, code] of passcodes) {
+    if (passcodeMatches(input, code) && found === null) found = house;
+  }
+  return found;
 }
 
-/** Cookie value: "<expiry as unix seconds>.<hex hmac>". */
-export function createSessionToken(key, nowMs = Date.now(), ttlSeconds = SESSION_SECONDS) {
+/**
+ * Signing key for one house's sessions, derived from the session secret, that house's passcode and its id, so
+ * changing one passcode (or the secret) signs out only that house (or everyone).
+ */
+export function deriveKey(secret, passcode, house) {
+  return createHmac("sha256", String(secret)).update("house-modeler/session/v2\0").update(String(house)).update("\0").update(String(passcode)).digest();
+}
+
+function sign(key, house, expiry) {
+  return createHmac("sha256", key).update(`${house}.${expiry}`).digest("hex");
+}
+
+/** Cookie value: "<house>.<expiry as unix seconds>.<hex hmac>". */
+export function createSessionToken(house, key, nowMs = Date.now(), ttlSeconds = SESSION_SECONDS) {
   const expiry = Math.floor(nowMs / 1000) + ttlSeconds;
-  return `${expiry}.${sign(key, expiry)}`;
+  return `${house}.${expiry}.${sign(key, house, expiry)}`;
 }
 
-/** True only for a well-formed, correctly signed, unexpired token. */
-export function verifySessionToken(token, key, nowMs = Date.now()) {
-  if (typeof token !== "string" || token.length > 200) return false;
-  const match = /^(\d{1,12})\.([0-9a-f]{64})$/.exec(token);
-  if (!match) return false;
-  const expiry = Number(match[1]);
-  const given = Buffer.from(match[2], "hex");
-  const expected = Buffer.from(sign(key, expiry), "hex");
-  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return false;
-  return expiry > Math.floor(nowMs / 1000);
+/**
+ * The house of a well-formed, correctly signed, unexpired token, else null. `keyFor(house)` gives that house's
+ * key, or undefined for a house the server no longer knows.
+ */
+export function verifySessionToken(token, keyFor, nowMs = Date.now()) {
+  if (typeof token !== "string" || token.length > 200) return null;
+  const match = /^([a-z0-9_-]{1,40})\.(\d{1,12})\.([0-9a-f]{64})$/.exec(token);
+  if (!match) return null;
+  const [, house, expiryText, sig] = match;
+  const key = keyFor(house);
+  if (!key) return null;
+  const expiry = Number(expiryText);
+  const given = Buffer.from(sig, "hex");
+  const expected = Buffer.from(sign(key, house, expiry), "hex");
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
+  return expiry > Math.floor(nowMs / 1000) ? house : null;
+}
+
+/** index.html with the house pinned: `<meta name="storey-house">` right after `<head>`. */
+export function injectHouseMeta(html, house) {
+  if (!HOUSE_ID.test(house)) return html;
+  const tag = `<meta name="storey-house" content="${house}">`;
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + tag) : tag + html;
 }
 
 /** Parse a Cookie header into a plain object (later duplicates are ignored). */

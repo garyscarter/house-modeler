@@ -6,6 +6,7 @@ import { gardenDef, itemSize } from "./gardenCatalogue";
 import { areaOf, edgesOf, pointSegmentDistance } from "./site";
 import { itemsOf } from "./siteItems";
 import { metres } from "./layoutMerge";
+import { activeHouseName } from "./house";
 
 /**
  * Bring a plot's boundary treatments (fence, wall, hedge, heights, tops) up to date with another plot's
@@ -162,11 +163,11 @@ export function mergeBoundaryTreatments(mine: Site, latest: Site): BoundaryMerge
 }
 
 /** The confirm-dialog text for one or more plots' changes; `names` labels each plot when there are several. */
-export function describeBoundaryChanges(parts: { name?: string; changes: BoundaryChange[]; buildings?: string[] }[]): string {
+export function describeBoundaryChanges(parts: { name?: string; changes: BoundaryChange[]; buildings?: string[] }[], houseName: string = activeHouseName()): string {
   const lines = parts.flatMap((p) => [...p.changes.map((c) => c.label), ...(p.buildings ?? [])].map((l) => `• ${p.name ? `${p.name}: ` : ""}${l}`));
   const intro =
-    "Update the plot's fences, walls and hedges, and the neighbouring buildings' measurements, to the latest for listing 91770873? Your corners, drive opening, garden and any buildings you added or redrew stay as they are. You can undo it.";
-  if (!lines.length) return "The boundary walls, fences and neighbouring buildings already match the latest for listing 91770873. Mark the plot as up to date?";
+    `Update the plot's fences, walls and hedges, and the neighbouring buildings' measurements, to the latest for ${houseName}? Your corners, drive opening, garden and any buildings you added or redrew stay as they are. You can undo it.`;
+  if (!lines.length) return `The boundary walls, fences and neighbouring buildings already match the latest for ${houseName}. Mark the plot as up to date?`;
   return `${intro}\n\nThese change:\n${lines.join("\n")}`;
 }
 

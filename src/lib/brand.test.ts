@@ -11,7 +11,7 @@ describe("brand", () => {
   });
 
   it("prefixes downloads with storey and the house", () => {
-    expect(downloadPrefix("listing-91770873")).toBe("storey-listing-91770873");
+    expect(downloadPrefix("my-house")).toBe("storey-my-house");
     expect(downloadPrefix("")).toBe("storey");
   });
 });

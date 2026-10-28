@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { clearHistory, transact, useStore } from "./store";
 import { applyProject } from "./lib/sync";
-import { listing91770873 } from "./lib/houses/listing91770873";
+import { builtInHouse } from "./houses/default";
 
 const st = () => useStore.getState();
 
@@ -11,8 +11,8 @@ describe("store: transact and clearHistory", () => {
   });
 
   it("makes several changes one undo step, even right after another edit", () => {
-    st().setVariant("current", listing91770873(""));
-    st().setVariant("proposed", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
+    st().setVariant("proposed", builtInHouse(""));
     const before = st().past.length;
     transact(() => {
       st().setVariant("current", undefined);
@@ -27,7 +27,7 @@ describe("store: transact and clearHistory", () => {
   });
 
   it("clearHistory empties undo and redo", () => {
-    st().setVariant("current", listing91770873(""));
+    st().setVariant("current", builtInHouse(""));
     st().undo();
     clearHistory();
     expect(st().past).toEqual([]);
@@ -35,11 +35,11 @@ describe("store: transact and clearHistory", () => {
   });
 
   it("leaves no history after a load from the server, but one step after an import", () => {
-    st().setVariant("current", listing91770873(""));
-    expect(applyProject({ variants: { proposed: listing91770873("") } }, true)).toBe(true);
+    st().setVariant("current", builtInHouse(""));
+    expect(applyProject({ variants: { proposed: builtInHouse("") } }, true)).toBe(true);
     expect(st().past).toEqual([]);
     expect(st().future).toEqual([]);
-    expect(applyProject({ variants: { current: listing91770873("") } })).toBe(true);
+    expect(applyProject({ variants: { current: builtInHouse("") } })).toBe(true);
     expect(st().past.length).toBe(1);
   });
 });

@@ -22,8 +22,13 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Set ONE of these two in the Render dashboard (README "Hosting on Render"):
+      # PASSCODE for a single house (the owner's), or PASSCODES for one passcode per house,
+      # as <house>=<passcode>,<house>=<passcode> with house ids from src/houses/.
       - key: PASSCODE
         sync: false # you type this in the Render dashboard when creating the Blueprint
+      - key: PASSCODES
+        sync: false # leave empty for one house; when set, PASSCODE is ignored
       - key: SESSION_SECRET
         generateValue: true
       - key: DATA_DIR

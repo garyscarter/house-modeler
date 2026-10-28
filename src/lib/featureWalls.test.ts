@@ -5,7 +5,7 @@ import { edgeLabel, edgeSpans, insertCorner, isOutsideEdge, removeCorner, setOut
 import { sideSpans, wallEnds, wallFaces, wallThickness } from "./walls";
 import { interiorFinish, outsideLook, wallLook } from "./wallCovering";
 import { floor, rect } from "./testing";
-import { listing91770873 } from "./houses/listing91770873";
+import { builtInHouse } from "../houses/default";
 
 /** A 3 m x 4 m room in a 1 px = 1 cm floor, as world metres. */
 const square = [
@@ -190,7 +190,7 @@ describe("edgeLabel", () => {
 });
 
 describe("the listing's feature walls", () => {
-  const ground = listing91770873("").floors[0];
+  const ground = builtInHouse("").floors[0];
   const where = (name: string) => {
     const room = ground.rooms.find((r) => r.name === name)!;
     return Object.entries(room.wallFinishes ?? {}).map(([k, o]) => `${o.covering} ${edgeLabel(ground, room, Number(k))}`);
@@ -237,7 +237,7 @@ describe("outside finishes of single walls", () => {
 });
 
 describe("the listing's outside finishes", () => {
-  const ground = listing91770873("").floors[0];
+  const ground = builtInHouse("").floors[0];
   const garage = ground.rooms.find((r) => r.name === "Garage")!;
   const house = { finish: "render" as const, color: "#efe9d8" };
 
