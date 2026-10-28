@@ -45,14 +45,14 @@ export function PhotosPanel() {
             }}
           />
         </label>
-        {isListing && house.photoMarker && !photos.some((p) => p.name === house.photoMarker) && (
+        {isListing && house.photos && house.photoMarker && !photos.some((p) => p.name === house.photoMarker) && (
           <button
             disabled={!!loading}
             title="Add the house's photos, already placed in their rooms or beside the right side of the house"
             onClick={async () => {
               setLoading({ done: 0, total: 0 });
               try {
-                addPhotos(await house.photos((done, total) => setLoading({ done, total })));
+                addPhotos(await house.photos!((done, total) => setLoading({ done, total })));
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not load the photos.");
               } finally {

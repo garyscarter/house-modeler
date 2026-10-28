@@ -33,7 +33,7 @@ export interface HouseDef {
   tiles: WelcomeTile[];
   /** The floorplan image as a data URL. */
   floorplan: () => Promise<string>;
-  photos: (onProgress?: (done: number, total: number) => void) => Promise<Photo[]>;
+  photos?: (onProgress?: (done: number, total: number) => void) => Promise<Photo[]>;
   /** A photo name that shows the built-in photos are loaded ("front-1"). */
   photoMarker?: string;
   placeholderImage: () => string;
