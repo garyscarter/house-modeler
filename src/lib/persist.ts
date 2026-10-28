@@ -16,6 +16,8 @@ import { uid } from "../types";
 /** Prefix that marks a reference to an image stored under its own key. */
 export const IMG_REF = "@@img:";
 export const IMG_KEY_PREFIX = "house-modeler/img/";
+/** The image key prefix for a house's storage suffix ("" for the default house, "/<id>" otherwise). */
+export const imgKeyPrefix = (suffix = ""): string => (suffix ? `house-modeler${suffix}/img/` : IMG_KEY_PREFIX);
 /** Strings shorter than this stay inline. */
 const MIN_INLINE = 512;
 /** 1x1 transparent PNG used when a referenced image is missing. */
@@ -76,6 +78,8 @@ export interface StorageOptions {
    * meanwhile): the store should load the saved project again rather than let this tab write over it.
    */
   onTakeover?: () => Promise<void> | void;
+  /** The active house's storage suffix (see lib/house.ts storageSuffix): keeps each house's images and writer apart. */
+  suffix?: string;
 }
 
 /** Why saving stopped in this tab, for the notice (see components/SaveNotice.tsx). */
@@ -84,8 +88,12 @@ export const TAKEN_OVER = "Another tab took over saving this project. Your next 
 export const REFRESHED = "Loaded your changes from the other tab. Make your last change here again.";
 
 export const WRITER_LOCK = "storey-writer";
+/** The single-writer lock for a house's storage suffix: each house has its own writer. */
+export const writerLock = (suffix = ""): string => WRITER_LOCK + suffix;
 
 export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: StorageOptions = {}): PersistStorage<S> {
+  const IMG_KEY_PREFIX = imgKeyPrefix(opts.suffix);
+  const WRITER_LOCK = writerLock(opts.suffix);
   const locks = opts.locks === undefined ? (typeof navigator !== "undefined" ? navigator.locks : undefined) ?? null : opts.locks;
   const urlToId = new Map<string, string>();
   /** Ids known to be written to IndexedDB. */

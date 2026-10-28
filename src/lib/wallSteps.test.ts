@@ -145,7 +145,7 @@ describe("ground along a boundary edge", () => {
   });
 });
 
-describe("listing 91770873", () => {
+describe("the built-in house", () => {
   const site = listingSite();
   const edges = edgesOf(site);
   const segs = (i: number) => boundaryWallSegments(site.boundary, edges[i], i, site.surfaces);

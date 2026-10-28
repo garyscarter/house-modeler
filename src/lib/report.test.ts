@@ -78,7 +78,7 @@ describe("areas", () => {
   });
 });
 
-describe("changes for listing 91770873", () => {
+describe("changes for the built-in house", () => {
   const a = builtInHouse("");
   const b = builtInProposed("");
   const changes = diffModels(a, b);
@@ -216,7 +216,7 @@ describe("notes", () => {
 });
 
 describe("areaSummary", () => {
-  it("measures listing 91770873 within 5% of its printed 113.9 m² and leaves the garage out of the heated area", () => {
+  it("measures the built-in house within 5% of its printed 113.9 m² and leaves the garage out of the heated area", () => {
     const s = areaSummary(builtInHouse(""));
     expect(Math.abs(s.vsListed!)).toBeLessThan(0.05);
     expect(s.unheatedRooms).toEqual(["Garage"]);

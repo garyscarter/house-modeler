@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { houseKey } from "./house";
 import { clearHistory, transact, useStore } from "../store";
 import { choose } from "../components/Dialogs";
 import {
@@ -21,7 +22,8 @@ import {
  * the first request does not get a JSON reply, sync stays off and nothing shows.
  */
 
-const STORAGE_KEY = "house-modeler/sync";
+/** The remembered revision, per house. */
+const storageKey = () => houseKey("house-modeler/sync");
 const SAVE_DELAY_MS = 3000;
 const RETRY_MS = 20_000;
 const PROBE_TIMEOUT_MS = 6000;
@@ -35,14 +37,14 @@ interface Memory extends Partial<Revision> {
 }
 const readMemory = (): Memory => {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
+    return JSON.parse(localStorage.getItem(storageKey()) ?? "{}") ?? {};
   } catch {
     return {};
   }
 };
 const writeMemory = (m: Memory) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(m));
+    localStorage.setItem(storageKey(), JSON.stringify(m));
   } catch {
     // private window or blocked storage: carry on, a reload then just asks again
   }

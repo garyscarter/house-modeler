@@ -12,6 +12,7 @@ import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/s
 import { editsSite, isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./lib/modes";
 import type { EdgePick } from "./lib/decorPick";
 import { peekPatch } from "./lib/studio";
+import { activeHouseId, houseKey, storageSuffix } from "./lib/house";
 
 export type ViewMode = "single" | "side-by-side" | "overlay" | "wipe";
 const VIEW_MODES: ViewMode[] = ["single", "side-by-side", "overlay", "wipe"];
@@ -469,8 +470,9 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: "house-modeler",
-      storage: imageAwareStorage<Persisted>(undefined, undefined, { onTakeover: () => reloadSaved() }),
+      // Per house: the default house keeps the old names, so existing saves keep working.
+      name: houseKey("house-modeler"),
+      storage: imageAwareStorage<Persisted>(undefined, undefined, { onTakeover: () => reloadSaved(), suffix: storageSuffix(activeHouseId()) }),
       partialize: (s): Persisted => ({
         variants: s.variants,
         photos: s.photos,

@@ -40,7 +40,7 @@ describe("subtractRect", () => {
   });
 });
 
-describe("listing 91770873 stairwell", () => {
+describe("the built-in house's stairwell", () => {
   const model = builtInHouse("");
   const [well] = stairwells(model);
 

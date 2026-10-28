@@ -3,8 +3,9 @@ import { useStore } from "../store";
 import { planningCheck, STATUS_LABEL, type ExtensionPart, type PlanningCheck, type PlanningRule } from "../lib/planning";
 import { siteOf } from "../lib/sites";
 import "./PlanningPanel.css";
+import { houseKey } from "../lib/house";
 
-const WING_KEY = "house-modeler.planning.wingAfter1948";
+const WING_KEY = houseKey("house-modeler.planning.wingAfter1948");
 
 /** The "side wing added after 1948" tick is a per-browser convenience, not project data. */
 function readWing(): boolean {

@@ -492,7 +492,7 @@ export interface PrintInput {
   site?: Site;
   /** PNG data URLs of the 3D view, with captions. */
   snapshots: { caption: string; src: string }[];
-  /** House name for the heading, title and footer (e.g. "Listing 91770873"). */
+  /** House name for the heading, title and footer (the house name). */
   houseName?: string;
   /** CSS inserted into the report's style block, e.g. an embedded @font-face. */
   fontCss?: string;

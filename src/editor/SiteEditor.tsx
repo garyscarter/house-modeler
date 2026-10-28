@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
-import { listingSite } from "../houses/default";
+import { useCurrentHouse } from "../lib/house";
 import { bbox, pointInPolygon, polygonArea } from "../lib/geometry";
 import type { Rect } from "../lib/planMath";
 import { siteWalls } from "../lib/siteWalls";
@@ -53,13 +53,14 @@ export function SiteEditor({ mode = "plot" }: { mode?: SiteMode }) {
 
 function NoSite({ model }: { model?: HouseModel }) {
   const setSite = useStore((s) => s.setSite);
+  const house = useCurrentHouse();
   return (
     <div className="empty">
       <BrandMark outline size={72} />
       <h2>No site yet</h2>
       <p>The site plan holds the plot boundary, garden surfaces and neighbouring buildings around the house.</p>
       <div className="row" style={{ justifyContent: "center" }}>
-        <button onClick={() => setSite(listingSite())}>Load site for listing 91770873</button>
+        <button onClick={() => setSite(house.sitePresets[house.site].build())}>Load site for {house.name}</button>
         {model && <button onClick={() => setSite(simpleSite(model, defaultDepths(model)))}>Create a simple site around the house</button>}
       </div>
     </div>

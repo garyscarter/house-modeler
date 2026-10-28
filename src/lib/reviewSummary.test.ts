@@ -1,3 +1,4 @@
+import { BUILT_IN_NAME } from "../houses/default";
 import { describe, expect, it } from "vitest";
 import { costTile, houseTile, planningTile, reviewSubtitle } from "./reviewSummary";
 import type { AreaReport, CostEstimate } from "./report";
@@ -33,7 +34,7 @@ describe("reviewSummary", () => {
     expect(planningTile(undefined).tone).toBe("neutral");
   });
   it("builds the subtitle", () => {
-    expect(reviewSubtitle(["current", "proposed"])).toBe("Listing 91770873 · As listed → Proposed");
-    expect(reviewSubtitle(["proposed"])).toBe("Listing 91770873 · Proposed");
+    expect(reviewSubtitle(["current", "proposed"])).toBe(`${BUILT_IN_NAME} · As listed → Proposed`);
+    expect(reviewSubtitle(["proposed"])).toBe(`${BUILT_IN_NAME} · Proposed`);
   });
 });

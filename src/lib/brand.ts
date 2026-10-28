@@ -46,5 +46,5 @@ export function wordmarkSvg(color: string, height: number, at?: { x: number; y: 
   return `<svg${pos} width="${wordmarkWidth(height, cut).toFixed(2)}" height="${height}" viewBox="${viewBox.join(" ")}" role="img" aria-label="${BRAND_NAME}"><path d="${d}" fill="${color}"/></svg>`;
 }
 
-/** File-name prefix for downloads: "storey-listing-91770873" style, from a slug of the house name. */
+/** File-name prefix for downloads: "storey-my-house" style, from a slug of the house name. */
 export const downloadPrefix = (houseSlug: string) => (houseSlug ? `storey-${houseSlug}` : "storey");

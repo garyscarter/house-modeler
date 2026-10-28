@@ -3,6 +3,7 @@ import { fmtDelta, fmtGBP, fmtM2 } from "./report";
 import type { PlanningCheck } from "./planning";
 import type { VariantKey } from "../types";
 import { VARIANT_LABEL } from "../types";
+import { activeHouseName } from "./house";
 
 export interface HouseTile {
   /** "112.4 m² → 139.5 m²", or one layout's area. */
@@ -66,8 +67,8 @@ export function planningTile(check?: PlanningCheck): PlanningTile {
   }
 }
 
-/** "Listing 91770873 · As listed → Proposed", or just the one layout's name. */
-export function reviewSubtitle(present: VariantKey[]): string {
+/** "<house name> · As listed → Proposed", or just the one layout's name. */
+export function reviewSubtitle(present: VariantKey[], houseName: string = activeHouseName()): string {
   const names = present.map((k) => VARIANT_LABEL[k]);
-  return `Listing 91770873 · ${names.length ? names.join(" → ") : "No layout loaded"}`;
+  return `${houseName} · ${names.length ? names.join(" → ") : "No layout loaded"}`;
 }

@@ -1,7 +1,8 @@
 import { isValidPose } from "../lib/cameraViews";
 import type { Pose } from "./cameraLink";
+import { houseKey } from "../lib/house";
 
-const KEY = "house-modeler-camera";
+const KEY = houseKey("house-modeler-camera");
 
 /** The camera pose remembered from the last visit, or null. */
 export function loadCameraPose(): Pose | null {

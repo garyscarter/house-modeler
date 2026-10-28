@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { houseKey } from "../lib/house";
 
 /**
  * Per-browser display options for the site. Kept out of the main store so
@@ -24,7 +25,7 @@ export const useSiteView = create<SiteView>()(
       setSiteView: (p) => set(p),
     }),
     {
-      name: "house-modeler-site-view",
+      name: houseKey("house-modeler-site-view"),
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ ghostNeighbours: s.ghostNeighbours, sunHours: s.sunHours, trueNeighbourColours: s.trueNeighbourColours }),
     },

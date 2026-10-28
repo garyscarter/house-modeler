@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store";
-import {
-  LISTING_PRESET,
-  LISTING_PROPOSED_PRESET,
-  PRESETS,
-} from "../houses/default";
-import { loadListing } from "../lib/presetActions";
+import { useCurrentHouse } from "../lib/house";
+import type { WelcomeTile } from "../houses/types";
+import { loadBuiltIn } from "../lib/presetActions";
 import { roomWorldPolygon } from "../lib/geometry";
 import { fitTransform, pathFor } from "../lib/footprint";
 import { modelArea } from "../lib/report";
@@ -20,25 +17,6 @@ const H = 160;
 /** How far the first floor is drawn behind the ground floor, in picture pixels. */
 const SHIFT = 9;
 
-type Tile = {
-  key: "current" | "proposed";
-  title: string;
-  caption: (area: number) => string;
-};
-const TILES: Tile[] = [
-  {
-    key: "current",
-    title: "The house as listed",
-    caption: (a) => `2 floors · ${a} m²`,
-  },
-  {
-    key: "proposed",
-    title: "With the planned extension",
-    caption: (a) => `Adds a first floor over the side extension · ${a} m²`,
-  },
-];
-
-const presetModel = (id: string): HouseModel => PRESETS[id].build("");
 
 /** A small footprint: the ground floor in outline, the first floor faintly offset behind it, extension rooms tinted. */
 function Footprint({ model }: { model: HouseModel }) {
@@ -99,30 +77,20 @@ function Footprint({ model }: { model: HouseModel }) {
   );
 }
 
-/** The empty state: shown whenever no layout exists. Two picture tiles load the listing's plans. */
+/** The empty state: shown whenever no layout exists. The house's picture tiles load its built-in plans. */
 export function Welcome() {
-  const [busy, setBusy] = useState<Tile["key"] | null>(null);
-  const models = useMemo(
-    () => ({
-      current: presetModel(LISTING_PRESET.id),
-      proposed: presetModel(LISTING_PROPOSED_PRESET.id),
-    }),
-    [],
-  );
-  const areas = useMemo(
-    () => ({
-      current: Math.round(modelArea(models.current)),
-      proposed: Math.round(modelArea(models.proposed)),
-    }),
-    [models],
-  );
+  const house = useCurrentHouse();
+  const [busy, setBusy] = useState<number | null>(null);
+  const models = useMemo<HouseModel[]>(() => house.tiles.map((t) => house.presets[t.preset].build("")), [house]);
+  const areas = useMemo(() => models.map((m) => Math.round(modelArea(m))), [models]);
 
-  const start = async (key: Tile["key"]) => {
-    if (busy) return;
-    setBusy(key);
+  const start = async (i: number, t: WelcomeTile) => {
+    if (busy !== null) return;
+    setBusy(i);
     try {
-      await loadListing("current");
-      if (key === "proposed") await loadListing("proposed");
+      // A Proposed tile also loads the house as it is, so the two can be compared.
+      if (t.variant === "proposed") await loadBuiltIn("current", house.main);
+      await loadBuiltIn(t.variant, t.preset);
       useStore.getState().setUi({ activeVariant: "current", tab: "3d" });
     } finally {
       setBusy(null);
@@ -133,22 +101,22 @@ export function Welcome() {
     <section className="welcome" aria-labelledby="welcome-title">
       <div className="welcome-card">
         <BrandMark outline size={72} />
-        <h1 id="welcome-title">Listing 91770873</h1>
+        <h1 id="welcome-title">{house.name}</h1>
         <p className="welcome-lede">
           See the house in 3D, then plan what you'd change.
         </p>
         <div className="welcome-tiles">
-          {TILES.map((t) => (
+          {house.tiles.map((t, i) => (
             <button
-              key={t.key}
+              key={t.preset + t.variant}
               className="welcome-tile"
-              onClick={() => void start(t.key)}
-              disabled={!!busy}
-              aria-busy={busy === t.key}
+              onClick={() => void start(i, t)}
+              disabled={busy !== null}
+              aria-busy={busy === i}
             >
               <span className="welcome-pic">
-                <Footprint model={models[t.key]} />
-                {busy === t.key && (
+                <Footprint model={models[i]} />
+                {busy === i && (
                   <span className="welcome-busy" role="status">
                     <Loader kind="lift" size={20} />
                     Opening
@@ -156,7 +124,7 @@ export function Welcome() {
                 )}
               </span>
               <span className="welcome-title">{t.title}</span>
-              <span className="welcome-caption">{t.caption(areas[t.key])}</span>
+              <span className="welcome-caption">{t.caption(areas[i])}</span>
             </button>
           ))}
         </div>

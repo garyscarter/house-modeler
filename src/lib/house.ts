@@ -97,3 +97,25 @@ export function currentHouse(): HouseDef {
   if (!h) throw new Error("No house loaded yet");
   return h;
 }
+
+/** The active house's name for messages, or "the built-in house" before one is loaded. */
+export function activeHouseName(): string {
+  return useHouse.getState().house?.name ?? "the built-in house";
+}
+
+/** A storage key for the active house: `base` itself for the default house, `base/<id>` for any other. */
+export function houseKey(base: string): string {
+  return base + storageSuffix(activeHouseId());
+}
+
+/** The current house in a component (the app renders only once a house is loaded). */
+export function useCurrentHouse(): HouseDef {
+  const house = useHouse((s) => s.house);
+  if (!house) throw new Error("No house loaded yet");
+  return house;
+}
+
+/** Is this preset id one of the house's built-ins (or derived from its id)? */
+export function belongsToHouse(house: HouseDef, id: string | undefined): boolean {
+  return !!id && (id in house.presets || id in house.sitePresets || id.startsWith(house.id));
+}

@@ -38,7 +38,7 @@ describe("wiring guide", () => {
   const model = withPoints();
   const numbered = numberPoints(model);
   const rows = pointRows(model, numbered);
-  const html = wiringGuideHtml({ date: "27 October 2026", houseName: "Listing 91770873", variantLabel: "Proposed", model });
+  const html = wiringGuideHtml({ date: "27 October 2026", houseName: "Test house", variantLabel: "Proposed", model });
 
   it("is a page with a plan per floor, each label once in its own floor's drawing", () => {
     expect(html).toMatch(/^<!doctype html>/);

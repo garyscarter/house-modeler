@@ -146,13 +146,13 @@ describe("printHtml", () => {
   it("is branded: mark, wordmark, house name, title, footer and embedded font", () => {
     const a = builtInHouse("");
     const base = { date: "d", variants: [{ label: "As listed", model: a, notes: [] }], areas: areaReport(a), rates: {}, snapshots: [] };
-    const html = printHtml({ ...base, houseName: "Listing 91770873", fontCss: "@font-face{font-family:X;src:url(data:font/woff2;base64,QQ==)}" });
+    const html = printHtml({ ...base, houseName: "Test house", fontCss: "@font-face{font-family:X;src:url(data:font/woff2;base64,QQ==)}" });
     expect(html).toContain("Storey");
     expect(html).toContain(MARK.roof);
     expect(html).toContain(WORDMARK.small.d);
-    expect(html).toContain("<h1>Listing 91770873</h1>");
-    expect(html).toContain("<title>Listing 91770873 report · Storey</title>");
-    expect(html).toContain("Made with Storey · Listing 91770873 · d");
+    expect(html).toContain("<h1>Test house</h1>");
+    expect(html).toContain("<title>Test house report · Storey</title>");
+    expect(html).toContain("Made with Storey · Test house · d");
     expect(html).toContain("@font-face{font-family:X;");
     expect(printHtml(base)).toContain("<title>Report · Storey</title>");
   });

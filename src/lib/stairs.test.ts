@@ -144,7 +144,7 @@ describe("clipUnderFlight", () => {
   });
 });
 
-describe("listing 91770873", () => {
+describe("the built-in house", () => {
   const m = builtInHouse("");
   const ground = m.floors.find((x) => x.level === 0)!;
   const first = m.floors.find((x) => x.level === 1)!;

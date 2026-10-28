@@ -347,7 +347,7 @@ describe("planningCheck: plot changes", () => {
   });
 });
 
-describe("planningCheck: listing 91770873", () => {
+describe("planningCheck: the built-in house", () => {
   const run = (wingAfter1948 = false) => {
     const s = listingSite();
     return planningCheck(builtInHouse(""), builtInProposed(""), { current: s, proposed: s }, { wingAfter1948 });

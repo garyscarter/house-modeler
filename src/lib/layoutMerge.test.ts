@@ -265,7 +265,7 @@ describe("which designs are based on the listing", () => {
   });
 });
 
-describe("listing 91770873", () => {
+describe("the built-in house", () => {
   /** As listed today, as an owner's copy from before the roof and radiators: 28° roof, 0.35 m eaves, no radiators. */
   function oldCopy(): HouseModel {
     const m = PRESETS[LISTING_PRESET.id].build("");
