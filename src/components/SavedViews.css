@@ -2,6 +2,7 @@
 .sv-error { color: var(--danger); margin: 0 0 10px; }
 .sv-review-list { display: flex; flex-direction: column; gap: 22px; }
 .sv-review-view h3 { margin: 0 0 8px; font-size: 16px; }
+.sv-review-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .sv-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 .sv-figures figure { margin: 0; }
 .sv-figures img, .sv-figures .sv-blank { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: var(--radius-s); border: 1px solid var(--line); object-fit: cover; }

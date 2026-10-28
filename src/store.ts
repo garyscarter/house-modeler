@@ -116,6 +116,8 @@ interface State {
   showSite: boolean;
   /** The 3D view's tape measure is armed (clicks place points). Not persisted; off when the tab leaves 3D. */
   measureTool: boolean;
+  /** A path-traced still in progress: which 3D view (its capture id) and how many samples of how many. Not persisted. */
+  rendering: { id: string; done: number; total: number } | null;
 
   setSettings: (s: Partial<Settings>) => void;
   setSun: (s: Partial<SunState>) => void;
@@ -173,6 +175,7 @@ interface State {
         | "showExterior"
         | "showSite"
         | "measureTool"
+        | "rendering"
       >
     >,
   ) => void;
@@ -325,6 +328,7 @@ export const useStore = create<State>()(
         showExterior: true,
         showSite: true,
         measureTool: false,
+        rendering: null,
 
         setSettings: (s) => rawSet((st) => ({ settings: { ...st.settings, ...s } })),
         setSun: (s) => rawSet((st) => ({ sun: { ...st.sun, ...s } })),

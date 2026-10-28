@@ -107,7 +107,7 @@ export async function captureAt(id: string | undefined, pose: CameraPose, w = 12
 const BACKDROP_SIZE = 150;
 
 /** Whether an object belongs in a model export: no lights, cameras, helpers, sprites, sky or render-target effects. */
-function exportable(o: THREE.Object3D): boolean {
+export function exportable(o: THREE.Object3D): boolean {
   if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera || o.type.endsWith("Helper") || (o as THREE.Sprite).isSprite) return false;
   const mesh = o as THREE.Mesh;
   if (!mesh.isMesh) return true;

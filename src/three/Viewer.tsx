@@ -109,7 +109,9 @@ function ViewerImpl(props: ViewerProps) {
     setCanvasKey((k) => k + 1);
   }, []);
   useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
-  const frameloop = active && compiled === quality ? "demand" : "never";
+  // A path-traced still draws into this canvas itself; the on-demand loop must not draw over it.
+  const tracing = useStore((s) => s.rendering?.id === (captureId ?? "main"));
+  const frameloop = active && compiled === quality && !tracing ? "demand" : "never";
   const before = useCallback(() => (quality === "high" ? loadEffects() : Promise.resolve()), [quality]);
 
   // Right-click menu on a room. The handler is kept stable (it reads the latest props through a ref) so floors stay memoised.

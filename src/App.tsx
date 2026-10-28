@@ -4,6 +4,7 @@ import { PhotoLightbox } from "./components/PhotoLightbox";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
+import { RenderDialogHost } from "./components/RenderDialog";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
@@ -306,6 +307,7 @@ export default function App() {
       <Dialogs />
       <CommandPalette />
       <ShortcutSheet />
+      <RenderDialogHost />
       <ReviewPage />
       <ListingUpdatesDialog />
       <LayoutsDialog />
