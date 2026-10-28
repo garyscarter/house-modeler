@@ -10,6 +10,7 @@ import { useSunInfo } from "./useSun";
 import { GROUND_Y } from "./Site";
 import { setGlassMode } from "./textures";
 import { useOffstageCompile } from "./frameLoop";
+import { GROUND_SHARE, gradientMeanLuminance, skyMeanLuminance, skyParams, sunColour } from "../lib/skyModel";
 
 /** Default key light: high, from the front right, so the front elevation reads with soft side shadows. */
 const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
@@ -32,8 +33,17 @@ const SHADOW_SAMPLES = { high: 16, balanced: 12, low: 8 } as const;
 const MIN_RADIUS = 1.5;
 const MAX_RADIUS = 12;
 
+/** The sun's colour at 50 degrees; lower suns warm from it by the sky model's atmospheric transmittance. */
 const WHITE_SUN = new THREE.Color("#fff3e2");
-const LOW_SUN = new THREE.Color("#ffae78");
+/** Hemisphere light's share during a sun study by day, where the baked physical sky already holds the sky's light. */
+const STUDY_HEMI = 0.5;
+/**
+ * Exposure eases from 1 to this as the sun goes from EXPOSURE_FROM down to NIGHT_ALTITUDE, so dusk doesn't go
+ * muddy, then back to 1 by EXPOSURE_TO, so full night looks as it did.
+ */
+const DUSK_EXPOSURE = 1.25;
+const EXPOSURE_FROM = 6;
+const EXPOSURE_TO = -8;
 const DAY_SKY = new THREE.Color("#eef0f2");
 const DUSK_SKY = new THREE.Color("#5d6f9c");
 const GROUND_BOUNCE = new THREE.Color("#8d8270");
@@ -157,12 +167,35 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   // alone leaves almost none), and the sky dims so garden lights read.
   const dusk = active ? THREE.MathUtils.smoothstep(altitude, -1.5, 0.5) * (1 - THREE.MathUtils.smoothstep(altitude, 3, 8)) : 0;
   const keyIntensity = active ? KEY_SUN * day.sun + DUSK_KEY * dusk : KEY_DEFAULT;
-  const keyColor = useMemo(() => (active ? WHITE_SUN.clone().lerp(LOW_SUN, day.warmth) : WHITE_SUN.clone()), [active, day.warmth]);
+  // Colour in tenth-degree steps, so a playing study doesn't build a colour every frame.
+  const colourAlt = Math.round(altitude * 10) / 10;
+  const keyColor = useMemo(
+    () => (active ? new THREE.Color().fromArray(sunColour(colourAlt, WHITE_SUN.toArray())) : WHITE_SUN.clone()),
+    [active, colourAlt],
+  );
+  const physical = active && !night;
+  const exposure = !active
+    ? 1
+    : altitude >= NIGHT_ALTITUDE
+      ? THREE.MathUtils.lerp(DUSK_EXPOSURE, 1, THREE.MathUtils.smoothstep(altitude, NIGHT_ALTITUDE, EXPOSURE_FROM))
+      : THREE.MathUtils.lerp(1, DUSK_EXPOSURE, THREE.MathUtils.smoothstep(altitude, EXPOSURE_TO, NIGHT_ALTITUDE));
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    const before = gl.toneMappingExposure;
+    return () => {
+      gl.toneMappingExposure = before;
+      invalidate();
+    };
+  }, [gl, invalidate]);
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+    invalidate();
+  }, [gl, exposure, invalidate]);
   const skyColor = useMemo(() => DUSK_SKY.clone().lerp(DAY_SKY, active ? Math.min(1, day.sky * 1.2) : 1).lerp(NIGHT_FILL, dark), [active, day.sky, dark]);
 
   return (
     <>
-      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={THREE.MathUtils.lerp(Math.max(skyLevel * 0.15, 0.35 * dusk), NIGHT_HEMI, dark)} />
+      <hemisphereLight color={skyColor} groundColor={GROUND_BOUNCE} intensity={THREE.MathUtils.lerp(Math.max(skyLevel * 0.15, 0.35 * dusk) * (physical ? STUDY_HEMI : 1), NIGHT_HEMI, dark)} />
       <directionalLight position={[-0.3, 0.8, 0.5]} color={MOON} intensity={night ? 0.3 : 0} />
       {/* Always casts, even at night, so the sun setting doesn't recompile every material. */}
       <directionalLight ref={light} intensity={keyIntensity} color={keyColor} castShadow />
@@ -175,14 +208,15 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
 const ENV_GRADIENT = ["#a7bcd8", "#eceef0", "#857b6c"];
 /** Environment light as a share of the sky level: the main ambient light. */
 const ENV_INTENSITY = 0.8;
-/** Zenith and horizon the gradient warms toward as the sun nears the horizon in a sun study. */
-const ENV_DUSK = ["#9ea8c4", "#f0cfae"];
-/** Sun altitude (degrees) below which the environment starts to warm. */
-const DUSK_ALTITUDE = 25;
 /** The environment is re-baked at most this often while the sun moves. */
 const REBAKE_MS = 250;
+/** A moving sun re-bakes once it has turned this far (radians), or its altitude has crossed an ALT_STEP step. */
+const REBAKE_TURN = THREE.MathUtils.degToRad(1);
+const ALT_STEP = 0.5;
 /** Cube face size of the environment, px (PMREM's own default). */
 const ENV_SIZE = 256;
+/** Size of the physical sky baked into the environment: well inside the cube camera's far plane (100). */
+const ENV_SKY_SCALE = 50;
 
 /** The visible physical sky dome. Unscaled, it would blow out to white. */
 function makeSky(scale: number) {
@@ -193,25 +227,67 @@ function makeSky(scale: number) {
   return sky;
 }
 
-function aimSky(sky: Sky, sunVector: readonly number[], altitude: number) {
+/**
+ * The physical sky for the environment bake. Its own material (every `Sky` shares one, which the backdrop
+ * scales down), unscaled, without the sun's disc (the key light is the sun, and a sub-texel disc would flicker
+ * through the prefilter), and with a warm ground below the horizon as the gradient has: `skyModel.skyRadiance`
+ * is the same function on the CPU.
+ */
+function makeEnvSky() {
+  const shader = Sky.SkyShader as typeof Sky.SkyShader & { vertexShader: string; fragmentShader: string };
+  const fragmentShader = shader.fragmentShader
+    .replace("L0 += ( vSunE * 19000.0 * Fex ) * sundisk;", "")
+    .replace(
+      "gl_FragColor = vec4( retColor, 1.0 );",
+      `if ( direction.y < 0.0 ) retColor = mix( retColor, groundShare * dot( retColor, vec3( 0.2126, 0.7152, 0.0722 ) ), smoothstep( 0.0, 0.25, -direction.y ) );
+        gl_FragColor = vec4( retColor, 1.0 );`,
+    )
+    .replace("uniform vec3 up;", "uniform vec3 up;\n      uniform vec3 groundShare;");
+  const material = new THREE.ShaderMaterial({
+    name: "EnvSkyShader",
+    vertexShader: shader.vertexShader,
+    fragmentShader,
+    uniforms: { ...THREE.UniformsUtils.clone(shader.uniforms), groundShare: { value: new THREE.Vector3(...GROUND_SHARE) } },
+    side: THREE.BackSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+  mesh.scale.setScalar(ENV_SKY_SCALE);
+  return mesh;
+}
+
+function aimSky(sky: { material: THREE.ShaderMaterial }, sunVector: readonly number[], altitude: number) {
   const u = sky.material.uniforms;
+  const p = skyParams(altitude);
   u.sunPosition.value.set(sunVector[0], sunVector[1], sunVector[2]);
-  u.turbidity.value = 5;
-  u.rayleigh.value = altitude > 0 ? 1.4 : 2.5;
-  u.mieCoefficient.value = 0.004;
-  u.mieDirectionalG.value = 0.85;
+  u.turbidity.value = p.turbidity;
+  u.rayleigh.value = p.rayleigh;
+  u.mieCoefficient.value = p.mieCoefficient;
+  u.mieDirectionalG.value = p.mieDirectionalG;
+}
+
+/** Linear colours of the environment gradient, and its ambient level (mean luminance). */
+const ENV_LINEAR = ENV_GRADIENT.map((c) => new THREE.Color(c).toArray());
+const GRADIENT_LEVEL = gradientMeanLuminance(ENV_LINEAR[0], ENV_LINEAR[1], ENV_LINEAR[2]);
+/**
+ * Factor on the environment intensity that gives the physical sky at this altitude the gradient's ambient
+ * level (mean luminance, from the sky model on the CPU; at 50 degrees that is 0.47 times the sky's own). The level itself then follows the sky level
+ * (the daylight curve) as the gradient's does, so the sky is not dimmed twice, the switch to the night
+ * gradient at NIGHT_ALTITUDE keeps the same brightness, and the bake changes only the light's colour and
+ * where it comes from.
+ */
+function skyLevelFactor(altitude: number) {
+  return GRADIENT_LEVEL / skyMeanLuminance(altitude);
 }
 
 /**
- * Soft image-based light with no download: a prefiltered environment map
- * that is the scene's main ambient light. By default a muted sky-to-ground
- * gradient; during a sun study (`sunVector` set) the gradient warms as the
- * sun nears the horizon, so dusk gets warm ambient light. (Baking the
- * physical sky itself doesn't work: it draws nothing into PMREM's cube
- * camera.) Re-baking is throttled, and the last position always lands.
- * Every bake reuses one cube map and one PMREM target, so scene.environment
- * stays the same texture: a new one would send every lit material back
- * through program selection on the next frame, and allocate 6 MB besides.
+ * Soft image-based light with no download: a prefiltered environment map that is the scene's main ambient
+ * light. During a sun study by day (`sunVector` set) it is the physical sky at the sun's position, the same
+ * model as the backdrop; otherwise (no study, or night, where the physical sky is black) a muted sky-to-ground
+ * gradient. Re-baking is throttled, and skipped until the sun has moved visibly; the last position always
+ * lands. Every bake reuses one cube map and one PMREM target, so scene.environment stays the same texture: a
+ * new one would send every lit material back through program selection on the next frame, and allocate 6 MB
+ * besides.
  */
 function useSkyEnvironment(sunVector: [number, number, number] | null, altitude: number, skyLevel: number) {
   const gl = useThree((s) => s.gl);
@@ -222,6 +298,10 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
   wanted.current = { v: sunVector, alt: altitude };
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const last = useRef(0);
+  const level = useRef(skyLevel);
+  level.current = skyLevel;
+  /** The baked map's factor on the environment intensity: 1 for the gradient. */
+  const factor = useRef(1);
 
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
@@ -229,31 +309,43 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
     const gradientGeo = new THREE.SphereGeometry(10, 32, 16);
     const gradientMat = skyGradientMaterial(new THREE.Color(ENV_GRADIENT[0]), new THREE.Color(ENV_GRADIENT[1]), new THREE.Color(ENV_GRADIENT[2]), false);
     gradient.add(new THREE.Mesh(gradientGeo, gradientMat));
-    const top = new THREE.Color(ENV_GRADIENT[0]), horizon = new THREE.Color(ENV_GRADIENT[1]);
-    const duskTop = new THREE.Color(ENV_DUSK[0]), duskHorizon = new THREE.Color(ENV_DUSK[1]);
-    // The gradient writes no depth, so the cube needs no depth buffer.
+    const physical = new THREE.Scene();
+    const envSky = makeEnvSky();
+    physical.add(envSky);
+    // Neither the gradient nor the sky writes depth, so the cube needs no depth buffer.
     const cube = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { type: THREE.HalfFloatType, depthBuffer: false });
     const cubeCamera = new THREE.CubeCamera(0.1, 100, cube);
     let rt: THREE.WebGLRenderTarget | null = null;
-    let baked = -1;
+    // What the map holds: the gradient (null) or the physical sky for this sun vector and altitude step.
+    let bakedSun: THREE.Vector3 | null = null;
+    let bakedStep = NaN;
+    const sun = new THREE.Vector3();
     bake.current = (v, alt) => {
-      // Warmth in twentieth steps, so a playing sun re-bakes only when the colour visibly changes.
-      const warmth = v ? Math.round(THREE.MathUtils.clamp(1 - alt / DUSK_ALTITUDE, 0, 1) * 20) / 20 : 0;
-      if (rt && warmth === baked) return;
-      baked = warmth;
-      gradientMat.uniforms.top.value.copy(top).lerp(duskTop, warmth);
-      gradientMat.uniforms.horizon.value.copy(horizon).lerp(duskHorizon, warmth);
+      const step = Math.floor(alt / ALT_STEP);
+      if (v) sun.set(v[0], v[1], v[2]).normalize();
+      if (rt && !v && !bakedSun) return;
+      if (rt && v && bakedSun && step === bakedStep && sun.angleTo(bakedSun) <= REBAKE_TURN) return;
+      if (v) {
+        aimSky(envSky, v, alt);
+        bakedSun = (bakedSun ?? new THREE.Vector3()).copy(sun);
+        bakedStep = step;
+        factor.current = skyLevelFactor(alt);
+      } else {
+        bakedSun = null;
+        factor.current = 1;
+      }
       // The post-processing composer turns autoClear off; each cube face needs clearing.
       const autoClear = gl.autoClear;
       gl.autoClear = true;
       try {
-        cubeCamera.update(gl, gradient);
+        cubeCamera.update(gl, v ? physical : gradient);
       } finally {
         gl.autoClear = autoClear;
       }
       // The first bake allocates the target (and PMREM's working targets); later ones refill it.
       rt = pmrem.fromCubemap(cube.texture, rt);
       scene.environment = rt.texture;
+      scene.environmentIntensity = level.current * ENV_INTENSITY * factor.current;
       invalidate();
     };
     bake.current(wanted.current.v, wanted.current.alt);
@@ -264,6 +356,8 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
       cube.dispose();
       gradientGeo.dispose();
       gradientMat.dispose();
+      envSky.geometry.dispose();
+      envSky.material.dispose();
       pmrem.dispose();
     };
   }, [gl, scene, invalidate]);
@@ -290,7 +384,7 @@ function useSkyEnvironment(sunVector: [number, number, number] | null, altitude:
   );
 
   useEffect(() => {
-    scene.environmentIntensity = skyLevel * ENV_INTENSITY;
+    scene.environmentIntensity = skyLevel * ENV_INTENSITY * factor.current;
     invalidate();
   }, [scene, skyLevel, invalidate]);
 }
