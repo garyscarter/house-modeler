@@ -46,11 +46,53 @@ export function floorplanDataUrl(id) {
   return null;
 }
 
+// ---- A headless browser that works here and on the owner's own computer ----
+
+const SOFTWARE_GL = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"];
+/** Chromium that comes with the cloud container (it matches the pinned playwright-core). */
+const CONTAINER_CHROMIUM = "/opt/pw-browsers/chromium";
+
+/**
+ * Launch headless Chromium through the project's own playwright-core, with no browser download: the cloud
+ * container's Chromium when there is one, else the installed Google Chrome, else Microsoft Edge, else a browser
+ * fetched once with `npx playwright-core install chromium`. STOREY_CHROMIUM names an executable to use instead.
+ */
+export async function launchBrowser() {
+  const { chromium } = createRequire(path.join(root, "package.json"))("playwright-core");
+  const tries = [];
+  if (process.env.STOREY_CHROMIUM) tries.push({ executablePath: process.env.STOREY_CHROMIUM });
+  if (existsSync(CONTAINER_CHROMIUM)) tries.push({ executablePath: CONTAINER_CHROMIUM });
+  tries.push({ channel: "chrome" }, { channel: "msedge" }, {});
+  let last;
+  for (const t of tries) {
+    try {
+      return await chromium.launch({ ...t, headless: true, args: SOFTWARE_GL });
+    } catch (e) {
+      last = e;
+    }
+  }
+  fail(
+    "No browser to take screenshots with. Install Google Chrome (or Microsoft Edge), or run\n" +
+      "  npx playwright-core install chromium\n" +
+      "once, then try again. (" + String(last?.message ?? last).split("\n")[0] + ")",
+  );
+}
+
+/** True when launchBrowser would find a browser (for the soundcheck); closes it again. */
+export async function browserAvailable() {
+  const { chromium } = createRequire(path.join(root, "package.json"))("playwright-core");
+  for (const t of [process.env.STOREY_CHROMIUM && { executablePath: process.env.STOREY_CHROMIUM }, existsSync(CONTAINER_CHROMIUM) && { executablePath: CONTAINER_CHROMIUM }, { channel: "chrome" }, { channel: "msedge" }, {}].filter(Boolean)) {
+    try {
+      await (await chromium.launch({ ...t, headless: true })).close();
+      return true;
+    } catch {}
+  }
+  return false;
+}
+
 /** Render `html` (which sets window.__ready = {w, h} once drawn) and save a PNG of that size. */
 export async function screenshot(html, out) {
-  const require = createRequire("/opt/node22/lib/node_modules/");
-  const { chromium } = require("playwright");
-  const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+  const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setContent(html);
