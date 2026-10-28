@@ -62,23 +62,38 @@ const log = (...a) => console.log(LABEL, ...a);
   const view = (detail) => page.evaluate((d) => window.dispatchEvent(new CustomEvent('house:view', { detail: d })), detail);
   const ui = (patch) => page.evaluate((p) => window.__houseStore.getState().setUi(p), patch);
   const sun = (patch) => page.evaluate((p) => window.__houseStore.getState().setSun(p), patch);
+  const views = ['home', 'front', 'rear', 'left', 'right'];
   const orbit = async (name) => {
-    const poses = [[12, 9, 14], [14, 9, 12], [16, 9, 10], [14, 10, 12], [12, 11, 14]].map(([x, y, z]) => ({ pose: { position: { x, y, z }, target: { x: 2, y: 1, z: -3 } } }));
     await settle(1500); await take();
     const durs = [];
-    for (const p of poses) { await view(p); await settle(1200); const r = await take(); durs.push(sum(r)); }
-    const per = durs.map((d) => d.ms);
-    const frames = durs.reduce((a, d) => a + d.n, 0), ms = per.reduce((a, b) => a + b, 0); log(name, JSON.stringify({ frames, msPerFrame: frames ? Math.round(ms / frames) : 0, calls: durs[2].calls || durs[0].calls, tris: durs[2].tris || durs[0].tris }));
+    for (const side of views) { await view({ side }); await settle(1200); const r = await take(); durs.push(sum(r)); }
+    const frames = durs.reduce((a, d) => a + d.n, 0), ms = durs.reduce((a, d) => a + d.ms, 0), maxMs = Math.max(...durs.map((d) => d.maxMs));
+    log(name, JSON.stringify({ frames, msPerFrame: frames ? Math.round(ms / frames) : 0, maxMs, calls: Math.max(...durs.map((d) => d.calls)), tris: Math.max(...durs.map((d) => d.tris)) }));
+  };
+  // A pan: the home view, then the camera and its target slid sideways 0.8 m at a time (the lamp pool re-picks past 1 m).
+  const pan = async (name) => {
+    await view({ side: 'home' }); await settle(1500); await take();
+    const base = await page.evaluate(() => { const c = window.__houseCamera; const p = c.camera.position, t = c.controls.target; return { p: [p.x, p.y, p.z], t: [t.x, t.y, t.z] }; });
+    const durs = [];
+    for (let i = 1; i <= 6; i++) {
+      const dx = 0.8 * i;
+      await view({ pose: { position: { x: base.p[0] + dx, y: base.p[1], z: base.p[2] }, target: { x: base.t[0] + dx, y: base.t[1], z: base.t[2] } } });
+      await settle(1000, 60000, 1200); const r = await take(); durs.push(sum(r));
+    }
+    const frames = durs.reduce((a, d) => a + d.n, 0), ms = durs.reduce((a, d) => a + d.ms, 0), maxMs = Math.max(...durs.map((d) => d.maxMs));
+    log(name, JSON.stringify({ frames, msPerFrame: frames ? Math.round(ms / frames) : 0, maxMs, calls: Math.max(...durs.map((d) => d.calls)), tris: Math.max(...durs.map((d) => d.tris)) }));
   };
   log('programs after load', await page.evaluate(() => window.__perfPrograms()));
   await step('switch->proposed (cold)', () => ui({ activeVariant: 'proposed' }));
   await step('switch->current (warm)', () => ui({ activeVariant: 'current' }));
   await step('switch->proposed (warm)', () => ui({ activeVariant: 'proposed' }));
   await step('sun 15->16h (shadow redraw)', () => sun({ hour: 16 }));
-  await orbit('day orbit');
+  await orbit('day views');
+  await pan('day pan');
   await step('night + lights on', () => sun({ hour: 23.5, lights: 'on' }));
   log('lights', await page.evaluate(() => JSON.stringify((window.__houseLights && window.__houseLights()) || null)));
-  await orbit('night orbit');
+  await orbit('night views');
+  await pan('night pan');
   await step('night: lights off', () => sun({ lights: 'off' }));
   await step('night: lights on', () => sun({ lights: 'on' }));
   await step('night switch->current', () => ui({ activeVariant: 'current' }));
