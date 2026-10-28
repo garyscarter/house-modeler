@@ -43,8 +43,8 @@ export function ImportPanel({ variant }: { variant: VariantKey }) {
         {VARIANT_LABEL[variant]}
         <Info>
           {variant === "current"
-            ? "The listing as marketed, traced from its floorplan. Load it to see it in 3D, then check the plan against the original."
-            : "Your redesign, to compare against As listed. Start from a copy of As listed or load the listing with its two-storey side extension."}
+            ? `${house.name} as traced from its floorplan. Load it to see it in 3D, then check the plan against the original.`
+            : `Your redesign, to compare against As listed. Start from a copy of As listed${house.proposed ? " or load the built-in Proposed with its two-storey side extension" : ""}.`}
         </Info>
       </h3>
       {model?.preset && !(variant === "proposed" && model.preset.id === house.main) && house.presets[model.preset.id] && house.presets[model.preset.id].version > model.preset.version && (
