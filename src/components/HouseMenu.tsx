@@ -11,7 +11,7 @@ import { useListingUpdateCount } from "./ImportPanel";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
 import { openPhotos } from "./PhotosDialog";
-import { ProjectActions, AboutLine, RenderQuality, StorageStatus, SyncStatus } from "./SettingsPanel";
+import { ProjectActions, AboutLine, RenderQuality, ExperimentalEffectsToggles, StorageStatus, SyncStatus } from "./SettingsPanel";
 import type { WheelMode } from "../lib/wheelGesture";
 import "./HouseMenu.css";
 
@@ -99,6 +99,7 @@ export function HouseMenu({ name }: { name: string }) {
               <span>Render quality</span>
               <RenderQuality />
             </div>
+            <ExperimentalEffectsToggles />
             {FEATURES[chassis].glass && (
             <div className="hm-row">
               <span>Look</span>
