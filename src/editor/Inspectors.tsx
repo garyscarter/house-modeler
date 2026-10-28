@@ -70,8 +70,7 @@ export function hoverRoom(id: string) {
 
 /**
  * A name input that commits when you leave it or press Enter (Escape undoes
- * the edit), so a rename is one undo step and photos follow the room or floor
- * from its old name to the new one, never to a half-typed name on the way.
+ * the edit), so a rename is one undo step and never records a half-typed name.
  */
 export function NameField({ value, onCommit, className, label }: { value: string; onCommit: (v: string) => void; className?: string; label?: string }) {
   const [text, setText] = useState(value);

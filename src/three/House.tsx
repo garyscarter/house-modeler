@@ -60,7 +60,7 @@ interface HouseProps {
    * from it are highlighted green (what the renovation adds).
    */
   diffAgainst?: HouseModel;
-  /** Draw roofs, canopies and exterior photo pins. */
+  /** Draw roofs and canopies. */
   showExterior?: boolean;
 }
 
