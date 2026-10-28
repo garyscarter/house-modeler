@@ -12,7 +12,7 @@ const PHOTO_URLS = import.meta.glob<string>("./assets/photos/*.jpg", { eager: tr
 
 type Place = { floor: "Ground Floor" | "Floor 1"; room: string; description: string } | { elevation: Elevation; description: string };
 
-const PLACES: Record<string, Place> = {
+export const PHOTO_PLACES: Record<string, Place> = {
   "kitchen-1": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen: cream shaker units, exposed brick pier, patterned vinyl floor." },
   "kitchen-2": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining area towards the hall doors." },
   "kitchen-3": { floor: "Ground Floor", room: "Kitchen", description: "Kitchen dining table with the brick wall and rear windows." },
@@ -75,7 +75,7 @@ export async function listingPhotos(onProgress?: (done: number, total: number) =
   return Promise.all(
     entries.map(async ([path, url]) => {
       const name = path.split("/").pop()!.replace(/\.jpg$/, "");
-      const place = PLACES[name];
+      const place = PHOTO_PLACES[name];
       const photo: Photo = { id: uid(), name, dataUrl: await toDataUrl(url), description: place?.description };
       if (place && "room" in place) Object.assign(photo, { floorName: place.floor, roomName: place.room });
       else if (place) photo.elevation = place.elevation;

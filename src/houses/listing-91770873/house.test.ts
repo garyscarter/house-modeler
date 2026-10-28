@@ -13,6 +13,7 @@ import { boundaryWallSegments } from "../../lib/wallSteps";
 import house91 from "./index";
 import { lintHouse } from "../lint";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./house";
+import { PHOTO_PLACES } from "./assets";
 
 const house = listing91770873("");
 const ground = house.floors[0];
@@ -471,6 +472,6 @@ describe("the house lint", () => {
   it("finds nothing to report", () => {
     // Loosened from the 8% default: the listing's printed sizes are internal while its tracing runs on wall
     // centrelines (the galley is 9% under), and Bedroom 2 traces 20% over its printed size.
-    expect(lintHouse(house91, { dimsTolerance: 0.25 })).toEqual([]);
+    expect(lintHouse(house91, { dimsTolerance: 0.25, photoPlaces: PHOTO_PLACES })).toEqual([]);
   });
 });
