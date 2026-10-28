@@ -9,6 +9,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: npm run house:new <id> ["<Name>"]
+Copies src/houses/_template to src/houses/<id>/ (renaming its ids) and makes reference/<id>/.
+The name defaults to the one saved by npm run house:start. The id is a slug such as semi-on-the-hill.`);
+  process.exit(0);
+}
 const [id, argName] = process.argv.slice(2);
 // With no name given, use the one house:start saved in the gitignored .storey-local.json for this id.
 let name = argName;
@@ -56,7 +62,8 @@ walk(dest);
 
 const made = [path.relative(root, dest) + "/"];
 const refTemplate = path.join(root, "reference/_template");
-if (existsSync(refTemplate)) cpSync(refTemplate, refDest, { recursive: true, force: false, errorOnExist: false });
+// NOTES.md belongs in src/houses/<id>/ (copied from the house template above), so it is not copied here.
+if (existsSync(refTemplate)) cpSync(refTemplate, refDest, { recursive: true, force: false, errorOnExist: false, filter: (src) => path.basename(src) !== "NOTES.md" });
 else {
   mkdirSync(refDest, { recursive: true });
   const intake = path.join(refDest, "INTAKE.md");

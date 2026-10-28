@@ -1,7 +1,7 @@
 // Two houses in one build (docs/onboarding-plan.md §7 check 3). Needs a dev server built with two houses:
 //   VITE_HOUSES=<default house id from src/houses/default.json>,_template npx vite --port 5302
 // Usage: PORT=5302 node scripts/test-houses.cjs
-// Checks: a fresh browser shows the picker; choosing the template opens it with its two rooms; "Switch house…"
+// Checks: a fresh browser shows the picker; choosing the template opens it with its rooms; "Switch house…"
 // in the House menu goes back to the picker; the listing's saved project survives a visit to the template.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const port = process.env.PORT || 5302;
@@ -55,7 +55,7 @@ const houseOf = (page) => page.evaluate(() => localStorage.getItem('storey-house
   await page.locator('.welcome-tile').first().click();
   await page.waitForSelector('.dock, .tab-bar', { timeout: 60000 });
   const templateRooms = await roomsOf(page);
-  ok(templateRooms && templateRooms.length === 2, `the template opens with its two rooms (${templateRooms ? templateRooms.join(', ') : 'none'})`);
+  ok(templateRooms && templateRooms.length >= 8, `the template opens with its rooms (${templateRooms ? templateRooms.join(', ') : 'none'})`);
   const title = await page.title();
   ok(/Template house/.test(title) || !title.includes(DEFAULT_NAME), `the tab title is the template's (${title})`);
 
