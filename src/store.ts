@@ -22,8 +22,6 @@ export { SITE_EDIT_ID };
 export interface Settings {
   /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
   quality: "high" | "balanced" | "low";
-  /** Experimental passes on the high setting only (see three/ExperimentalEffects.tsx); absent means off. */
-  effects?: { reflections?: boolean; gi?: boolean };
 }
 
 /** Sun study controls. */

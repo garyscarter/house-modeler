@@ -8,7 +8,6 @@ import { BrandMark } from "./BrandMark";
 import { BRAND_NAME, downloadPrefix } from "../lib/brand";
 import { fileDate, slug } from "../lib/fileNames";
 import { houseName } from "../lib/studio";
-import "./SettingsPanel.css";
 
 const QUALITY: [string, string, string][] = [
   ["high", "High", "Ambient occlusion and soft shadows"],
@@ -27,36 +26,6 @@ export function RenderQuality() {
           {label}
         </button>
       ))}
-    </div>
-  );
-}
-
-/**
- * The experimental passes, under the Render quality switch: screen-space
- * reflections and bounce light, off by default and on the high setting only.
- * Bounce light needs SSGI, which no library provides for this version of
- * three, so its box stays disabled and says so.
- */
-export function ExperimentalEffectsToggles() {
-  const settings = useStore((s) => s.settings);
-  const setSettings = useStore((s) => s.setSettings);
-  const high = settings.quality === "high";
-  const effects = settings.effects ?? {};
-  const set = (patch: { reflections?: boolean; gi?: boolean }) => setSettings({ effects: { ...effects, ...patch } });
-  const needHigh = "Needs the High render quality";
-  return (
-    <div className="experimental-effects" role="group" aria-label="Experimental, high quality only">
-      <span className="experimental-head">
-        Experimental, high quality only <span className="beta-pill">beta</span>
-      </span>
-      <label className={high ? "" : "is-disabled"} title={high ? "Screen-space reflections in the glass and gloss surfaces" : needHigh}>
-        <input type="checkbox" checked={!!effects.reflections} disabled={!high} onChange={(e) => set({ reflections: e.target.checked })} />
-        Reflections
-      </label>
-      <label className="is-disabled" title="Bounce light: not available on this renderer">
-        <input type="checkbox" checked={false} disabled onChange={() => {}} />
-        Bounce light
-      </label>
     </div>
   );
 }
