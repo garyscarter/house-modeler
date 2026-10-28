@@ -1,5 +1,8 @@
 # Onboarding a second house: implementation plan ("The Eras Tour")
 
+
+> **Update (2026-10-28):** the hosted Claude artifact and `npm run build:hosted` were dropped. Render deploys main and is the only hosted copy; read the artifact parts below as history.
+
 Status: approved brief (docs/onboarding-brief.md) with every open decision settled: one live deployment, **one passcode per house** on the server, the owner's hosted artifact carries **the owner's house only**, the fidelity tier is picked **after the basic 3D**, the theme stays in the **playbook** (the app stays Storey, docs/brand.md).
 
 Lead: **Taylor Swift** (Opus) runs the show: lands Chunk 0 through a builder, launches the builders in parallel worktrees, merges, checks, reports. Builders are Sonnet (medium) unless noted. The lead session (Fable) pushes and republishes.

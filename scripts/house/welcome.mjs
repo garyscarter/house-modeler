@@ -1,7 +1,7 @@
 // Where am I? `npm run welcome` prints the right next step for this checkout, from the gitignored .storey-local.json.
 // --hook   for the SessionStart hook: silent unless there is something new (first welcome) or the intake is not ready yet.
 // --quiet  silent when the house is ready or no house is being set up.
-import { houseIsIn, intakeLines, intakeState, readLocal, soundcheckLines, surpriseSong, welcomeText, writeLocal } from "./_lib.mjs";
+import { beadsOf, bracelet, houseIsIn, intakeLines, intakeState, nextEra, readLocal, soundcheckLines, surpriseSong, welcomeText, writeLocal } from "./_lib.mjs";
 
 const hook = process.argv.includes("--hook");
 const HOOK_NOTE =
@@ -15,13 +15,18 @@ const id = local && typeof local.house === "string" ? local.house : null;
 out.push(...soundcheckLines(id));
 
 if (id && houseIsIn(id)) {
+  const next = nextEra(id);
+  // The hook shows the bracelet and the next era while the show is still on; once the encore is done it stays quiet.
+  if (hook && next) out.push(bracelet(id), `Next up: ${next.name}. In Claude Code run /eras-tour to play it.`);
   if (!hook && !quiet) {
-    out.push("The show's on: run /eras-tour to pick up the next era, or VITE_HOUSES=" + id + " npm run dev to see it.");
+    out.push(bracelet(id));
+    out.push(next ? `The show's on: run /eras-tour to play ${next.name}, or VITE_HOUSES=${id} npm run dev to see it.` : `That's the whole show. VITE_HOUSES=${id} npm run dev to see it.`);
     const song = surpriseSong(id);
     if (song) out.push(`Tonight's surprise song: ${song}`);
   }
 } else if (id) {
   if (!(intakeState(id).ready && (hook || quiet))) out.push(...intakeLines(id));
+  if (!quiet && (intakeState(id).ready || beadsOf(id).length)) out.push(bracelet(id));
 } else {
   // No house chosen: greet. A first-time checkout (no local file) is greeted once and then marked as welcomed.
   // In the hook, a fresh checkout greets as a note for Claude rather than an announcement: cloud sessions start from

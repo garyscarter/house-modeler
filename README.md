@@ -41,7 +41,7 @@ Each browser keeps its own copy of the project (layouts, plots, cost rates) in i
 - When the app opens, it asks the server for the shared copy. If the server's copy is newer than the one this browser last synced, it is loaded (the startup prompt about listing updates then runs on what was loaded). A browser that has never synced uploads its project if the server has none.
 - About 3 seconds after you stop editing, the project is saved to the server. If the shared copy was changed on another device in the meantime, nothing is overwritten: a dialog offers **Load that version**, **Keep mine and overwrite** or **Cancel**. **Cancel** leaves things as they are until you tap **Sync now**.
 - **Settings → Project** shows the state ("Synced with the server · saved 14:02", "Saving…", "Couldn't reach the server, will retry") and has a **Sync now** button. Opening the app again, or coming back to its tab, also checks for changes made elsewhere. Camera, tabs and other view settings are not synced, only the project (the same data as Export JSON).
-- Where there is no server (`npm run dev`, or the hosted Claude artifact), sync is off and nothing is shown.
+- Where there is no server (`npm run dev`), sync is off and nothing is shown.
 
 The server stores each house's shared copy as one file in the folder named by the `DATA_DIR` environment variable (without it, `./data` next to the app, which is in `.gitignore`): `project.json` for the owner's house (the file that was there before houses were added) and `project-<house>.json` for any other.
 
@@ -67,10 +67,9 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 
 A house is a folder, `src/houses/<id>/`, with its tracing, floorplan and `NOTES.md`; the id is a slug, never an address. Photos go in `reference/<id>/photos/` for Claude and the notes, not in the house folder.
 
-1. Run `npm run house:start <id> "<Name>"`. It makes `reference/<id>/` with `INTAKE.md` (from `reference/_template/`) and a `photos/` folder. Fill in the intake: floorplan, photos, a north-up map with a scale, and ten short answers, ticking items as you go. About 30 minutes, no Claude needed. `npm run welcome` (and `npm run soundcheck` to check Node and the install) shows where you are.
+1. Run `npm run house:start <id> "<Name>"`. It makes `reference/<id>/` with `INTAKE.md` (from `reference/_template/`) and a `photos/` folder. Fill in the intake: floorplan, photos, a north-up map with a scale, and ten short answers, ticking items as you go. About 30 minutes, no Claude needed. `npm run welcome` (and `npm run soundcheck` to check Node and the install) shows where you are, including your friendship bracelet: a bead for each era Claude has finished.
 2. When `npm run welcome` says Ready, run `/eras-tour` in Claude Code in this repo. It scaffolds the house, traces the floorplan, builds the exterior and plot, checks them, and then offers an optional fidelity pass (finishes, garden, camera-fitted heights).
 3. Ask the repo owner to add your passcode to `PASSCODES` on Render; the passcode opens your house and keeps its project separate from the others.
-4. Optionally publish your own single-file build with `npm run build:hosted -- --house <id>`.
 
 ## Listing 91770873
 
