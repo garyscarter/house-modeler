@@ -69,3 +69,31 @@ Shared rules: CLAUDE.md applies (brand tokens, `<Loader>` for every wait, listin
 - `heightNormal.test.ts` as above; `npm run check`, `npm run build`.
 - Screenshots (1440x900) before and after at a raking sun (June 21, 18:30, rear view and front view) and at midday (15:00, home view), in the scratchpad `materials/` folder: brick courses, roof tiles and floorboards show directional relief at 18:30 that follows the light; no tile seams on walls or roofs; at midday the look is close to today's, not noisier. One phone-size (390x844) shot to confirm nothing breaks on the low setting.
 - Zoom to 60 m away (store/orbit) and confirm the brick does not sparkle (mipmaps working).
+
+---
+
+## 4. Screen-space reflections and bounce light on the high setting, behind a toggle
+
+**Why.** The orbit view's lighting is direct light plus a baked environment and N8AO. Screen-space reflections put the sky and the garden into the glass and gloss floors; screen-space global illumination adds bounced colour (lawn onto render, a red door onto the step). Both are finicky and cost GPU time, so they ship **off by default, behind two toggles on the high setting only**, so the owner can judge them in use before deciding.
+
+**Library reality on three 0.185.** `realism-effects@1.1.2` (0beqz; `SSGIEffect` with reflections and GI in one, `TRAAEffect`, `VelocityDepthNormalPass`) is the only SSGI for the pmndrs composer, but it was last published in May 2023, before three removed `WebGLMultipleRenderTargets` (r172) and changed other renderer internals, so it may fail to import or render. Three's own `examples/jsm/postprocessing/SSRPass.js` is maintained and gives reflections only. Evaluate in this order and stop at the first that works:
+1. Install `realism-effects` into the main checkout's node_modules (see section 1 for how; copy package.json and the lock into the worktree) and render one high-quality frame headless with `SSGIEffect` in the composer. If it throws, draws black, or needs patching three, drop it: do not patch node_modules or vendor the library. Say exactly what failed.
+2. Otherwise wrap three's `SSRPass` in a pmndrs `Pass` adapter (`src/three/ssrPass.ts`: a class extending `Pass` from `postprocessing` that owns an `SSRPass`, forwards `setSize`, and in `render(renderer, input, output)` calls the SSRPass with the pmndrs buffers; SSRPass renders its own normal, metalness and depth passes with override materials, which ignore the section cut's clipping planes, so reflections of clipped geometry may appear; accept and note it). Reflections only; the GI toggle then reads "Bounce light: not available on this renderer" and is disabled.
+
+**Toggles and UI.**
+- `Settings` in `src/store.ts` gains `effects?: { reflections?: boolean; gi?: boolean }` (persisted with the rest of `settings`; absent means off, so no migration).
+- `src/components/SettingsPanel.tsx`, under the Render quality switch: a row "Experimental, high quality only" with two checkboxes, **Reflections** and **Bounce light**, disabled (with a title saying why) unless quality is high. Brand tokens only; the row must read as experimental (a small "beta" pill is fine).
+- A palette entry for each toggle in `src/lib/commands.ts` only if it is a one-liner.
+
+**Rendering.**
+- `src/three/Effects.tsx` stays the lazy chunk for N8AO and tone mapping. Put the experimental passes in a second lazy chunk, `src/three/ExperimentalEffects.tsx`, loaded only when a toggle is on (the pattern `Viewer.tsx` uses for `Effects`; extend the `before` hook so `Precompile` waits for it). Order in the composer: render, N8AO, SSR/SSGI, tone mapping, keeping `multisampling` as it is unless the pass cannot run under MSAA (then drop MSAA while a toggle is on and say so).
+- Frames are on demand. Reflections from `SSRPass` are single-frame and work as is. SSGI with temporal accumulation needs successive frames to converge: while the GI toggle is on and the 3D tab is shown, keep `invalidate()` going for 24 frames after any change (a small hook that re-arms on store changes and camera moves via `OrbitControls`' change event), never a permanent `frameloop="always"`.
+- Glass: the windows use physical transmission on high; if SSR on transmissive glass doubles up or sparkles, exclude the glass materials from the pass (SSRPass has a `selects` list) and say so.
+- Compare mode mounts two viewers; both honour the toggles.
+
+**Files you own.** `src/three/Effects.tsx`, new `src/three/ExperimentalEffects.tsx`, new `src/three/ssrPass.ts`, `src/components/SettingsPanel.tsx` (+ its css), `src/store.ts` (the `effects` field only), `src/lib/commands.ts` (two entries at most), and a minimal edit to `src/three/Viewer.tsx` (the lazy load and the `before` hook). `package.json`/`package-lock.json` only if realism-effects stays.
+
+**Acceptance.**
+- `npm run check`, `npm run build`; the experimental chunk is lazy and not in `index`, `Viewer` or `Effects`.
+- Headless screenshots (balanced is not enough here: use high quality, 1000x650 viewport, long waits) of the rear view at 15:00 with: both off, reflections on, GI on if available; and the home view with the section cut at a ground-floor stop and reflections on. Reflections should show sky or garden in the patio doors and on the gloss kitchen units; nothing should flicker between two consecutive screenshots with no change. Toggling must not break the on-demand loop: with both off again, 3 s idle produces no frames (check `gl.info.render.frame` through a temporary dev hook you remove before committing).
+- Toggle state survives a reload (it is in persisted settings).
