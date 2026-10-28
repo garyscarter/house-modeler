@@ -1,6 +1,9 @@
 // Start a new house: `npm run house:new <id> "<Name>"`.
 // Copies src/houses/_template to src/houses/<id>/ (renaming its ids), and makes reference/<id>/ for the source
 // material (from reference/_template/ when that exists).
+// It refuses only when src/houses/<id>/index.ts already exists. A reference/<id>/ folder that is already there (the
+// intake may have been filled in first) is kept: template files are copied in without overwriting any file that
+// exists, and an existing reference/<id>/INTAKE.md is never touched.
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,12 +20,12 @@ if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id) || id.startsWith("_")) {
 }
 const dest = path.join(root, "src/houses", id);
 const refDest = path.join(root, "reference", id);
-if (existsSync(dest) || existsSync(refDest)) {
-  console.error(`${existsSync(dest) ? path.relative(root, dest) : path.relative(root, refDest)} already exists; nothing was changed.`);
+if (existsSync(path.join(dest, "index.ts"))) {
+  console.error(`${path.relative(root, path.join(dest, "index.ts"))} already exists; nothing was changed.`);
   process.exit(1);
 }
 
-cpSync(path.join(root, "src/houses/_template"), dest, { recursive: true });
+cpSync(path.join(root, "src/houses/_template"), dest, { recursive: true, force: false, errorOnExist: false });
 writeFileSync(path.join(dest, "meta.json"), JSON.stringify({ name }) + "\n");
 
 // Rename the preset ids and the house id in the copied sources (tests too, which mention them).
@@ -45,10 +48,11 @@ walk(dest);
 
 const made = [path.relative(root, dest) + "/"];
 const refTemplate = path.join(root, "reference/_template");
-if (existsSync(refTemplate)) cpSync(refTemplate, refDest, { recursive: true });
+if (existsSync(refTemplate)) cpSync(refTemplate, refDest, { recursive: true, force: false, errorOnExist: false });
 else {
   mkdirSync(refDest, { recursive: true });
-  writeFileSync(path.join(refDest, "INTAKE.md"), `Run /eras-tour in Claude Code to fill in the intake for ${name}.\n`);
+  const intake = path.join(refDest, "INTAKE.md");
+  if (!existsSync(intake)) writeFileSync(intake, `Run /eras-tour in Claude Code to fill in the intake for ${name}.\n`);
 }
 made.push(path.relative(root, refDest) + "/");
 
