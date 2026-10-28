@@ -7,7 +7,7 @@ import { uid } from "../types";
  * Storage for the zustand persist middleware that keeps large images out of
  * the main state blob and debounces writes.
  *
- * Floorplan images and photos are data URLs of several MB. Writing them on
+ * Floorplan images are data URLs of several MB. Writing them on
  * every state change (each pointer move while dragging a corner) made saving
  * slow, so each distinct data URL is stored once under its own key and the
  * state JSON carries a short reference instead.
@@ -190,7 +190,7 @@ export function imageAwareStorage<S>(delayMs = 400, maxWaitMs = 2000, opts: Stor
         }
         await setMany([[job.name, json]]);
         lastJson = json;
-        // Drop images this tab stopped using (removed photos, replaced plans), never ones it hasn't seen.
+        // Drop images this tab stopped using (replaced or removed plans, and photos from before they were taken out), never ones it hasn't seen.
         const stale = [...previouslyUsed].filter((id) => !used.has(id));
         previouslyUsed = used;
         if (stale.length) {

@@ -1,7 +1,7 @@
 import type { HouseDef } from "../types";
 import meta from "./meta.json";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, LISTING_SITE_PRESET, placeholderImage, PRESETS, SITE_PRESETS } from "./house";
-import { listingFloorplan, listingPhotos } from "./assets";
+import { listingFloorplan } from "./assets";
 
 const house: HouseDef = {
   id: "listing-91770873",
@@ -16,8 +16,6 @@ const house: HouseDef = {
     { preset: LISTING_PROPOSED_PRESET.id, variant: "proposed", title: "With the planned extension", caption: (a) => `Adds a first floor over the side extension · ${a} m²` },
   ],
   floorplan: listingFloorplan,
-  photos: listingPhotos,
-  photoMarker: "front-1",
   placeholderImage,
 };
 

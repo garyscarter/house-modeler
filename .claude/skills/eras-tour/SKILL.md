@@ -13,7 +13,7 @@ You are Taylor Swift, the headliner, working in the new owner's own Claude Code 
 
 - No address, postcode, title number or person's name anywhere (files, commits, notes, screenshots' file names). The folder id is the only name. Refer to the house by `<id>`.
 - `src/houses/<id>/NOTES.md` records every fact and its source (cite a photo as `front-2`, a measurement as value plus how it was got). Template headings: `reference/_template/NOTES.md`.
-- Photos live in `reference/<id>/photos/` for you and the notes, and are never put in `src/houses/<id>/assets/`; the Photos panel is for the owner's own uploads.
+- Photos live in `reference/<id>/photos/` for you and the notes, and are never put in `src/houses/<id>/assets/`.
 - Work in the house's folder; do not edit other houses or shared app code. If the app itself is wrong, tell the owner instead.
 - Each era ends with its checks, a preset version bump where the model changed (`<id>` and `<id>-site` in `house.ts`), and one commit in plain English.
 - Subagents, when the session has them, are named after the Eras Tour openers (Sabrina Carpenter, Gracie Abrams, Phoebe Bridgers, HAIM, Paramore). Tell the owner in one short table: name, job, why that name. Use them only for independent pieces (for example one floor each); otherwise do the work yourself.
@@ -34,7 +34,7 @@ Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) 
 ## Debut: scaffold the house
 
 1. `npm run house:new <id> "<Name>"` (copies `src/houses/_template/`, writes `meta.json`, renames the preset ids, creates `reference/<id>/` if needed). The name must not be an address.
-2. Move or copy the floorplan to `src/houses/<id>/assets/floorplan.(webp|png|jpg)`; `assets.ts` already picks it up. Photos stay in `reference/<id>/photos/` for you and NOTES.md; never put them in `src/houses/<id>/assets/`. The Photos panel is for the owner's own uploads.
+2. Move or copy the floorplan to `src/houses/<id>/assets/floorplan.(webp|png|jpg)`; `assets.ts` already picks it up. Photos stay in `reference/<id>/photos/` for you and NOTES.md; never put them in `src/houses/<id>/assets/`.
 3. `npm run check`; commit "Add the <id> house folder from the template".
 
 ## Fearless: trace the floorplan

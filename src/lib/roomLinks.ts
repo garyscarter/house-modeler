@@ -1,6 +1,6 @@
 import type { Floor, Room } from "../types";
 
-export const FLOOR_LINK_FIELDS = ["floorFinish", "floorAngle", "floorGrout", "color", "floorPhotoId"] as const;
+export const FLOOR_LINK_FIELDS = ["floorFinish", "floorAngle", "floorGrout", "color"] as const;
 export const WALL_LINK_FIELDS = ["wallCovering", "wallPaint", "wallAccent", "upperCovering", "upperAccent", "skirtingColor"] as const;
 
 export type LinkKind = "floor" | "walls";

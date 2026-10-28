@@ -61,7 +61,7 @@ Opus plans as **Taylor Swift** (the headliner writes the setlist). **Ed Sheeran*
 
 ## What has to change in the app for one live deployment
 
-1. **House registry.** `src/houses/<slug>/` holds `house.ts` (layouts, plot, presets), `assets/` (floorplan, photos), `NOTES.md` and `house.test.ts`; `src/houses/index.ts` lists them, each loaded lazily so one house's photos never load for another. A `House` descriptor carries the id, display name, presets and asset loaders. Everything that now says "listing 91770873" (about 20 files) reads the active house. Listing 91770873 moves into the first folder unchanged.
+1. **House registry.** `src/houses/<slug>/` holds `house.ts` (layouts, plot, presets), `assets/` (the floorplan), `NOTES.md` and `house.test.ts`; `src/houses/index.ts` lists them, each loaded lazily so one house's photos never load for another. A `House` descriptor carries the id, display name, presets and asset loaders. Everything that now says "listing 91770873" (about 20 files) reads the active house. Listing 91770873 moves into the first folder unchanged.
 2. **Active house.** The store carries `houseId`. The Welcome card shows a picker when more than one house is available; the House menu gets "Switch house…". The browser's saved project is namespaced by house, so switching never loses work.
 3. **Server.** `PASSCODES` names one passcode per house (`PASSCODE` alone keeps working for the first house). The session cookie carries the house, `/api/project` reads and writes `project-<house>.json`, and `/api/me` tells the app which house the passcode opened. Served by the server, the app opens that house and hides the picker.
 4. **Hosted artifact.** The build takes the houses to include; the owner's artifact stays the owner's house only.

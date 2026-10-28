@@ -1,25 +1,5 @@
-/* Keep the viewer's HTML overlays (room labels, photo pins) in their own stacking context so they stay under dialogs. */
+/* Keep the viewer's HTML overlays (room labels) in their own stacking context so they stay under dialogs. */
 .viewer { isolation: isolate; }
-
-.photo-pin {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
-  cursor: pointer;
-  /* Sits just under the room label, which is centred on the same point. */
-  transform: translateY(20px);
-  user-select: none;
-  white-space: nowrap;
-}
-.photo-pin svg { width: 14px; height: 14px; }
-.photo-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 
 /* Phone: captions sit under the layout pill. */

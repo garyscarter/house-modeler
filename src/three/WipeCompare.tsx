@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { VARIANT_LABEL, type Floor, type Photo, type Room, type VariantKey } from "../types";
+import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "../types";
 import type { V2 } from "../lib/geometry";
 import { useStore } from "../store";
 import { SunControls } from "../components/SunControls";
@@ -8,7 +8,6 @@ import { ViewCube } from "./ViewCube";
 import "./Wipe.css";
 
 export interface WipeCompareProps {
-  photos: Photo[];
   showLabels: boolean;
   showCeilings: boolean;
   doorsOpen: boolean;
@@ -70,7 +69,6 @@ export function WipeCompare(p: WipeCompareProps) {
           <Viewer
             model={model}
             variant={k}
-            photos={p.photos}
             showLabels={p.showLabels}
             showCeilings={p.showCeilings}
             doorsOpen={p.doorsOpen}
@@ -89,7 +87,6 @@ export function WipeCompare(p: WipeCompareProps) {
   }
 
   const shared = {
-    photos: p.photos,
     showLabels: p.showLabels,
     showCeilings: p.showCeilings,
     doorsOpen: p.doorsOpen,

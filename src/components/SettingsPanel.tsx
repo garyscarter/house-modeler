@@ -33,7 +33,6 @@ export function RenderQuality() {
 /** Export JSON, Import JSON and Clear all (House menu, Project). */
 export function ProjectActions({ onDone }: { onDone?: () => void }) {
   const variants = useStore((s) => s.variants);
-  const photos = useStore((s) => s.photos);
   const sites = useStore((s) => s.sites);
   const costRates = useStore((s) => s.costRates);
   const pieces = useStore((s) => s.pieces);
@@ -42,7 +41,7 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
 
   const exportJson = () => {
     // `sites` holds each layout's own plot; older exports had one shared `site`, which import still reads.
-    const blob = new Blob([JSON.stringify({ variants, photos, sites, costRates, pieces, savedViews }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ variants, sites, costRates, pieces, savedViews }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     const model = variants[useStore.getState().activeVariant] ?? variants.current ?? variants.proposed;
@@ -89,7 +88,7 @@ export function ProjectActions({ onDone }: { onDone?: () => void }) {
         className="danger"
         onClick={async () => {
           onDone?.();
-          if (await ask("Clear both models, the site and all photos? Undo brings back the layouts, plot and photos, but not saved views.", { ok: "Clear", danger: true })) reset();
+          if (await ask("Clear both models, the site? Undo brings back the layouts and plot, but not saved views.", { ok: "Clear", danger: true })) reset();
         }}
       >
         Clear all…

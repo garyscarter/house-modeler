@@ -103,9 +103,9 @@ describe("room summaries", () => {
   });
 
   it("detailsSummary", () => {
-    expect(detailsSummary(room, 2)).toBe("Heated · 2 photos · has notes");
-    expect(detailsSummary(rect("Garage", 0, 0, 1, 1), 0)).toBe("Not heated");
-    expect(detailsSummary(rect("A", 0, 0, 1, 1), 1)).toBe("Heated · 1 photo");
+    expect(detailsSummary(room)).toBe("Heated · has notes");
+    expect(detailsSummary(rect("Garage", 0, 0, 1, 1))).toBe("Not heated");
+    expect(detailsSummary(rect("A", 0, 0, 1, 1))).toBe("Heated");
   });
 
   it("knockSummary", () => {

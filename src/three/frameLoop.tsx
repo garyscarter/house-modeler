@@ -21,7 +21,7 @@ const contentSignature = (gl: THREE.WebGLRenderer) => `${gl.info.memory.geometri
  * requested) on mount, in the commit of any change to what the scene is built
  * from (`deps` from the viewer, plus site, sun, variant, site view and section cut), and
  * whenever the renderer's geometry, texture or program counts change, which
- * catches photos and other content that arrive asynchronously. Err on the
+ * catches textures and other content that arrive asynchronously. Err on the
  * side of redrawing: a stale shadow is a visible bug, a spare redraw is not.
  */
 export function ShadowUpdates({ deps }: { deps: unknown[] }) {

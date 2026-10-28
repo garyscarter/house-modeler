@@ -128,7 +128,7 @@ export function Measure() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       const t = (e.target as HTMLElement | null)?.tagName;
-      if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || document.querySelector(".dialog-backdrop, .modal-backdrop, .lightbox")) return;
+      if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || document.querySelector(".dialog-backdrop, .modal-backdrop")) return;
       if (live.current.points.length) setPoints([]);
       else useStore.getState().setUi({ measureTool: false });
       setHover(null);

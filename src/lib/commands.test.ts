@@ -154,17 +154,12 @@ describe("studio commands", () => {
     expect(rankCommands("sockets", cmds)[0]?.title).toBe("Mode: Electrics");
     expect(rankCommands("circuits", cmds).some((x) => x.title === "Mode: Electrics")).toBe(true);
   });
-  it("has canvas and photo pin commands that write the panel preferences", () => {
+  it("has canvas commands that write the panel preferences", () => {
     const cmds = buildCommands(ctx({}));
     cmds.find((x) => x.title === "Canvas: Full")!.run();
     expect(usePanelPrefs.getState().quiet).toBe(false);
     cmds.find((x) => x.title === "Canvas: Quiet")!.run();
     expect(usePanelPrefs.getState().quiet).toBe(true);
-    usePanelPrefs.getState().setPrefs({ showPins: false });
-    buildCommands(ctx({})).find((x) => x.title === "Photo pins: show")!.run();
-    expect(usePanelPrefs.getState().showPins).toBe(true);
-    expect(buildCommands(ctx({})).some((x) => x.title === "Photo pins: hide")).toBe(true);
-    usePanelPrefs.getState().setPrefs({ showPins: false });
   });
 });
 

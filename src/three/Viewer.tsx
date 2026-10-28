@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import type { Floor, HouseModel, Photo, Room, VariantKey } from "../types";
+import type { Floor, HouseModel, Room, VariantKey } from "../types";
 import { House } from "./House";
 import { lampStats } from "./lampPool";
 import { modelBounds, type V2 } from "../lib/geometry";
@@ -33,7 +33,6 @@ import "./Viewer.css";
 interface ViewerProps {
   model: HouseModel;
   ghost?: HouseModel;
-  photos: Photo[];
   showLabels: boolean;
   showCeilings: boolean;
   doorsOpen?: boolean;
@@ -68,7 +67,7 @@ const Effects = lazy(() => loadEffects().then((m) => ({ default: m.Effects })));
 export const Viewer = memo(ViewerImpl, (prev, next) => prev.active === false && next.active === false);
 
 function ViewerImpl(props: ViewerProps) {
-  const { model, ghost, photos, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
+  const { model, ghost, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
   // Subscribed only while shown: a store subscription would re-render this hidden view on every plan edit, memo or not.
   const liveVariants = useStore((s) => (active ? s.variants : null));
   const seenVariants = useRef(liveVariants ?? useStore.getState().variants);
@@ -197,7 +196,6 @@ function ViewerImpl(props: ViewerProps) {
         <Lighting centre={centre} size={size} />
         <House
           model={model}
-          photos={photos}
           showLabels={showLabels}
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
@@ -209,7 +207,7 @@ function ViewerImpl(props: ViewerProps) {
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}
         />
-        {ghost && <House model={ghost} photos={[]} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
+        {ghost && <House model={ghost} ghost showLabels={false} diffAgainst={model} visibleLevels={visibleLevels} />}
         <SiteScene centre={centre} size={size} model={model} />
         {ghost && variant && ghostVariant && <SiteDiff variant={variant} other={ghostVariant} />}
         {/* Hidden views are stale until shown again, so exports only see the visible ones. */}
@@ -220,7 +218,7 @@ function ViewerImpl(props: ViewerProps) {
           </Suspense>
         )}
         <SectionCut />
-        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, photos]} />
+        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality]} />
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
         <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
         <TrackScene />

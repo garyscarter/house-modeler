@@ -7,7 +7,7 @@ const fixturesOf = (k: "current" | "proposed") => st().variants[k]!.floors.flatM
 
 describe("store: my furniture", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], pieces: [], past: [], future: [] });
+    useStore.setState({ variants: {}, sites: {}, pieces: [], past: [], future: [] });
     st().setVariant("current", builtInHouse(""));
     st().copyVariant("current", "proposed");
   });

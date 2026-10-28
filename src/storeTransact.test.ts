@@ -7,7 +7,7 @@ const st = () => useStore.getState();
 
 describe("store: transact and clearHistory", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], pieces: [], past: [], future: [] });
+    useStore.setState({ variants: {}, sites: {}, pieces: [], past: [], future: [] });
   });
 
   it("makes several changes one undo step, even right after another edit", () => {
@@ -17,7 +17,6 @@ describe("store: transact and clearHistory", () => {
     transact(() => {
       st().setVariant("current", undefined);
       st().setVariant("proposed", undefined);
-      st().addPhotos([]);
     });
     expect(st().past.length).toBe(before + 1);
     expect(st().variants.current).toBeUndefined();

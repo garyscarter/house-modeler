@@ -13,8 +13,6 @@ export interface Room {
   locked?: boolean;
   /** Printed dimensions from the plan, in metres, if any. */
   dims?: { w: number; h: number };
-  /** Photo used as the floor texture, if any. */
-  floorPhotoId?: string;
   color?: string;
   /** Colour of this room's external walls (e.g. brick vs render). */
   exteriorColor?: string;
@@ -51,7 +49,7 @@ export interface Room {
   unheated?: boolean;
   /** Colour of the skirting boards in this room (dark stained wood, quarry tile…). Undefined = white-painted. */
   skirtingColor?: string;
-  /** Floor style follows this room (id, any floor of the same variant): finish, direction, grout, colour and floor photo are copied from it whenever it changes. */
+  /** Floor style follows this room (id, any floor of the same variant): finish, direction, grout and colour are copied from it whenever it changes. */
   floorFrom?: string;
   /** Wall style follows this room: covering, colours, the paper above a band and skirting. Feature walls stay the room's own. */
   wallsFrom?: string;
@@ -890,27 +888,6 @@ export interface SiteSurface {
   /** How far the kerb stands above the surface's own top at its edge, metres. Absent: the style's default. */
   kerbHeight?: number;
 }
-
-export interface Photo {
-  id: string;
-  name: string;
-  dataUrl: string;
-  /** Assigned location, by floor name + room name so it survives re-extraction. */
-  floorName?: string;
-  roomName?: string;
-  /** For exterior photos: which side of the house they show. front = bottom of the plan. */
-  elevation?: Elevation;
-  description?: string;
-  confidence?: number;
-}
-
-export type Elevation = "front" | "rear" | "left" | "right";
-export const ELEVATION_LABEL: Record<Elevation, string> = {
-  front: "Front (bottom of plan)",
-  rear: "Rear (top of plan)",
-  left: "Left side",
-  right: "Right side",
-};
 
 export type VariantKey = "current" | "proposed";
 

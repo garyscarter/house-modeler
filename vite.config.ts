@@ -21,7 +21,7 @@ const DEFAULT_HOUSE_ID: string = JSON.parse(fs.readFileSync(path.join(HOUSES_DIR
 /**
  * `virtual:houses`: the house registry, one entry per folder under src/houses/ that has an index.ts. Folders starting
  * with "_" are left out unless VITE_HOUSES names them; when VITE_HOUSES (comma-separated ids) is set, only those
- * folders are listed, so no other house's code or photos enter the build. Each house loads lazily.
+ * folders are listed, so no other house's code or assets enter the build. Each house loads lazily.
  */
 function housesPlugin(): Plugin {
   const ID = "virtual:houses";

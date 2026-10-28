@@ -22,13 +22,11 @@ interface PanelPrefs {
   look: Look;
   /** Quiet canvas: matte grey neighbours, a ground that fades into the page, neutral room fills and handles only on the selected room. */
   quiet: boolean;
-  /** Photo pins and exterior photo billboards in the 3D view (off by default; "Show" menu). */
-  showPins: boolean;
   /** The one-time three-step coach strip after the first load has been dismissed. */
   coachDone: boolean;
   /** What a plain scroll wheel does on the plan and in 3D: "auto" tells a mouse from a trackpad by the event, else always zoom or always pan. */
   wheel: WheelMode;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "showPins" | "coachDone" | "wheel">>) => void;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "coachDone" | "wheel">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -41,7 +39,6 @@ export const usePanelPrefs = create<PanelPrefs>()(
       inspectorCollapsed: false,
       look: "studio",
       quiet: true,
-      showPins: false,
       coachDone: false,
       wheel: "auto",
       setPrefs: (p) => set(p),
@@ -49,7 +46,7 @@ export const usePanelPrefs = create<PanelPrefs>()(
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, showPins: s.showPins, coachDone: s.coachDone, wheel: s.wheel }),
+      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, coachDone: s.coachDone, wheel: s.wheel }),
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<PanelPrefs>) };
         if (!isLook(merged.look)) merged.look = "studio";

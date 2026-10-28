@@ -7,7 +7,7 @@ const st = () => useStore.getState();
 
 describe("store: a plot per layout", () => {
   beforeEach(() => {
-    useStore.setState({ variants: {}, sites: {}, photos: [], past: [], future: [], activeVariant: "current" });
+    useStore.setState({ variants: {}, sites: {}, past: [], future: [], activeVariant: "current" });
   });
 
   it("copies the plot with Copy As listed to start, then keeps the two apart", () => {

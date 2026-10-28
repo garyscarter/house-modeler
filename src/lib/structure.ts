@@ -10,7 +10,7 @@ import type { Floor, HouseModel } from "../types";
  * Cosmetic fields are listed here and everything else counts as structure, so
  * a new field that affects geometry is picked up by default.
  */
-const ROOM_COSMETIC = new Set(["color", "notes", "floorPhotoId", "floorFinish", "floorAngle", "floorGrout", "wallPaint", "wallCovering", "wallAccent", "wallFinishes", "skirtingColor", "unheated"]);
+const ROOM_COSMETIC = new Set(["color", "notes", "floorFinish", "floorAngle", "floorGrout", "wallPaint", "wallCovering", "wallAccent", "wallFinishes", "skirtingColor", "unheated"]);
 const OPENING_COSMETIC = new Set(["color", "boardColor", "liningColor", "backColor", "backLiningColor", "matchFront", "matchBack", "frameColor"]);
 // The plan image is a large data URL and only the numbers read from it matter.
 const FLOOR_SKIPPED = new Set(["image", "name", "rooms", "openings", "fixtures"]);
@@ -42,7 +42,7 @@ export function floorStructure(floor: Floor, withOpenings = true): string {
 
 // What only the room's floor surface (or the UI) reads; the wall shell and walls ignore these. The wall
 // coverings, skirting and exterior colour are read by the shell and so are not listed.
-const ROOM_SURFACE_ONLY = new Set(["name", "color", "notes", "floorPhotoId", "floorFinish", "floorAngle", "floorGrout", "unheated"]);
+const ROOM_SURFACE_ONLY = new Set(["name", "color", "notes", "floorFinish", "floorAngle", "floorGrout", "unheated"]);
 const SHELL_SKIPPED = new Set(["image", "name", "fixtures"]);
 const looksCache = new WeakMap<Floor, string>();
 

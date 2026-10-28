@@ -22,8 +22,5 @@ await snap0();
 async function snap0() { await page.click(".view-buttons button:has-text('top')"); await snap("top"); }
 await page.click("header button:has-text('Check plan')"); await page.waitForTimeout(1500);
 await page.screenshot({ path: `${out}/plan-ground.png` });
-await page.click("aside button:has-text('Photos')"); await page.waitForTimeout(500);
-await page.click("text=/^Load .+ photos$/"); await page.waitForTimeout(4000);
-await page.screenshot({ path: `${out}/photos.png` });
-console.log(errs.join("\n") || "no page errors", await page.locator(".photo-card").count());
+console.log(errs.join("\n") || "no page errors");
 await browser.close();

@@ -15,7 +15,7 @@ describe("lintHouse", () => {
     expect(isSimplePolygon([{ x: 0, y: 0 }, { x: 4, y: 4 }, { x: 4, y: 0 }, { x: 0, y: 4 }])).toBe(false);
   });
 
-  it("flags a bad room, opening, size, plot and photo place", () => {
+  it("flags a bad room, opening, size, and plot", () => {
     const def = clone();
     const base = template.presets[template.main];
     def.presets[def.main] = {
@@ -29,11 +29,9 @@ describe("lintHouse", () => {
         return m;
       },
     };
-    const msgs = lintHouse(def, { photoPlaces: { a: { floor: "Nowhere", room: "x" }, b: { floor: "Ground Floor", room: "Cellar" } } });
+    const msgs = lintHouse(def);
     expect(msgs.join("\n")).toMatch(/pxPerM/);
     expect(msgs.join("\n")).toMatch(/fewer than 3/);
-    expect(msgs.join("\n")).toMatch(/no floor named "Nowhere"/);
-    expect(msgs.join("\n")).toMatch(/no room "Cellar"/);
   });
 
   it("flags openings off the walls and sizes that disagree with the polygon", () => {
