@@ -9,9 +9,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const [id, name] = process.argv.slice(2);
+const [id, argName] = process.argv.slice(2);
+// With no name given, use the one house:start saved in the gitignored .storey-local.json for this id.
+let name = argName;
+if (id && !name) {
+  try {
+    const local = JSON.parse(readFileSync(path.join(root, ".storey-local.json"), "utf8"));
+    if (local.house === id && typeof local.name === "string") name = local.name;
+  } catch {}
+}
 if (!id || !name) {
-  console.error('Usage: npm run house:new <id> "<Name>"   (id is a slug such as semi-on-the-hill)');
+  console.error('Usage: npm run house:new <id> ["<Name>"]   (id is a slug such as semi-on-the-hill)');
   process.exit(1);
 }
 if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id) || id.startsWith("_")) {
