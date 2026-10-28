@@ -10,12 +10,9 @@ const local = readLocal();
 const id = local && typeof local.house === "string" ? local.house : null;
 
 if (id && houseIsIn(id)) {
-  if (!hook && !quiet) out.push("Your house is in. In Claude Code run /eras-tour to continue, or `VITE_HOUSES=" + id + " npm run dev` to open it.");
+  if (!hook && !quiet) out.push("The show's on: run /eras-tour to pick up the next era, or VITE_HOUSES=" + id + " npm run dev to see it.");
 } else if (id) {
-  const s = intakeState(id);
-  if (s.ready && (hook || quiet)) {
-    // nothing to add
-  } else out.push(...intakeLines(id, { cap: hook ? 14 : Infinity }));
+  if (!(intakeState(id).ready && (hook || quiet))) out.push(...intakeLines(id));
 } else {
   // No house chosen: greet. A first-time checkout (no local file) is greeted once and then marked as welcomed.
   if (!local) {

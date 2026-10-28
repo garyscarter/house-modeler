@@ -3,7 +3,7 @@
 // choice in the gitignored .storey-local.json. It does not make src/houses/<id>/ (that is house:new, run by /eras-tour).
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { SLUG, fail, intakeLines, root, writeLocal } from "./_lib.mjs";
+import { SLUG, fail, intakeLines, root, ticket, writeLocal } from "./_lib.mjs";
 
 const [id, name] = process.argv.slice(2);
 if (!id || !name) fail('Usage: npm run house:start <id> "<Name>"   (id is a slug such as my-semi, never an address)');
@@ -20,6 +20,7 @@ const keep = path.join(ref, "photos/.gitkeep");
 if (!existsSync(keep)) writeFileSync(keep, "");
 writeLocal({ house: id, name, welcomed: true });
 
-console.log(`Started "${name}" as ${id}. Your files go in reference/${id}/ (photos in reference/${id}/photos/).`);
+console.log(ticket(id).join("\n"));
+console.log(`Your ticket is stamped for "${name}". Your files go in reference/${id}/ (photos in reference/${id}/photos/).`);
 console.log(intakeLines(id).join("\n"));
 console.log(`Fill in reference/${id}/INTAKE.md, then run: npm run welcome`);
