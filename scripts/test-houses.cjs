@@ -1,10 +1,14 @@
 // Two houses in one build (docs/onboarding-plan.md §7 check 3). Needs a dev server built with two houses:
-//   VITE_HOUSES=listing-91770873,_template npx vite --port 5302
+//   VITE_HOUSES=<default house id from src/houses/default.json>,_template npx vite --port 5302
 // Usage: PORT=5302 node scripts/test-houses.cjs
 // Checks: a fresh browser shows the picker; choosing the template opens it with its two rooms; "Switch house…"
 // in the House menu goes back to the picker; the listing's saved project survives a visit to the template.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const port = process.env.PORT || 5302;
+const fs = require('fs');
+const path = require('path');
+const DEFAULT_ID = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/houses/default.json'), 'utf8')).id;
+const DEFAULT_NAME = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/houses/' + DEFAULT_ID + '/meta.json'), 'utf8')).name;
 let failed = 0;
 const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) failed++; };
 const args = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
@@ -27,12 +31,12 @@ const houseOf = (page) => page.evaluate(() => localStorage.getItem('storey-house
   const picker = await page.locator('.house-picker').count();
   ok(picker === 1, 'a fresh browser with two houses shows the picker');
   const tiles = await page.locator('.house-picker button').allTextContents();
-  ok(tiles.some((t) => /Listing 91770873/.test(t)) && tiles.some((t) => /Template house/.test(t)), `the picker lists both houses (${tiles.map((t) => t.trim()).join(' | ')})`);
+  ok(tiles.some((t) => t.includes(DEFAULT_NAME)) && tiles.some((t) => /Template house/.test(t)), `the picker lists both houses (${tiles.map((t) => t.trim()).join(' | ')})`);
 
   // Open the listing first and load it, so there is a saved project to protect.
-  await page.locator('.house-picker button', { hasText: 'Listing 91770873' }).first().click();
+  await page.locator('.house-picker button', { hasText: DEFAULT_NAME }).first().click();
   await page.waitForSelector('.welcome-tile', { timeout: 60000 });
-  ok((await houseOf(page)) === 'listing-91770873', 'choosing the listing remembers it');
+  ok((await houseOf(page)) === DEFAULT_ID, 'choosing the listing remembers it');
   await page.locator('.welcome-tile').first().click();
   await page.waitForSelector('.dock, .tab-bar', { timeout: 60000 });
   const listingRooms = await roomsOf(page);
@@ -53,10 +57,10 @@ const houseOf = (page) => page.evaluate(() => localStorage.getItem('storey-house
   const templateRooms = await roomsOf(page);
   ok(templateRooms && templateRooms.length === 2, `the template opens with its two rooms (${templateRooms ? templateRooms.join(', ') : 'none'})`);
   const title = await page.title();
-  ok(/Template house/.test(title) || !/91770873/.test(title), `the tab title is the template's (${title})`);
+  ok(/Template house/.test(title) || !title.includes(DEFAULT_NAME), `the tab title is the template's (${title})`);
 
   // Back to the listing: its project is still there, no Welcome card.
-  await page.evaluate(() => { localStorage.setItem('storey-house', 'listing-91770873'); });
+  await page.evaluate(() => { localStorage.setItem('storey-house', DEFAULT_ID); });
   await page.goto(`http://localhost:${port}/`);
   await page.waitForSelector('.dock, .tab-bar, .welcome-tile', { timeout: 60000 });
   const backRooms = await roomsOf(page);

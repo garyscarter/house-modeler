@@ -2,7 +2,7 @@
 // page body (the artifact host adds the doctype, head and body around it).
 // Usage: `npm run build:hosted`, then publish dist-hosted/house-modeler.html
 // with every file under dist-hosted/assets (see CLAUDE.md).
-// `npm run build:hosted -- --house <id>` builds another house (default listing-91770873): only that house's code
+// `npm run build:hosted -- --house <id>` builds another house (default: the id in src/houses/default.json): only that house's code
 // and photos go into the build, and the build fails if anything from another house turns up.
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "
 const out = "dist-hosted";
 const args = process.argv.slice(2);
 const at = args.indexOf("--house");
-const house = at >= 0 ? args[at + 1] : "listing-91770873";
+const house = at >= 0 ? args[at + 1] : JSON.parse(readFileSync("src/houses/default.json", "utf8")).id;
 if (!house || house.startsWith("--") || !existsSync(`src/houses/${house}/index.ts`)) {
   console.error(`No house "${house ?? ""}" under src/houses/ (usage: build-hosted.mjs [--house <id>])`);
   process.exit(1);

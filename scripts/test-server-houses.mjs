@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "storey-houses-"));
 const port = 10000 + Math.floor(Math.random() * 20000);
-const A = { house: "listing-91770873", code: "abcdefghij" };
+const defaultHouse = JSON.parse(fs.readFileSync(path.join(root, "src/houses/default.json"), "utf8")).id;
+const A = { house: defaultHouse, code: "abcdefghij" };
 const B = { house: "_template", code: "klmnopqrst" };
 let failed = 0;
 const ok = (cond, msg) => {
