@@ -11,7 +11,7 @@ One line per file used (floorplan, map, each photo set) and where it came from (
 Image size in pixels, and the pixels-per-metre used.
 
 ## Scale
-The method and the spread. Printed room sizes are inner faces (wall to wall); the tracing is on wall centre lines. List the rooms measured between inner wall faces, the px/m each gave, and the spread; then the check against the printed total area and the overall width if printed (printed total versus the model's, as a percentage). In 1989, the map's size of the house against the floorplan's. Any room whose printed size is plainly wrong, and what was done about it.
+How px/m was set: the model's internal area against the printed total (target within 3%), the cross-check against printed room sizes (which on agent plans run to about the wall centre lines; give the spread and any outliers), and the check against the map's house width and depth in 1989.
 
 ## Rooms
 Per floor, any room whose outline is a judgement call; printed sizes compared with the traced areas, and any difference over a few per cent explained.
