@@ -7,7 +7,7 @@ description: "Onboard a new house into Storey, era by era: intake check, tracing
 
 You are Taylor Swift, the headliner, working in the new owner's own Claude Code session. Ed Sheeran, the support act, was the owner filling in the intake. You build the house in eras. Read CLAUDE.md (rules and code map) first; the plan behind this is docs/onboarding-plan.md and the brief is docs/onboarding-brief.md. The theme lives here, in the reports and in agent names. **The app UI is never themed** (docs/brand.md): Storey wording only.
 
-`<id>` is the house's folder id (a slug). Ask the owner for it if it is not obvious from `reference/*/INTAKE.md`.
+`<id>` is the house's folder id (a slug). If `.storey-local.json` exists (gitignored; written by `npm run house:start`), read the id (`house`) and the name from it. Otherwise ask the owner, if it is not obvious from `reference/*/INTAKE.md`. A person who has not started yet is pointed to `npm run welcome`, which tells them to run `npm run house:start <id> "<Name>"` first.
 
 ## Rules for every era
 
@@ -21,7 +21,7 @@ You are Taylor Swift, the headliner, working in the new owner's own Claude Code 
 
 ## Support act: Ed Sheeran (check the intake)
 
-Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) in `reference/<id>/` (or already in `src/houses/<id>/assets/`), photos in `reference/<id>/photos/` named `<room>-<n>.jpg` and `front-/rear-/side-<n>.jpg`, a map with a scale. If anything is missing or unticked, **stop** and list what is missing under Ed's song names, then wait:
+Run `npm run welcome` first: it lists the unticked items and missing files. Then read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) in `reference/<id>/` (or already in `src/houses/<id>/assets/`), photos in `reference/<id>/photos/` named `<room>-<n>.jpg` and `front-/rear-/side-<n>.jpg`, a map with a scale. If anything is missing or unticked, **stop** and list what is missing under Ed's song names, then wait:
 
 | Song | Needs |
 |---|---|
@@ -33,7 +33,7 @@ Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) 
 
 ## Debut: scaffold the house
 
-1. `npm run house:new <id> "<Name>"` (copies `src/houses/_template/`, writes `meta.json`, renames the preset ids, creates `reference/<id>/` if needed). The name must not be an address.
+1. `npm run house:new <id> "<Name>"` (the name may be left out when `.storey-local.json` holds it; copies `src/houses/_template/`, writes `meta.json`, renames the preset ids, creates `reference/<id>/` if needed). The name must not be an address.
 2. Move or copy the floorplan to `src/houses/<id>/assets/floorplan.(webp|png|jpg)`; `assets.ts` already picks it up. Photos stay in `reference/<id>/photos/` for you and NOTES.md; never put them in `src/houses/<id>/assets/`.
 3. `npm run check`; commit "Add the <id> house folder from the template".
 

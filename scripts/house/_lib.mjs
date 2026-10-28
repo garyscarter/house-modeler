@@ -64,3 +64,102 @@ export async function screenshot(html, out) {
 }
 
 export const saveHtml = (file, html) => writeFileSync(file, html);
+
+// ---- First-run welcome and intake state (used by welcome.mjs and start.mjs) ----
+import { readdirSync } from "node:fs";
+
+export const localFile = path.join(root, ".storey-local.json");
+export const SLUG = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const IMG = /\.(png|jpe?g|webp)$/i;
+
+/** The gitignored local state: { house, name?, welcomed }, or null when there is none (or it is unreadable). */
+export function readLocal() {
+  try {
+    const v = JSON.parse(readFileSync(localFile, "utf8"));
+    return v && typeof v === "object" ? v : null;
+  } catch {
+    return null;
+  }
+}
+export const writeLocal = (v) => writeFileSync(localFile, JSON.stringify(v) + "\n");
+
+/** Ids under src/houses/ that are real houses (a folder with index.ts), minus the owner's and the template. */
+export function otherHouses() {
+  const dir = path.join(root, "src/houses");
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && d.name !== "listing-91770873")
+    .map((d) => d.name);
+}
+
+export const houseIsIn = (id) => existsSync(path.join(root, "src/houses", id, "index.ts"));
+
+const filesIn = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile()).map((d) => d.name) : []);
+
+const SONGS = [
+  { song: "Shape of You", what: "the floorplan" },
+  { song: "Photograph", what: "the photos" },
+  { song: "Castle on the Hill", what: "the map" },
+  { song: "Thinking Out Loud", what: "the ten answers" },
+  { song: "Perfect", what: "checklist ticked, slug chosen" },
+];
+
+/** Ed's setlist for reference/<id>/INTAKE.md: each song done or not, from the `- [ ]` / `- [x]` items in its section
+ *  (Thinking Out Loud has no boxes: it is done once no `__________` blanks are left) and the files on disk. */
+export function intakeState(id) {
+  const ref = path.join(root, "reference", id);
+  const text = existsSync(path.join(ref, "INTAKE.md")) ? readFileSync(path.join(ref, "INTAKE.md"), "utf8") : "";
+  const sections = text.split(/^### /m).slice(1);
+  const refFiles = filesIn(ref);
+  const isMap = (f) => /^map/i.test(f);
+  const fileOk = {
+    "Shape of You": refFiles.some((f) => IMG.test(f) && !isMap(f)) || filesIn(path.join(root, "src/houses", id, "assets")).some((f) => IMG.test(f)),
+    Photograph: filesIn(path.join(ref, "photos")).some((f) => f !== ".gitkeep"),
+    "Castle on the Hill": refFiles.some(isMap),
+  };
+  const where = {
+    "Shape of You": `reference/${id}/ (or src/houses/${id}/assets/)`,
+    Photograph: `reference/${id}/photos/`,
+    "Castle on the Hill": `reference/${id}/map.png`,
+  };
+  const songs = SONGS.map(({ song, what }) => {
+    const sec = sections.find((x) => x.startsWith(song)) ?? "";
+    const items = [...sec.matchAll(/^\s*- \[( |x|X)\] /gm)];
+    const unticked = items.filter((m) => m[1] === " ").length;
+    const blanks = song === "Thinking Out Loud" ? (sec.match(/`_{3,}`/g) ?? []).length : 0;
+    const notes = [];
+    if (fileOk[song] === false) notes.push(`put it in ${where[song]}`);
+    if (unticked) notes.push(`${unticked} to tick`);
+    if (blanks) notes.push(`${blanks} blanks to fill`);
+    return { song, what, done: !!sec && notes.length === 0, notes };
+  });
+  const done = songs.every((x) => x.done);
+  return { songs, hasIntake: !!text, ready: !!text && done };
+}
+
+export const welcomeText = () => [
+  "Doors are open. Storey is a browser app for modelling a house in 3D and planning changes to it.",
+  "Ed Sheeran's on first: that's you, getting the intake together. Taylor headlines after:",
+  "that's Claude, building your house in eras. Three steps:",
+  "  1. Get your ticket: choose a house id, a slug such as my-semi, never an address.",
+  "  2. Fill in the intake: floorplan, photos, a map and ten short answers (about 30 minutes).",
+  "  3. In Claude Code run /eras-tour.",
+  'Your ticket:  npm run house:start <id> "<Name>"   (the id is the name on the ticket)',
+  "Any time, npm run welcome shows where you are.",
+];
+
+export const ticket = (id) => {
+  const rows = ["THE ERAS TOUR · support: Ed Sheeran", `House: ${id}`, "Admit one house"];
+  const w = Math.max(...rows.map((r) => r.length));
+  return ["┌" + "─".repeat(w + 2) + "┐", ...rows.map((r) => `│ ${r.padEnd(w)} │`), "└" + "─".repeat(w + 2) + "┘"];
+};
+
+/** Ed's setlist lines, or the ready line. */
+export function intakeLines(id) {
+  const s = intakeState(id);
+  if (!s.hasIntake) return [`reference/${id}/INTAKE.md is missing. Run: npm run house:start ${id} "<Name>"`];
+  if (s.ready) return ["Ed's set is done. Taylor's on next: in Claude Code run /eras-tour."];
+  const out = [`Ed's setlist for ${id}:`];
+  for (const x of s.songs) out.push(`  [${x.done ? "x" : " "}] ${x.song} (${x.what})${x.done ? "" : ": " + x.notes.join("; ")}`);
+  out.push(`Tick items in reference/${id}/INTAKE.md (change "[ ]" to "[x]") as you play them.`);
+  return out;
+}

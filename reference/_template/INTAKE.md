@@ -1,6 +1,6 @@
 # Intake for <id>
 
-The support act (Ed Sheeran). About 30 minutes, no Claude needed. Fill this in, drop the files in the places below, then run `/eras-tour`.
+The support act (Ed Sheeran). About 30 minutes, no Claude needed. Fill this in, drop the files in the places below, then run `/eras-tour`. Tick each checklist item (change `- [ ]` to `- [x]`) as you finish it; `npm run welcome` shows what is still open.
 
 ## The slug (Perfect)
 
