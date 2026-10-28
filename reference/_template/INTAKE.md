@@ -12,7 +12,7 @@ The folder id: lowercase letters, digits and hyphens, 3 to 40 characters, never 
 ## Where files go
 
 - `reference/<id>/` holds the sources you were given (agent PDFs, map screenshots, anything raw). It stays in the repo for reference and is not shipped in the app.
-- `src/houses/<id>/assets/` holds the floorplan and photos that ship with the house. The floorplan is `floorplan.webp` (or .png/.jpg); photos go in `photos/`.
+- `src/houses/<id>/assets/` holds the floorplan that ships with the house: `floorplan.webp` (or .png/.jpg). Photos go in `reference/<id>/photos/`, for Claude and the notes; they are never put in `src/houses/<id>/assets/`. The Photos panel in the app is for your own uploads.
 
 ## Checklist
 

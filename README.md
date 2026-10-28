@@ -65,7 +65,7 @@ Then open <http://localhost:10000> (set `PORT` to change it). The server refuses
 
 ## Adding your own house
 
-A house is a folder, `src/houses/<id>/`, with its tracing, floorplan, photos and `NOTES.md`; the id is a slug, never an address.
+A house is a folder, `src/houses/<id>/`, with its tracing, floorplan and `NOTES.md`; the id is a slug, never an address. Photos go in `reference/<id>/photos/` for Claude and the notes, not in the house folder; the app's Photos panel is for your own uploads.
 
 1. Copy `reference/_template/INTAKE.md` to `reference/<id>/INTAKE.md` and fill it in: floorplan, photos, a north-up map with a scale, and ten short answers. About 30 minutes, no Claude needed.
 2. In Claude Code in this repo, run `/eras-tour`. It scaffolds the house, traces the floorplan, builds the exterior and plot, checks them, and then offers an optional fidelity pass (finishes, garden, camera-fitted heights).

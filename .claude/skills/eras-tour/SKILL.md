@@ -13,6 +13,7 @@ You are Taylor Swift, the headliner, working in the new owner's own Claude Code 
 
 - No address, postcode, title number or person's name anywhere (files, commits, notes, screenshots' file names). The folder id is the only name. Refer to the house by `<id>`.
 - `src/houses/<id>/NOTES.md` records every fact and its source (cite a photo as `front-2`, a measurement as value plus how it was got). Template headings: `reference/_template/NOTES.md`.
+- Photos live in `reference/<id>/photos/` for you and the notes, and are never put in `src/houses/<id>/assets/`; the Photos panel is for the owner's own uploads.
 - Work in the house's folder; do not edit other houses or shared app code. If the app itself is wrong, tell the owner instead.
 - Each era ends with its checks, a preset version bump where the model changed (`<id>` and `<id>-site` in `house.ts`), and one commit in plain English.
 - Subagents, when the session has them, are named after the Eras Tour openers (Sabrina Carpenter, Gracie Abrams, Phoebe Bridgers, HAIM, Paramore). Tell the owner in one short table: name, job, why that name. Use them only for independent pieces (for example one floor each); otherwise do the work yourself.
@@ -20,7 +21,7 @@ You are Taylor Swift, the headliner, working in the new owner's own Claude Code 
 
 ## Support act: Ed Sheeran (check the intake)
 
-Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) in `src/houses/<id>/assets/` (or `reference/<id>/`), photos named `<room>-<n>.jpg` and `front-/rear-/side-<n>.jpg`, a map with a scale. If anything is missing or unticked, **stop** and list what is missing under Ed's song names, then wait:
+Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) in `reference/<id>/` (or already in `src/houses/<id>/assets/`), photos in `reference/<id>/photos/` named `<room>-<n>.jpg` and `front-/rear-/side-<n>.jpg`, a map with a scale. If anything is missing or unticked, **stop** and list what is missing under Ed's song names, then wait:
 
 | Song | Needs |
 |---|---|
@@ -33,7 +34,7 @@ Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) 
 ## Debut: scaffold the house
 
 1. `npm run house:new <id> "<Name>"` (copies `src/houses/_template/`, writes `meta.json`, renames the preset ids, creates `reference/<id>/` if needed). The name must not be an address.
-2. Move or copy the floorplan to `src/houses/<id>/assets/` and point `assets.ts` at it and the photos folder.
+2. Move or copy the floorplan to `src/houses/<id>/assets/floorplan.(webp|png|jpg)`; `assets.ts` already picks it up. Photos stay in `reference/<id>/photos/` for you and NOTES.md; never put them in `src/houses/<id>/assets/`. The Photos panel is for the owner's own uploads.
 3. `npm run check`; commit "Add the <id> house folder from the template".
 
 ## Fearless: trace the floorplan
@@ -43,7 +44,7 @@ Read `reference/<id>/INTAKE.md`. Check the files are really there: floorplan(s) 
 3. Rewrite `src/houses/<id>/house.ts` in **floorplan pixels** (wall centre lines) with the helpers at the top of `src/houses/listing-91770873/house.ts`: `rect(name, x0, y0, x1, y1, dims?)`, `poly(name, [[x,y],...], dims?)` and `op(kind, x, y, "h"|"v", widthM)`. Pass the printed sizes as `dims`. One floor object per floor, with `pxPerM`. Keep the template's preset shape and export names.
 4. `npm run house:overlay <id> [--floor n] [--out file.png]`, then **look at the image** (Read it). Fix rooms that miss the walls and openings off their edges; repeat until it lines up.
 5. Compare each room's traced area with its printed size (the lint in `src/houses/lint.ts` allows 8%); note any difference over a few per cent in NOTES.md.
-6. Take a 3D screenshot: start `npx vite --port 5173`, adapt the pattern in `scripts/screenshots.mjs` (Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`). Look at it.
+6. Take a 3D screenshot: start `VITE_HOUSES=<id> npx vite --port 5173`, adapt the pattern in `scripts/screenshots.mjs` (Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`). Look at it.
 7. `npm run check`; bump `version`; commit "Trace the <id> floorplan".
 
 ## Speak Now: the one round of questions
@@ -81,7 +82,7 @@ Each tier may be its own session. Every pass bumps the preset version so the upd
 
 ## Encore: share it
 
-1. **Passcode.** The owner of the live server (the repo owner) adds this house to `PASSCODES` on Render: `PASSCODES="listing-91770873=…,<id>=…"`, one passcode per house, at least 10 characters. Tell the new owner to ask for it; the passcode picks the house, so nobody sees another's. The shared project then lives on the server and syncs across their devices (README, "Keeping one project on every device").
+1. **Passcode.** The owner of the live server (the repo owner) adds this house to `PASSCODES` on Render: `PASSCODES="listing-91770873=…,<id>=…"`, one passcode per house, at least 10 characters. Tell the new owner to ask for it; the passcode keeps each house's shared project separate; the houses in a build are visible to anyone signed in. The shared project then lives on the server and syncs across their devices (README, "Keeping one project on every device").
 2. **Optional own artifact.** `npm run build:hosted -- --house <id>` builds a single-file page with only this house; the owner may publish `dist-hosted/house-modeler.html` as their own Artifact and record its URL in NOTES.md. Never publish the repo owner's artifact URL.
 3. **How updates reach a browser.** Bumped preset versions are offered by a prompt on the next open; edits are kept and merged. Their work is saved per house in the browser and on the server.
 4. Merge or push as the repo owner directs; do not push to `main` yourself unless told.
