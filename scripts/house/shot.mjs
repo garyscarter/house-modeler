@@ -24,8 +24,10 @@ if (badView || !views.length) fail(`Unknown view "${badView}". Views: ${Object.k
 if (!existsSync(path.join(root, "src/houses", id, "index.ts"))) fail(`No house "${id}" under src/houses/.`);
 const out = path.resolve(flags.out ?? path.join("/tmp/storey-shots", id));
 mkdirSync(out, { recursive: true });
-// Only this script's own pictures go: older 3d-*.png and plan-*.png, so none are left from an earlier run.
-clearPictures(out, /^(3d|plan)-.*\.png$/);
+// Only the pictures this run takes again go: the requested 3D views, and every plan (all floors are drawn each run, so
+// a renamed or removed floor's old plan cannot linger). Other views from earlier runs stay.
+const again = new Set(views.map((v) => `3d-${v}.png`));
+clearPictures(out, { test: (f) => again.has(f) || /^plan-.*\.png$/.test(f) });
 
 process.env.VITE_HOUSES = id;
 const { createServer } = await import(path.join(root, "node_modules/vite/dist/node/index.js"));

@@ -20,7 +20,7 @@ const level = flags.floor === undefined ? 0 : Number(flags.floor);
 const floor = model.floors.find((f) => f.level === level) ?? model.floors[level];
 if (!floor) fail(`No floor ${flags.floor ?? 0} (levels: ${model.floors.map((f) => f.level).join(", ")}).`);
 const outDir = shotsDir(id);
-if (!flags.out) clearPictures(outDir, /^overlay-floor\d+\.png$/);
+// Each floor has its own file, overwritten when that floor is drawn again; other floors' pictures stay.
 const out = flags.out ? path.resolve(flags.out) : path.join(shotsDir(id), `overlay-floor${floor.level}.png`);
 
 const COLOURS = { door: "#ff8c00", window: "#00a0ff", patio: "#00a078", bay: "#00c8ff", front: "#dc0000", garage: "#965000", gap: "#888888", french: "#00a078", bifold: "#00a078", archway: "#c800c8" };
