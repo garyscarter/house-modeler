@@ -4,7 +4,7 @@
 // It refuses only when src/houses/<id>/index.ts already exists. A reference/<id>/ folder that is already there (the
 // intake may have been filled in first) is kept: template files are copied in without overwriting any file that
 // exists, and an existing reference/<id>/INTAKE.md is never touched.
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,6 +40,7 @@ if (existsSync(path.join(dest, "index.ts"))) {
 }
 
 cpSync(path.join(root, "src/houses/_template"), dest, { recursive: true, force: false, errorOnExist: false });
+mkdirSync(path.join(dest, "assets"), { recursive: true });
 writeFileSync(path.join(dest, "meta.json"), JSON.stringify({ name }) + "\n");
 
 // Rename the preset ids and the house id in the copied sources (tests too, which mention them).
@@ -74,3 +75,17 @@ made.push(path.relative(root, refDest) + "/");
 console.log(`Made ${made.join(" and ")} for "${name}" (id ${id}; presets ${id} and ${id}-site).`);
 console.log(`Next: run /eras-tour in Claude Code to trace the house, or edit src/houses/${id}/house.ts by hand.`);
 console.log(`Try it: VITE_HOUSES=${id} npm run dev   |   Check: npm run check   |   Overlay: npm run house:overlay ${id}`);
+
+// The floorplan: one picture in reference/<id>/ (not a map) is copied into assets/ as floorplan.<ext>; the original
+// stays where it is. Several candidates: copy none and say which to choose.
+const pics = existsSync(refDest) ? readdirSync(refDest).filter((f) => /\.(png|jpe?g|webp)$/i.test(f) && !/^map/i.test(f)) : [];
+const assetsDir = path.join(dest, "assets");
+if (pics.length === 1) {
+  const ext = path.extname(pics[0]).slice(1).toLowerCase().replace("jpeg", "jpg");
+  const to = path.join(assetsDir, `floorplan.${ext}`);
+  if (existsSync(to)) console.log(`${path.relative(root, to)} already exists; left alone.`);
+  else {
+    copyFileSync(path.join(refDest, pics[0]), to);
+    console.log(`Copied reference/${id}/${pics[0]} to ${path.relative(root, to)} (the original is untouched).`);
+  }
+} else if (pics.length > 1) console.log(`Several pictures in reference/${id}/ (${pics.join(", ")}): copy the floorplan into ${path.relative(root, assetsDir)}/ as floorplan.<ext> yourself.`);

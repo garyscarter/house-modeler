@@ -5,7 +5,7 @@
 // Plot boundary in red, neighbours in blue, the house footprint (each ground-floor room) in green.
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fail, helpAndExit, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed } from "./_lib.mjs";
+import { fail, helpAndExit, loadHouse, parseArgs, screenshot, shotsDir, takeSwallowed, clearPictures, takenLine } from "./_lib.mjs";
 
 const usage = `Usage: npm run house:map -- <id> <map.png> --scale <px per m> --origin <x,y> [--bearing deg] [--out file.png]
 Draws the plot over the map image. The picture goes to /tmp/storey-shots/<id>/map-overlay.png unless --out names a file.
@@ -46,6 +46,8 @@ const data = {
   scale,
   bearing,
 };
+const outDir = shotsDir(id);
+if (!flags.out) clearPictures(outDir, /^map-overlay\.png$/);
 const out = flags.out ? path.resolve(flags.out) : path.join(shotsDir(id), "map-overlay.png");
 const html = `<!doctype html><meta charset="utf-8"><style>body{margin:0}svg{display:block}</style>
 <svg id="s" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -74,3 +76,4 @@ im.src = "data:image/${ext || "png"};base64,${map.toString("base64")}";
 </script>`;
 await screenshot(html, out);
 console.log(`Wrote ${out} (boundary ${site.boundary.length} corners, ${site.neighbours.length} neighbours, front faces ${bearing} deg)`);
+console.log(takenLine());
