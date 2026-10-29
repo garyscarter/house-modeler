@@ -48,7 +48,7 @@ Run `npm run welcome` first: it lists the unticked items and missing files. Then
 ## Debut: scaffold the house
 
 1. `npm run house:new <id> "<Name>"` (the name may be left out when `.storey-local.json` holds it; copies `src/houses/_template/`, writes `meta.json`, renames the preset ids, creates `reference/<id>/` if needed). The name must not be an address. Create the branch `house/<id>`.
-2. Copy (do not move) the floorplan from `reference/<id>/` to `src/houses/<id>/assets/floorplan.(webp|png|jpg)`; `assets.ts` already picks it up.
+2. `house:new` makes `src/houses/<id>/assets/` and copies the floorplan into it as `floorplan.<ext>` when `reference/<id>/` holds exactly one (it says so). Otherwise copy (never move) the right one there yourself; `assets.ts` picks it up.
 3. `npm run check`; commit the house folder and `reference/<id>/` together: "Add the <id> house folder from the template".
 
 ## Fearless: trace the floorplan
@@ -72,7 +72,7 @@ Roof form and pitch (estimate from front/rear/side photos; refine in the fidelit
 ## 1989: the plot and the sun
 
 From the map: boundary, neighbours' footprints, drive, front garden, road and pavement, boundary types and heights from the intake and photos. Work in metres around the house (x right, z towards the front) in the site preset. Set `frontBearing`, `latitude` and `longitude` from the intake's location answer (nearest town, or two-decimal latitude and longitude); never infer a location from photo details. Check by eye:
-`npm run house:map -- <id> <map.png> --scale <px per m> --origin <x,y> [--bearing deg]` and look at the image; fix and repeat. Open the sun study and check shadows fall the right way. Record the bearing's source and the map's accuracy in NOTES.md.
+`npm run house:map -- <id> <map.png> --scale <px per m> --origin <x,y> [--bearing deg]` and look at the image; fix and repeat. Check the sun: `npm run house:shot -- <id> --views sun` (midsummer, early afternoon) and look that shadows fall away from the front bearing's sun side. Record the bearing's source and the map's accuracy in NOTES.md.
 
 **The map is the authority on the plot and the house's overall size.** If the house's width or depth and the map's building disagree by more than about 0.3 m, the floorplan scale is wrong: go back to Fearless's scale, rescale the whole plan, re-run the overlay and the lint. Do not explain the gap away as one part of the house (say the garage) being off, unless a photo plainly shows that part drawn wrongly on the floorplan: then cite the photo and ask the owner in one line before keeping the scale. Rescaling may push the internal area to the bottom of the ±3% listed-area window; that is fine, and the map wins over the listed total when they pull apart. Record both numbers in NOTES.md "Scale". Never move a mapped boundary to make the house fit. Replace every one of the template's boundary edges, neighbours and surfaces with real ones (an edge along a house wall still gets a real kind, such as a wall); add the road and pavement wherever the map shows them. Bump the site preset version; commit "Place <id> on its plot".
 
