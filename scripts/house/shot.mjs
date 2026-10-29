@@ -6,9 +6,9 @@
 // /tmp/storey-shots/<id>). Prints the files and any page errors.
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { fail, helpAndExit, launchBrowser, parseArgs, root, takeSwallowed } from "./_lib.mjs";
+import { fail, helpAndExit, launchBrowser, parseArgs, root, takeSwallowed, clearPictures, takenLine } from "./_lib.mjs";
 
-const VIEWS = { home: "Home view", top: "Look at the top", front: "Look at the front", rear: "Look at the rear", left: "Look at the left", right: "Look at the right" };
+const VIEWS = { home: "Home view", sun: "Home view", top: "Look at the top", front: "Look at the front", rear: "Look at the rear", left: "Look at the left", right: "Look at the right" };
 const usage = `Usage: npm run house:shot -- <id> [--out dir] [--variant current|proposed] [--views home,top]
 Pictures of the house as the app draws it: 3d-<view>.png for each view (${Object.keys(VIEWS).join(", ")}; default home,top)
 and plan-<floor>.png for every floor. Saved in /tmp/storey-shots/<id>/ unless --out names a folder.
@@ -24,10 +24,13 @@ if (badView || !views.length) fail(`Unknown view "${badView}". Views: ${Object.k
 if (!existsSync(path.join(root, "src/houses", id, "index.ts"))) fail(`No house "${id}" under src/houses/.`);
 const out = path.resolve(flags.out ?? path.join("/tmp/storey-shots", id));
 mkdirSync(out, { recursive: true });
+// Only this script's own pictures go: older 3d-*.png and plan-*.png, so none are left from an earlier run.
+clearPictures(out, /^(3d|plan)-.*\.png$/);
 
 process.env.VITE_HOUSES = id;
 const { createServer } = await import(path.join(root, "node_modules/vite/dist/node/index.js"));
-const server = await createServer({ root, logLevel: "error", server: { port: 0, host: "127.0.0.1" } });
+// Its own pre-bundle cache, rebuilt every run, so a stale one from the dev server cannot break React's imports.
+const server = await createServer({ root, logLevel: "error", cacheDir: path.join(root, "node_modules/.vite-house-shot"), optimizeDeps: { force: true }, server: { port: 0, host: "127.0.0.1" } });
 await server.listen();
 const url = server.resolvedUrls?.local?.[0] ?? `http://127.0.0.1:${server.config.server.port}/`;
 
@@ -71,6 +74,8 @@ try {
       continue;
     }
     await button.click();
+    // The sun view: the home camera with the sun panel's midsummer (day 172) midday, so the shadows show.
+    if (v === "sun") await page.evaluate(() => window.__houseStore.getState().setSun({ enabled: true, dayOfYear: 172, hour: 13 }));
     await snap(`3d-${v}.png`);
   }
   for (const f of floors) {
@@ -87,5 +92,6 @@ try {
   await server.close();
 }
 console.log(saved.join("\n"));
+console.log(takenLine());
 console.log(errors.length ? `Page errors:\n${errors.join("\n")}` : "No page errors.");
 process.exit(errors.length ? 1 : 0);

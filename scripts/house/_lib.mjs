@@ -1,6 +1,6 @@
 // Shared by the house overlay scripts: load a house definition through Vite (no extra dependency) and render an
 // HTML page to a PNG with the pre-installed Playwright.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,14 @@ export function takeSwallowed(flags, pos, spec, script) {
   if (tip) console.log(tip);
   return flags;
 }
+
+/** Delete the files in `dir` whose names match `pattern` (only those), so old pictures cannot sit beside new ones. */
+export function clearPictures(dir, pattern) {
+  for (const f of readdirSync(dir)) if (pattern.test(f)) rmSync(path.join(dir, f), { force: true });
+}
+
+/** One line saying when the pictures were taken, for telling new from old at a glance. */
+export const takenLine = () => `Pictures taken at ${new Date().toTimeString().slice(0, 8)}.`;
 
 /** The folder for a script's pictures, /tmp/storey-shots/<id>/ unless --out names another; created if missing. */
 export function shotsDir(id, out) {
@@ -149,7 +157,6 @@ export async function screenshot(html, out) {
 export const saveHtml = (file, html) => writeFileSync(file, html);
 
 // ---- First-run welcome and intake state (used by welcome.mjs and start.mjs) ----
-import { readdirSync } from "node:fs";
 
 export const localFile = path.join(root, ".storey-local.json");
 export const SLUG = /^[a-z0-9][a-z0-9-]{1,39}$/;
