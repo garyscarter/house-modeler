@@ -1,5 +1,6 @@
 import type { Floor, HouseModel, StairsDir } from "../types";
 import { pointInPolygon, roomWorldPolygon, toWorld, type V2, type WallPiece } from "./geometry";
+import { BULKHEAD_REACH, growConvex, splitConvex, type Bulkhead } from "./bulkhead";
 
 /**
  * The treads of a flight: a straight run, optionally with kite winders at the
@@ -42,6 +43,10 @@ export const WINDERS = 3;
 export const TOP_WINDERS = 2;
 /** Depth of the flight's structure under a tread where it is not boxed in down to the floor, metres. */
 export const SOFFIT = 0.25;
+/** A wall under a flight stops this far under the tread surface over it, so the two never share a face. */
+export const WALL_UNDER_TREAD = 0.003;
+/** Painted lining on the underside of a tread boxed into a bulkhead whose block would hang below it, metres. */
+export const LINING = 0.004;
 
 type Shape = Pick<FlightShape, "run" | "width" | "turn" | "topTurn" | "topWinders">;
 
@@ -306,12 +311,14 @@ function polygonCentroidOf(pts: V2[]): V2 {
  * Walls of the floor a flight starts from stop under its treads where the
  * flight passes over them (a head that runs on over a wall into the next
  * room). Each piece is split where its centre line crosses the flight, and
- * the part under the flight topped off at the underside of the treads over
- * it. `thickness` is the wall's, so both faces stay under the treads.
+ * the part under the flight topped off just under the surface of the lowest
+ * tread over it (WALL_UNDER_TREAD): inside the treads' blocks, so it shows
+ * nowhere on the stairs, while on the far side it reaches up to the tread
+ * that crosses it, where a bulkhead there meets it. `thickness` is the
+ * wall's, so both faces stay under the treads.
  */
 export function clipUnderFlight(pieces: WallPiece[], f: FlightShape, thickness: number): WallPiece[] {
   const treads = stairTreads(f);
-  const riser = f.rise / treadCount(f);
   const hw = f.width / 2;
   // A wall the foot or a side merely stands against is left alone.
   const m = 0.02;
@@ -357,7 +364,7 @@ export function clipUnderFlight(pieces: WallPiece[], f: FlightShape, thickness: 
         const p = { x: c.x + (n.x * k * thickness) / 2, y: c.y + (n.y * k * thickness) / 2 };
         if (!inFlight(p)) continue;
         const t = treads.find((tr) => pointInPolygon(p, tr.pts));
-        if (t) cap = Math.min(cap, t.top - riser);
+        if (t) cap = Math.min(cap, t.top - WALL_UNDER_TREAD);
       }
     }
     if (!(cap < pc.y1)) return [pc];
@@ -367,4 +374,116 @@ export function clipUnderFlight(pieces: WallPiece[], f: FlightShape, thickness: 
     if (t1 < len - 1e-3) out.push({ ...pc, a: at(t1) });
     return out;
   });
+}
+
+/** A flight's footprint on the plan: the run × width rectangle, world metres. */
+export function flightFootprint(f: Pick<FlightShape, "centre" | "dir" | "run" | "width">): V2[] {
+  const hw = f.width / 2;
+  return [flightAt(f, 0, -hw), flightAt(f, f.run, -hw), flightAt(f, f.run, hw), flightAt(f, 0, hw)];
+}
+
+/** A prism of the flight's structure: a plan outline (world metres) from y0 up to y1 above the floor. */
+export interface FlightBlock {
+  pts: V2[];
+  y0: number;
+  y1: number;
+}
+
+const onSegment = (p: V2, a: V2, b: V2) => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y) < 1e-6;
+};
+
+/** The edge of `t` it shares with `prev` (its riser, where it rises from prev), as [a, b], or null. */
+function riserEdge(t: V2[], prev: V2[]): [V2, V2] | null {
+  for (let i = 0; i < t.length; i++) {
+    const a = t[i];
+    const b = t[(i + 1) % t.length];
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue;
+    const on = (p: V2) => prev.some((q, j) => onSegment(p, q, prev[(j + 1) % prev.length]));
+    if (on(a) && on(b)) return [a, b];
+  }
+  return null;
+}
+
+/**
+ * The solid parts of a flight, as plan prisms: `body` in the painted understairs finish, `carpet` the treads.
+ * Each tread is a carpeted block one riser deep. Under it:
+ * - over the room the foot stands in, the flight is boxed in down to the floor (the understairs cupboard);
+ * - where it has passed over a wall into another room, a soffit SOFFIT deep hangs under it,
+ * - except where a bulkhead covers it (its footprint grown by BULKHEAD_REACH, so one built against the wall also
+ *   covers the wall's thickness): the bulkhead is the boxing, so the flight is boxed down to the bulkhead's
+ *   underside instead, and nothing of it hangs below. A tread whose block would reach below the underside is cut
+ *   off there, under a thin painted lining; its riser, where it rises from a tread outside the bulkhead, is lined
+ *   below the underside (carpet on the stairs' side, paint on the room's), closing the bulkhead down to the tread
+ *   below. A tread whose surface is itself below the underside cannot be boxed in: it is drawn as it is, showing.
+ */
+export function flightBlocks(floor: Floor, f: FlightShape, bulkheads: Bulkhead[] = []): { body: FlightBlock[]; carpet: FlightBlock[] } {
+  const treads = stairTreads(f);
+  const riser = f.rise / treadCount(f);
+  const boxed = boxedPart(floor, f);
+  const covers = bulkheads.map((b) => ({ pts: growConvex(b.pts, BULKHEAD_REACH), bottom: b.bottom }));
+  const body: FlightBlock[] = [];
+  const carpet: FlightBlock[] = [];
+  const inCover = (pts: V2[], cover: V2[]) => splitConvex(pts, cover).inside;
+  treads.forEach((t, k) => {
+    const under = t.top - riser;
+    const box = boxed(t.pts);
+    if (box && under > 0.001) body.push({ pts: box, y0: 0, y1: under });
+    // Wholly over the foot's room: boxed to the floor, and no bulkhead comes into it.
+    if (box === t.pts || under <= 0.001) {
+      carpet.push({ pts: t.pts, y0: Math.max(0, under), y1: t.top });
+      return;
+    }
+    // Split off the parts under each bulkhead; what is left keeps its soffit.
+    let rest: V2[][] = [t.pts];
+    const covered: { pts: V2[]; bottom: number; cover: V2[] }[] = [];
+    for (const c of covers) {
+      rest = rest.flatMap((p) => {
+        const s = splitConvex(p, c.pts);
+        if (s.inside) covered.push({ pts: s.inside, bottom: c.bottom, cover: c.pts });
+        return s.outside;
+      });
+    }
+    for (const p of rest) {
+      body.push({ pts: p, y0: Math.max(0, under - SOFFIT), y1: under });
+      carpet.push({ pts: p, y0: under, y1: t.top });
+    }
+    for (const c of covered) {
+      const B = c.bottom;
+      if (t.top <= B + LINING) {
+        carpet.push({ pts: c.pts, y0: under, y1: t.top });
+        continue;
+      }
+      if (under >= B) {
+        if (under > B + 1e-4) body.push({ pts: c.pts, y0: B, y1: under });
+        carpet.push({ pts: c.pts, y0: under, y1: t.top });
+        continue;
+      }
+      body.push({ pts: c.pts, y0: B, y1: B + LINING });
+      carpet.push({ pts: c.pts, y0: B + LINING, y1: t.top });
+      const edge = k > 0 ? riserEdge(t.pts, treads[k - 1].pts) : null;
+      if (!edge) continue;
+      const [a, b] = edge;
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const mid = t.pts.reduce((s, p) => ({ x: s.x + p.x / t.pts.length, y: s.y + p.y / t.pts.length }), { x: 0, y: 0 });
+      let n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+      if ((mid.x - a.x) * n.x + (mid.y - a.y) * n.y < 0) n = { x: -n.x, y: -n.y };
+      const strip = (d0: number, d1: number) => [
+        { x: a.x + n.x * d0, y: a.y + n.y * d0 },
+        { x: b.x + n.x * d0, y: b.y + n.y * d0 },
+        { x: b.x + n.x * d1, y: b.y + n.y * d1 },
+        { x: a.x + n.x * d1, y: a.y + n.y * d1 },
+      ];
+      // Carpet on the riser's face, standing on the tread below; the bulkhead's lining just behind it.
+      const face = inCover(strip(-0.0025, 0), c.cover);
+      const lining = inCover(strip(0, 0.005), c.cover);
+      if (face) carpet.push({ pts: face, y0: under, y1: B + LINING });
+      if (lining) body.push({ pts: lining, y0: under - 0.005, y1: B });
+    }
+  });
+  return { body, carpet };
 }

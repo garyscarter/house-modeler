@@ -13,6 +13,9 @@ import { boundaryWallSegments } from "../../lib/wallSteps";
 import house91 from "./index";
 import { lintHouse } from "../lint";
 import { LISTING_PRESET, LISTING_PROPOSED_PRESET, listing91770873, listing91770873Proposed, listingSite } from "./house";
+import { flightBlocks, flightS, floorFlight, stairTreads, treadCount } from "../../lib/stairs";
+import { floorBulkheads, splitConvex } from "../../lib/bulkhead";
+import { applyListingUpdates, listingUpdates } from "../../lib/layoutMerge";
 
 const house = listing91770873("");
 const ground = house.floors[0];
@@ -157,7 +160,8 @@ describe("the kitchen", () => {
     // The cupboard door hangs on its east jamb and swings north into the kitchen.
     const cupboardSweep = rectCorners({ x: cupboard.x + (cupboard.widthM * px) / 2 - cl / 2, y: cupboard.y - cl / 2 }, cl, cl, 0);
     expect(convexOverlap(sweep, cupboardSweep, 0.5)).toBe(false);
-    for (const s of solids) expect(convexOverlap(sweep, s.corners, 0.5), s.id).toBe(false);
+    // Anything the leaf could hit: below its head (the bulkhead and its downlights are over it).
+    for (const s of solids.filter((s) => s.z0 < (door.head ?? 2.05))) expect(convexOverlap(sweep, s.corners, 0.5), s.id).toBe(false);
   });
 
   it("runs the sink under the galley window and opens the hatch where the returned units end", () => {
@@ -171,6 +175,118 @@ describe("the kitchen", () => {
     // In kitchen-1 the hatch's glazed half starts about where the return ends, at the wall.
     const north = hatch.y - (hatch.widthM * ground.pxPerM) / 2;
     expect(Math.abs(north - retEnd)).toBeLessThan(0.3 * ground.pxPerM);
+  });
+});
+
+describe("the kitchen's bulkhead and the head of the stairs over it", () => {
+  const H = house.ceilingHeight;
+  const px = ground.pxPerM;
+  const kitchen = ground.rooms.find((r) => r.name === "Kitchen")!;
+  const bulk = (ground.fixtures ?? []).find((f) => f.type === "bulkhead")!;
+  const b = fixtureBox(bulk, byId("bulkhead")!, H);
+  const f = floorFlight(house, ground)!;
+  /** The wall between the kitchen and the stairs hall: plan y 345, its kitchen face half a partition north. */
+  const face = 345 - (WALL_T / 2) * px;
+
+  it("runs the kitchen's full width along its south wall, from the wall to the end of the head, 2.0 m up", () => {
+    expect(bulk).toBeTruthy();
+    expect(kitchen.polygon.some((p) => p.y === 345)).toBe(true);
+    expect(bulk.rot).toBe(0);
+    expect(bulk.x - (b.w * px) / 2).toBeCloseTo(730 + (WALL_T / 2) * px, 0);
+    expect(bulk.x + (b.w * px) / 2).toBeCloseTo(975 - (WALL_T / 2) * px, 0);
+    expect(bulk.y + (b.d * px) / 2).toBeCloseTo(face, 1);
+    expect(bulk.y - (b.d * px) / 2).toBeCloseTo(273, 1);
+    expect(b.z0).toBeCloseTo(2.0);
+    expect(b.z0 + b.h).toBeCloseTo(H);
+    // Same in Proposed, whose ground floor is the listing's.
+    const p = listing91770873Proposed("").floors.find((x) => x.level === 0)!;
+    expect((p.fixtures ?? []).filter((x) => x.type === "bulkhead")).toHaveLength(1);
+  });
+
+  it("has two downlights let into its underside, and the glazed doors either side tucked under it", () => {
+    const lights = (ground.fixtures ?? []).filter((x) => x.type === "downlight");
+    expect(lights).toHaveLength(2);
+    for (const l of lights) {
+      const lb = fixtureBox(l, byId("downlight")!, H);
+      expect(lb.z0 + lb.h).toBeCloseTo(b.z0);
+      expect(Math.abs(l.x - bulk.x)).toBeLessThan((b.w * px) / 2);
+      expect(Math.abs(l.y - bulk.y)).toBeLessThan((b.d * px) / 2);
+    }
+    for (const d of ground.openings.filter((o) => o.kind === "door" && o.style === "glazed-15" && ((o.y === 345 && o.x < 975) || o.x === 975)))
+      expect(d.head).toBeLessThanOrEqual(b.z0 + 1e-9);
+  });
+
+  it("puts the riser onto the head winders inside the wall, so only the head winders are over the kitchen", () => {
+    const sFace = flightS(f, 0, (face - ground.origin.y) / px);
+    const sCentre = flightS(f, 0, (345 - ground.origin.y) / px);
+    const s1 = f.run - f.width;
+    expect(s1).toBeGreaterThan(sCentre);
+    expect(s1).toBeLessThan(sFace);
+    // The foot stays where the plan has it.
+    expect(ground.stairs!.y + (f.run / 2) * px).toBeCloseTo(513.95, 1);
+    const treads = stairTreads(f);
+    const kitchenSide = [
+      { x: -5, y: -10 },
+      { x: 5, y: -10 },
+      { x: 5, y: (face - ground.origin.y) / px },
+      { x: -5, y: (face - ground.origin.y) / px },
+    ];
+    const overKitchen = treads.filter((t) => splitConvex(t.pts, kitchenSide).inside);
+    expect(overKitchen).toHaveLength(2);
+    // Every tread over the kitchen has its surface above the bulkhead's underside, with room for its boards.
+    for (const t of overKitchen) expect(t.top).toBeGreaterThan(b.z0 + 0.05);
+    // In the model's riser-deep blocks the first head winder reaches down to 1.88 m; boxed in, it stops at the underside.
+    expect(overKitchen[0].top - f.rise / treadCount(f)).toBeCloseTo(1.885, 2);
+  });
+
+  it("boxes the flight down to the bulkhead's underside: no tread, carpet or soffit below it inside the kitchen", () => {
+    const [bh] = floorBulkheads(ground, H);
+    const { body, carpet } = flightBlocks(ground, f, [bh]);
+    // The bulkhead's footprint less a centimetre at its edges (where the riser's lining meets the wall).
+    const xs = bh.pts.map((p) => p.x);
+    const ys = bh.pts.map((p) => p.y);
+    const inner = [
+      { x: Math.min(...xs) + 0.01, y: Math.min(...ys) + 0.01 },
+      { x: Math.max(...xs) - 0.01, y: Math.min(...ys) + 0.01 },
+      { x: Math.max(...xs) - 0.01, y: Math.max(...ys) - 0.01 },
+      { x: Math.min(...xs) + 0.01, y: Math.max(...ys) - 0.01 },
+    ];
+    const inside = [...body, ...carpet].filter((x) => splitConvex(x.pts, inner).inside);
+    expect(inside.length).toBeGreaterThan(0);
+    for (const x of inside) expect(x.y0).toBeGreaterThanOrEqual(bh.bottom - 1e-9);
+  });
+
+  it("stays out of the walkthrough's way: it hangs well above the 1 m the walk treats as an obstacle", () => {
+    const mine = (ground.fixtures ?? []).filter((x) => x.type === "bulkhead" || x.type === "downlight");
+    expect(mine).toHaveLength(3);
+    for (const x of mine) expect(fixtureBox(x, byId(x.type)!, H).z0).toBeGreaterThan(1.8);
+  });
+
+  it("is offered to a copy saved before it, ticked, with the stairs change", () => {
+    // A copy of the listing as it was: no bulkhead or its downlights, the flight 3.3 m from the same foot.
+    const old = structuredClone(house);
+    const g = old.floors.find((x) => x.level === 0)!;
+    g.fixtures = (g.fixtures ?? []).filter((x) => x.type !== "bulkhead" && x.type !== "downlight");
+    for (const fl of old.floors) {
+      fl.stairsLen = 3.3;
+      fl.stairs = { ...fl.stairs!, y: fl.stairs!.y - 1.46 };
+    }
+    const changes = listingUpdates(old, house);
+    const bulkhead = changes.find((c) => c.label.includes("Bulkhead"))!;
+    expect(bulkhead).toMatchObject({ group: "fixtures", defaultSelected: true, available: true });
+    expect(bulkhead.label).toContain("Kitchen");
+    const lights = changes.filter((c) => c.group === "fixtures" && c.label.includes("Downlight"));
+    expect(lights).toHaveLength(2);
+    for (const l of lights) expect(l.note).toMatch(/lighting plan/);
+    const stairs = changes.filter((c) => c.group === "stairs");
+    expect(stairs.length).toBeGreaterThan(0);
+    expect(stairs[0].label).toMatch(/3\.3 m → 3\.26 m long/);
+    expect(stairs[0].defaultSelected).toBe(true);
+    const ticked = changes.filter((c) => c.defaultSelected).map((c) => c.id);
+    const out = applyListingUpdates(old, house, ticked);
+    const og = out.floors.find((x) => x.level === 0)!;
+    expect((og.fixtures ?? []).filter((x) => x.type === "bulkhead")).toHaveLength(1);
+    expect(og.stairsLen).toBe(3.26);
   });
 });
 

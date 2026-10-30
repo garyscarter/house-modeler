@@ -665,6 +665,13 @@ export const FixtureSymbol = memo(function FixtureSymbol({
         <rect key="f" x={-fw / 2} y={y0 + 0.02 * m} width={fw} height={0.1 * m} fill={ghost || clash ? fill : "#c8a24a"} fillOpacity={fo} stroke={outline} strokeWidth={sw * 0.6} />,
       );
     }
+    case "bulkhead":
+      // Overhead, as on architects' plans: a faint dashed outline with its diagonals.
+      return g(
+        <rect key="b" x={x0} y={y0} width={w} height={d} fill={ghost || clash ? fill : "#9ca3af"} fillOpacity={ghost || clash ? fo : 0.15} stroke={outline} strokeWidth={sw} strokeDasharray={`${stroke * 6} ${stroke * 4}`} />,
+        <line key="d1" x1={x0} y1={y0} x2={x1} y2={y1} {...thin} strokeDasharray={`${stroke * 6} ${stroke * 4}`} />,
+        <line key="d2" x1={x0} y1={y1} x2={x1} y2={y0} {...thin} strokeDasharray={`${stroke * 6} ${stroke * 4}`} />,
+      );
     case "pendant":
     case "pendant-multi":
     case "flush-light":

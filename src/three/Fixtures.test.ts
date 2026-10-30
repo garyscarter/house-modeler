@@ -46,4 +46,48 @@ describe("buildFixtureMeshes", () => {
   it("casts no shadow from a lamp's glow meshes", () => {
     for (const m of buildFixtureMeshes(floorOf(), 2.4)) if (m.glow) expect(m.castShadow).toBe(false);
   });
+
+  describe("a bulkhead", () => {
+    // 2 m by 1 m, 0.3 m deep, centred at world (2, 2); a downlight in its underside.
+    const floor = {
+      id: "b", name: "B", level: 0, image: "", imageW: 100, imageH: 100, pxPerM: 50, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, rooms: [], openings: [],
+      fixtures: [
+        { id: "k", type: "bulkhead", x: 100, y: 100, rot: 0, w: 2, d: 1, h: 0.3 },
+        { id: "d", type: "downlight", x: 75, y: 100, rot: 0, drop: 0.3 },
+      ],
+    } as unknown as Floor;
+    const bounds = (cuts?: { x: number; y: number }[][]) => {
+      const box = new THREE.Box3();
+      for (const m of buildFixtureMeshes(floor, 2.4, cuts)) {
+        if (m.glow) continue;
+        m.geometry.computeBoundingBox();
+        box.union(m.geometry.boundingBox!);
+      }
+      return box;
+    };
+
+    it("hangs flush from the ceiling, its underside its height below", () => {
+      const b = bounds();
+      expect(b.max.y).toBeCloseTo(2.4);
+      expect(b.min.y).toBeLessThan(2.1);
+    });
+
+    it("is left out over a flight passing up through it", () => {
+      const cut = [{ x: 1.8, y: 0 }, { x: 2.2, y: 0 }, { x: 2.2, y: 4 }, { x: 1.8, y: 4 }];
+      const meshes = buildFixtureMeshes(floor, 2.4, [cut]).filter((m) => !m.glow && m.key.startsWith("#f3f3f0"));
+      expect(meshes).toHaveLength(1);
+      const pos = meshes[0].geometry.attributes.position;
+      // No vertex of the box inside the cut.
+      for (let i = 0; i < pos.count; i++) expect(pos.getX(i) > 1.8 + 1e-6 && pos.getX(i) < 2.2 - 1e-6).toBe(false);
+    });
+
+    it("lets a downlight with a drop into its underside: the ring's face at the underside, not the ceiling", () => {
+      const ring = buildFixtureMeshes(floor, 2.4).filter((m) => m.key.startsWith("L|#f4f4f2"));
+      expect(ring.length).toBeGreaterThan(0);
+      for (const m of ring) {
+        m.geometry.computeBoundingBox();
+        expect(m.geometry.boundingBox!.max.y).toBeCloseTo(2.1, 3);
+      }
+    });
+  });
 });

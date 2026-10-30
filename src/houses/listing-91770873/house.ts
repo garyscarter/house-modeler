@@ -80,8 +80,8 @@ const FF_WINDOW: Partial<Opening> = { ...UPVC, sill: 0.98, head: 1.95 };
 /** The hall's windows: frames about 1 m tall, sills about 0.95 m up (front-street, front-2, front-3). */
 const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 23 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 23 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 24 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 24 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 7 };
 
@@ -219,14 +219,16 @@ export function listing91770873(image: string): HouseModel {
       // living-front-2 inside). Each face is a large fixed pane under a narrow top light (front-2).
       { ...op("bay", 1177, 515, "h", 1.6), depth: 0.3, glazing: "fixed-top", ...UPVC },
       op("door", 1045, 410, "v", 0.8, MAHOGANY_DOOR), // hall -> front living room
-      op("door", 770, 345, "h", 0.8, MAHOGANY_DOOR), // kitchen -> front hall
+      // The two glazed doors out of the kitchen have their heads tucked under the bulkhead along its south wall
+      // (kitchen-2): 2.0 m openings, the bulkhead's underside (fixtures below).
+      op("door", 770, 345, "h", 0.8, { ...MAHOGANY_DOOR, head: 2.0 }), // kitchen -> front hall
       // Kitchen -> stairs hall: not beside the stairs where the floorplan draws it (x 950 on y 345), but in the
       // kitchen's east wall at its south-east corner, opening onto the little recess off the stairs hall by the
       // living-room door (x 975-1045, y 278-345). kitchen-2 shows it there, beside the hatch wall with the
       // kitchen's south wall running back from it to the cupboard door; hall-stairs-2 shows a radiator where
       // the plan's door was (owner confirms). The wall between the recess's corners is only 0.92 m, so it is a
       // 762 mm door. Latch to the north and hinges on the south jamb (kitchen-2), opening into the kitchen.
-      op("door", 975, 311.5, "v", 0.76, { ...MAHOGANY_DOOR, flipHinge: true }), // kitchen -> stairs hall
+      op("door", 975, 311.5, "v", 0.76, { ...MAHOGANY_DOOR, flipHinge: true, head: 2.0 }), // kitchen -> stairs hall
       op("door", 960, 515, "h", 0.8, MAHOGANY_DOOR), // stairs hall -> front hall
       // Glazed door across the corridor from the front hall to the kitchen, hung on its east jamb
       // (plan: leaf 745-805 at y 443, opening north; galley-1). It sits in a short partition (ground.walls below).
@@ -252,7 +254,7 @@ export function listing91770873(image: string): HouseModel {
       // Its head is about 1.9 m up (front-street, front-2, front-3; the front door beside it reads 2.05 m).
       op("garage", 635, 515, "h", 2.15, { color: "#b3202e", style: "up-over", frameColor: "#f2efe6", head: 1.9 }), // garage door
     ],
-    { x: 865, y: 393.5 }, // centre of the flight (below)
+    { x: 865, y: 394.96 }, // centre of the flight (below): its foot at plan y 513.95
     // Covered porch in front of the garage door and front door.
     [
       [
@@ -268,10 +270,13 @@ export function listing91770873(image: string): HouseModel {
   // Its head winds a quarter turn the same way, two winders onto the west end of the landing,
   // stepped off eastwards (owner; the floorplan's walk line turns east at the top, and landing-1
   // is taken from there looking east). The flight runs on over the kitchen/hall wall: its head
-  // fills the landing's full depth, from the foot (plan y 514) to the landing's north wall
-  // (first-floor y 1046 = ground y 273), so 3.3 m, 13 risers of about 204 mm.
+  // fills the landing's depth, from the foot (plan y 514) to just short of the landing's north wall
+  // (first-floor y 1046 = ground y 273). 13 risers of about 188 mm. It is 3.26 m, 4 cm short of the
+  // plan's 3.3 m, so that the riser up onto the head winders stands inside the kitchen/hall wall, as
+  // the first-floor plan draws one (its tread line at y 1116 = ground 343): the treads over the kitchen
+  // are then only the head winders, which the kitchen's bulkhead boxes in (NOTES "Stairs", "Length").
   ground.stairsDir = "up";
-  ground.stairsLen = 3.3;
+  ground.stairsLen = 3.26;
   ground.stairsWidth = 0.9;
   ground.stairsTurn = "right";
   ground.stairsTopTurn = "right";
@@ -307,6 +312,15 @@ export function listing91770873(image: string): HouseModel {
     { id: uid(), type: "wall-unit", x: 551.17, y: 51.75, rot: 270, w: 0.565, color: UNITS },
     { id: uid(), type: "cooker-hood", x: 555.55, y: 94.27, rot: 270, color: UNITS },
     { id: uid(), type: "wall-unit", x: 551.17, y: 136.25, rot: 270, w: 0.55, color: UNITS },
+    // The bulkhead along the kitchen's south wall that boxes in the head of the stairs (kitchen-2): a flat
+    // painted box the kitchen's full width (walls' inner faces, x 733.65-971.35), from the south wall's inner face
+    // (y 341.35) to the end of the flight's head (y 273), its underside 2.0 m up (0.25 m down from the ceiling).
+    // The glazed doors either side of the cupboard door have their heads under it (their openings 2.0 m, above).
+    // Two downlights in its underside, about 0.35 m out from the wall: one in front of the glazed door to the
+    // front hall, one between the cupboard door and the east wall (kitchen-2; places judged by eye).
+    { id: uid(), type: "bulkhead", x: 852.5, y: 307.175, rot: 0, w: 3.256, d: 0.936, h: 0.25 },
+    { id: uid(), type: "downlight", x: 795, y: 315, rot: 0, drop: 0.25 },
+    { id: uid(), type: "downlight", x: 934.6, y: 315, rot: 0, drop: 0.25 },
     // Rear living room: carved mahogany surround on the chimney breast's face (x 1253), marble hearth.
     { id: uid(), type: "fireplace", x: 1234.6, y: 153.5, rot: 90 },
     // Radiators from the photos: white steel panels about 0.15 m off the floor, backs at the walls' inner
@@ -389,11 +403,11 @@ export function listing91770873(image: string): HouseModel {
       op("window", 972, 1285, "h", 0.95, { glazing: "fixed-top", ...FF_WINDOW }),
       op("window", 610, 1080, "v", 0.6, FF_WINDOW),
     ],
-    { x: 650, y: 1166.5 }, // where the ground floor's flight arrives (below)
+    { x: 650, y: 1167.96 }, // where the ground floor's flight arrives (below)
   );
   // The flight arriving from the ground floor, drawn the same on this floor's plan.
   first.stairsDir = "up";
-  first.stairsLen = 3.3;
+  first.stairsLen = 3.26;
   first.stairsWidth = 0.9;
   first.stairsTurn = "right";
   first.stairsTopTurn = "right";

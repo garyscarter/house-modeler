@@ -90,6 +90,7 @@ export type Symbol =
   | "built-in"
   | "window-seat"
   | "wall-box"
+  | "bulkhead"
   // Lighting (see lib/lights.ts for what each one emits)
   | "pendant"
   | "pendant-multi"
@@ -259,6 +260,8 @@ export const CATALOGUE: CatalogueItem[] = [
   { id: "built-in-alcove", name: "Built-in alcove unit", category: "Joinery", w: 0.9, d: 0.4, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0.85, baseFront: "shaker", top: true, plinth: true, shelves: 3, upperFront: "open", upperD: 0.3 }, note: "Cupboards below, open shelves above, floor to ceiling; click in an alcove to fit it" },
   { id: "built-in-cupboard", name: "Built-in cupboard (full height)", category: "Joinery", w: 0.9, d: 0.5, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0.9, baseFront: "shaker", top: false, plinth: true, shelves: 3, upperFront: "shaker", topBox: 0.4 }, note: "Doors top to bottom with a top box; click in an alcove to fit it" },
   { id: "built-in-shelves", name: "Built-in shelves (open)", category: "Joinery", w: 0.9, d: 0.3, h: 2.4, color: PAINTED, symbol: "built-in", toCeiling: true, joinery: { baseH: 0, plinth: true, shelves: 5, upperFront: "open" }, note: "Open shelving floor to ceiling; click in an alcove to fit it" },
+  // In the rooms' ceiling white (three/House.tsx RoomCeiling). Its height is how far it comes down from the ceiling.
+  { id: "bulkhead", name: "Bulkhead (boxed-in ceiling)", category: "Joinery", w: 1.2, d: 0.6, h: 0.3, color: "#f3f3f0", symbol: "bulkhead", ceiling: true, note: "A box hung flush from the ceiling, boxing in stairs, pipes or ducts; set any width, depth and height (how far it comes down). A flight passing through it is boxed down to its underside" },
   { id: "window-seat", name: "Window seat", category: "Joinery", w: 1.2, d: 0.5, h: 0.45, color: PAINTED, symbol: "window-seat", joinery: { seatFront: "lid", plinth: true, backCushion: false }, note: "Storage bench with a cushion; click by a window to fit it to the window" },
   { id: "banquette", name: "Banquette", category: "Joinery", w: 1.6, d: 0.55, h: 0.45, color: PAINTED, symbol: "window-seat", joinery: { seatFront: "drawers", plinth: true, backCushion: true }, note: "Bench seat with drawers and back cushions, along a wall or under a window" },
   { id: "floating-shelves", name: "Floating shelves (stack of 3)", category: "Joinery", w: 1.0, d: 0.25, h: 0.74, color: WOOD, symbol: "shelf", mount: 1.2, joinery: { shelves: 3, shelfT: 0.04 }, note: "Set how many shelves, their spacing and thickness" },

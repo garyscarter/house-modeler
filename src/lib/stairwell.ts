@@ -1,6 +1,7 @@
 import type { Floor, HouseModel } from "../types";
 import { areaOf, buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
 import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
+import { BULKHEAD_REACH, floorBulkheads, growConvex } from "./bulkhead";
 
 /**
  * Stairwells: the opening in the floor above each flight, and where its
@@ -234,6 +235,14 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
   const across = { x: -f.dir.y, y: f.dir.x };
   const side = (sign: number): V2 => ({ x: across.x * sign, y: across.y * sign });
   const boxed = boxedIn(lower, f);
+  // A newel over a room the flight passes over hangs from its soffit, or stops at the underside of a bulkhead boxing
+  // the flight in there, like the flight itself.
+  const covers = floorBulkheads(lower, model.ceilingHeight).map((b) => ({ pts: growConvex(b.pts, BULKHEAD_REACH), bottom: b.bottom }));
+  const newelFoot = (p: V2, y: number) => {
+    if (boxed(p)) return 0;
+    const hung = Math.max(0, y - NEWEL_DROP);
+    return covers.reduce((h, c) => (pointInPolygon(p, c.pts) ? Math.max(h, c.bottom) : h), hung);
+  };
   const lowerGaps = openingGaps(lower, model.ceilingHeight);
   const upperGaps = openingGaps(upper, model.ceilingHeight);
   /** The end of a turned head, where the side it turns to begins. */
@@ -250,8 +259,8 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     if (s1 - s0 < 0.05 || !openSide(lower, a, b, side(sign), model.ceilingHeight)) continue;
     const ya = stairHeight(f, s0, l * 0.999);
     const yb = stairHeight(f, s1, l * 0.999);
-    const run: RailRun = { a, b, ya, yb, fa: boxed(a) ? 0 : Math.max(0, ya - NEWEL_DROP), fb: boxed(b) ? 0 : Math.max(0, yb - NEWEL_DROP) };
-    out.lower.push(...cutAtOpenings(run, lowerGaps, (p, y) => (boxed(p) ? 0 : Math.max(0, y - NEWEL_DROP))));
+    const run: RailRun = { a, b, ya, yb, fa: newelFoot(a, ya), fb: newelFoot(b, yb) };
+    out.lower.push(...cutAtOpenings(run, lowerGaps, newelFoot));
   }
   for (const r of well.rects) {
     const corners = [

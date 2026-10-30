@@ -98,7 +98,7 @@ describe("the built-in house's stairwell", () => {
     // Along the head's west side, the full depth of the landing, at floor level.
     expect(r.a.x).toBeCloseTo(w.flight.centre.x - w.flight.width / 2);
     expect(r.b.x).toBeCloseTo(r.a.x);
-    expect(Math.abs(r.b.y - r.a.y)).toBeGreaterThan(0.85);
+    expect(Math.abs(r.b.y - r.a.y)).toBeGreaterThan(0.8);
     expect(Math.max(r.a.y, r.b.y)).toBeLessThan((1110 - 1203) / 73 + 1e-6);
   });
 
@@ -124,7 +124,7 @@ describe("balustrades at doorways", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].upper).toEqual([]);
     expect(runs[0].lower.map(flat)).toEqual([
-      { a: [0.45, 0.25], b: [0.45, -1.25], ya: 0.5654, yb: 1.8846, fa: 0, fb: 1.5346 },
+      { a: [0.45, 0.25], b: [0.45, -1.21], ya: 0.5654, yb: 1.8846, fa: 0, fb: 2 },
     ]);
   });
 
@@ -145,7 +145,7 @@ describe("balustrades at doorways", () => {
       if (nearLine) expect(y1 <= lo || y0 >= hi).toBe(true);
     }
     // The lower flight's rail is untouched.
-    expect(lower.map(flat)).toEqual([{ a: [0.45, 0.25], b: [0.45, -1.25], ya: 0.5654, yb: 1.8846, fa: 0, fb: 1.5346 }]);
+    expect(lower.map(flat)).toEqual([{ a: [0.45, 0.25], b: [0.45, -1.21], ya: 0.5654, yb: 1.8846, fa: 0, fb: 2 }]);
     expect(rails.map(flat)).toEqual([]);
   });
 
