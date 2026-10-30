@@ -1,7 +1,7 @@
 import type { V2 } from "./geometry";
 import {
   ALL_OPEN, CELL, MAX_STEP, WALKER_R, cellAt, cellPt, crossAt, doorIsOpen, floorAt, groundAt, inGarden, insideFlight, internalOf, levelIndex,
-  nearestCell, passable, roomIndexAt, roomStand, segObsDist, standable, stairState, type WalkInternal,
+  STAND_OUT, nearestCell, passable, pathLength, roomIndexAt, stairPath, roomStand, segObsDist, standable, stairState, type WalkInternal,
 } from "./walkNav";
 import { GROUND_DROP } from "./site";
 import type { DoorStates, NavWorld, RouteResult, WalkGoal, WalkHit, WalkPoint, WalkPose, WalkRoute } from "./walkTypes";
@@ -60,23 +60,36 @@ class Heap {
   }
 }
 
+/** A way over a flight, from one of its ends to another (foot, head, side exits), each end's stand cell to the other's. */
 interface Link {
+  from: number;
   to: number;
   cost: number;
   fi: number;
+  a: number;
+  b: number;
+  /** Doors on the way (a side exit's), which must be open. */
+  doors: number[];
 }
-const linkCache = new WeakMap<WalkInternal, Map<number, Link[]>>();
-function linksOf(I: WalkInternal): Map<number, Link[]> {
+const linkCache = new WeakMap<WalkInternal, { byNode: Map<number, number[]>; list: Link[] }>();
+function linksOf(I: WalkInternal): { byNode: Map<number, number[]>; list: Link[] } {
   let m = linkCache.get(I);
   if (m) return m;
-  m = new Map();
+  const list: Link[] = [];
+  const byNode = new Map<number, number[]>();
   I.flights.forEach((F, fi) => {
-    if (F.footCell < 0 || F.headCell < 0) return;
-    const a = I.off[F.lower] + F.footCell;
-    const b = I.off[F.upper] + F.headCell;
-    m!.set(a, [...(m!.get(a) ?? []), { to: b, cost: F.cost, fi }]);
-    m!.set(b, [...(m!.get(b) ?? []), { to: a, cost: F.cost, fi }]);
+    F.ends.forEach((A, a) =>
+      F.ends.forEach((B, b) => {
+        if (a === b || A.cell < 0 || B.cell < 0) return;
+        const from = I.off[A.li] + A.cell;
+        const to = I.off[B.li] + B.cell;
+        const doors = [A.door, B.door].filter((d) => d >= 0);
+        byNode.set(from, [...(byNode.get(from) ?? []), list.length]);
+        list.push({ from, to, cost: pathLength(stairPath(F, a, b)) + 2 * STAND_OUT + 0.5, fi, a, b, doors });
+      }),
+    );
   });
+  m = { byNode, list };
   linkCache.set(I, m);
   return m;
 }
@@ -94,7 +107,7 @@ export const nodePt = (I: WalkInternal, id: number): V2 => {
 export interface Field {
   g: Float64Array;
   parent: Int32Array;
-  /** The flight used to reach a node, -1 for none. */
+  /** The stair link (index in linksOf(I).list) used to reach a node, -1 for none. */
   via: Int16Array;
 }
 
@@ -159,13 +172,14 @@ export function search(I: WalkInternal, starts: { id: number; g: number }[], goa
         heap.push(off + j, ng + h(li, j));
       }
     }
-    for (const L of links.get(id) ?? []) {
-      if (closed[L.to]) continue;
+    for (const li2 of links.byNode.get(id) ?? []) {
+      const L = links.list[li2];
+      if (closed[L.to] || !L.doors.every(open)) continue;
       const ng = g[id] + L.cost;
       if (ng < g[L.to]) {
         g[L.to] = ng;
         parent[L.to] = id;
-        via[L.to] = L.fi;
+        via[L.to] = li2;
         const lj = liOfNode(I, L.to);
         heap.push(L.to, ng + h(lj, L.to - I.off[lj]));
       }
@@ -268,29 +282,37 @@ function plan(I: WalkInternal, from: WalkPose, to: WalkPoint, open: Open): Plann
   const goalPt = exact ? { x: to.x, y: to.y } : cellPt(gg, goalCell);
 
   // Where we start: a cell near the walker, or either end of the flight we are on.
-  const starts: { id: number; g: number; prefix: WalkPoint[]; at: V2 }[] = [];
+  const starts: { id: number; g: number; prefix: WalkPoint[]; at: V2; door?: number }[] = [];
   const F = from.stair !== null ? I.flights[from.stair] : undefined;
   if (F && from.stair !== null) {
     const fi = from.stair;
-    const line = F.line;
-    let k = 0;
-    line.forEach((p, i) => {
-      if (Math.hypot(p.x - from.x, p.y - from.y) < Math.hypot(line[k].x - from.x, line[k].y - from.y)) k = i;
-    });
     const lenOf = (pts: V2[]) => pts.reduce((s, p, i) => s + (i ? Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) : Math.hypot(p.x - from.x, p.y - from.y)), 0);
-    if (F.footCell >= 0) {
-      const down = [...line.slice(0, k + 1).reverse()];
-      starts.push({ id: I.off[F.lower] + F.footCell, g: lenOf([...down, F.footStand]), at: F.footStand, prefix: [...stairPoints(I, fi, down), { ...F.footStand, level: levelNum(I, F.lower), stair: null }] });
-    }
-    if (F.headCell >= 0) {
-      const up = line.slice(k);
-      starts.push({ id: I.off[F.upper] + F.headCell, g: lenOf([...up, F.headStand]), at: F.headStand, prefix: [...stairPoints(I, fi, up), { ...F.headStand, level: levelNum(I, F.upper), stair: null }] });
-    }
+    F.ends.forEach((E, e) => {
+      if (E.cell < 0 || (E.door >= 0 && !open(E.door))) return;
+      // Along the walking line towards that end, from the point on it nearest the walker.
+      let best: V2[] | null = null;
+      let bd = Infinity;
+      for (const src of [0, 1]) {
+        if (src === e) continue;
+        const path = stairPath(F, src, e);
+        let k = 0;
+        path.forEach((p, i) => {
+          if (Math.hypot(p.x - from.x, p.y - from.y) < Math.hypot(path[k].x - from.x, path[k].y - from.y)) k = i;
+        });
+        const d = Math.hypot(path[k].x - from.x, path[k].y - from.y);
+        if (d < bd) {
+          bd = d;
+          best = path.slice(k);
+        }
+      }
+      const way = best!;
+      starts.push({ id: I.off[E.li] + E.cell, g: lenOf([...way, E.stand]), at: E.stand, prefix: [...stairPoints(I, fi, way), { ...E.stand, level: levelNum(I, E.li), stair: null }], door: E.door });
+    });
   } else {
     const li = levelIndex(I, from.level);
     const g = I.levels[li].grid;
     const c = nearestCell(g, from, 1.5, (i) => passable(g, i, open));
-    if (c >= 0) starts.push({ id: I.off[li] + c, g: Math.hypot(cellPt(g, c).x - from.x, cellPt(g, c).y - from.y), at: { x: from.x, y: from.y }, prefix: [] });
+    if (c >= 0) starts.push({ id: I.off[li] + c, g: Math.hypot(cellPt(g, c).x - from.x, cellPt(g, c).y - from.y), at: { x: from.x, y: from.y }, prefix: [], door: -1 });
   }
   if (!starts.length) return null;
   const res = search(I, starts, goal, open);
@@ -299,8 +321,12 @@ function plan(I: WalkInternal, from: WalkPose, to: WalkPoint, open: Open): Plann
   const nodes: number[] = [];
   for (let id = goal; id >= 0; id = res.parent[id]) nodes.push(id);
   nodes.reverse();
-  const start = starts.find((s) => s.id === nodes[0])!;
+  const start = starts.reduce((b, s) => (s.id === nodes[0] && (b.id !== nodes[0] || s.g < b.g) ? s : b), starts[0]);
   const points: WalkPoint[] = [...start.prefix];
+  const links = linksOf(I);
+  // Doors crossed stepping on or off the treads sideways, with the first point beyond each.
+  const sideDoors: { key: string; index: number }[] = [];
+  if (start.door !== undefined && start.door >= 0) sideDoors.push({ key: I.doors[start.door].nd.key, index: points.length - 1 });
   const cellDoors: number[] = [];
   // Split the node path into runs on one storey, joined by flights.
   const runs: { li: number; cells: number[]; viaIn: number }[] = [];
@@ -316,22 +342,26 @@ function plan(I: WalkInternal, from: WalkPose, to: WalkPoint, open: Open): Plann
   runs.forEach((run, k) => {
     const g = I.levels[run.li].grid;
     if (k > 0) {
-      const Fl = I.flights[run.viaIn];
-      const up = run.li === Fl.upper;
-      points.push(...stairPoints(I, run.viaIn, up ? Fl.line : [...Fl.line].reverse()));
-      cur = up ? Fl.headStand : Fl.footStand;
+      const L = links.list[run.viaIn];
+      const Fl = I.flights[L.fi];
+      const A = Fl.ends[L.a];
+      const B = Fl.ends[L.b];
+      if (A.door >= 0) sideDoors.push({ key: I.doors[A.door].nd.key, index: points.length });
+      points.push(...stairPoints(I, L.fi, stairPath(Fl, L.a, L.b)));
+      cur = B.stand;
       points.push({ ...cur, level: levelNum(I, run.li), stair: null });
+      if (B.door >= 0) sideDoors.push({ key: I.doors[B.door].nd.key, index: points.length - 1 });
     }
     let end: V2;
     if (k === runs.length - 1) end = goalPt;
     else {
-      const Fn = I.flights[runs[k + 1].viaIn];
-      end = run.li === Fn.lower ? Fn.footStand : Fn.headStand;
+      const L = links.list[runs[k + 1].viaIn];
+      end = I.flights[L.fi].ends[L.a].stand;
     }
     const mids = run.cells.map((c) => cellPt(g, c));
     for (const p of pull(I, run.li, cur, mids, end, open)) points.push({ x: p.x, y: p.y, level: levelNum(I, run.li), stair: null });
   });
-  const route: WalkRoute = { points, doors: doorsCrossed(I, from, points) };
+  const route: WalkRoute = { points, doors: [...doorsCrossed(I, from, points), ...sideDoors].sort((a, b) => a.index - b.index) };
   return { route, cellDoors, cost: res.g[goal] };
 }
 
@@ -410,10 +440,7 @@ export function goalPoint(nav: NavWorld, goal: WalkGoal): { point: WalkPoint; ya
 export function startNodes(I: WalkInternal, from: WalkPose | WalkPoint, open: Open): { id: number; g: number }[] {
   if (from.stair !== null && I.flights[from.stair]) {
     const F = I.flights[from.stair];
-    const out: { id: number; g: number }[] = [];
-    if (F.footCell >= 0) out.push({ id: I.off[F.lower] + F.footCell, g: Math.hypot(F.footStand.x - from.x, F.footStand.y - from.y) });
-    if (F.headCell >= 0) out.push({ id: I.off[F.upper] + F.headCell, g: Math.hypot(F.headStand.x - from.x, F.headStand.y - from.y) });
-    return out;
+    return F.ends.filter((e) => e.cell >= 0 && (e.door < 0 || open(e.door))).map((e) => ({ id: I.off[e.li] + e.cell, g: Math.hypot(e.stand.x - from.x, e.stand.y - from.y) }));
   }
   const li = levelIndex(I, from.level);
   const g = I.levels[li].grid;

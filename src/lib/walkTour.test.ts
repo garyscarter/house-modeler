@@ -52,14 +52,12 @@ describe("planTour", () => {
     expect(g.at.y).toBeLessThan(-9);
   });
 
-  it("works on the proposed layout", () => {
+  it("works on the proposed layout, new room included", () => {
     const nav = buildNav(builtInProposed(""), listingSite(), false);
     const stops = checkTour(nav);
     const names = stops.map((s) => s.name);
-    for (const n of ["Hallway (front)", "Kitchen", "Living Room (rear)", "Landing", "Bathroom", "Bedroom 1", "Bedroom 2", "Bedroom 3"]) expect(names).toContain(n);
-    // Known limit: the new room's door opens off the left of the top winders, which turn right onto the landing.
-    // The stairs can only be left by their exit edge, so the walk cannot reach it yet (checkTour has checked it is unreachable).
-    expect(names).not.toContain("New Room");
+    // The new room's door opens off the side of the top winders: the walk steps off the treads through it.
+    for (const n of ["Hallway (front)", "Kitchen", "Living Room (rear)", "Landing", "Bathroom", "Bedroom 1", "Bedroom 2", "Bedroom 3", "New Room"]) expect(names).toContain(n);
   });
 
   it("skips cupboards and rooms too small to visit, and has no garden without a plot", () => {

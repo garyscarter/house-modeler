@@ -24,6 +24,8 @@ import { doorKey, initiallyOpen, passageOf, patioSlider, yawOf, type DoorStates,
 export const WALKER_R = 0.25;
 /** Highest step up a walker takes without stairs, metres (kerbs, a threshold). */
 export const MAX_STEP = 0.3;
+/** Highest step on or off the treads sideways, through a doorway off the flight's side (about two risers), metres. */
+export const SIDE_STEP = 0.45;
 /** Grid cell, metres. Fine enough that a 0.65 m door leaves a column of free cells. */
 export const CELL = 0.1;
 /**
@@ -36,7 +38,7 @@ const CLR_REACH = 0.6;
 /** Below this height a wall piece stops you (a window's sill wall does; a lintel doesn't). */
 const PIECE_MAX_Y0 = 0.3;
 /** How far beyond the flight's entry and exit edges its stand spots are. */
-const STAND_OUT = 0.35;
+export const STAND_OUT = 0.35;
 
 export interface BB {
   x0: number;
@@ -117,6 +119,26 @@ export interface FlightNav {
   headStand: V2;
   footCell: number;
   headCell: number;
+  /** Ways on and off: 0 the foot, 1 the head, then side exits through doorways off the flight's sides. */
+  ends: StairEnd[];
+}
+
+/** A way on or off a flight. */
+export interface StairEnd {
+  /** The storey it leads to. */
+  li: number;
+  /** Midpoint on the flight's edge, and the point level with it on the centre line. */
+  mid: V2;
+  centre: V2;
+  /** Where on the run it is, and for a side exit, which side (+1 right going up, -1 left) and the stretch of side it opens. */
+  s: number;
+  side: -1 | 0 | 1;
+  s0: number;
+  s1: number;
+  /** Door through it (index in doors), -1 for none. */
+  door: number;
+  stand: V2;
+  cell: number;
 }
 
 export interface DoorNav {
@@ -447,6 +469,30 @@ export function leftBy(F: FlightNav, p: V2): "entry" | "exit" | null {
   return entry ? "entry" : exit ? "exit" : null;
 }
 
+/** The side exit (index in ends) a point beyond the flight's side is at, or -1. */
+export function sideAt(F: FlightNav, p: V2): number {
+  const { s, l } = flightSL(F, p);
+  for (let k = 2; k < F.ends.length; k++) {
+    const e = F.ends[k];
+    if (e.side * l >= F.f.width / 2 - 1e-6 && s >= e.s0 - 0.05 && s <= e.s1 + 0.05) return k;
+  }
+  return -1;
+}
+
+export const pathLength = (pts: V2[]) => pts.reduce((t, p, i) => t + (i ? Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) : 0), 0);
+
+/** The walking line between two ends of a flight: edge midpoint, along the centre line, edge midpoint; points at most 0.3 m apart. */
+export function stairPath(F: FlightNav, a: number, b: number): V2[] {
+  const A = F.ends[a];
+  const B = F.ends[b];
+  const pts: V2[] = [A.mid];
+  for (const p of [A.centre, B.centre, B.mid]) {
+    const q = pts[pts.length - 1];
+    if (Math.hypot(p.x - q.x, p.y - q.y) > 1e-6) pts.push(p);
+  }
+  return densify(pts, 0.3);
+}
+
 /** How deep a walker at p sits inside the obstacles (0 when clear). */
 export function penetration(obs: Obs[], x: number, y: number, open: (d: number) => boolean): number {
   let pen = 0;
@@ -707,7 +753,8 @@ function rectPoly(F: Flight): V2[] {
 
 type Edge = { s0: number; l0: number; s1: number; l1: number };
 /** The flight's outline as four (s, l) edges, less its entry edge and/or exit edge. */
-function flightEdges(F: Flight, noEntry: boolean, noExit: boolean): Edge[] {
+type SideCut = { side: number; s0: number; s1: number };
+function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCut[] = []): Edge[] {
   const { run, width: w, turn } = F;
   const hw = w / 2;
   const top = F.topTurn ?? 0;
@@ -716,6 +763,7 @@ function flightEdges(F: Flight, noEntry: boolean, noExit: boolean): Edge[] {
     const cut: [number, number][] = [];
     if (noEntry && turn && Math.sign(l) === turn) cut.push([0, w]);
     if (noExit && top && Math.sign(l) === top) cut.push([run - w, run]);
+    for (const c of sides) if (c.side === Math.sign(l)) cut.push([c.s0, c.s1]);
     for (const [a, b] of subtract(0, run, cut)) out.push({ s0: a, l0: l, s1: b, l1: l });
   };
   side(-hw);
@@ -727,7 +775,7 @@ function flightEdges(F: Flight, noEntry: boolean, noExit: boolean): Edge[] {
 const edgeObs = (F: Flight, e: Edge) => boxObs(flightAt(F, e.s0, e.l0), flightAt(F, e.s1, e.l1), 0);
 
 /** A well's edges, less where they lie along the flight's exit edge. */
-function wellObs(F: Flight, r: Rect): Obs[] {
+function wellObs(F: Flight, r: Rect, sides: SideCut[] = []): Obs[] {
   const corners = [
     { x: r.x0, y: r.y0 },
     { x: r.x1, y: r.y0 },
@@ -745,15 +793,19 @@ function wellObs(F: Flight, r: Rect): Obs[] {
     const sb = flightS(F, b.x, b.y);
     const lb = flightL(F, b.x, b.y);
     // Parameter t along a-b where the edge's s (or l) reaches the given value.
-    let cut: [number, number][] = [];
-    if (top && Math.abs(la - (top * w) / 2) < 0.03 && Math.abs(lb - (top * w) / 2) < 0.03 && Math.abs(sb - sa) > 1e-6) {
-      const t0 = (run - w - sa) / (sb - sa);
-      const t1 = (run - sa) / (sb - sa);
-      cut = [[Math.min(t0, t1), Math.max(t0, t1)]];
-    } else if (!top && Math.abs(sa - run) < 0.03 && Math.abs(sb - run) < 0.03 && Math.abs(lb - la) > 1e-6) {
+    const cut: [number, number][] = [];
+    const along = [...(top ? [{ side: top, s0: run - w, s1: run }] : []), ...sides];
+    for (const c of along) {
+      if (Math.abs(la - (c.side * w) / 2) < 0.03 && Math.abs(lb - (c.side * w) / 2) < 0.03 && Math.abs(sb - sa) > 1e-6) {
+        const t0 = (c.s0 - sa) / (sb - sa);
+        const t1 = (c.s1 - sa) / (sb - sa);
+        cut.push([Math.min(t0, t1), Math.max(t0, t1)]);
+      }
+    }
+    if (!top && Math.abs(sa - run) < 0.03 && Math.abs(sb - run) < 0.03 && Math.abs(lb - la) > 1e-6) {
       const t0 = (-w / 2 - la) / (lb - la);
       const t1 = (w / 2 - la) / (lb - la);
-      cut = [[Math.min(t0, t1), Math.max(t0, t1)]];
+      cut.push([Math.min(t0, t1), Math.max(t0, t1)]);
     }
     for (const [t0, t1] of subtract(0, 1, cut))
       out.push(boxObs({ x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 }, { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 }, 0));
@@ -838,10 +890,54 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     if (lower < 0 || upper < 0) continue;
     const { run, width: w, turn } = f;
     const top = f.topTurn ?? 0;
-    levels[lower].obs.push(...flightEdges(f, true, false).map((e) => edgeObs(f, e)));
+    const hw = w / 2;
+    const lowerBase = levels[lower].baseY;
+    // Side exits: doorways in a wall along the flight's side, where the treads are within SIDE_STEP of that floor.
+    const sides: StairEnd[] = [];
+    for (const li of [lower, upper]) {
+      doors.forEach((d, di) => {
+        if (d.li !== li || d.nd.passage === "shut") return;
+        const sa = flightS(f, d.a.x, d.a.y);
+        const la = flightL(f, d.a.x, d.a.y);
+        const sb = flightS(f, d.b.x, d.b.y);
+        const lb = flightL(f, d.b.x, d.b.y);
+        const side = Math.sign(la) as -1 | 1;
+        if (!side || Math.sign(lb) !== side || Math.abs(la - lb) > 0.05 || side * la < hw - 0.05 || side * la > hw + 0.3) return;
+        const cut: [number, number][] = [];
+        if (turn === side) cut.push([0, w]);
+        if (top === side) cut.push([run - w, run]);
+        for (const [p0, p1] of subtract(Math.max(0, Math.min(sa, sb)), Math.min(run, Math.max(sa, sb)), cut)) {
+          // The longest stretch where the treads at the side are within SIDE_STEP of the floor.
+          let best: [number, number] | null = null;
+          let from = -1;
+          const n = Math.max(1, Math.ceil((p1 - p0) / 0.02));
+          for (let k = 0; k <= n + 1; k++) {
+            const sk = p0 + ((p1 - p0) * k) / n;
+            const ok = k <= n && Math.abs(lowerBase + stairHeight(f, sk, side * hw) - levels[li].baseY) <= SIDE_STEP;
+            if (ok && from < 0) from = sk;
+            if (!ok && from >= 0) {
+              const end = p0 + ((p1 - p0) * (k - 1)) / n;
+              if (!best || end - from > best[1] - best[0]) best = [from, end];
+              from = -1;
+            }
+          }
+          if (!best || best[1] - best[0] < 0.2) continue;
+          const sm = (best[0] + best[1]) / 2;
+          // Upstairs it must open off the well (elsewhere the upper floor covers the treads).
+          const inner = flightAt(f, sm, side * (hw - 0.1));
+          if (li === upper && !well.rects.some((r) => inner.x > r.x0 && inner.x < r.x1 && inner.y > r.y0 && inner.y < r.y1)) continue;
+          sides.push({
+            li, s: sm, side, s0: best[0], s1: best[1], door: d.nd.passage === "door" ? di : -1,
+            mid: flightAt(f, sm, side * hw), centre: flightAt(f, sm, 0), stand: flightAt(f, sm, side * (hw + STAND_OUT)), cell: -1,
+          });
+        }
+      });
+    }
+    const cutsOn = (li: number) => sides.filter((e) => e.li === li);
+    levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower)).map((e) => edgeObs(f, e)));
     solids[lower].push(rectPoly(f));
     for (const r of well.rects) {
-      levels[upper].obs.push(...wellObs(f, r));
+      levels[upper].obs.push(...wellObs(f, r, cutsOn(upper)));
       solids[upper].push([
         { x: r.x0, y: r.y0 },
         { x: r.x1, y: r.y0 },
@@ -849,27 +945,28 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
         { x: r.x0, y: r.y1 },
       ]);
     }
-    const entryMid = turn ? flightAt(f, w / 2, (turn * w) / 2) : flightAt(f, 0, 0);
-    const exitMid = top ? flightAt(f, run - w / 2, (top * w) / 2) : flightAt(f, run, 0);
-    const path = [entryMid];
-    if (turn) path.push(flightAt(f, w / 2, 0));
-    if (top) path.push(flightAt(f, run - w / 2, 0));
-    path.push(exitMid);
-    const line = densify(path, 0.3);
-    const footStand = turn ? flightAt(f, w / 2, turn * (w / 2 + STAND_OUT)) : flightAt(f, -STAND_OUT, 0);
-    const headStand = top ? flightAt(f, run - w / 2, top * (w / 2 + STAND_OUT)) : flightAt(f, run + STAND_OUT, 0);
-    let len = 0;
-    for (let i = 1; i < line.length; i++) len += Math.hypot(line[i].x - line[i - 1].x, line[i].y - line[i - 1].y);
-    flights.push({
-      f, lower, upper,
-      lowerBase: levels[lower].baseY,
+    const entryMid = turn ? flightAt(f, hw, turn * hw) : flightAt(f, 0, 0);
+    const exitMid = top ? flightAt(f, run - hw, top * hw) : flightAt(f, run, 0);
+    const footStand = turn ? flightAt(f, hw, turn * (hw + STAND_OUT)) : flightAt(f, -STAND_OUT, 0);
+    const headStand = top ? flightAt(f, run - hw, top * (hw + STAND_OUT)) : flightAt(f, run + STAND_OUT, 0);
+    const ends: StairEnd[] = [
+      { li: lower, mid: entryMid, centre: turn ? flightAt(f, hw, 0) : entryMid, s: turn ? hw : 0, side: 0, s0: 0, s1: 0, door: -1, stand: footStand, cell: -1 },
+      { li: upper, mid: exitMid, centre: top ? flightAt(f, run - hw, 0) : exitMid, s: top ? run - hw : run, side: 0, s0: run, s1: run, door: -1, stand: headStand, cell: -1 },
+      ...sides,
+    ];
+    // On the treads, the stringers block, and a side exit's door while it is shut.
+    const leaves = sides.filter((e) => e.door >= 0).flatMap((e) => levels[e.li].obs.filter((o) => o.door === e.door));
+    const F: FlightNav = {
+      f, lower, upper, lowerBase,
       upperBase: levels[upper].baseY,
-      perim: flightEdges(f, true, true).map((e) => edgeObs(f, e)),
+      perim: [...flightEdges(f, true, true, sides).map((e) => edgeObs(f, e)), ...leaves],
       wells: well.rects,
-      entryMid, exitMid, line,
-      cost: len + 2 * STAND_OUT + 0.5,
-      footStand, headStand, footCell: -1, headCell: -1,
-    });
+      entryMid, exitMid, line: [], cost: 0,
+      footStand, headStand, footCell: -1, headCell: -1, ends,
+    };
+    F.line = stairPath(F, 0, 1);
+    F.cost = pathLength(F.line) + 2 * STAND_OUT + 0.5;
+    flights.push(F);
   }
 
   const lowest = levels.length ? polygonCentroidOfRooms(levels[gardenLi].rooms) : { x: 0, y: 0 };
@@ -919,13 +1016,18 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     for (let i = 0; i < g.kind.length; i++) if (g.solid[i]) g.blocked[i] = 1;
   });
 
-  // Stand spots at each end of a flight, on a free cell.
+  // Stand spots at each end of a flight, on a free cell (a side exit's beyond its side).
   for (const F of flights) {
-    const snap = (li: number, p: V2) => nearestCell(levels[li].grid, p, 1.0, (i) => passable(levels[li].grid, i, ALL_OPEN));
-    F.footCell = snap(F.lower, F.footStand);
-    F.headCell = snap(F.upper, F.headStand);
-    if (F.footCell >= 0) F.footStand = cellPt(levels[F.lower].grid, F.footCell);
-    if (F.headCell >= 0) F.headStand = cellPt(levels[F.upper].grid, F.headCell);
+    F.ends.forEach((e, k) => {
+      const g = levels[e.li].grid;
+      const beyond = (i: number) => k < 2 || e.side * flightL(F.f, cellX(g, i), cellY(g, i)) > F.f.width / 2 + 0.1;
+      e.cell = nearestCell(g, e.stand, k < 2 ? 1.0 : 0.6, (i) => passable(g, i, ALL_OPEN) && beyond(i));
+      if (e.cell >= 0) e.stand = cellPt(g, e.cell);
+    });
+    F.footCell = F.ends[0].cell;
+    F.headCell = F.ends[1].cell;
+    F.footStand = F.ends[0].stand;
+    F.headStand = F.ends[1].stand;
   }
 
   let total = 0;
