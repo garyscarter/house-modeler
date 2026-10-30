@@ -66,3 +66,7 @@
 
 /* The getting-started strip sits where the walk bar and map are. */
 .app[data-walking] .coach-strip { display: none; }
+
+/* Walking: the inspector steps aside so the view is the house; on the phone the walk bar drops to where the sheet was. */
+.app[data-walking] .inspector-card, .app[data-walking] .sheet { display: none; }
+.app[data-chassis="phone"][data-walking] .dock[data-walking] { bottom: 12px; opacity: 1; pointer-events: auto; }
