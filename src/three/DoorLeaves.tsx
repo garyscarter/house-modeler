@@ -80,7 +80,7 @@ function Leaf({ leaf, glass }: { leaf: ShellLeaf; glass: Material }) {
   }, [target]);
   useFrame((_, dt) => {
     if (lin.current === target) return;
-    const step = Math.min(dt, 0.1) / DURATION[motion];
+    const step = Math.min(dt, 0.5) / DURATION[motion];
     lin.current = target > lin.current ? Math.min(1, lin.current + step) : Math.max(0, lin.current - step);
     apply();
     if (lin.current === target) useWalk.getState().doorSettled();
