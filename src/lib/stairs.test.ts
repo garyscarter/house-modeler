@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { builtInHouse } from "../houses/default";
 import { pointInPolygon, polygonArea, roomWorldPolygon, toWorld } from "./geometry";
-import { boxedIn, boxedPart, clipUnderFlight, flightAt, flightWinders, floorFlight, stairHeight, stairTreads, treadCount, WINDERS, type FlightShape } from "./stairs";
+import { boxedIn, boxedPart, clipUnderFlight, flightAt, flightBlocks, flightFootprint, flightWinders, floorFlight, LINING, SOFFIT, stairHeight, stairTreads, treadCount, WALL_UNDER_TREAD, WINDERS, type FlightShape } from "./stairs";
+import { splitConvex } from "./bulkhead";
+import type { Floor } from "../types";
 
 const flight = (turn: -1 | 0 | 1): FlightShape => ({ centre: { x: 0, y: 0 }, dir: { x: 0, y: -1 }, run: 2.3, width: 0.9, rise: 2.65, turn });
 /** A flight turned at both ends, like the listing's: 3.3 m, rising up the plan (-y), so +l is +x. */
@@ -132,7 +134,9 @@ describe("clipUnderFlight", () => {
     const under = out.find((p) => Math.abs(p.a.x + 0.45 - 0.02) < 1e-6)!;
     expect(under.b.x).toBeCloseTo(0.43);
     const over = treads.filter((t) => pointInPolygon({ x: 0, y }, t.pts))[0];
-    expect(under.y1).toBeCloseTo(over.top - riser);
+    // Just under the surface of the tread over it, inside its block.
+    expect(under.y1).toBeCloseTo(over.top - WALL_UNDER_TREAD);
+    expect(under.y1).toBeGreaterThan(over.top - riser);
     expect(under.y1).toBeLessThan(2.4);
     expect(out.filter((p) => p.y1 === 2.4)).toHaveLength(2);
   });
@@ -159,11 +163,12 @@ describe("the built-in house", () => {
     expect(f.topTurn).toBe(1);
     expect(stairTreads(f)).toHaveLength(treadCount(f) - 1);
     expect(stairTreads(f).slice(-2).every((t) => t.top < f.rise)).toBe(true);
-    // The head fills the landing's west end, up to its north wall (inner face about plan y 1044).
+    // The head fills the landing's west end, up to its north wall (inner face about plan y 1044), less the 4 cm
+    // that puts the riser onto the head winders inside the kitchen/hall wall below.
     const top = flightAt(f, f.run, 0);
     const landing = room("Landing");
     expect(top.y).toBeGreaterThan(Math.min(...landing.map((p) => p.y)));
-    expect(top.y - Math.min(...landing.map((p) => p.y))).toBeLessThan(0.1);
+    expect(top.y - Math.min(...landing.map((p) => p.y))).toBeLessThan(0.13);
     // Stepping off the side it turns to lands on the landing, clear of the head.
     const off = flightAt(f, f.run - 0.45, 0.45 + 0.3);
     expect(pointInPolygon(off, landing)).toBe(true);
@@ -198,5 +203,70 @@ describe("the built-in house", () => {
   it("opens the stairs room onto the landing across the whole flight", () => {
     const gap = first.openings.find((o) => o.kind === "gap")!;
     expect(gap.widthM).toBeGreaterThanOrEqual(1.05);
+  });
+});
+
+describe("flightBlocks", () => {
+  // `both()` rises up the plan from y 1.65 to -1.65 (world metres = px / 100); a hall holds its foot, and a
+  // wall at y -0.65 (s 2.3) parts it from a kitchen the top straight tread and the head run on over.
+  const f = both();
+  const rect = (name: string, x0: number, y0: number, x1: number, y1: number) => ({ id: name, name, polygon: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }] });
+  const floor = {
+    id: "g", name: "G", level: 0, image: "", imageW: 400, imageH: 400, pxPerM: 100, origin: { x: 0, y: 0 }, offset: { x: 0, y: 0 },
+    rooms: [rect("Hall", -100, -65, 100, 170), rect("Kitchen", -100, -200, 100, -65)], openings: [],
+  } as unknown as Floor;
+  const kitchenSide = [{ x: -1, y: -2 }, { x: 1, y: -2 }, { x: 1, y: -0.7 }, { x: -1, y: -0.7 }];
+  /** A bulkhead over the kitchen side of the wall (from its face, y -0.7), its underside at `bottom`. */
+  const bulkhead = (bottom: number) => [{ pts: [{ x: -1, y: -1.7 }, { x: 1, y: -1.7 }, { x: 1, y: -0.7 }, { x: -1, y: -0.7 }], bottom }];
+  const over = (pts: { x: number; y: number }[], region: { x: number; y: number }[]) => !!splitConvex(pts, region).inside;
+
+  it("hangs a soffit under the treads over the other room when nothing covers them", () => {
+    const { body } = flightBlocks(floor, f);
+    const soffits = body.filter((b) => over(b.pts, kitchenSide) && Math.abs(b.y1 - b.y0 - SOFFIT) < 1e-9);
+    expect(soffits.length).toBeGreaterThan(0);
+  });
+
+  it("draws no soffit under a bulkhead: the flight is boxed down to its underside, and nothing of it shows below", () => {
+    const B = 2.0;
+    const { body, carpet } = flightBlocks(floor, f, bulkhead(B));
+    // Inside the bulkhead (less a centimetre at its edges, where the riser's lining closes it down to the wall).
+    const inner = [{ x: -0.99, y: -1.69 }, { x: 0.99, y: -1.69 }, { x: 0.99, y: -0.71 }, { x: -0.99, y: -0.71 }];
+    for (const b of [...body, ...carpet].filter((b) => over(b.pts, inner))) expect(b.y0).toBeGreaterThanOrEqual(B - 1e-9);
+    expect(body.some((b) => over(b.pts, inner) && Math.abs(b.y1 - b.y0 - SOFFIT) < 1e-9)).toBe(false);
+    // The tread straddling the wall (top 2.04, its block from 1.83) is cut off at the underside under a painted lining.
+    const t10 = stairTreads(f)[9];
+    expect(t10.top).toBeGreaterThan(B);
+    expect(body.some((b) => over(b.pts, inner) && b.y0 === B && b.y1 === B + LINING)).toBe(true);
+    // The head winders above the underside are boxed down to it.
+    const riser = f.rise / treadCount(f);
+    const head = stairTreads(f).at(-1)!;
+    expect(body.some((b) => b.y0 === B && Math.abs(b.y1 - (head.top - riser)) < 1e-9)).toBe(true);
+  });
+
+  it("lines a covered tread's riser below the underside where it rises from a tread outside the bulkhead", () => {
+    // A bulkhead reaching back over the wall into the hall, so the riser onto the head (s 2.4, y -0.75) is under it.
+    const B = 2.1;
+    const treads = stairTreads(f);
+    const first = treads[10];
+    const under = first.top - f.rise / treadCount(f);
+    expect(under).toBeLessThan(B);
+    const { body, carpet } = flightBlocks(floor, f, [{ pts: [{ x: -1, y: -1.7 }, { x: 1, y: -1.7 }, { x: 1, y: -0.76 }, { x: -1, y: -0.76 }], bottom: B }]);
+    const lining = body.find((b) => Math.abs(b.y0 - (under - 0.005)) < 1e-9 && b.y1 === B);
+    const face = carpet.find((b) => Math.abs(b.y0 - under) < 1e-9 && b.y1 === B + LINING);
+    expect(lining && face).toBeTruthy();
+    // Both thin strips along the riser line.
+    for (const b of [lining!, face!]) expect(Math.max(...b.pts.map((p) => p.y)) - Math.min(...b.pts.map((p) => p.y))).toBeLessThan(0.006);
+  });
+
+  it("draws a tread whose surface is below the bulkhead's underside as it is (it cannot be boxed in)", () => {
+    const B = 2.3;
+    const t10 = stairTreads(f)[9];
+    expect(t10.top).toBeLessThan(B);
+    const { carpet } = flightBlocks(floor, f, bulkhead(B));
+    expect(carpet.some((b) => over(b.pts, kitchenSide) && b.y1 === t10.top && b.y0 < B)).toBe(true);
+  });
+
+  it("has a footprint of run by width", () => {
+    expect(Math.abs(polygonArea(flightFootprint(f)))).toBeCloseTo(3.3 * 0.9);
   });
 });

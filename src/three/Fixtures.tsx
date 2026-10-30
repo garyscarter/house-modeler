@@ -3,9 +3,10 @@ import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { Fixture, Floor } from "../types";
-import { toWorld } from "../lib/geometry";
+import { toWorld, type V2 } from "../lib/geometry";
+import { isBulkhead, splitConvex, subtractConvex } from "../lib/bulkhead";
 import { CUBE_BOARD, DEFAULT_WORKTOP, SIX_RINGS, VENTED_ZONES, burners, byId, chaiseSizes, cornerArm, cornerEnds, cornerSofaSizes, cubeGrid, type CatalogueItem, type GridLayout, isHandleless, peninsulaOverhang, radiatorPanels, sideBySideSplit, wardrobeDoorCount, type Symbol } from "../lib/catalogue";
-import { fixtureBox } from "../lib/planMath";
+import { fixtureBox, rectCorners } from "../lib/planMath";
 import { FRAME_COLOUR, FRAME_W, isPicture, type PictureFrame } from "../lib/art";
 import { artTexture } from "./artTextures";
 import { RUG_GROUND, rugPattern } from "../lib/rugs";
@@ -22,14 +23,28 @@ import { litLook, fixtureGeometryKey, type GlowRole } from "../lib/fixtureGlow";
  * A floor's fixtures are a few hundred small parts, so they are merged into one mesh per material (see
  * buildFixtureMeshes) rather than drawn one mesh each. Fixtures have no 3D click handling, so nothing is lost.
  */
-export function Fixtures({ floor, ceiling, lightsOn = false, blocked = NONE }: { floor: Floor; ceiling: number; lightsOn?: boolean; /** Lights a wall switch that is off keeps dark. */ blocked?: ReadonlySet<string> }) {
+export function Fixtures({
+  floor,
+  ceiling,
+  lightsOn = false,
+  blocked = NONE,
+  cuts = NO_CUTS,
+}: {
+  floor: Floor;
+  ceiling: number;
+  lightsOn?: boolean;
+  /** Lights a wall switch that is off keeps dark. */
+  blocked?: ReadonlySet<string>;
+  /** Plan outlines (world metres, convex) a bulkhead's box is left out of: the flight passing up through it. */
+  cuts?: V2[][];
+}) {
   // Rebuilt only when the fixtures' shape, the floor's placement or the ceiling change: not for a room colour, a wall
   // or a lamp being switched, dimmed or warmed (those only swap a glowing mesh's material, below).
   const geoKey = useMemo(() => fixtureGeometryKey(floor.fixtures), [floor.fixtures]);
   const meshes = useMemo(
-    () => buildFixtureMeshes(floor, ceiling),
+    () => buildFixtureMeshes(floor, ceiling, cuts),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geoKey, floor.origin, floor.offset, floor.pxPerM, ceiling],
+    [geoKey, floor.origin, floor.offset, floor.pxPerM, ceiling, cuts],
   );
   const byFx = useMemo(() => new Map((floor.fixtures ?? []).map((f) => [f.id, f])), [floor.fixtures]);
   // Both looks of every glowing mesh, each render: cheap (a cache hit), and it keeps them young in the material cache.
@@ -129,19 +144,33 @@ const _yaw = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 
 const NONE: ReadonlySet<string> = new Set();
+const NO_CUTS: V2[][] = [];
 
 /**
  * Every part of every fixture on the floor in world space, merged into one geometry per material. The parts that can
  * light up (Part.glow) merge per fixture instead and carry no material: Fixtures picks their lit or unlit one, so a
  * switch never rebuilds geometry.
  */
-export function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[] {
+export function buildFixtureMeshes(floor: Floor, ceiling: number, cuts: V2[][] = []): FixtureMesh[] {
   const groups = new Map<string, { color: string; finish: Finish; light: boolean; glow?: FixtureMesh["glow"]; geoms: THREE.BufferGeometry[] }>();
   for (const f of floor.fixtures ?? []) {
     const item = byId(f.type);
     if (!item) continue;
     const p = toWorld(floor, { x: f.x, y: f.y });
     const b = fixtureBox(f, item, ceiling);
+    // A bulkhead a flight passes up through: its box less the flight's footprint (the flight is boxed down to its
+    // underside there instead, see lib/stairs.ts flightBlocks), as upright prisms in world space.
+    if (isBulkhead(item) && cuts.length) {
+      const pts = rectCorners(f, b.w * floor.pxPerM, b.d * floor.pxPerM, f.rot).map((q) => toWorld(floor, q));
+      if (cuts.some((c) => splitConvex(pts, c).inside)) {
+        const colour = f.color ?? item.color;
+        const key = colour + "matt";
+        const group = groups.get(key) ?? { color: colour, finish: "matt" as Finish, light: false, geoms: [] };
+        for (const piece of subtractConvex(pts, cuts)) group.geoms.push(prism(piece, b.z0, b.z0 + b.h));
+        groups.set(key, group);
+        continue;
+      }
+    }
     _place.compose(_pos.set(p.x, b.z0, p.y), _yaw.setFromAxisAngle(_up, (-f.rot * Math.PI) / 180), _scale.set(1, 1, 1));
     const j = isJoinery(item) || item.symbol === "shaker-wardrobe" ? joineryOf(f, item, b) : undefined;
     const pat = item.symbol === "rug" ? rugPattern(f) : undefined;
@@ -171,6 +200,15 @@ export function buildFixtureMeshes(floor: Floor, ceiling: number): FixtureMesh[]
     g.geoms.forEach((x) => x.dispose());
     if (merged) out.push({ key, geometry: merged, material: g.glow ? undefined : material(g.color, g.finish), glow: g.glow, castShadow: g.finish !== "glass" && !g.light });
   }
+  return out;
+}
+
+/** An upright prism over a plan outline (world metres) from y0 to y1, indexed like the unit parts. */
+function prism(pts: V2[], y0: number, y1: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape(pts.map((q) => new THREE.Vector2(q.x, -q.y)));
+  const g = new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, y0, 0);
+  const out = mergeVertices(g);
+  g.dispose();
   return out;
 }
 
@@ -856,6 +894,10 @@ function fixtureParts(
     case "wall-light":
     case "strip-light":
       out.push(...lightFittingParts(symbol, w, d, h, color, drop, grid));
+      break;
+    case "bulkhead":
+      // A painted box hung flush from the ceiling.
+      box(0, h / 2, 0, w, h, d, color, "matt");
       break;
     case "tv-wall": {
       box(0, h / 2, -d / 2 + 0.015, 0.2, 0.3, 0.03, DARK, "metal");
@@ -1683,12 +1725,13 @@ function lightFittingParts(symbol: Symbol, w: number, d: number, h: number, colo
     }
     case "downlight":
     case "downlight-grid": {
-      // A ring bezel 1 cm proud of the ceiling round a lens; a grid is that ring at every point and nothing else.
+      // A ring bezel 1 cm proud of the surface it is let into round a lens; a grid is that ring at every point and
+      // nothing else. That surface is the fitting's own top: the ceiling, or `drop` below it in a bulkhead's underside.
       const pts: [number, number, number][] = symbol === "downlight" ? [[0, 0, 0]] : gridPoints(w, d, grid, 0);
       const ring = symbol === "downlight" ? Math.min(w, d) : 0.09;
       for (const [x, , z] of pts) {
-        can(x, z, top - 0.01, top, ring, ring, look(color, "satin"));
-        can(x, z, top - 0.0115, top - 0.009, ring * 0.65, ring * 0.65, bulb(BULB_OFF));
+        can(x, z, h - 0.01, h, ring, ring, look(color, "satin"));
+        can(x, z, h - 0.0115, h - 0.009, ring * 0.65, ring * 0.65, bulb(BULB_OFF));
       }
       break;
     }

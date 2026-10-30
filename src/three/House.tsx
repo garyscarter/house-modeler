@@ -19,7 +19,8 @@ import { POOL, floorLamps, isLightItem, lampGlow, lightsMaster, lightsOn as mast
 import { RoomLabels } from "./RoomLabels";
 import { Balustrade } from "./Balustrade";
 import { balustrades, cutWells, stairwells, type RailRun, type Rect, type Stairwell } from "../lib/stairwell";
-import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightShape } from "../lib/stairs";
+import { flightBlocks, flightFootprint, floorFlight, type FlightShape } from "../lib/stairs";
+import { floorBulkheads, type Bulkhead } from "../lib/bulkhead";
 import { flightStructure, floorStructure, floorsStructure, modelStructure, shellLooks } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell, FLOOR_SURFACE } from "./shell";
@@ -241,6 +242,11 @@ function FloorGroupInner({
   const flightSig = flightStructure(model, floor);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const flight = useMemo(() => (hasAbove ? floorFlight(model, floor) : null), [hasAbove, flightSig]);
+  // Bulkheads box the flight in where it passes through them, and their boxes are left out over its footprint.
+  const bulkSig = useMemo(() => JSON.stringify(floorBulkheads(floor, H)), [floor, H]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const bulkheads = useMemo(() => floorBulkheads(floor, H), [bulkSig]);
+  const flightCuts = useMemo(() => (flight && floor.stairs ? [flightFootprint(flight)] : NO_CUTS), [flight, floor.stairs]);
   // Keyed on what the shell reads, so moving a fixture or recolouring a floor keeps the walls (and the shell built from them).
   const looks = shellLooks(floor);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -297,10 +303,10 @@ function FloorGroupInner({
           </WallBox>
         ))}
 
-      {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} />}
+      {floor.stairs && hasAbove && <Stairs floor={floor} flight={flight} bulkheads={bulkheads} />}
 
       <group onClick={onPickWall ? block : undefined}>
-        <Fixtures floor={floor} ceiling={H} lightsOn={lampsOn} blocked={blocked} />
+        <Fixtures floor={floor} ceiling={H} lightsOn={lampsOn} blocked={blocked} cuts={flightCuts} />
       </group>
 
       {showLabels && <RoomLabels floor={floor} baseY={y0} ceiling={H} roofOver={roofOver} selectedRoomId={selectedRoomId ?? null} />}
@@ -704,35 +710,26 @@ function WallBox({ piece, children, thickness }: { piece: WallPiece; children: R
  * to the floor (the understairs is boxed in), carpeted across its top riser,
  * with kite winders at the foot or head when the flight turns there. Where
  * the flight passes over a wall into another room (a head running on over
- * the kitchen), only a soffit hangs under the treads there.
+ * the kitchen), only a soffit hangs under the treads there, or, under a
+ * bulkhead, the flight is boxed down to the bulkhead's underside (see
+ * flightBlocks in lib/stairs.ts).
  */
-function Stairs({ floor, flight: f }: { floor: Floor; flight: FlightShape | null }) {
+function Stairs({ floor, flight: f, bulkheads }: { floor: Floor; flight: FlightShape | null; bulkheads: Bulkhead[] }) {
   // `f` changes whenever anything the treads read does (see flightStructure), so `floor` is not a dependency.
   const geom = useMemo(() => {
     if (!f) return null;
-    const treads = stairTreads(f);
-    const riser = f.rise / treadCount(f);
-    const boxed = boxedPart(floor, f);
-    const body: THREE.BufferGeometry[] = [];
-    const carpet: THREE.BufferGeometry[] = [];
+    const parts = flightBlocks(floor, f, bulkheads);
     // Shapes are drawn on the plan (x, -y) and extruded up, then stood upright.
-    const block = (pts: V2[], y0: number, y1: number) => new THREE.ExtrudeGeometry(shapeFrom(pts), { depth: y1 - y0, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, y0, 0);
-    for (const t of treads) {
-      // Down to the floor over the stairs hall; a soffit where the flight has passed over a wall into another room.
-      const under = t.top - riser;
-      const box = boxed(t.pts);
-      if (box && under > 0.001) body.push(block(box, 0, under));
-      if (box !== t.pts && under > 0.001) body.push(block(t.pts, Math.max(0, under - SOFFIT), under));
-      carpet.push(block(t.pts, Math.max(0, t.top - riser), t.top));
-    }
-    const merge = (parts: THREE.BufferGeometry[]) => {
-      const g = parts.length ? mergeGeometries(parts) : null;
-      parts.forEach((p) => p.dispose());
+    const block = (b: { pts: V2[]; y0: number; y1: number }) => new THREE.ExtrudeGeometry(shapeFrom(b.pts), { depth: b.y1 - b.y0, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, b.y0, 0);
+    const merge = (list: { pts: V2[]; y0: number; y1: number }[]) => {
+      const geoms = list.filter((b) => b.y1 - b.y0 > 1e-4).map(block);
+      const g = geoms.length ? mergeGeometries(geoms) : null;
+      geoms.forEach((p) => p.dispose());
       return g;
     };
-    return { body: merge(body), carpet: merge(carpet) };
+    return { body: merge(parts.body), carpet: merge(parts.carpet) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f]);
+  }, [f, bulkheads]);
   useEffect(() => () => {
     geom?.body?.dispose();
     geom?.carpet?.dispose();
@@ -745,6 +742,8 @@ function Stairs({ floor, flight: f }: { floor: Floor; flight: FlightShape | null
     </group>
   );
 }
+
+const NO_CUTS: V2[][] = [];
 
 /** Compare overlay: new walls in the app accent teal (--accent), removed walls in a warm red at low opacity. Colour-blind safe against each other. */
 const OVERLAY_NEW = "#0f6e66";

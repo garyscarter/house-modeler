@@ -1,6 +1,6 @@
 import type { Exterior, Fixture, Floor, HouseModel, Opening, OpeningKind, Pt, Room } from "../types";
 import { DEFAULT_EXTERIOR, TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid } from "../types";
-import { byId, type CatalogueItem } from "./catalogue";
+import { byId, isFittedLight, type CatalogueItem } from "./catalogue";
 import { EXT_WALL_T, pointInPolygon, toWorld, WALL_T, type V2 } from "./geometry";
 import { convexOverlap, defaultHead, defaultSill, DOOR_KINDS, fixtureSolids, rectCorners, wallLines, type WallLine } from "./planMath";
 
@@ -229,9 +229,9 @@ function where(floor: Floor, o: Pick<Opening, "x" | "y" | "orientation">): strin
 // ---------------------------------------------------------------------------------------------------------
 // Fittings and furniture
 
-/** Fittings that come with a house rather than with its owner: heating, mirrors, heated towel rails. */
+/** Fittings that come with a house rather than with its owner: heating, mirrors, heated towel rails, bulkheads. */
 export function isFitting(item: CatalogueItem | undefined): boolean {
-  return !!item && (item.category === "Heating" || item.symbol.startsWith("mirror") || item.symbol === "towel-rail");
+  return !!item && (item.category === "Heating" || item.symbol.startsWith("mirror") || item.symbol === "towel-rail" || item.symbol === "bulkhead");
 }
 
 function fixtureName(fx: Fixture, item: CatalogueItem | undefined): string {
@@ -293,7 +293,9 @@ function fixtureChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
         ? `Not ticked: it ${problems.join(", and ")}.`
         : fitting
           ? undefined
-          : "Not ticked: furniture is yours to place, and you may have removed this on purpose.";
+          : item && isFittedLight(item)
+            ? "Not ticked: lights are part of your own lighting plan, and you may have removed this on purpose."
+            : "Not ticked: furniture is yours to place, and you may have removed this on purpose.";
       out.push({
         fitting,
         id: `fixture.${li}.${i}`,

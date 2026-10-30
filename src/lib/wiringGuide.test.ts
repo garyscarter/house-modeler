@@ -4,12 +4,19 @@ import { builtInProposed } from "../houses/default";
 import { numberPoints, pointRows } from "./electrics";
 import { planExtent, planScale, planSvg } from "./export";
 import type { Fixture, HouseModel } from "../types";
+import { byId, isElectricalItem } from "./catalogue";
 
 const fx = (id: string, type: string, x: number, y: number, extra: Partial<Fixture> = {}): Fixture => ({ id, type, x, y, rot: 0, ...extra });
 
-/** The listing's Proposed layout with points added on both floors (the built-in model has none). */
+/** The listing's Proposed layout without its electrical points (only the kitchen bulkhead's two downlights). */
+function noPoints(): HouseModel {
+  const m = builtInProposed("");
+  return { ...m, floors: m.floors.map((f) => ({ ...f, fixtures: (f.fixtures ?? []).filter((x) => !isElectricalItem(byId(x.type)!)) })) };
+}
+
+/** The listing's Proposed layout with points added on both floors (none of its own). */
 function withPoints(): HouseModel {
-  const base = builtInProposed("");
+  const base = noPoints();
   const floors = [...base.floors].sort((a, b) => a.level - b.level);
   const [g, f1] = floors;
   const gr = g.rooms[0].polygon;
@@ -90,7 +97,7 @@ describe("wiring guide", () => {
   });
 
   it("an empty model says so and has no plans", () => {
-    const empty = wiringGuideHtml({ date: "d", variantLabel: "Proposed", model: builtInProposed("") });
+    const empty = wiringGuideHtml({ date: "d", variantLabel: "Proposed", model: noPoints() });
     expect(empty).toContain("No electrical points yet");
     expect(svgs(empty).length).toBeLessThanOrEqual(3) /* brand marks only */;
     expect(planSvg).toBeTypeOf("function");
