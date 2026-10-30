@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour, withRoomWallColours, DEFAULT_LINING } from "./openings";
+import { initiallyOpen } from "./walkTypes";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, rigBoxes, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour, withRoomWallColours, DEFAULT_LINING } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -497,5 +498,63 @@ describe("opening boxes are stable across the leaf refactor", () => {
     const out: Record<string, string> = {};
     for (const [label, pl, o, d] of matrix()) out[label] = digest(openingParts(pl, T, o, d).boxes);
     expect(out).toMatchSnapshot();
+  });
+});
+
+describe("door rigs", () => {
+  it("rig boxes at rest plus the rest equal the merged boxes, and rest follows initiallyOpen", () => {
+    for (const [label, pl, o, d] of matrix()) {
+      const full = openingParts(pl, T, o, d);
+      const split = openingParts(pl, T, o, d, { leaves: false });
+      if (!full.rig) {
+        expect(split.boxes, label).toEqual(full.boxes);
+        continue;
+      }
+      expect(split.rig!.rest, label).toBe(initiallyOpen(pl.opening, d) ? 1 : 0);
+      expect(canon([...split.boxes, ...rigBoxes(split.rig!, split.rig!.rest)]), label).toEqual(canon(full.boxes));
+      expect(split.boxes.length, label).toBeLessThan(full.boxes.length);
+    }
+  });
+
+  it("swing leaves turn by the kind's usual angle, or openDeg", () => {
+    const turn = (kind: Opening["kind"], w: number, out: 1 | -1 | 0, extra: Partial<Opening> = {}) => {
+      const rig = openingParts(place(kind, w, extra, 2.1), T, out, false).rig!;
+      const a = rig.panels[0].pose(0).ry;
+      const b = rig.panels[0].pose(1).ry;
+      return Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a))) * (180 / Math.PI);
+    };
+    expect(turn("front", 1, 1)).toBeCloseTo(80, 4);
+    expect(turn("door", 0.85, 1, { openDeg: 0 })).toBeCloseTo(75, 4);
+    expect(turn("door", 0.85, 0, { openDeg: 30 })).toBeCloseTo(30, 4);
+    expect(turn("french", 1.5, -1)).toBeCloseTo(80, 4);
+  });
+
+  it("the patio slider moves 0.95 of a panel along x only", () => {
+    for (const [w, flip] of [[2.4, false], [3.6, true], [3.6, false]] as const) {
+      const rig = openingParts(place("patio", w, { flipHinge: flip }), T, 1).rig!;
+      expect(rig.motion).toBe("slide");
+      expect(rig.panels).toHaveLength(1);
+      const a = rig.panels[0].pose(0);
+      const b = rig.panels[0].pose(1);
+      const lw = w - 0.12;
+      const n = w > 3.2 ? 3 : 2;
+      expect(Math.abs(b.x - a.x)).toBeCloseTo((0.95 * lw) / n, 9);
+      expect(Math.sign(b.x - a.x)).toBe(flip ? 1 : -1);
+      expect(b.z).toBe(a.z);
+    }
+  });
+
+  it("a bi-fold at t=1 is the open stack and at t=0 the shut row", () => {
+    const l = bifoldLayout(3, false);
+    const rig = openingParts(place("bifold", 3), T, 1, true, { leaves: false }).rig!;
+    expect(rig.motion).toBe("fold");
+    expect(rig.panels).toHaveLength(l.n);
+    expect(rig.panels[0].pose(1).x).toBeCloseTo(-l.clear / 2);
+    expect(rig.panels[1].pose(0).x).toBeCloseTo(-l.clear / 2 + l.panel);
+    expect(rig.panels[1].pose(0).z).toBeCloseTo(rig.panels[0].pose(0).z);
+  });
+
+  it("windows, gaps and garage doors have no rig", () => {
+    for (const k of ["window", "gap", "garage", "archway"] as const) expect(openingParts(place(k, 1.2), T, 1).rig).toBeUndefined();
   });
 });
