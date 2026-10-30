@@ -11,6 +11,8 @@ import { knockThroughNeighbours } from "../../lib/mergeRooms";
 import { planTargetAt, type HitSolid, type PlanTarget } from "../../lib/planHit";
 import { closestOnSegment, DOUBLE_DOOR_M, outsideSide, SWING_KINDS } from "../../lib/planMath";
 import { useStore } from "../../store";
+import { toWorld } from "../../lib/geometry";
+import { useWalk } from "../../walkStore";
 import type { Fixture, Floor, Opening, Pt, VariantKey } from "../../types";
 import { confirmKnockThrough } from "../KnockThrough";
 import type { CanvasCamera } from "../core";
@@ -160,6 +162,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
       if (decorate) {
         const hit = pickInPlan(floor.rooms.map((r) => ({ id: r.id, poly: r.polygon })), raw, px * 12);
         return [
+          { label: "Walk from here", run: () => { select({ room: room.id }); useWalk.getState().requestWalk({ kind: "room", level: floor.level, roomId: room.id, at: toWorld(floor, raw) }); } } satisfies MenuItem,
           {
             label: "Decorate the floor",
             run: () => {
@@ -176,6 +179,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
       const neighbours = knockThroughNeighbours(floor, room.id);
       const onEdge = edge !== null ? closestOnSegment(raw, room.polygon[edge], room.polygon[(edge + 1) % room.polygon.length]).q : null;
       return [
+        { label: "Walk from here", run: () => { select({ room: room.id }); useWalk.getState().requestWalk({ kind: "room", level: floor.level, roomId: room.id, at: toWorld(floor, raw) }); } } satisfies MenuItem,
         {
           label: "Rename…",
           run: async () => {

@@ -32,6 +32,8 @@ import { isLightItem, lightsMaster, lightsOn, switchedOn } from "../lib/lights";
 import { controlIndex } from "../lib/electrics";
 import { byId } from "../lib/catalogue";
 import { Measure, MeasureButton } from "./Measure";
+import { useWalk } from "../walkStore";
+import { WalkControls } from "./walk/WalkControls";
 import "./Viewer.css";
 
 interface ViewerProps {
@@ -58,6 +60,8 @@ interface ViewerProps {
   /** Show the title, view cube and sun panel (default). Off, the owner of the layout (the wipe) draws them once. */
   chrome?: boolean;
 }
+
+const NOOP = () => {};
 
 /** Post-processing (and its libraries) load only when "high" quality turns it on. */
 const loadEffects = () => import("./Effects");
@@ -110,6 +114,15 @@ function ViewerImpl(props: ViewerProps) {
     setCanvasKey((k) => k + 1);
   }, []);
   useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
+  // Walking (first person) replaces the orbit controls in the main, chrome-drawing view only.
+  const walking = useWalk((s) => s.on) && active && chrome;
+  const walkOn = useWalk((s) => s.on);
+  const activeVariant = useStore((s) => s.activeVariant);
+  const reviewing = useStore((s) => s.mode === "review");
+  const doorsSettled = useWalk((s) => s.doorsSettled);
+  useEffect(() => {
+    if (walkOn && chrome && (!active || reviewing)) useWalk.getState().stopWalk();
+  }, [walkOn, chrome, active, reviewing]);
   // A path-traced still draws into this canvas itself; the on-demand loop must not draw over it.
   const tracing = useStore((s) => s.rendering?.id === (captureId ?? "main"));
   const frameloop = active && compiled === quality && !tracing ? "demand" : "never";
@@ -134,6 +147,13 @@ function ViewerImpl(props: ViewerProps) {
           run: () => {
             first();
             select(floor, room);
+          },
+        },
+        {
+          label: "Walk from here",
+          run: () => {
+            first();
+            useWalk.getState().requestWalk({ kind: "room", level: floor.level, roomId: room.id });
           },
         },
         {
@@ -163,8 +183,8 @@ function ViewerImpl(props: ViewerProps) {
     <ViewedVariant.Provider value={variant}>
     <div className="viewer">
       {chrome && title && <div className="viewer-title">{title}</div>}
-      {chrome && <ViewCube />}
-      {chrome && <MeasureButton />}
+      {chrome && !walking && <ViewCube />}
+      {chrome && !walking && <MeasureButton />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
       {chrome && compiled !== null && !lost && <LightsWarming model={model} />}
@@ -205,9 +225,9 @@ function ViewerImpl(props: ViewerProps) {
           showCeilings={showCeilings}
           doorsOpen={doorsOpen}
           selectedRoomId={selectedRoomId}
-          onSelectRoom={onSelectRoom}
-          onContextRoom={openRoomMenu}
-          onPickWall={onPickWall}
+          onSelectRoom={walking ? NOOP : onSelectRoom}
+          onContextRoom={walking ? undefined : openRoomMenu}
+          onPickWall={walking ? undefined : onPickWall}
           visibleLevels={visibleLevels}
           diffAgainst={ghost}
           showExterior={!!showExterior && cap === null}
@@ -223,9 +243,13 @@ function ViewerImpl(props: ViewerProps) {
           </Suspense>
         )}
         <SectionCut />
-        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality]} />
+        <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, doorsSettled]} />
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
-        <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
+        {walking ? (
+          <WalkControls model={model} variant={variant ?? activeVariant} />
+        ) : (
+          <Orbit linkId={captureId ?? "main"} centre={centre} size={size} bounds={bounds} frame={frame} heightOf={heightOf} />
+        )}
         <TrackScene />
         <Measure />
         <FrameOnCommit />
