@@ -51,9 +51,16 @@ async function open(tile = 0, ctxOpts = { viewport: { width: 1440, height: 900 }
       // Stand in the front hall (x -0.2, z 2.0) at eye height, looking at the front door and its open leaf.
       await page.evaluate(() => {
         const { camera, controls } = window.__houseCamera;
-        camera.position.set(0.4, 1.6, 2.4);
-        controls.target.set(-1.85, 1.2, 1.7);
-        controls.update();
+        if (controls) {
+          camera.position.set(0.4, 1.6, 2.4);
+          controls.target.set(-1.85, 1.2, 1.7);
+          controls.update();
+        } else if (window.__walk) {
+          // Walking (the walk controller owns the camera): stand there and face the door instead.
+          const w = window.__walkStore.getState();
+          w.setPose({ ...w.pose, x: 0.4, y: 2.4, level: 0, stair: null, feetY: 0, yaw: Math.atan2(-(-1.85 - 0.4), -(1.7 - 2.4)), pitch: -0.1 });
+          window.__walk.sim(0.2);
+        }
         window.__houseRenderer.shadowMap.needsUpdate = true;
       });
       await page.waitForTimeout(2500);
