@@ -61,7 +61,7 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
   let side = false;
   if (st.stair !== null) {
     const F = I.flights[st.stair];
-    if (insideFlight(F, p)) {
+    if (insideFlight(F, p, true)) {
       const s = stairState(I, st.stair, p);
       next = { x, y, li: s.li, stair: st.stair, feetY: s.feetY };
     } else {

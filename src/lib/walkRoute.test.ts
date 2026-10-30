@@ -4,7 +4,7 @@ import type { HouseModel } from "../types";
 import { polygonCentroid, type V2 } from "./geometry";
 import { floor, rect } from "./testing";
 import { MAX_STEP, WALKER_R, buildNav, goalPoint, pickTarget, routeTo, startPose, stepWalker } from "./walk";
-import { ALL_OPEN, SIDE_STEP, internalOf, standable } from "./walkNav";
+import { ALL_OPEN, SIDE_STEP, insideFlight, insideWell, internalOf, standable } from "./walkNav";
 import type { DoorStates, NavWorld, WalkPose, WalkRoute } from "./walkTypes";
 
 const house = builtInHouse("");
@@ -241,8 +241,8 @@ describe("pickTarget and goalPoint", () => {
   });
 });
 
-describe("stepping off the head onto a landing carried past it", () => {
-  // Proposed with the landing carried west past the head's far side to New Room's door, which moves with it.
+/** Proposed with the landing carried west past the head's far side to New Room's door, which moves with it. */
+function landingCarriedWest(): HouseModel {
   const m = builtInProposed("");
   const up = m.floors.find((f) => f.level === 1)!;
   const landing = up.rooms.find((r) => r.name === "Landing")!;
@@ -258,6 +258,28 @@ describe("stepping off the head onto a landing carried past it", () => {
     { x: 315, y: 1285 },
   ];
   up.openings.find((o) => o.kind === "door" && o.x === 610 && o.y === 1075)!.x = 564;
+  return m;
+}
+
+/** Walk a route from the front hall to a room upstairs; the trail. */
+function hallTo(n: NavWorld, name: string): { trail: WalkPose[]; goal: V2 } {
+  const r1 = (level: number, nm: string) => n.levels.find((l) => l.level === level)!.rooms.find((r) => r.name === nm)!;
+  const hall = goalPoint(n, { kind: "room", level: 0, roomId: r1(0, "Hallway (front)").id })!;
+  const from: WalkPose = { ...hall.point, feetY: 0, yaw: 0, pitch: 0 };
+  const goal = goalPoint(n, { kind: "room", level: 1, roomId: r1(1, name).id })!;
+  const open: DoorStates = Object.fromEntries(n.doors.map((d) => [d.key, true]));
+  const r = routeTo(n, from, goal.point, open);
+  expect(r.ok).toBe(true);
+  return { trail: r.ok ? follow(n, from, r.route, open) : [from], goal: goal.point };
+}
+
+describe("stepping off the head onto a landing carried past it", () => {
+  // A winding head: its far side is left open as a step up (headSideSteps).
+  const m = landingCarriedWest();
+  m.floors.forEach((f) => {
+    delete f.stairsTopSteps;
+    if (f.stairsTopTurn) f.stairsTopWinders = 2;
+  });
   const sn = buildNav(m, listingSite(), false);
   const SI = internalOf(sn)!;
   const open: DoorStates = Object.fromEntries(sn.doors.map((d) => [d.key, true]));
@@ -292,6 +314,56 @@ describe("stepping off the head onto a landing carried past it", () => {
     const offAt = trail.findIndex((p, i) => i > 0 && trail[i - 1].stair !== null && p.stair === null && p.level === 1);
     expect(offAt).toBeGreaterThan(0);
     expect(trail[offAt].x).toBeLessThan(SI.flights[0].f.centre.x);
+  });
+});
+
+describe("a flat head: a square, then a step up onto the landing", () => {
+  const flat = (m: HouseModel) => {
+    m.floors.forEach((f) => {
+      if (f.stairsTopTurn) f.stairsTopSteps = 2;
+    });
+    return m;
+  };
+
+  it("walks up onto the square, over the step and off onto the landing, never more than a riser at a time", () => {
+    const n = buildNav(flat(builtInHouse("")), listingSite(), false);
+    const F = internalOf(n)!.flights[0];
+    // Off the head across the step's far edge, east of the square.
+    expect(F.ends[1].edge).toBeCloseTo(0.45 + 0.22);
+    expect(F.ends).toHaveLength(2);
+    const { trail, goal } = hallTo(n, "Bedroom 3");
+    const end = trail[trail.length - 1];
+    expect(end).toMatchObject({ level: 1, stair: null });
+    expect(Math.hypot(end.x - goal.x, end.y - goal.y)).toBeLessThan(0.3);
+    for (let i = 1; i < trail.length; i++) expect(Math.abs(trail[i].feetY - trail[i - 1].feetY)).toBeLessThanOrEqual(MAX_STEP + 1e-9);
+    // Up the step: between the square and the landing, east of the flight.
+    expect(trail.some((p) => p.stair === 0 && p.x > 0.46 && p.feetY > 2.1 && p.feetY < 2.44)).toBe(true);
+  });
+
+  it("goes up steps on the far side too, to a room off a landing carried past the head", () => {
+    const n = buildNav(flat(landingCarriedWest()), listingSite(), false);
+    const F = internalOf(n)!.flights[0];
+    expect(F.ends).toHaveLength(3);
+    expect(F.ends[2]).toMatchObject({ li: 1, side: -1, door: -1 });
+    expect(F.ends[2].edge).toBeCloseTo(0.67);
+    expect(F.ends[2].cell).toBeGreaterThanOrEqual(0);
+    const { trail, goal } = hallTo(n, "New Room");
+    const end = trail[trail.length - 1];
+    expect(end).toMatchObject({ level: 1, stair: null });
+    expect(Math.hypot(end.x - goal.x, end.y - goal.y)).toBeLessThan(0.3);
+    // Steps all the way: no big side step any more.
+    for (let i = 1; i < trail.length; i++) expect(Math.abs(trail[i].feetY - trail[i - 1].feetY)).toBeLessThanOrEqual(MAX_STEP + 1e-9);
+    const offAt = trail.findIndex((p, i) => i > 0 && trail[i - 1].stair !== null && p.stair === null && p.level === 1);
+    expect(trail[offAt].x).toBeLessThan(-0.67 + 1e-6);
+  });
+
+  it("counts the steps as the stairs only from above: a ground-floor walker is never put on them", () => {
+    const n = buildNav(flat(builtInHouse("")), listingSite(), false);
+    const F = internalOf(n)!.flights[0];
+    const onStep = { x: 0.55, y: -1.8 };
+    expect(insideFlight(F, onStep, true)).toBe(true);
+    expect(insideFlight(F, onStep)).toBe(false);
+    expect(insideWell(F, onStep)).toBe(true);
   });
 });
 

@@ -395,7 +395,7 @@ export function pickTarget(nav: NavWorld, hit: WalkHit, from: WalkPose): WalkPoi
   // The treads: go to the other end.
   for (let fi = 0; fi < I.flights.length; fi++) {
     const F = I.flights[fi];
-    if (!insideFlight(F, p) || hit.y <= F.lowerBase + 0.05 || hit.y >= F.upperBase - 0.05) continue;
+    if (!insideFlight(F, p, true) || hit.y <= F.lowerBase + 0.05 || hit.y >= F.upperBase - 0.05) continue;
     const onLower = from.stair === fi ? stairState(I, fi, from).li === F.lower : levelIndex(I, from.level) === F.lower;
     const li = onLower ? F.upper : F.lower;
     const at = onLower ? F.headStand : F.footStand;

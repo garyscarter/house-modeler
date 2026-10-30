@@ -6,7 +6,7 @@ import { bayOutline, frontUnit } from "./openings";
 import { fixtureSolids } from "./planMath";
 import { GROUND_DROP } from "./site";
 import { itemFootprint, itemsOf } from "./siteItems";
-import { flightAt, flightL, flightS, stairHeight, type Flight } from "./stairs";
+import { flightAt, flightL, flightS, headSpans, stairHeight, stepDepth, type Flight, type StepSpan } from "./stairs";
 import { headSideSteps, stairwells, type Rect } from "./stairwell";
 import { surfaceOutline } from "./surfaceCurve";
 import { effectiveSlope } from "./surfaceSlope";
@@ -135,6 +135,8 @@ export interface StairEnd {
   side: -1 | 0 | 1;
   s0: number;
   s1: number;
+  /** How far across the flight (|l|) its edge is: the stringer, or the far edge of a flat head's steps. */
+  edge: number;
   /** Door through it (index in doors), -1 for none. */
   door: number;
   stand: V2;
@@ -444,13 +446,20 @@ export function floorAt(I: WalkInternal, li: number, p: V2): number | null {
 
 /** Plan point to the flight's (s, l). */
 export const flightSL = (F: FlightNav, p: V2) => ({ s: flightS(F.f, p.x, p.y), l: flightL(F.f, p.x, p.y) });
-export function insideFlight(F: FlightNav, p: V2): boolean {
+/** On the flight's treads (and, with `steps`, on a flat head's steps beside its square, which are up at the floor above). */
+export function insideFlight(F: FlightNav, p: V2, steps = false): boolean {
   const { s, l } = flightSL(F, p);
-  return s > 0 && s < F.f.run && Math.abs(l) < F.f.width / 2;
+  const hw = F.f.width / 2;
+  if (s > 0 && s < F.f.run && Math.abs(l) < hw) return true;
+  if (!steps) return false;
+  const reach = hw + stepDepth(F.f);
+  return reach > hw && Math.abs(l) < reach && headSpans(F.f).some((sp) => sp.side === Math.sign(l) && s > sp.s0 && s < sp.s1);
 }
 export function insideWell(F: FlightNav, p: V2): boolean {
-  return F.wells.some((r) => p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1) && insideFlight(F, p);
+  return F.wells.some((r) => p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1) && insideFlight(F, p, true);
 }
+/** The span a flat head steps off onto the landing from (on the side it turns to), if it has one. */
+const headSpan = (f: Flight): StepSpan | undefined => headSpans(f).find((sp) => sp.side === f.topTurn);
 /** Where on the stairs: feet height and the storey (the lower one until past half way up). */
 export function stairState(I: WalkInternal, fi: number, p: V2): { feetY: number; li: number } {
   const F = I.flights[fi];
@@ -463,8 +472,13 @@ export function leftBy(F: FlightNav, p: V2): "entry" | "exit" | null {
   const { s, l } = flightSL(F, p);
   const { run, width: w, turn } = F.f;
   const top = F.f.topTurn ?? 0;
+  const sp = headSpan(F.f);
   const entry = turn ? l * turn >= w / 2 && s >= -0.05 && s <= w + 0.05 : s <= 0 && Math.abs(l) <= w / 2 + 0.05;
-  const exit = top ? l * top >= w / 2 && s >= run - w - 0.05 && s <= run + 0.05 : s >= run && Math.abs(l) <= w / 2 + 0.05;
+  const exit = sp
+    ? l * top >= w / 2 + stepDepth(F.f) - 1e-6 && s >= sp.s0 - 0.05 && s <= sp.s1 + 0.05
+    : top
+      ? l * top >= w / 2 && s >= run - w - 0.05 && s <= run + 0.05
+      : s >= run && Math.abs(l) <= w / 2 + 0.05;
   if (entry && exit) return s < run / 2 ? "entry" : "exit";
   return entry ? "entry" : exit ? "exit" : null;
 }
@@ -474,7 +488,7 @@ export function sideAt(F: FlightNav, p: V2): number {
   const { s, l } = flightSL(F, p);
   for (let k = 2; k < F.ends.length; k++) {
     const e = F.ends[k];
-    if (e.side * l >= F.f.width / 2 - 1e-6 && s >= e.s0 - 0.05 && s <= e.s1 + 0.05) return k;
+    if (e.side * l >= e.edge - 1e-6 && s >= e.s0 - 0.05 && s <= e.s1 + 0.05) return k;
   }
   return -1;
 }
@@ -753,21 +767,31 @@ function rectPoly(F: Flight): V2[] {
 
 type Edge = { s0: number; l0: number; s1: number; l1: number };
 /** The flight's outline as four (s, l) edges, less its entry edge and/or exit edge. */
-type SideCut = { side: number; s0: number; s1: number };
-function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCut[] = []): Edge[] {
+type SideCut = { side: number; s0: number; s1: number; edge?: number };
+/**
+ * With `steps` (on the stairs, where the exit is open), a flat head's square opens onto its steps, whose ends
+ * bound them and whose far edges are the ways off (the head's exit, and side exits on the far side).
+ */
+function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCut[] = [], steps = false): Edge[] {
   const { run, width: w, turn } = F;
   const hw = w / 2;
   const top = F.topTurn ?? 0;
+  const spans = steps ? headSpans(F) : [];
+  const reach = hw + stepDepth(F);
   const out: Edge[] = [];
   const side = (l: number) => {
     const cut: [number, number][] = [];
     if (noEntry && turn && Math.sign(l) === turn) cut.push([0, w]);
-    if (noExit && top && Math.sign(l) === top) cut.push([run - w, run]);
-    for (const c of sides) if (c.side === Math.sign(l)) cut.push([c.s0, c.s1]);
+    if (noExit && top && Math.sign(l) === top && !headSpans(F).length) cut.push([run - w, run]);
+    for (const c of sides) if (c.side === Math.sign(l) && (c.edge ?? hw) <= hw + 1e-6) cut.push([c.s0, c.s1]);
+    for (const sp of spans) if (sp.side === Math.sign(l)) cut.push([sp.s0, sp.s1]);
     for (const [a, b] of subtract(0, run, cut)) out.push({ s0: a, l0: l, s1: b, l1: l });
   };
   side(-hw);
   side(hw);
+  for (const sp of reach > hw ? spans : []) {
+    out.push({ s0: sp.s0, l0: sp.side * hw, s1: sp.s0, l1: sp.side * reach }, { s0: sp.s1, l0: sp.side * hw, s1: sp.s1, l1: sp.side * reach });
+  }
   if (!(noEntry && !turn)) out.push({ s0: 0, l0: -hw, s1: 0, l1: hw });
   if (!(noExit && !top)) out.push({ s0: run, l0: -hw, s1: run, l1: hw });
   return out;
@@ -784,6 +808,9 @@ function wellObs(F: Flight, r: Rect, sides: SideCut[] = []): Obs[] {
   ];
   const { run, width: w } = F;
   const top = F.topTurn ?? 0;
+  const sp = headSpan(F);
+  // The way off the head: a flat head's steps' far edge, or the side a winding head turns to.
+  const exit: SideCut[] = sp ? [{ side: top, s0: sp.s0, s1: sp.s1, edge: w / 2 + stepDepth(F) }] : top ? [{ side: top, s0: run - w, s1: run }] : [];
   const out: Obs[] = [];
   for (let i = 0; i < 4; i++) {
     const a = corners[i];
@@ -794,9 +821,9 @@ function wellObs(F: Flight, r: Rect, sides: SideCut[] = []): Obs[] {
     const lb = flightL(F, b.x, b.y);
     // Parameter t along a-b where the edge's s (or l) reaches the given value.
     const cut: [number, number][] = [];
-    const along = [...(top ? [{ side: top, s0: run - w, s1: run }] : []), ...sides];
-    for (const c of along) {
-      if (Math.abs(la - (c.side * w) / 2) < 0.03 && Math.abs(lb - (c.side * w) / 2) < 0.03 && Math.abs(sb - sa) > 1e-6) {
+    for (const c of [...exit, ...sides]) {
+      const at = c.side * (c.edge ?? w / 2);
+      if (Math.abs(la - at) < 0.03 && Math.abs(lb - at) < 0.03 && Math.abs(sb - sa) > 1e-6) {
         const t0 = (c.s0 - sa) / (sb - sa);
         const t1 = (c.s1 - sa) / (sb - sa);
         cut.push([Math.min(t0, t1), Math.max(t0, t1)]);
@@ -920,7 +947,7 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
         const inner = flightAt(f, sm, side * (hw - 0.1));
         if (li === upper && !well.rects.some((r) => inner.x > r.x0 && inner.x < r.x1 && inner.y > r.y0 && inner.y < r.y1)) continue;
         sides.push({
-          li, s: sm, side, s0: best[0], s1: best[1], door,
+          li, s: sm, side, s0: best[0], s1: best[1], door, edge: hw,
           mid: flightAt(f, sm, side * hw), centre: flightAt(f, sm, 0), stand: flightAt(f, sm, side * (hw + STAND_OUT)), cell: -1,
         });
       }
@@ -938,8 +965,17 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
       });
     }
     for (const st of headSideSteps(model, well)) sideExit(upper, st.side, st.s0, st.s1, -1);
+    // A flat head's steps up on its far side, onto a landing carried on past it.
+    const reach = hw + stepDepth(f);
+    for (const sp of headSpans(f).filter((x) => x.side !== top)) {
+      const sm = (sp.s0 + sp.s1) / 2;
+      sides.push({
+        li: upper, s: sm, side: sp.side, s0: sp.s0, s1: sp.s1, door: -1, edge: reach,
+        mid: flightAt(f, sm, sp.side * reach), centre: flightAt(f, sm, 0), stand: flightAt(f, sm, sp.side * (reach + STAND_OUT)), cell: -1,
+      });
+    }
     const cutsOn = (li: number) => sides.filter((e) => e.li === li);
-    levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower)).map((e) => edgeObs(f, e)));
+    levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower).filter((e) => e.edge <= hw + 1e-6)).map((e) => edgeObs(f, e)));
     solids[lower].push(rectPoly(f));
     for (const r of well.rects) {
       levels[upper].obs.push(...wellObs(f, r, cutsOn(upper)));
@@ -951,12 +987,16 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
       ]);
     }
     const entryMid = turn ? flightAt(f, hw, turn * hw) : flightAt(f, 0, 0);
-    const exitMid = top ? flightAt(f, run - hw, top * hw) : flightAt(f, run, 0);
+    // A turned head is left from the middle of its side, or of its steps' far edge.
+    const head = headSpan(f);
+    const hs = head ? (head.s0 + head.s1) / 2 : run - hw;
+    const he = head ? reach : hw;
+    const exitMid = top ? flightAt(f, hs, top * he) : flightAt(f, run, 0);
     const footStand = turn ? flightAt(f, hw, turn * (hw + STAND_OUT)) : flightAt(f, -STAND_OUT, 0);
-    const headStand = top ? flightAt(f, run - hw, top * (hw + STAND_OUT)) : flightAt(f, run + STAND_OUT, 0);
+    const headStand = top ? flightAt(f, hs, top * (he + STAND_OUT)) : flightAt(f, run + STAND_OUT, 0);
     const ends: StairEnd[] = [
-      { li: lower, mid: entryMid, centre: turn ? flightAt(f, hw, 0) : entryMid, s: turn ? hw : 0, side: 0, s0: 0, s1: 0, door: -1, stand: footStand, cell: -1 },
-      { li: upper, mid: exitMid, centre: top ? flightAt(f, run - hw, 0) : exitMid, s: top ? run - hw : run, side: 0, s0: run, s1: run, door: -1, stand: headStand, cell: -1 },
+      { li: lower, mid: entryMid, centre: turn ? flightAt(f, hw, 0) : entryMid, s: turn ? hw : 0, side: 0, s0: 0, s1: 0, door: -1, edge: hw, stand: footStand, cell: -1 },
+      { li: upper, mid: exitMid, centre: top ? flightAt(f, hs, 0) : exitMid, s: top ? hs : run, side: 0, s0: run, s1: run, door: -1, edge: he, stand: headStand, cell: -1 },
       ...sides,
     ];
     // On the treads, the stringers block, and a side exit's door while it is shut.
@@ -964,7 +1004,7 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     const F: FlightNav = {
       f, lower, upper, lowerBase,
       upperBase: levels[upper].baseY,
-      perim: [...flightEdges(f, true, true, sides).map((e) => edgeObs(f, e)), ...leaves],
+      perim: [...flightEdges(f, true, true, sides, true).map((e) => edgeObs(f, e)), ...leaves],
       wells: well.rects,
       entryMid, exitMid, line: [], cost: 0,
       footStand, headStand, footCell: -1, headCell: -1, ends,
@@ -1025,7 +1065,7 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
   for (const F of flights) {
     F.ends.forEach((e, k) => {
       const g = levels[e.li].grid;
-      const beyond = (i: number) => k < 2 || e.side * flightL(F.f, cellX(g, i), cellY(g, i)) > F.f.width / 2 + 0.1;
+      const beyond = (i: number) => k < 2 || e.side * flightL(F.f, cellX(g, i), cellY(g, i)) > e.edge + 0.1;
       e.cell = nearestCell(g, e.stand, k < 2 ? 1.0 : 0.6, (i) => passable(g, i, ALL_OPEN) && beyond(i));
       if (e.cell >= 0) e.stand = cellPt(g, e.cell);
     });
