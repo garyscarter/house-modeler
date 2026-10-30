@@ -288,6 +288,28 @@ describe("the built-in house", () => {
     expect(out.exterior).toEqual(latestModel.exterior);
   });
 
+  it("cuts the kitchen's bulkhead back to a wall built under it, keeping the part over the stairs, and doesn't offer it again", () => {
+    const latestModel = PRESETS[LISTING_PRESET.id].build("");
+    const mine = PRESETS[LISTING_PRESET.id].build("");
+    const ground = mine.floors.find((f) => f.level === 0)!;
+    ground.fixtures = (ground.fixtures ?? []).filter((x) => x.type !== "bulkhead");
+    // A WC partitioned off the kitchen's south-west corner, its east wall (x 824.5) under the bulkhead's west end.
+    ground.rooms.push(rect("WC", 694, 250, 824.5, 345));
+    const cs = listingUpdates(mine, latestModel);
+    const c = byLabel(cs, "Bulkhead")!;
+    expect(c).toMatchObject({ available: true, defaultSelected: true });
+    expect(c.note).toMatch(/^Cut back to your walls: 1\.9\d × 0\.94 m of its 3\.26 × 0\.94 m\.$/);
+    const out = applyListingUpdates(mine, latestModel, [c.id]);
+    const b = out.floors.find((f) => f.level === 0)!.fixtures!.find((x) => x.type === "bulkhead")!;
+    const ppm = ground.pxPerM;
+    const [x0, x1] = [b.x - (b.w! * ppm) / 2, b.x + (b.w! * ppm) / 2];
+    // From the WC wall's kitchen face to the bulkhead's own east end, over the flight (ground x 832-898).
+    expect(x0).toBeCloseTo(824.5 + (0.1 / 2) * ppm, 1);
+    expect(x1).toBeCloseTo(971.35, 1);
+    expect(b.d).toBeCloseTo(0.936);
+    expect(byLabel(listingUpdates(out, latestModel), "Bulkhead")).toBeUndefined();
+  });
+
   it("leaves a front door's side lights, and the width they need, to the owner", () => {
     const latestModel = PRESETS[LISTING_PRESET.id].build("");
     const mine = PRESETS[LISTING_PRESET.id].build("");

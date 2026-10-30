@@ -4,7 +4,7 @@ Status: built (October 2026). The planner was Nancy Sinatra (Opus); the chunks w
 
 ## As built
 
-- **Side exits off the stairs** (not in the plan). Proposed's new room opens off the side of the top winders, about 0.35 m below the landing, so a flight can now be left sideways through a door, gap or archway on its side, stepping up to `SIDE_STEP` (0.45 m). A shut door there still blocks. See `walkNav.ts` (flight ends) and `walkMove.ts`.
+- **Side exits off the stairs** (not in the plan). Proposed's new room opens off the side of the top winders, about 0.35 m below the landing, so a flight can now be left sideways through a door, gap or archway on its side, stepping up to `SIDE_STEP` (0.45 m). A shut door there still blocks. See `walkNav.ts` (flight ends) and `walkMove.ts`. A turned head's far side that faces more of the same landing (a landing carried on past the head) has no rail where its winders are within `STEP_UP` (0.45 m) of the floor, and is a side exit with no door (`headSideSteps` in `stairwell.ts`).
 - **Walls are boxes, not capsules**, the grid is 0.1 m, and door frames take 0.02 m a side, so the 0.65 m bathroom door stays passable with a 0.25 m walker.
 - **A place behind a shut door** (a floor tap or a mini-map tap) walks you up to that door, turns you to face it and then says it is shut (`stopBeforeDoor` in `walkMotion.ts`), rather than refusing on the spot.
 - **Arrival** finishes turning to the route's facing before the route clears, and a walker stood where nobody can (a door shut on you, an edit) is settled onto the nearest free spot when it next tries to move.

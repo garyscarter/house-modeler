@@ -1,6 +1,6 @@
 import type { Floor, HouseModel } from "../types";
 import { areaOf, buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
-import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, type Flight } from "./stairs";
+import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, stairTreads, type Flight } from "./stairs";
 import { BULKHEAD_REACH, floorBulkheads, growConvex } from "./bulkhead";
 
 /**
@@ -119,12 +119,24 @@ function openSide(floor: Floor, a: V2, b: V2, out: V2, ceiling: number): boolean
   // A solid wall piece (not a doorway or gap) running along this side.
   for (const w of buildWalls(floor)) {
     for (const pc of cutWall(w, ceiling).pieces) {
-      if (pc.y0 > 0.05) continue;
+      if (pc.y0 > 0.05 || !alongside(a, b, pc.a, pc.b)) continue;
       // Within 0.3 m: tracings put walls at their centre lines, and old walls can be thicker than drawn.
       if (distToSeg(mid, pc.a, pc.b) < 0.3 && distToSeg(m, pc.a, pc.b) < 0.45) return false;
     }
   }
   return true;
+}
+
+/** Does wall line p–q run beside side a–b: near parallel, and over at least half of it (a wall ending at its corner doesn't)? */
+function alongside(a: V2, b: V2, p: V2, q: V2): boolean {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const wl = Math.hypot(q.x - p.x, q.y - p.y);
+  if (len < 1e-6 || wl < 1e-6) return false;
+  const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+  if (Math.abs(u.x * (q.y - p.y) - u.y * (q.x - p.x)) / wl > 0.2) return false;
+  const t0 = (p.x - a.x) * u.x + (p.y - a.y) * u.y;
+  const t1 = (q.x - a.x) * u.x + (q.y - a.y) * u.y;
+  return Math.min(len, Math.max(t0, t1)) - Math.max(0, Math.min(t0, t1)) >= len / 2;
 }
 
 /** A guard rail on a floor: a plan line from a to b, over floor or treads at heights ya and yb (metres above this floor). */
@@ -222,11 +234,75 @@ function cutAtOpenings(run: RailRun, gaps: Gap[], foot?: (p: V2, y: number) => n
 }
 
 /**
+ * The most a winder beside the far side of a turned head may sit below the floor above for that side to be a
+ * step up onto more landing rather than a drop to guard, metres: two risers. (Part K asks for guarding only
+ * where the drop is over 600 mm.)
+ */
+export const STEP_UP = 0.45;
+
+/** A stretch of a flight's side (s from s0 to s1 up the run, side +1 right going up, -1 left) left open to step off. */
+export interface SideStep {
+  side: -1 | 1;
+  s0: number;
+  s1: number;
+}
+
+/**
+ * Where a turned head's far side opens onto more of the landing it arrives on: the stretches along the side
+ * away from the turn where the winders beside it are within STEP_UP of the floor above and the same room
+ * carries on beyond, with no wall between. They are steps, not drops, so no rail runs there and the walk
+ * steps off them. A landing carried past the head to a room beyond it is reached this way.
+ */
+export function headSideSteps(model: HouseModel, well: Stairwell): SideStep[] {
+  const f = well.flight;
+  const upper = model.floors.find((u) => u.id === well.upperId);
+  if (!f.topTurn || !upper) return [];
+  const side = -f.topTurn as -1 | 1;
+  const hw = f.width / 2;
+  const treads = stairTreads(f);
+  const rooms = upper.rooms.map((r) => roomWorldPolygon(upper, r));
+  const inWell = (p: V2) => well.rects.some((r) => p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1);
+  const ok = (s: number) => {
+    const inside = flightPoint(f, s, side * (hw - 0.05));
+    const beyond = flightPoint(f, s, side * (hw + 0.3));
+    const tread = treads.find((t) => pointInPolygon(inside, t.pts));
+    if (!tread || f.rise - tread.top > STEP_UP + 1e-6 || !inWell(inside)) return false;
+    return rooms.some((poly) => pointInPolygon(beyond, poly) && pointInPolygon(inside, poly));
+  };
+  const out: SideStep[] = [];
+  const s0 = f.run - f.width;
+  const n = Math.max(1, Math.ceil(f.width / 0.02));
+  let from = -1;
+  for (let k = 0; k <= n + 1; k++) {
+    const s = s0 + (f.width * Math.min(k, n)) / n;
+    const good = k <= n && ok(s);
+    if (good && from < 0) from = s;
+    if (!good && from >= 0) {
+      const to = s0 + (f.width * (k - 1)) / n;
+      const a = flightPoint(f, from, side * hw);
+      const b = flightPoint(f, to, side * hw);
+      if (to - from >= 0.2 && openSide(upper, a, b, { x: -f.dir.y * side, y: f.dir.x * side }, model.ceilingHeight)) out.push({ side, s0: from, s1: to });
+      from = -1;
+    }
+  }
+  return out;
+}
+
+/** What is left of [a, b] once the stretches in `cut` are taken out. */
+function subtractSpans(a: number, b: number, cut: [number, number][]): [number, number][] {
+  let parts: [number, number][] = [[a, b]];
+  for (const [c0, c1] of cut)
+    parts = parts.flatMap(([p0, p1]): [number, number][] => (c1 <= p0 || c0 >= p1 ? [[p0, p1]] : ([[p0, c0], [c1, p1]] as [number, number][]).filter(([q0, q1]) => q1 - q0 > 1e-3)));
+  return parts;
+}
+
+/**
  * Balustrades for a stairwell: along the open sides of the flight on the
  * floor below, and round the open edges of the opening on the floor above,
  * leaving the top of the flight open to step off: its end when it arrives
  * straight, the side it turns to when its head winds onto the landing.
- * Runs are cut short of any doorway on their line.
+ * Runs are cut short of any doorway on their line, and leave a turned head's
+ * far side open where it is a step up onto more landing (headSideSteps).
  */
 export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRun[]; upper: RailRun[] } {
   const lower = model.floors.find((f) => f.id === well.lowerId);
@@ -265,6 +341,7 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     const run: RailRun = { a, b, ya, yb, fa: newelFoot(a, ya), fb: newelFoot(b, yb) };
     out.lower.push(...cutAtOpenings(run, lowerGaps, newelFoot));
   }
+  const steps = headSideSteps(model, well);
   for (const r of well.rects) {
     const corners = [
       { x: r.x0, y: r.y0 },
@@ -281,7 +358,8 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     ]) {
       // The side a turned head steps off onto the landing stays open.
       const e = f.topTurn && sign === f.topTurn ? Math.min(s1, headStart) : s1;
-      if (e - s0 > 0.05) edges.push([flightPoint(f, s0, l), flightPoint(f, e, l), side(sign)]);
+      const open = steps.filter((st) => st.side === sign && Math.abs(l - (sign * f.width) / 2) < 0.03).map((st): [number, number] => [st.s0, st.s1]);
+      for (const [p0, p1] of subtractSpans(s0, e, open)) if (p1 - p0 > 0.05) edges.push([flightPoint(f, p0, l), flightPoint(f, p1, l), side(sign)]);
     }
     edges.push([flightPoint(f, s0, l0), flightPoint(f, s0, l1), { x: -f.dir.x, y: -f.dir.y }]);
     // A turned head's far end is guarded too (usually it is against a wall).

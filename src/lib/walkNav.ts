@@ -7,7 +7,7 @@ import { fixtureSolids } from "./planMath";
 import { GROUND_DROP } from "./site";
 import { itemFootprint, itemsOf } from "./siteItems";
 import { flightAt, flightL, flightS, stairHeight, type Flight } from "./stairs";
-import { stairwells, type Rect } from "./stairwell";
+import { headSideSteps, stairwells, type Rect } from "./stairwell";
 import { surfaceOutline } from "./surfaceCurve";
 import { effectiveSlope } from "./surfaceSlope";
 import { outwardSign, wallThickness } from "./walls";
@@ -892,8 +892,39 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     const top = f.topTurn ?? 0;
     const hw = w / 2;
     const lowerBase = levels[lower].baseY;
-    // Side exits: doorways in a wall along the flight's side, where the treads are within SIDE_STEP of that floor.
+    // Side exits: doorways in a wall along the flight's side, and a turned head's far side where it steps up onto
+    // more landing (no rail there), where the treads are within SIDE_STEP of that floor.
     const sides: StairEnd[] = [];
+    const sideExit = (li: number, side: -1 | 1, sa: number, sb: number, door: number) => {
+      const cut: [number, number][] = [];
+      if (turn === side) cut.push([0, w]);
+      if (top === side) cut.push([run - w, run]);
+      for (const [p0, p1] of subtract(Math.max(0, Math.min(sa, sb)), Math.min(run, Math.max(sa, sb)), cut)) {
+        // The longest stretch where the treads at the side are within SIDE_STEP of the floor.
+        let best: [number, number] | null = null;
+        let from = -1;
+        const n = Math.max(1, Math.ceil((p1 - p0) / 0.02));
+        for (let k = 0; k <= n + 1; k++) {
+          const sk = p0 + ((p1 - p0) * k) / n;
+          const ok = k <= n && Math.abs(lowerBase + stairHeight(f, sk, side * hw) - levels[li].baseY) <= SIDE_STEP;
+          if (ok && from < 0) from = sk;
+          if (!ok && from >= 0) {
+            const end = p0 + ((p1 - p0) * (k - 1)) / n;
+            if (!best || end - from > best[1] - best[0]) best = [from, end];
+            from = -1;
+          }
+        }
+        if (!best || best[1] - best[0] < 0.2) continue;
+        const sm = (best[0] + best[1]) / 2;
+        // Upstairs it must open off the well (elsewhere the upper floor covers the treads).
+        const inner = flightAt(f, sm, side * (hw - 0.1));
+        if (li === upper && !well.rects.some((r) => inner.x > r.x0 && inner.x < r.x1 && inner.y > r.y0 && inner.y < r.y1)) continue;
+        sides.push({
+          li, s: sm, side, s0: best[0], s1: best[1], door,
+          mid: flightAt(f, sm, side * hw), centre: flightAt(f, sm, 0), stand: flightAt(f, sm, side * (hw + STAND_OUT)), cell: -1,
+        });
+      }
+    };
     for (const li of [lower, upper]) {
       doors.forEach((d, di) => {
         if (d.li !== li || d.nd.passage === "shut") return;
@@ -903,36 +934,10 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
         const lb = flightL(f, d.b.x, d.b.y);
         const side = Math.sign(la) as -1 | 1;
         if (!side || Math.sign(lb) !== side || Math.abs(la - lb) > 0.05 || side * la < hw - 0.05 || side * la > hw + 0.3) return;
-        const cut: [number, number][] = [];
-        if (turn === side) cut.push([0, w]);
-        if (top === side) cut.push([run - w, run]);
-        for (const [p0, p1] of subtract(Math.max(0, Math.min(sa, sb)), Math.min(run, Math.max(sa, sb)), cut)) {
-          // The longest stretch where the treads at the side are within SIDE_STEP of the floor.
-          let best: [number, number] | null = null;
-          let from = -1;
-          const n = Math.max(1, Math.ceil((p1 - p0) / 0.02));
-          for (let k = 0; k <= n + 1; k++) {
-            const sk = p0 + ((p1 - p0) * k) / n;
-            const ok = k <= n && Math.abs(lowerBase + stairHeight(f, sk, side * hw) - levels[li].baseY) <= SIDE_STEP;
-            if (ok && from < 0) from = sk;
-            if (!ok && from >= 0) {
-              const end = p0 + ((p1 - p0) * (k - 1)) / n;
-              if (!best || end - from > best[1] - best[0]) best = [from, end];
-              from = -1;
-            }
-          }
-          if (!best || best[1] - best[0] < 0.2) continue;
-          const sm = (best[0] + best[1]) / 2;
-          // Upstairs it must open off the well (elsewhere the upper floor covers the treads).
-          const inner = flightAt(f, sm, side * (hw - 0.1));
-          if (li === upper && !well.rects.some((r) => inner.x > r.x0 && inner.x < r.x1 && inner.y > r.y0 && inner.y < r.y1)) continue;
-          sides.push({
-            li, s: sm, side, s0: best[0], s1: best[1], door: d.nd.passage === "door" ? di : -1,
-            mid: flightAt(f, sm, side * hw), centre: flightAt(f, sm, 0), stand: flightAt(f, sm, side * (hw + STAND_OUT)), cell: -1,
-          });
-        }
+        sideExit(li, side, sa, sb, d.nd.passage === "door" ? di : -1);
       });
     }
+    for (const st of headSideSteps(model, well)) sideExit(upper, st.side, st.s0, st.s1, -1);
     const cutsOn = (li: number) => sides.filter((e) => e.li === li);
     levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower)).map((e) => edgeObs(f, e)));
     solids[lower].push(rectPoly(f));

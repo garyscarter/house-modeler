@@ -241,6 +241,60 @@ describe("pickTarget and goalPoint", () => {
   });
 });
 
+describe("stepping off the head onto a landing carried past it", () => {
+  // Proposed with the landing carried west past the head's far side to New Room's door, which moves with it.
+  const m = builtInProposed("");
+  const up = m.floors.find((f) => f.level === 1)!;
+  const landing = up.rooms.find((r) => r.name === "Landing")!;
+  landing.polygon = landing.polygon.map((p) => ({ ...p, x: p.x === 610 ? 564 : p.x }));
+  up.rooms.find((r) => r.name === "New Room")!.polygon = [
+    { x: 315, y: 795 },
+    { x: 610, y: 795 },
+    { x: 610, y: 1040 },
+    { x: 564, y: 1040 },
+    { x: 564, y: 1110 },
+    { x: 610, y: 1110 },
+    { x: 610, y: 1285 },
+    { x: 315, y: 1285 },
+  ];
+  up.openings.find((o) => o.kind === "door" && o.x === 610 && o.y === 1075)!.x = 564;
+  const sn = buildNav(m, listingSite(), false);
+  const SI = internalOf(sn)!;
+  const open: DoorStates = Object.fromEntries(sn.doors.map((d) => [d.key, true]));
+  const r1 = (level: number, name: string) => sn.levels.find((l) => l.level === level)!.rooms.find((r) => r.name === name)!;
+
+  it("opens the head's far side as a way off with no door", () => {
+    const ends = SI.flights[0].ends;
+    expect(ends).toHaveLength(3);
+    expect(ends[2]).toMatchObject({ li: 1, side: -1, door: -1 });
+    expect(ends[2].cell).toBeGreaterThanOrEqual(0);
+  });
+
+  it("routes from the hall up the stairs, off the side of the head and through the door into the new room", () => {
+    const hall = goalPoint(sn, { kind: "room", level: 0, roomId: r1(0, "Hallway (front)").id })!;
+    const from: WalkPose = { ...hall.point, feetY: 0, yaw: 0, pitch: 0 };
+    const goal = goalPoint(sn, { kind: "room", level: 1, roomId: r1(1, "New Room").id })!;
+    const r = routeTo(sn, from, goal.point, open);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const trail = follow(sn, from, r.route, open);
+    const end = trail[trail.length - 1];
+    expect(end).toMatchObject({ level: 1, stair: null });
+    expect(Math.hypot(end.x - goal.point.x, end.y - goal.point.y)).toBeLessThan(0.3);
+    let sideSteps = 0;
+    for (let i = 1; i < trail.length; i++) {
+      const jump = Math.abs(trail[i].feetY - trail[i - 1].feetY);
+      expect(jump).toBeLessThanOrEqual(SIDE_STEP + 1e-9);
+      if (jump > MAX_STEP + 1e-9) sideSteps++;
+    }
+    expect(sideSteps).toBeLessThanOrEqual(1);
+    // Off the stairs onto the landing west of the well, not round by the head's usual way off to the east.
+    const offAt = trail.findIndex((p, i) => i > 0 && trail[i - 1].stair !== null && p.stair === null && p.level === 1);
+    expect(offAt).toBeGreaterThan(0);
+    expect(trail[offAt].x).toBeLessThan(SI.flights[0].f.centre.x);
+  });
+});
+
 describe("side exits off the stairs (Proposed)", () => {
   const pn = buildNav(builtInProposed(""), listingSite(), false);
   const PI = internalOf(pn)!;

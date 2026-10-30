@@ -3,7 +3,7 @@ import { builtInHouse, builtInProposed } from "../houses/default";
 import { polygonArea, roomWorldPolygon } from "./geometry";
 import { buildWalls, cutWall } from "./geometry";
 import { floor as mkFloor, rect } from "./testing";
-import { balustrades, cutWells, stairwells, subtractRect, type Rect } from "./stairwell";
+import { balustrades, cutWells, headSideSteps, stairwells, subtractRect, type Rect } from "./stairwell";
 
 const sq = (x0: number, y0: number, x1: number, y1: number) => [
   { x: x0, y: y0 },
@@ -85,21 +85,44 @@ describe("the built-in house's stairwell", () => {
     expect(b.upper).toHaveLength(0);
   });
 
-  it("guards the drop beside the head when the landing is widened past it", () => {
-    // Like a landing carried west over the extension: the head's outer side now faces open floor.
+  it("leaves the head's far side open as a step when the landing is carried on past it", () => {
+    // Like a landing carried west over the extension: the head's outer side now faces more landing, and the first
+    // winder beside it is two risers down (0.38 m): a step up onto it, not a drop to guard (Part K: over 600 mm).
     const m = structuredClone(model);
     const upper = m.floors.find((f) => f.level === 1)!;
     const landing = upper.rooms.find((r) => r.name === "Landing")!;
     landing.polygon = landing.polygon.map((p) => ({ ...p, x: p.x === 610 ? 539 : p.x }));
     const [w] = stairwells(m);
+    expect(balustrades(m, w).upper).toHaveLength(0);
+    const steps = headSideSteps(m, w);
+    expect(steps).toHaveLength(1);
+    expect(steps[0].side).toBe(-w.flight.topTurn!);
+    // Along the head's west side, the landing's depth over the well.
+    expect(steps[0].s1 - steps[0].s0).toBeGreaterThan(0.75);
+    // The listed house's head is walled on that side: nothing to step onto.
+    expect(headSideSteps(model, stairwells(model)[0])).toHaveLength(0);
+  });
+
+  it("guards the part of that side beside a winder more than two risers down", () => {
+    // Three winders in the head: the first is three risers (0.53 m) down, the second two.
+    const m = structuredClone(model);
+    const upper = m.floors.find((f) => f.level === 1)!;
+    const lower = m.floors.find((f) => f.level === 0)!;
+    upper.rooms.find((r) => r.name === "Landing")!.polygon = upper.rooms
+      .find((r) => r.name === "Landing")!
+      .polygon.map((p) => ({ ...p, x: p.x === 610 ? 539 : p.x }));
+    lower.stairsTopWinders = 3;
+    const [w] = stairwells(m);
     const runs = balustrades(m, w).upper;
     expect(runs).toHaveLength(1);
     const [r] = runs;
-    // Along the head's west side, the full depth of the landing, at floor level.
+    // From the landing's south edge to where the second winder begins, at floor level.
     expect(r.a.x).toBeCloseTo(w.flight.centre.x - w.flight.width / 2);
     expect(r.b.x).toBeCloseTo(r.a.x);
-    expect(Math.abs(r.b.y - r.a.y)).toBeGreaterThan(0.8);
-    expect(Math.max(r.a.y, r.b.y)).toBeLessThan((1110 - 1203) / 73 + 1e-6);
+    expect(Math.abs(r.b.y - r.a.y)).toBeGreaterThan(0.3);
+    expect(Math.abs(r.b.y - r.a.y)).toBeLessThan(0.6);
+    const [st] = headSideSteps(m, w);
+    expect(st.s1 - st.s0).toBeGreaterThan(0.3);
   });
 
   it("removes the opening's area from the floor above", () => {

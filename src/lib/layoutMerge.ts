@@ -1,7 +1,9 @@
 import type { Exterior, Fixture, Floor, HouseModel, Opening, OpeningKind, Pt, Room } from "../types";
 import { DEFAULT_EXTERIOR, TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid } from "../types";
 import { byId, isFittedLight, type CatalogueItem } from "./catalogue";
-import { EXT_WALL_T, pointInPolygon, toWorld, WALL_T, type V2 } from "./geometry";
+import { EXT_WALL_T, polygonArea, pointInPolygon, toWorld, WALL_T, type V2 } from "./geometry";
+import { isBulkhead } from "./bulkhead";
+import { flightFootprint, floorFlight } from "./stairs";
 import { convexOverlap, defaultHead, defaultSill, DOOR_KINDS, fixtureSolids, rectCorners, wallLines, type WallLine } from "./planMath";
 
 /**
@@ -264,35 +266,140 @@ function fixtureProblems(fx: Fixture, item: CatalogueItem, floor: Floor, latestR
   return out;
 }
 
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+const boxCorners = (b: Box): Pt[] => [
+  { x: b.x0, y: b.y0 },
+  { x: b.x1, y: b.y0 },
+  { x: b.x1, y: b.y1 },
+  { x: b.x0, y: b.y1 },
+];
+
+/** The part of convex `poly` inside box `b` (Sutherland–Hodgman against its four sides). */
+function clipToBox(poly: Pt[], b: Box): Pt[] {
+  const sides: [(p: Pt) => number][] = [[(p) => p.x - b.x0], [(p) => b.x1 - p.x], [(p) => p.y - b.y0], [(p) => b.y1 - p.y]];
+  return sides.reduce((pts, [f]) => {
+    const out: Pt[] = [];
+    pts.forEach((p, i) => {
+      const q = pts[(i + 1) % pts.length];
+      const fp = f(p);
+      const fq = f(q);
+      if (fp >= 0) out.push(p);
+      if ((fp > 0 && fq < 0) || (fp < 0 && fq > 0)) {
+        const t = fp / (fp - fq);
+        out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      }
+    });
+    return out;
+  }, poly);
+}
+
+/** A fixture's footprint in world metres. */
+const worldCorners = (floor: Floor, fx: Fixture, item: CatalogueItem): V2[] =>
+  rectCorners(fx, (fx.w ?? item.w) * floor.pxPerM, (fx.d ?? item.d) * floor.pxPerM, fx.rot).map((p) => toWorld(floor, p));
+
+/** Shortest side a bulkhead cut back to the walls may have, metres. */
+const MIN_BULKHEAD_M = 0.2;
+
+/**
+ * A bulkhead (`fx` on `floor`, image px) cut back to the design's walls: the largest rectangle within it clear
+ * of every wall it crosses, keeping as much as it can of a flight passing up through it, which is what it is
+ * there to box in. Undefined when it crosses no wall, is turned off the square, or nothing useful is left.
+ */
+function fitBulkhead(fx: Fixture, item: CatalogueItem, floor: Floor, model: HouseModel): Fixture | undefined {
+  const rot = (((fx.rot ?? 0) % 360) + 360) % 360;
+  if (rot % 90) return undefined;
+  const ppm = floor.pxPerM;
+  const turned = rot % 180 === 90;
+  const w = (fx.w ?? item.w) * ppm;
+  const d = (fx.d ?? item.d) * ppm;
+  const [hx, hy] = turned ? [d / 2, w / 2] : [w / 2, d / 2];
+  const box: Box = { x0: fx.x - hx, y0: fx.y - hy, x1: fx.x + hx, y1: fx.y + hy };
+  const eps = 0.005 * ppm;
+  const walls = wallRects(wallLines(floor, WALL_T, EXT_WALL_T))
+    .filter((r) => convexOverlap(boxCorners(box), r, eps))
+    .map((r) => ({ x0: Math.min(...r.map((p) => p.x)), y0: Math.min(...r.map((p) => p.y)), x1: Math.max(...r.map((p) => p.x)), y1: Math.max(...r.map((p) => p.y)) }));
+  if (!walls.length || walls.length > 6) return undefined;
+  const flight = floorFlight(model, floor);
+  const under = flight ? flightFootprint(flight).map((p) => ({ x: (p.x - floor.offset.x) * ppm + floor.origin.x, y: (p.y - floor.offset.y) * ppm + floor.origin.y })) : [];
+  const min = MIN_BULKHEAD_M * ppm;
+  // Flight covered first (to 0.01 m²), then area.
+  const score = (b: Box) => [under.length ? Math.round((Math.abs(polygonArea(clipToBox(under, b))) / (ppm * ppm)) * 100) : 0, (b.x1 - b.x0) * (b.y1 - b.y0)];
+  let best: { box: Box; score: number[] } | undefined;
+  // Each wall it crosses is cleared on one of its four sides; try every choice (a handful of walls at most).
+  const pick = (k: number, b: Box) => {
+    if (b.x1 - b.x0 < min || b.y1 - b.y0 < min) return;
+    if (k === walls.length) {
+      const sc = score(b);
+      if (!best || sc[0] > best.score[0] || (sc[0] === best.score[0] && sc[1] > best.score[1])) best = { box: b, score: sc };
+      return;
+    }
+    const r = walls[k];
+    if (b.x1 <= r.x0 + eps || b.x0 >= r.x1 - eps || b.y1 <= r.y0 + eps || b.y0 >= r.y1 - eps) return pick(k + 1, b);
+    pick(k + 1, { ...b, x1: Math.min(b.x1, r.x0) });
+    pick(k + 1, { ...b, x0: Math.max(b.x0, r.x1) });
+    pick(k + 1, { ...b, y1: Math.min(b.y1, r.y0) });
+    pick(k + 1, { ...b, y0: Math.max(b.y0, r.y1) });
+  };
+  pick(0, box);
+  // (Assigned inside pick, which the type checker doesn't follow.)
+  const found = best as { box: Box } | undefined;
+  if (!found) return undefined;
+  const { x0, y0, x1, y1 } = found.box;
+  const [bw, bd] = turned ? [y1 - y0, x1 - x0] : [x1 - x0, y1 - y0];
+  return { ...fx, x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: +(bw / ppm).toFixed(3), d: +(bd / ppm).toFixed(3) };
+}
+
 function fixtureChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
   const out: (LayoutChange & { fitting: boolean })[] = [];
   for (const { lf, mf, li } of floorPairs(mine, latest)) {
     const mineFx = mf.fixtures ?? [];
     (lf.fixtures ?? []).forEach((lfx, i) => {
       const lw = toWorld(lf, lfx);
-      const there = mineFx.some((m) => m.id === lfx.id || (m.type === lfx.type && distM(toWorld(mf, m), lw) <= FIXTURE_MATCH_M));
-      if (there) return;
       const item = byId(lfx.type);
-      const placed: Fixture = { ...structuredClone(lfx), ...mapPoint(lf, mf, lfx) };
+      const there = mineFx.some(
+        (m) =>
+          m.id === lfx.id ||
+          (m.type === lfx.type && distM(toWorld(mf, m), lw) <= FIXTURE_MATCH_M) ||
+          // A bulkhead the design has over any of the same ceiling (one cut back to its walls, say).
+          (m.type === lfx.type && !!item && isBulkhead(item) && convexOverlap(worldCorners(mf, m, item), worldCorners(lf, lfx, item), 0.05)),
+      );
+      if (there) return;
+      let placed: Fixture = { ...structuredClone(lfx), ...mapPoint(lf, mf, lfx) };
       const latestRoom = roomOfFixture(lf, lfx)?.name;
       // A clash the latest house has itself (a radiator tucked against a nib, say) is how it is meant to be.
       const latestOnly = { ...lf, fixtures: (lf.fixtures ?? []).filter((f) => f !== lfx) };
-      const problems = item
-        ? fixtureProblems(
-            placed,
-            item,
-            mf,
-            latestRoom,
-            fixtureProblems(lfx, item, latestOnly, undefined, false, true).some((p) => p.startsWith("would cut")),
-            fixtureProblems(lfx, item, latestOnly, undefined, true, false).some((p) => p.startsWith("would block")),
-          )
-        : ["isn't in this version's catalogue"];
+      const problemsAt = (fx: Fixture) =>
+        item
+          ? fixtureProblems(
+              fx,
+              item,
+              mf,
+              latestRoom,
+              fixtureProblems(lfx, item, latestOnly, undefined, false, true).some((p) => p.startsWith("would cut")),
+              fixtureProblems(lfx, item, latestOnly, undefined, true, false).some((p) => p.startsWith("would block")),
+            )
+          : ["isn't in this version's catalogue"];
+      let problems = problemsAt(placed);
+      // A bulkhead crossing the design's walls is cut back to them, keeping the part over the stairs.
+      let cutBack: string | undefined;
+      const fit = item && isBulkhead(item) && problems.some((p) => p.startsWith("would cut")) ? fitBulkhead(placed, item, mf, mine) : undefined;
+      if (fit && item) {
+        const size = (fx: Fixture) => `${metres(fx.w ?? item.w).replace(" m", "")} × ${metres(fx.d ?? item.d)}`;
+        cutBack = `Cut back to your walls: ${size(fit)} of its ${size(placed)}.`;
+        placed = fit;
+        problems = problemsAt(fit);
+      }
       const fitting = isFitting(item);
       const tick = fitting && !problems.length;
       const note = problems.length
-        ? `Not ticked: it ${problems.join(", and ")}.`
+        ? `${cutBack ? cutBack + " " : ""}Not ticked: it ${problems.join(", and ")}.`
         : fitting
-          ? undefined
+          ? cutBack
           : item && isFittedLight(item)
             ? "Not ticked: lights are part of your own lighting plan, and you may have removed this on purpose."
             : "Not ticked: furniture is yours to place, and you may have removed this on purpose.";
@@ -616,7 +723,9 @@ function ownWindowChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] 
  * - New fittings and furniture: latest fixtures with no fixture of the same type within 0.3 m (or the same
  *   id) on the design's floor of the same level. Fittings (radiators, mirrors, towel rails) are ticked when
  *   they land in a room of the same name, clear of the design's walls, doorways and fixtures (clashes the
- *   latest house has itself don't count); everything else is offered unticked with the reason.
+ *   latest house has itself don't count); everything else is offered unticked with the reason. A bulkhead that
+ *   would cut into the design's walls is cut back to them first, keeping the part over the stairs; one the
+ *   design has over any of the same ceiling counts as there.
  * - Stairs: one change per floor whose flight differs; ticked when the design's flight is within 0.75 m.
  * - Doors and windows: an opening of the same kind and orientation within 0.2 m is the design's own; its
  *   style, size and height fields that differ are offered (ticked unless a new width would leave its wall
