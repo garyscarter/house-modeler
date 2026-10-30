@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -23,6 +23,8 @@ import { boxedPart, floorFlight, SOFFIT, stairTreads, treadCount, type FlightSha
 import { flightStructure, floorStructure, floorsStructure, modelStructure, shellLooks } from "../lib/structure";
 import { GROUND_Y } from "./Site";
 import { buildShell, FLOOR_SURFACE } from "./shell";
+import { DoorLeaves } from "./DoorLeaves";
+import { useWalk } from "../walkStore";
 import { getMaterial, glassMaterial, setGlassLitMask, trackGlass, type MatSpec } from "./textures";
 import { litMask } from "../lib/glassGlow";
 import { floorBaseY } from "./floorBase";
@@ -365,6 +367,8 @@ function FloorShell({
   const upperWalls = useMemo(() => above.flatMap((f) => buildWalls(f)), [upperSig]);
   const finish = ext.wallFinish ?? "render";
   const litSig = [...litRooms].sort().join();
+  // While walking, the moving door leaves come out of the merged shell so they can swing, slide and fold.
+  const split = useWalk((s) => s.on);
   const shell = useMemo(
     () =>
       buildShell({
@@ -383,11 +387,18 @@ function FloorShell({
         doorColours: { frontDoorColor: ext.frontDoorColor, backDoorColor: ext.backDoorColor },
         doorsOpen,
         flight,
+        splitLeaves: split,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight],
+    [shellLooks(floor), walls, H, slab, upperPolys, upperWalls, lowest, baseY, finish, ext.wallColor, ext.trimColor, ext.frontDoorColor, ext.backDoorColor, doorsOpen, flight, split],
   );
-  useEffect(() => () => shell.meshes.forEach((m) => m.geometry.dispose()), [shell]);
+  useEffect(
+    () => () => {
+      shell.meshes.forEach((m) => m.geometry.dispose());
+      shell.leaves.forEach((l) => l.panels.forEach((p) => p.meshes.forEach((m) => m.geometry.dispose())));
+    },
+    [shell],
+  );
   // This floor's own glass: the lit rooms are a mask on the material, so which rooms are lit never rebuilds the shell.
   // Registered in the effect, so a copy StrictMode makes and drops is never tracked.
   const glass = useMemo(() => glassMaterial(undefined, false), []);
@@ -442,6 +453,7 @@ function FloorShell({
         ) : null;
       })}
       {onContextRoom && <RoomHover floor={floor} holes={holes} />}
+      {split && <DoorLeaves leaves={shell.leaves} glass={glass} />}
       {shell.meshes.map((m) => (
         <mesh
           key={m.key}
@@ -500,6 +512,68 @@ if (typeof window !== "undefined")
     true,
   );
 
+const LONG_PRESS_MS = 550;
+const LONG_PRESS_SLOP = 8;
+
+/**
+ * Touch long-press for the 3D room menu (a touch has no right-click): hold still 550 ms and `onContext` is called
+ * with the touch's screen position. A move over 8 px, a lift or a second finger cancels it, and the click that
+ * follows a long-press is swallowed (swallowClick) so it does not also select the room.
+ */
+function useLongPress(onContext?: (x: number, y: number) => void) {
+  const cb = useRef(onContext);
+  cb.current = onContext;
+  const state = useRef<{ stop: () => void; swallow: boolean }>({ stop: () => {}, swallow: false });
+  useEffect(() => () => state.current.stop(), []);
+  return useMemo(
+    () => ({
+      down(n: PointerEvent) {
+        const st = state.current;
+        st.swallow = false;
+        if (n.pointerType !== "touch" || !cb.current) return;
+        st.stop();
+        const id = n.pointerId;
+        const x0 = n.clientX;
+        const y0 = n.clientY;
+        const timer = window.setTimeout(() => {
+          st.stop();
+          st.swallow = true;
+          cb.current?.(x0, y0);
+        }, LONG_PRESS_MS);
+        const move = (m: PointerEvent) => {
+          if (m.pointerId === id && Math.hypot(m.clientX - x0, m.clientY - y0) > LONG_PRESS_SLOP) st.stop();
+        };
+        const end = (m: PointerEvent) => {
+          if (m.pointerId === id) st.stop();
+        };
+        const second = (m: PointerEvent) => {
+          if (m.pointerId !== id) st.stop();
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", end);
+        window.addEventListener("pointercancel", end);
+        window.addEventListener("pointerdown", second);
+        st.stop = () => {
+          window.clearTimeout(timer);
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", end);
+          window.removeEventListener("pointercancel", end);
+          window.removeEventListener("pointerdown", second);
+          st.stop = () => {};
+        };
+      },
+      /** True once, for the click right after a long-press fired. */
+      swallowClick(): boolean {
+        const st = state.current;
+        const was = st.swallow;
+        st.swallow = false;
+        return was;
+      },
+    }),
+    [],
+  );
+}
+
 function RoomFloor({ room, polys, selected, onSelect, onContext }: { room: Room; polys: V2[][]; selected: boolean; onSelect: () => void; onContext?: (x: number, y: number) => void }) {
   const setUi = useUiSetter();
   // Shape coordinates are metres, so the UVs keep boards and tiles at their real size;
@@ -519,6 +593,7 @@ function RoomFloor({ room, polys, selected, onSelect, onContext }: { room: Room;
   }, [polys, angle]);
   useEffect(() => () => geom.dispose(), [geom]);
   const material = getMaterial(floorSpec(room, selected));
+  const press = useLongPress(onContext);
   return (
     <mesh
       geometry={geom}
@@ -528,8 +603,11 @@ function RoomFloor({ room, polys, selected, onSelect, onContext }: { room: Room;
       material={material}
       onClick={(e) => {
         e.stopPropagation();
+        // The click that ends a long-press has already opened the menu.
+        if (press.swallowClick()) return;
         onSelect();
       }}
+      onPointerDown={onContext && ((e) => press.down(e.nativeEvent))}
       onPointerOver={
         onContext &&
         ((e) => {

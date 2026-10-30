@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { buildWalls, toWorld } from "../lib/geometry";
 import { floor, rect } from "../lib/testing";
@@ -76,5 +77,82 @@ describe("buildShell glass glow slots", () => {
 
   it("finds glass on both panes and nowhere else", () => {
     expect([...byDir.keys()].filter((k) => k.startsWith("?"))).toEqual([]);
+  });
+});
+
+describe("buildShell splitLeaves", () => {
+  const g = floor(
+    [rect("A", 0, 0, 300, 400), rect("B", 300, 0, 600, 400)],
+    [
+      { id: "d1", kind: "door", x: 300, y: 330, orientation: "v", widthM: 0.8 },
+      { id: "pat", kind: "patio", x: 450, y: 400, orientation: "h", widthM: 2.4 },
+      { id: "fr", kind: "front", x: 100, y: 400, orientation: "h", widthM: 1 },
+      { id: "win", kind: "window", x: 150, y: 0, orientation: "h", widthM: 1.2 },
+    ],
+  );
+  const input = (doorsOpen: boolean, splitLeaves: boolean) => ({
+    floor: g,
+    walls: buildWalls(g),
+    ceiling: 2.4,
+    slab: 0.25,
+    upperPolys: [],
+    upperWalls: [],
+    plinthY: null,
+    baseY: 0,
+    wallFinish: "render" as const,
+    wallColor: "#ffffff",
+    trimColor: "#ffffff",
+    doorColours: {},
+    doorsOpen,
+    splitLeaves,
+  });
+  /** Vertex positions (rounded, sorted) by material key. */
+  const verts = (shell: ReturnType<typeof buildShell>, withLeaves: boolean) => {
+    const by = new Map<string, string[]>();
+    const add = (key: string, geom: THREE.BufferGeometry, m?: THREE.Matrix4) => {
+      const pos = geom.getAttribute("position");
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        if (m) v.applyMatrix4(m);
+        (by.get(key) ?? by.set(key, []).get(key)!).push([v.x, v.y, v.z].map((n) => (Math.round(n * 1e5) / 1e5 + 0).toFixed(5)).join(","));
+      }
+    };
+    for (const m of shell.meshes) add(m.key, m.geometry);
+    if (withLeaves)
+      for (const l of shell.leaves) {
+        const outer = new THREE.Matrix4().compose(new THREE.Vector3(l.frame.centre.x, 0, l.frame.centre.y), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.atan2(-l.frame.dir.y, l.frame.dir.x), 0)), new THREE.Vector3(1, 1, 1));
+        for (const p of l.panels) {
+          const rest = l.initial ? 1 : 0;
+          const o = p.pose(rest);
+          const inner = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, o.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, o.ry, 0)), new THREE.Vector3(1, 1, 1));
+          const m = outer.clone().multiply(inner);
+          for (const mesh of p.meshes) add(mesh.key, mesh.geometry, m);
+        }
+      }
+    for (const a of by.values()) a.sort();
+    return by;
+  };
+
+  for (const doorsOpen of [false, true]) {
+    it(`gives the same vertices as the merged shell at rest (doors open: ${doorsOpen})`, () => {
+      const merged = buildShell(input(doorsOpen, false));
+      const split = buildShell(input(doorsOpen, true));
+      expect(merged.leaves).toEqual([]);
+      expect(split.leaves.map((l) => l.kind).sort()).toEqual(["door", "front", "patio"]);
+      const a = verts(merged, false);
+      const b = verts(split, true);
+      expect([...b.keys()].sort()).toEqual([...a.keys()].sort());
+      for (const [k, va] of a) expect(b.get(k), k).toEqual(va);
+    });
+  }
+
+  it("takes the leaves out of the merged meshes and keys them by floor and opening", () => {
+    const merged = buildShell(input(false, false));
+    const split = buildShell(input(false, true));
+    const count = (s: typeof merged) => s.meshes.reduce((n, m) => n + m.geometry.getAttribute("position").count, 0);
+    expect(count(split)).toBeLessThan(count(merged));
+    expect(split.leaves.map((l) => l.key).sort()).toEqual([`${g.id}:d1`, `${g.id}:fr`, `${g.id}:pat`].sort());
+    expect(split.leaves.find((l) => l.kind === "patio")!.panels).toHaveLength(1);
   });
 });

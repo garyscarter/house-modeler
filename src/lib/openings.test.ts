@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Opening } from "../types";
 import type { OpeningPlacement } from "./geometry";
 import { bifoldLayout } from "./bifold";
-import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour, withRoomWallColours, DEFAULT_LINING } from "./openings";
+import { initiallyOpen } from "./walkTypes";
+import { bayOutline, bayParts, boxQuads, casements, defaultStyle, doorLeaf, effectiveOpenDeg, frontUnit, withSidelight, glazingLayout, openingParts, rigBoxes, resolvedStyle, styleOptions, topLights, type Box, houseDoorColour, withHouseDoorColour, withRoomWallColours, DEFAULT_LINING } from "./openings";
 
 const T = 0.25;
 const place = (kind: Opening["kind"], width: number, extra: Partial<Opening> = {}, y1 = 2.1, y0 = 0): OpeningPlacement => ({
@@ -440,5 +441,120 @@ describe("withRoomWallColours", () => {
   it("keeps a lining colour set by hand", () => {
     const o = withRoomWallColours({ ...op, liningColor: "#ffffff", backLiningColor: "#eeeeee", matchFront: true, matchBack: true }, "#aaaaaa", "#bbbbbb");
     expect(o).toMatchObject({ color: "#aaaaaa", liningColor: "#ffffff", backColor: "#bbbbbb", backLiningColor: "#eeeeee" });
+  });
+});
+
+// ---- the moving leaves: the merged boxes must never change (docs/walkthrough-plan.md, Chunk A) ----
+
+const r6 = (n: number) => Math.round(n * 1e6) / 1e6 + 0;
+const canon = (boxes: Box[]) =>
+  boxes
+    .map((b) => JSON.stringify([b.mat, b.p.map(r6), b.s.map(r6), r6(b.ry ?? 0), b.side ?? 0, b.faces ?? 0]))
+    .sort();
+/** Count plus a pair of FNV-1a hashes of the sorted, rounded boxes. */
+const digest = (boxes: Box[]) => {
+  const c = canon(boxes);
+  const txt = c.join("\n");
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < txt.length; i++) {
+    h1 = Math.imul(h1 ^ txt.charCodeAt(i), 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + txt.charCodeAt(i), 0x85ebca6b) >>> 0;
+  }
+  return `${c.length} ${h1.toString(16)}${h2.toString(16)}`;
+};
+
+interface Variant { name: string; kind: Opening["kind"]; width: number; extra?: Partial<Opening>; outs: (1 | -1 | 0)[] }
+const VARIANTS: Variant[] = [
+  { name: "door-int-0.8", kind: "door", width: 0.8, outs: [0] },
+  { name: "door-int-1.4", kind: "door", width: 1.4, outs: [0] },
+  { name: "door-ext-0.8", kind: "door", width: 0.8, outs: [1, -1] },
+  { name: "door-ext-1.4", kind: "door", width: 1.4, outs: [1, -1] },
+  { name: "front", kind: "front", width: 1, outs: [1, -1] },
+  { name: "front-sidelight", kind: "front", width: 1.8, extra: { sidelight: "both" }, outs: [1, -1] },
+  { name: "french", kind: "french", width: 1.5, outs: [1, -1, 0] },
+  { name: "patio-2.4", kind: "patio", width: 2.4, outs: [1, -1] },
+  { name: "patio-3.6", kind: "patio", width: 3.6, outs: [1, -1] },
+  { name: "bifold-ext", kind: "bifold", width: 3, outs: [1, -1] },
+  { name: "bifold-int", kind: "bifold", width: 2, outs: [0] },
+];
+/** Every combination in the matrix: [label, placement, out, doorsOpen]. */
+function matrix() {
+  const cases: [string, OpeningPlacement, 1 | -1 | 0, boolean][] = [];
+  for (const v of VARIANTS)
+    for (const out of v.outs)
+      for (const flipHinge of [false, true])
+        for (const flipSwing of [false, true])
+          for (const doorsOpen of [true, false])
+            for (const openDeg of [undefined, 0, 30]) {
+              const extra: Partial<Opening> = { ...v.extra, flipHinge, flipSwing, ...(openDeg === undefined ? {} : { openDeg }) };
+              cases.push([`${v.name} out${out} h${+flipHinge} s${+flipSwing} open${+doorsOpen} deg${openDeg}`, place(v.kind, v.width, extra, 2.1), out, doorsOpen]);
+            }
+  return cases;
+}
+
+describe("opening boxes are stable across the leaf refactor", () => {
+  it("matches the recorded digests", () => {
+    const out: Record<string, string> = {};
+    for (const [label, pl, o, d] of matrix()) out[label] = digest(openingParts(pl, T, o, d).boxes);
+    expect(out).toMatchSnapshot();
+  });
+});
+
+describe("door rigs", () => {
+  it("rig boxes at rest plus the rest equal the merged boxes, and rest follows initiallyOpen", () => {
+    for (const [label, pl, o, d] of matrix()) {
+      const full = openingParts(pl, T, o, d);
+      const split = openingParts(pl, T, o, d, { leaves: false });
+      if (!full.rig) {
+        expect(split.boxes, label).toEqual(full.boxes);
+        continue;
+      }
+      expect(split.rig!.rest, label).toBe(initiallyOpen(pl.opening, d) ? 1 : 0);
+      expect(canon([...split.boxes, ...rigBoxes(split.rig!, split.rig!.rest)]), label).toEqual(canon(full.boxes));
+      expect(split.boxes.length, label).toBeLessThan(full.boxes.length);
+    }
+  });
+
+  it("swing leaves turn by the kind's usual angle, or openDeg", () => {
+    const turn = (kind: Opening["kind"], w: number, out: 1 | -1 | 0, extra: Partial<Opening> = {}) => {
+      const rig = openingParts(place(kind, w, extra, 2.1), T, out, false).rig!;
+      const a = rig.panels[0].pose(0).ry;
+      const b = rig.panels[0].pose(1).ry;
+      return Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a))) * (180 / Math.PI);
+    };
+    expect(turn("front", 1, 1)).toBeCloseTo(80, 4);
+    expect(turn("door", 0.85, 1, { openDeg: 0 })).toBeCloseTo(75, 4);
+    expect(turn("door", 0.85, 0, { openDeg: 30 })).toBeCloseTo(30, 4);
+    expect(turn("french", 1.5, -1)).toBeCloseTo(80, 4);
+  });
+
+  it("the patio slider moves 0.95 of a panel along x only", () => {
+    for (const [w, flip] of [[2.4, false], [3.6, true], [3.6, false]] as const) {
+      const rig = openingParts(place("patio", w, { flipHinge: flip }), T, 1).rig!;
+      expect(rig.motion).toBe("slide");
+      expect(rig.panels).toHaveLength(1);
+      const a = rig.panels[0].pose(0);
+      const b = rig.panels[0].pose(1);
+      const lw = w - 0.12;
+      const n = w > 3.2 ? 3 : 2;
+      expect(Math.abs(b.x - a.x)).toBeCloseTo((0.95 * lw) / n, 9);
+      expect(Math.sign(b.x - a.x)).toBe(flip ? 1 : -1);
+      expect(b.z).toBe(a.z);
+    }
+  });
+
+  it("a bi-fold at t=1 is the open stack and at t=0 the shut row", () => {
+    const l = bifoldLayout(3, false);
+    const rig = openingParts(place("bifold", 3), T, 1, true, { leaves: false }).rig!;
+    expect(rig.motion).toBe("fold");
+    expect(rig.panels).toHaveLength(l.n);
+    expect(rig.panels[0].pose(1).x).toBeCloseTo(-l.clear / 2);
+    expect(rig.panels[1].pose(0).x).toBeCloseTo(-l.clear / 2 + l.panel);
+    expect(rig.panels[1].pose(0).z).toBeCloseTo(rig.panels[0].pose(0).z);
+  });
+
+  it("windows, gaps and garage doors have no rig", () => {
+    for (const k of ["window", "gap", "garage", "archway"] as const) expect(openingParts(place(k, 1.2), T, 1).rig).toBeUndefined();
   });
 });

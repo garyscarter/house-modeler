@@ -1,8 +1,9 @@
 import type { DoorStyle, GarageStyle, GlazingPattern, Opening, OpeningKind, OpeningStyle, Sidelight, SillStyle } from "../types";
 import { DOOR_STYLE_LABEL, GARAGE_STYLE_LABEL } from "../types";
 import type { OpeningPlacement, V2 } from "./geometry";
-import { bifoldLayout, type BifoldLayout } from "./bifold";
+import { BIFOLD_FOLD, bifoldLayout } from "./bifold";
 import type { FaceQuad, FaceSlot, V3 } from "./walls";
+import { initiallyOpen, openTargetDeg, patioSlider, type DoorMotion } from "./walkTypes";
 
 /**
  * Doors and windows as simple parts (boxes and a few quads) in each
@@ -50,12 +51,34 @@ export interface Box {
   faces?: 1 | -1;
 }
 
+/** Where a moving leaf's frame sits in the opening's local frame: its origin (x, y, z) and its turn about y. */
+export interface LeafPose {
+  x: number;
+  y: number;
+  z: number;
+  ry: number;
+}
+/** One moving panel: boxes in the panel's own frame (sides already final) and where that frame is at openness t (0 shut, 1 open). */
+export interface LeafPanel {
+  boxes: Box[];
+  pose: (t: number) => LeafPose;
+}
+/** The moving part of a door: its panels, and the openness the door is drawn at (0 shut, 1 open). */
+export interface DoorRig {
+  motion: DoorMotion;
+  panels: LeafPanel[];
+  rest: 0 | 1;
+}
+
 export interface OpeningParts {
+  /** Everything, but with `opts.leaves` false without the rig's panels. */
   boxes: Box[];
   /** Extra faces (bay walls, bay roof and ceiling), local frame. */
   quads: FaceQuad[];
   /** Floor that extends into a bay, local frame (x, z) polygon. */
   bayFloor?: { x: number; z: number }[];
+  /** Doors only (door, front, french, a patio's sliding panel, bifold): the leaves that move. */
+  rig?: DoorRig;
 }
 
 /** Frame section: width of the outer frame bars and depth of the frame, metres. */
@@ -207,11 +230,6 @@ export function resolvedStyle(op: Opening, external: boolean): OpeningStyle | un
 export function effectiveOpenDeg(op: Pick<Opening, "openDeg">, deg: number, doorsOpen = true): number {
   if (!doorsOpen) return 0;
   return Math.max(0, Math.min(180, op.openDeg ?? deg));
-}
-
-/** Open angle of a swing leaf, radians. */
-function openAngle(op: Opening, deg: number, doorsOpen: boolean): number {
-  return (effectiveOpenDeg(op, deg, doorsOpen) * Math.PI) / 180;
 }
 
 /** Number of casements for a window of this width (UK: about 0.5-0.75 m each). */
@@ -401,22 +419,35 @@ function sills(x0: number, x1: number, y: number, wallT: number, out: number, st
   return boxes;
 }
 
-/**
- * A door leaf hinged at local (hx, hz), `len` long, opened by `ang` towards
- * the side `swing` (+1 or -1 along z), with its far end pointing along
- * `toward` (+1 or -1 along x) when closed. `body` builds the leaf's parts in
- * its own frame: x from the hinge along the leaf, z through its thickness.
- */
-function leaf(hx: number, hz: number, len: number, toward: number, swing: number, ang: number, body: (len: number) => Box[]): Box[] {
-  const dx = toward * Math.cos(ang);
-  const dz = swing * Math.sin(ang);
-  const t = toward < 0 ? -1 : 1;
-  // The body frame is turned by pi when toward is -1, so its +z is the wall's -z.
-  return place(body(len), [hx, 0, hz], rotTo(dx, dz)).map((b) => ({
+const flipSide = <T extends { side?: 1 | -1; faces?: 1 | -1 }>(b: T): T => ({
+  ...b,
+  ...(b.side ? { side: -b.side as 1 | -1 } : {}),
+  ...(b.faces ? { faces: -b.faces as 1 | -1 } : {}),
+});
+
+/** A swing leaf as a rig panel: what `leaf` builds, split into its boxes (own frame) and its pose at openness t (target = full angle, degrees). */
+function swingPanel(hx: number, hzShut: number, hzOpen: number, len: number, toward: number, swing: number, target: number, body: (len: number) => Box[]): LeafPanel {
+  const t0 = toward < 0 ? -1 : 1;
+  const boxes = body(len).map((b) => ({
     ...b,
-    ...(b.side ? { side: (b.side * t) as 1 | -1 } : {}),
-    ...(b.faces ? { faces: (b.faces * t) as 1 | -1 } : {}),
+    ...(b.side ? { side: (b.side * t0) as 1 | -1 } : {}),
+    ...(b.faces ? { faces: (b.faces * t0) as 1 | -1 } : {}),
   }));
+  return {
+    boxes,
+    pose: (t) => {
+      const ang = (Math.max(0, t) * target * Math.PI) / 180;
+      return { x: hx, y: 0, z: t > 0 ? hzOpen : hzShut, ry: rotTo(toward * Math.cos(ang), swing * Math.sin(ang)) };
+    },
+  };
+}
+
+/** Boxes of a rig's panels placed at openness t, in the opening's local frame. */
+export function rigBoxes(rig: DoorRig, t: number): Box[] {
+  return rig.panels.flatMap((p) => {
+    const o = p.pose(t);
+    return place(p.boxes, [o.x, o.y, o.z], o.ry);
+  });
 }
 
 const sgn = (v: number): 1 | -1 => (v < 0 ? -1 : 1);
@@ -696,13 +727,15 @@ function swingSide(op: Opening, out: number, outwards = false): number {
 }
 
 /** Parts for any opening except bays (see bayParts). */
-export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 0, doorsOpen = true): OpeningParts {
+export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 0, doorsOpen = true, opts: { leaves?: boolean } = {}): OpeningParts {
   const op = pl.opening;
   const w = pl.width;
   const { y0, y1 } = pl;
   const hinge = op.flipHinge ? 1 : -1; // jamb the hinges are on, along x
   const zf = frameZ(wallT, out);
   const boxes: Box[] = [];
+  const panels: LeafPanel[] = [];
+  let motion: DoorMotion = "swing";
   switch (op.kind) {
     case "gap":
     case "bay":
@@ -714,14 +747,13 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
     }
     case "door": {
       const s = swingSide(op, out);
-      const ang = openAngle(op, 75, doorsOpen);
+      const target = openTargetDeg(op);
       const style = resolvedStyle(op, !!out) as DoorStyle;
       if (out) {
         // External door (back door): frame near the outside, leaf opening inwards (or shut, in the frame).
         boxes.push(...doorFrame(w, y1, zf));
         const lw = w - 2 * FW;
-        const hz = ang ? zf + s * (FD / 2) : zf;
-        boxes.push(...leaf(hinge * (lw / 2), hz, lw, -hinge, s, ang, doorLeaf(style, y1 - FW - 0.02, 0.05, out * -hinge)));
+        panels.push(swingPanel(hinge * (lw / 2), zf, zf + s * (FD / 2), lw, -hinge, s, target, doorLeaf(style, y1 - FW - 0.02, 0.05, out * -hinge)));
       } else {
         boxes.push(...doorLining(w, y1, wallT));
         const lh = y1 - 0.03;
@@ -729,10 +761,10 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
         const hz = s * (wallT / 2 - 0.02);
         if (w > 1.25) {
           // Wide openings get a pair of leaves.
-          boxes.push(...leaf(-inner / 2, hz, inner / 2, 1, s, ang, doorLeaf(style, lh, 0.04, s)));
-          boxes.push(...leaf(inner / 2, hz, inner / 2, -1, s, ang, doorLeaf(style, lh, 0.04, -s)));
+          panels.push(swingPanel(-inner / 2, hz, hz, inner / 2, 1, s, target, doorLeaf(style, lh, 0.04, s)));
+          panels.push(swingPanel(inner / 2, hz, hz, inner / 2, -1, s, target, doorLeaf(style, lh, 0.04, -s)));
         } else {
-          boxes.push(...leaf(hinge * (inner / 2), hz, inner, -hinge, s, ang, doorLeaf(style, lh, 0.04, s * -hinge)));
+          panels.push(swingPanel(hinge * (inner / 2), hz, hz, inner, -hinge, s, target, doorLeaf(style, lh, 0.04, s * -hinge)));
         }
       }
       break;
@@ -759,9 +791,8 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       const lh = y1 - FW - 0.02;
       const f = out || 1;
       const s = swingSide(op, out);
-      const ang = openAngle(op, 0, doorsOpen);
       const style = resolvedStyle(op, true) as DoorStyle;
-      boxes.push(...leaf((la + lb) / 2 + hinge * (lw / 2), ang ? zf + s * (FD / 2) : zf, lw, -hinge, s, ang, doorLeaf(style, lh, 0.05, f * -hinge, true)));
+      panels.push(swingPanel((la + lb) / 2 + hinge * (lw / 2), zf, zf + s * (FD / 2), lw, -hinge, s, openTargetDeg(op), doorLeaf(style, lh, 0.05, f * -hinge, true)));
       break;
     }
     case "garage": {
@@ -800,11 +831,20 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       const n = w > 3.2 ? 3 : 2;
       const lw = w - 2 * FW;
       const pw = lw / n + 0.04;
+      const slider = patioSlider(w, op.flipHinge);
       for (let i = 0; i < n; i++) {
         const x = -lw / 2 + ((i + 0.5) * lw) / n;
         const dz = (i % 2 ? 1 : -1) * 0.018;
-        boxes.push(...place(glazedLeaf(y1 - FW - 0.03, 0.03, i === 0 || i === n - 1)(pw), [x - pw / 2, 0.03, zf + dz], 0));
+        const body = glazedLeaf(y1 - FW - 0.03, 0.03, i === 0 || i === n - 1)(pw);
+        if (i !== slider.index) {
+          boxes.push(...place(body, [x - pw / 2, 0.03, zf + dz], 0));
+          continue;
+        }
+        // The slider runs 0.95 of a panel towards the far end (index n-1 towards -x, index 0 towards +x).
+        const run = (i === 0 ? 1 : -1) * 0.95 * (lw / n);
+        panels.push({ boxes: body, pose: (t) => ({ x: x - pw / 2 + run * Math.max(0, t), y: 0.03, z: zf + dz, ry: 0 }) });
       }
+      motion = "slide";
       break;
     }
     case "french": {
@@ -814,9 +854,9 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       const lw = (w - 2 * FW) / 2;
       const hz = zf + s * (FD / 2);
       const lh = y1 - FW - 0.02;
-      const ang = openAngle(op, 80, doorsOpen);
-      boxes.push(...leaf(-lw, ang ? hz : zf, lw, 1, s, ang, glazedLeaf(lh, 0.055)));
-      boxes.push(...leaf(lw, ang ? hz : zf, lw, -1, s, ang, glazedLeaf(lh, 0.055)));
+      const target = openTargetDeg(op);
+      panels.push(swingPanel(-lw, zf, hz, lw, 1, s, target, glazedLeaf(lh, 0.055)));
+      panels.push(swingPanel(lw, zf, hz, lw, -1, s, target, glazedLeaf(lh, 0.055)));
       break;
     }
     case "archway":
@@ -827,39 +867,43 @@ export function openingParts(pl: OpeningPlacement, wallT: number, out: 1 | -1 | 
       // Internal bi-folds get a lining like internal doors, external ones a frame and threshold.
       const layout = bifoldLayout(w, !out);
       boxes.push(...(out ? doorFrame(w, y1, zf) : doorLining(w, y1, wallT)));
-      boxes.push(...bifoldStack(layout, y1 - FW - 0.02, zf, hinge, swingSide(op, out, true), !doorsOpen));
+      const swing = swingSide(op, out, true);
+      const h = y1 - FW - 0.02;
+      for (let i = 0; i < layout.n; i++) {
+        const body = glazedLeaf(h, 0.05, i === layout.n - 1)(layout.panel);
+        panels.push({
+          boxes: body,
+          pose: (t) => {
+            const th = Math.max(0, t) * BIFOLD_FOLD;
+            // Panels chain from the hinge jamb, each a step of (-hinge cos, +-swing sin) panels long; shut they lie in a row.
+            let x = hinge * (layout.clear / 2);
+            let z = zf + (th > 0 ? swing * (FD / 2) : 0);
+            for (let j = 0; j < i; j++) {
+              x += -hinge * Math.cos(th) * layout.panel;
+              z += th > 0 ? (j % 2 ? -1 : 1) * swing * Math.sin(th) * layout.panel : 0;
+            }
+            const dx = -hinge * Math.cos(th);
+            const dz = th > 0 ? (i % 2 ? -1 : 1) * swing * Math.sin(th) : 0;
+            return { x, y: 0.015, z, ry: rotTo(dx, dz) };
+          },
+        });
+      }
+      motion = "fold";
       break;
     }
   }
   // Side +1 is always the front side: the outside of an external wall, the local +z side inside.
-  if (out === -1) for (const b of boxes) {
-    if (b.side) b.side = -b.side as 1 | -1;
-    if (b.faces) b.faces = -b.faces as 1 | -1;
+  if (out === -1) {
+    for (const b of boxes) {
+      if (b.side) b.side = -b.side as 1 | -1;
+      if (b.faces) b.faces = -b.faces as 1 | -1;
+    }
+    for (const p of panels) p.boxes = p.boxes.map(flipSide);
   }
-  return { boxes, quads: [] };
-}
-
-/**
- * Bi-fold panels folded into a concertina stack against one jamb: each
- * panel stands nearly square to the wall, alternately folding out and back.
- */
-function bifoldStack(l: BifoldLayout, h: number, zf: number, side: number, swing: number, shut = false): Box[] {
-  const boxes: Box[] = [];
-  if (shut) {
-    // Closed: the panels lie flat in a row across the opening.
-    for (let i = 0; i < l.n; i++) boxes.push(...place(glazedLeaf(h, 0.05, i === l.n - 1)(l.panel), [side * (l.clear / 2 - i * l.panel), 0.015, zf], rotTo(-side, 0)));
-    return boxes;
-  }
-  let x = side * (l.clear / 2);
-  let z = zf + swing * (FD / 2);
-  for (let i = 0; i < l.n; i++) {
-    const dx = -side * l.run;
-    const dz = (i % 2 ? -1 : 1) * swing * l.throw;
-    boxes.push(...place(glazedLeaf(h, 0.05, i === l.n - 1)(l.panel), [x, 0.015, z], rotTo(dx, dz)));
-    x += dx;
-    z += dz;
-  }
-  return boxes;
+  if (!panels.length) return { boxes, quads: [] };
+  const rig: DoorRig = { motion, panels, rest: initiallyOpen(op, doorsOpen) ? 1 : 0 };
+  if (opts.leaves !== false) boxes.push(...rigBoxes(rig, rig.rest));
+  return { boxes, quads: [], rig };
 }
 
 /**
