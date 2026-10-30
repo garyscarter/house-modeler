@@ -71,7 +71,12 @@ export default function App() {
 
   useStudioKeys();
   useEffect(startChassisWatch, []);
-  useEffect(() => useStore.persist.onFinishHydration(() => setHydrated(true)), []);
+  useEffect(() => {
+    const off = useStore.persist.onFinishHydration(() => setHydrated(true));
+    // Loading can finish between the first render and this effect, and then no event follows: check again.
+    if (useStore.persist.hasHydrated()) setHydrated(true);
+    return off;
+  }, []);
 
   // Once saved work has loaded, offer the listing's plans (or an update to them), at most once per page load.
   const asked = useRef(false);
