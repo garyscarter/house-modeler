@@ -16,6 +16,7 @@ Browser-only React + react-three-fiber + zustand app for the houses in `src/hous
 
 - A SessionStart hook (`.claude/hooks/session-start.sh`) runs `npm ci` when node_modules is missing. By hand: `npm ci`; if npm 10 fails with an "edgesOut" error, use `npx -y npm@11.6.2 ci` (or `install`). In a worktree, symlink the main checkout's node_modules instead of reinstalling, unless package-lock.json differs.
 - `npm run check` (typecheck plus vitest) and `npm run build` must pass before pushing.
+- **Finished work goes to `main`.** Develop on the session's branch; when the work is done and `npm run check` and `npm run build` pass, merge it into `main` (fast-forward when you can) and push, so Render deploys it. This is the owner's standing permission to push to `main`. Say in the report that it is on `main`.
 - Check UI changes in headless Chromium with Playwright from /opt/node22/lib/node_modules, launched with `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`. In dev builds the store is on `window.__houseStore`.
 - Pure logic goes in src/lib with tests; world frame: x right, world z = plan y (+z is the front of the house).
 - Brand: the app is Storey. Follow docs/brand.md: the mark and colours come from `src/lib/brand.ts` and `BrandMark`, CSS tokens only, and every wait or busy state uses `<Loader>` (blueprint, lift or fill) beside a short label, never bare "Loading…".
