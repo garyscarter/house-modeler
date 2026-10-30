@@ -444,16 +444,23 @@ describe("withRoomWallColours", () => {
 });
 
 // ---- the moving leaves: the merged boxes must never change (docs/walkthrough-plan.md, Chunk A) ----
-import { createHash } from "node:crypto";
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6 + 0;
 const canon = (boxes: Box[]) =>
   boxes
     .map((b) => JSON.stringify([b.mat, b.p.map(r6), b.s.map(r6), r6(b.ry ?? 0), b.side ?? 0, b.faces ?? 0]))
     .sort();
+/** Count plus a pair of FNV-1a hashes of the sorted, rounded boxes. */
 const digest = (boxes: Box[]) => {
   const c = canon(boxes);
-  return `${c.length} ${createHash("sha1").update(c.join("\n")).digest("hex").slice(0, 16)}`;
+  const txt = c.join("\n");
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < txt.length; i++) {
+    h1 = Math.imul(h1 ^ txt.charCodeAt(i), 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + txt.charCodeAt(i), 0x85ebca6b) >>> 0;
+  }
+  return `${c.length} ${h1.toString(16)}${h2.toString(16)}`;
 };
 
 interface Variant { name: string; kind: Opening["kind"]; width: number; extra?: Partial<Opening>; outs: (1 | -1 | 0)[] }
