@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Floor, Opening, Room, WallFinish } from "../types";
+import type { Floor, Opening, OpeningKind, Room, WallFinish } from "../types";
 import {
   cutWall,
   roomWorldPolygon,
@@ -9,7 +9,7 @@ import {
   type WallSeg,
 } from "../lib/geometry";
 import { outwardSign, sideSpans, spanAt, wallEnds, wallFaces, wallBands, wallThickness, type FaceQuad, type FaceSlot, type RoomPoly } from "../lib/walls";
-import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_LINING, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, withRoomWallColours, type Box, type PartMat } from "../lib/openings";
+import { DEFAULT_ARCHWAY_COLOUR, DEFAULT_LINING, bayParts, boxQuads, openingParts, quadsToWorld, withHouseDoorColour, withRoomWallColours, type Box, type LeafPose, type PartMat } from "../lib/openings";
 import { coverLayout, coverTop, coverV, interiorFinish, outsideLook, splitFinish, splitQuadAtY, type InteriorFinish } from "../lib/wallCovering";
 import { spansByEdge } from "../lib/featureWalls";
 import { splitFaceByLine, splitLine } from "../lib/wallSplit";
@@ -17,6 +17,7 @@ import { skirtingColour } from "../lib/skirting";
 import { clipUnderFlight, type FlightShape } from "../lib/stairs";
 import { type MatSpec, matKey } from "./textures";
 import { MAX_GLASS_ROOMS, roomSlots } from "../lib/glassGlow";
+import { doorKey, initiallyOpen, type DoorMotion } from "../lib/walkTypes";
 
 /**
  * Builds the static shell of one floor (walls, skirting, doors, windows and
@@ -47,6 +48,25 @@ export interface ShellInput {
   doorsOpen: boolean;
   /** The flight up from this floor, if any: walls it passes over stop under its treads. */
   flight?: FlightShape | null;
+  /** Leave the moving door leaves out of the merged meshes and return them in `leaves` (used while walking). */
+  splitLeaves?: boolean;
+}
+
+/** One moving panel of a door: its meshes in the panel's own frame, and where that frame is at openness t. */
+export interface ShellLeafPanel {
+  meshes: ShellMesh[];
+  pose: (t: number) => LeafPose;
+}
+/** A door's moving leaves. `frame` places the opening's local frame in the world: x along `dir`, z along dir turned anticlockwise. */
+export interface ShellLeaf {
+  key: string;
+  openingId: string;
+  kind: OpeningKind;
+  motion: DoorMotion;
+  /** Drawn open (true) or shut with the View "Doors open" switch as it stood. */
+  initial: boolean;
+  frame: { centre: V2; dir: V2 };
+  panels: ShellLeafPanel[];
 }
 
 export interface ShellMesh {
@@ -164,7 +184,7 @@ class Batcher {
 /** Height of a room's floor surface above the storey base, metres: finishes sit on the slab, and anything lying on the floor (rugs) starts here. */
 export const FLOOR_SURFACE = 0.012;
 
-export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: BayFloor[]; roomSlots: Map<string, number> } {
+export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: BayFloor[]; roomSlots: Map<string, number>; leaves: ShellLeaf[] } {
   const { floor, walls, ceiling: H, trimColor } = inp;
   const slots = roomSlots(floor.rooms.map((r) => r.id));
   if (import.meta.env.DEV && floor.rooms.length > MAX_GLASS_ROOMS) console.warn(`shell: only the first ${MAX_GLASS_ROOMS} rooms of a floor glow`);
@@ -178,6 +198,7 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
   const ends = wallEnds(walls, thick);
   const batch = new Batcher();
   const bayFloors: BayFloor[] = [];
+  const leaves: ShellLeaf[] = [];
 
   const outsideSpec = (roomId: string | null, color?: string, edge?: number): MatSpec => {
     const look = outsideLook(roomId ? roomsById.get(roomId) : undefined, edge, { finish: inp.wallFinish, color: inp.wallColor });
@@ -319,12 +340,22 @@ export function buildShell(inp: ShellInput): { meshes: ShellMesh[]; bayFloors: B
     } else if (op.kind === "bay") {
       // A bay on an internal wall makes no sense; draw it as a window.
       parts = openingParts({ ...pl, y0: Math.min(windowSill(op), pl.y1 - 0.1), opening: { ...op, kind: "window" } }, wallT, out);
-    } else parts = openingParts(pl, wallT, out, inp.doorsOpen);
+    } else parts = openingParts(pl, wallT, out, inp.doorsOpen, { leaves: !inp.splitLeaves });
     for (const q of boxQuads(parts.boxes, frame)) addFace(q, null, op, [], 0, slotOf(q));
     for (const q of quadsToWorld(parts.quads, frame)) addFace(q, null, op, [], 0, slotOf(q));
+    if (inp.splitLeaves && parts.rig) {
+      // Each panel gets its own geometry in its own frame (glass never glows: slot 0), moved by DoorLeaves.
+      const here = { centre: { x: 0, y: 0 }, dir: { x: 1, y: 0 } };
+      const panels = parts.rig.panels.map((panel): ShellLeafPanel => {
+        const b = new Batcher();
+        for (const q of boxQuads(panel.boxes, here)) b.add(q, q.slot.kind === "part" ? partSpec(q.slot.mat, op, trimColor, q.slot.side) : slotSpec(q.slot, null, op));
+        return { meshes: b.build(), pose: panel.pose };
+      });
+      leaves.push({ key: doorKey(floor.id, pl.opening.id), openingId: pl.opening.id, kind: pl.opening.kind, motion: parts.rig.motion, initial: initiallyOpen(pl.opening, inp.doorsOpen), frame, panels });
+    }
   }
 
-  return { meshes: batch.build(), bayFloors, roomSlots: slots };
+  return { meshes: batch.build(), bayFloors, roomSlots: slots, leaves };
 }
 
 /** The shorter side of a quad, metres. */
