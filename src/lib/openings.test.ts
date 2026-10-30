@@ -442,3 +442,53 @@ describe("withRoomWallColours", () => {
     expect(o).toMatchObject({ color: "#aaaaaa", liningColor: "#ffffff", backColor: "#bbbbbb", backLiningColor: "#eeeeee" });
   });
 });
+
+// ---- the moving leaves: the merged boxes must never change (docs/walkthrough-plan.md, Chunk A) ----
+import { createHash } from "node:crypto";
+
+const r6 = (n: number) => Math.round(n * 1e6) / 1e6 + 0;
+const canon = (boxes: Box[]) =>
+  boxes
+    .map((b) => JSON.stringify([b.mat, b.p.map(r6), b.s.map(r6), r6(b.ry ?? 0), b.side ?? 0, b.faces ?? 0]))
+    .sort();
+const digest = (boxes: Box[]) => {
+  const c = canon(boxes);
+  return `${c.length} ${createHash("sha1").update(c.join("\n")).digest("hex").slice(0, 16)}`;
+};
+
+interface Variant { name: string; kind: Opening["kind"]; width: number; extra?: Partial<Opening>; outs: (1 | -1 | 0)[] }
+const VARIANTS: Variant[] = [
+  { name: "door-int-0.8", kind: "door", width: 0.8, outs: [0] },
+  { name: "door-int-1.4", kind: "door", width: 1.4, outs: [0] },
+  { name: "door-ext-0.8", kind: "door", width: 0.8, outs: [1, -1] },
+  { name: "door-ext-1.4", kind: "door", width: 1.4, outs: [1, -1] },
+  { name: "front", kind: "front", width: 1, outs: [1, -1] },
+  { name: "front-sidelight", kind: "front", width: 1.8, extra: { sidelight: "both" }, outs: [1, -1] },
+  { name: "french", kind: "french", width: 1.5, outs: [1, -1, 0] },
+  { name: "patio-2.4", kind: "patio", width: 2.4, outs: [1, -1] },
+  { name: "patio-3.6", kind: "patio", width: 3.6, outs: [1, -1] },
+  { name: "bifold-ext", kind: "bifold", width: 3, outs: [1, -1] },
+  { name: "bifold-int", kind: "bifold", width: 2, outs: [0] },
+];
+/** Every combination in the matrix: [label, placement, out, doorsOpen]. */
+function matrix() {
+  const cases: [string, OpeningPlacement, 1 | -1 | 0, boolean][] = [];
+  for (const v of VARIANTS)
+    for (const out of v.outs)
+      for (const flipHinge of [false, true])
+        for (const flipSwing of [false, true])
+          for (const doorsOpen of [true, false])
+            for (const openDeg of [undefined, 0, 30]) {
+              const extra: Partial<Opening> = { ...v.extra, flipHinge, flipSwing, ...(openDeg === undefined ? {} : { openDeg }) };
+              cases.push([`${v.name} out${out} h${+flipHinge} s${+flipSwing} open${+doorsOpen} deg${openDeg}`, place(v.kind, v.width, extra, 2.1), out, doorsOpen]);
+            }
+  return cases;
+}
+
+describe("opening boxes are stable across the leaf refactor", () => {
+  it("matches the recorded digests", () => {
+    const out: Record<string, string> = {};
+    for (const [label, pl, o, d] of matrix()) out[label] = digest(openingParts(pl, T, o, d).boxes);
+    expect(out).toMatchSnapshot();
+  });
+});
