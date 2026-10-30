@@ -43,11 +43,13 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     ok((await walkState(page)).on, 'walking');
     ok(await page.evaluate(() => document.activeElement === document.body || !document.activeElement.closest('.dock')), 'focus not left on a dock button');
     ok(await page.$eval('.app', (e) => e.hasAttribute('data-walking')), 'app has data-walking');
-    ok(await page.$('.walk-map') === null, 'no map before there is a pose');
-    // stand-in pose so the map draws without WalkControls (no-op once C is merged)
+    ok(await page.$('.walk-map') === null || await page.evaluate(() => !!window.__walkStore.getState().pose), 'no map before there is a pose');
+    // The walk controller places the walker at once; this stand-in only matters if it has not yet.
     await page.evaluate(() => { const w = window.__walkStore.getState(); if (!w.pose) w.placed({ x: 0, y: 0, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0 }, {}); });
     await page.evaluate(() => { window.__walkStore.getState().setWhere({ level: 0, roomName: 'Kitchen', outside: false }); window.__walkStore.getState().say('Click the floor to walk there', 60000); });
     await page.waitForSelector('.walk-map svg path');
+    // The controller takes a goal as soon as it is set, so note what the map asks for.
+    await page.evaluate(() => { const w = window.__walkStore; const orig = w.getState().requestGoal; window.__lastGoal = null; w.setState({ requestGoal: (g) => { window.__lastGoal = g; orig(g); } }); });
     ok(await page.$('.walk-map svg path') !== null, 'mini-map shows rooms');
     const mapW = await page.$eval('.walk-map', (e) => Math.round(e.getBoundingClientRect().width));
     ok(mapW === (phone ? 120 : 180), `map is ${mapW}px`);
@@ -71,7 +73,7 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     });
     ok(!!clicked, 'found a room to tap');
     await page.mouse.click(clicked.x, clicked.y);
-    const g = (await walkState(page)).goal;
+    const g = await page.evaluate(() => window.__lastGoal);
     ok(g && g.kind === 'room' && g.roomId === clicked.id && g.level === 0, 'tapping a room on the map sets the goal');
     // eye height
     await page.click('.walk-eye .popover-btn');
@@ -111,10 +113,10 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     if (plot) {
       ok(true, 'plot boundary drawn when outside');
       ok(!phone ? (await page.$eval('.walk-where', (e) => e.textContent)) === 'Garden' : true, 'readout says Garden');
-      await page.evaluate(() => window.__walkStore.getState().takeGoal());
+      await page.evaluate(() => { window.__walkStore.getState().takeGoal(); window.__lastGoal = null; });
       const pt = await page.evaluate(() => { const svg = document.querySelector('.walk-map svg'); const r = svg.getBoundingClientRect();
         for (let y = 6; y < r.height; y += 6) for (let x = 6; x < r.width; x += 6) { const el = document.elementFromPoint(r.left + x, r.top + y); if (el === svg) return { x: r.left + x, y: r.top + y }; } return null; });
-      if (pt) { await page.mouse.click(pt.x, pt.y); const g2 = (await walkState(page)).goal; ok(g2 && g2.kind === 'point' && g2.level === 0, 'tapping the plot sets a point goal'); }
+      if (pt) { await page.mouse.click(pt.x, pt.y); const g2 = await page.evaluate(() => window.__lastGoal); ok(g2 && g2.kind === 'point' && g2.level === 0, 'tapping the plot sets a point goal'); }
     } else console.log('SKIP no plot for this house');
     await page.evaluate(() => { const w = window.__walkStore.getState(); w.setWhere({ level: 0, roomName: 'Kitchen', outside: false }); w.setPose({ x: 1, y: 1, level: 0, stair: null, feetY: 0, yaw: 0.5, pitch: 0 }); });
     const r = await page.$eval('.walk-bar', (e) => e.getBoundingClientRect());

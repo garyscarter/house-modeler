@@ -1,4 +1,4 @@
-import { forwardOf, PITCH_MAX, yawOf, type WalkPose, type WalkRoute } from "./walkTypes";
+import { forwardOf, PITCH_MAX, yawOf, type NavDoor, type WalkPoint, type WalkPose, type WalkRoute } from "./walkTypes";
 
 /** Walk-through: the pure movement maths of the first-person controller (three/walk/WalkControls). */
 export const WALK_SPEED = 1.4;
@@ -64,6 +64,21 @@ function easeYaw(from: number, to: number, dt: number): number {
   const k = 1 - Math.exp(-8 * dt);
   const step = Math.sign(d) * Math.min(Math.abs(d * k), 4 * dt) ;
   return from + (Math.abs(d * k) < 0.002 ? d : step);
+}
+
+/**
+ * The part of a route that ends at a shut door: its points before the door, then a spot `gap` in front of the door on
+ * the side you come from, facing it. Null when the route does not pass that door.
+ */
+export function stopBeforeDoor(route: WalkRoute, door: Pick<NavDoor, "key" | "centre" | "dir">, from: WalkPoint, gap = 0.6): WalkRoute | null {
+  const at = route.doors.find((d) => d.key === door.key);
+  if (!at) return null;
+  const before = route.points.slice(0, at.index);
+  const last = before[before.length - 1] ?? from;
+  const n = { x: -door.dir.y, y: door.dir.x };
+  const side = (last.x - door.centre.x) * n.x + (last.y - door.centre.y) * n.y >= 0 ? 1 : -1;
+  const stop: WalkPoint = { x: door.centre.x + n.x * gap * side, y: door.centre.y + n.y * gap * side, level: last.level, stair: last.stair };
+  return { points: [...before, stop], doors: route.doors.filter((d) => d.index < at.index), yaw: yawOf({ x: door.centre.x - stop.x, y: door.centre.y - stop.y }) };
 }
 
 /** Look-round at a tour stop: base ± 50° over a 4 s sine. */

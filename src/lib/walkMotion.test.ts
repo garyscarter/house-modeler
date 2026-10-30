@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dragLook, followStep, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, RUN_SPEED, WALK_SPEED, wrapAngle } from "./walkMotion";
+import { dragLook, followStep, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, RUN_SPEED, stopBeforeDoor, WALK_SPEED, wrapAngle } from "./walkMotion";
 import { PITCH_MAX, type WalkPose, type WalkRoute } from "./walkTypes";
 
 const pose = (over: Partial<WalkPose> = {}): WalkPose => ({ x: 0, y: 0, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0, ...over });
@@ -110,5 +110,35 @@ describe("isTap", () => {
     expect(isTap({ x: 0, y: 0, t: 0 }, { x: 3, y: 2, t: 200 })).toBe(true);
     expect(isTap({ x: 0, y: 0, t: 0 }, { x: 9, y: 0, t: 200 })).toBe(false);
     expect(isTap({ x: 0, y: 0, t: 0 }, { x: 0, y: 0, t: 600 })).toBe(false);
+  });
+});
+
+describe("stopBeforeDoor", () => {
+  // A door in a wall along x at y = 0, crossed between the second and third points.
+  const door = { key: "f:d", centre: { x: 0, y: 0 }, dir: { x: 1, y: 0 } };
+  const pt = (x: number, y: number) => ({ x, y, level: 0, stair: null });
+  const route: WalkRoute = { points: [pt(2, 3), pt(0.2, 1), pt(0, -1), pt(-1, -3)], doors: [{ key: "f:d", index: 2 }] };
+
+  it("stops in front of the door on the side you come from, facing it", () => {
+    const r = stopBeforeDoor(route, door, pt(3, 4))!;
+    expect(r.points.slice(0, 2)).toEqual(route.points.slice(0, 2));
+    const stop = r.points[2];
+    expect(stop.x).toBeCloseTo(0);
+    expect(stop.y).toBeCloseTo(0.6);
+    expect(r.points).toHaveLength(3);
+    expect(r.doors).toEqual([]);
+    expect(wrapAngle(r.yaw! - 0)).toBeCloseTo(0); // yaw 0 looks along -z (plan -y), towards the door
+  });
+
+  it("from the other side, and when the door is the first thing crossed", () => {
+    const back: WalkRoute = { points: [pt(0, 2)], doors: [{ key: "f:d", index: 0 }] };
+    const r = stopBeforeDoor(back, door, pt(0.3, -2))!;
+    expect(r.points).toHaveLength(1);
+    expect(r.points[0].y).toBeCloseTo(-0.6);
+    expect(Math.abs(wrapAngle(r.yaw! - Math.PI))).toBeCloseTo(0);
+  });
+
+  it("null when the route does not pass the door", () => {
+    expect(stopBeforeDoor({ points: [pt(1, 1)], doors: [] }, door, pt(0, 2))).toBeNull();
   });
 });

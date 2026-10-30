@@ -8,7 +8,7 @@ import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
 import { buildNav, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, startPose, stepWalker } from "../../lib/walk";
 import { eyeHeightOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
-import { anyKey, dragLook, followStep, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, ROUTE_SPEED, type HeldKeys } from "../../lib/walkMotion";
+import { anyKey, dragLook, followStep, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, ROUTE_SPEED, stopBeforeDoor, wrapAngle, type HeldKeys } from "../../lib/walkMotion";
 import { doorTagOf } from "./doorTag";
 
 /** First-person walk controller (docs/walkthrough-plan.md, Chunk C): keys, drag to look, tap to walk or open a door, routes and the tour. */
@@ -25,7 +25,8 @@ const STALL_S = 0.5;
 const COARSE = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
 let hinted = false;
 
-interface Follow { route: WalkRoute; index: number; goal: WalkPoint | null }
+/** A route being walked; `arrive` runs once the walker is there and facing the route's yaw. */
+interface Follow { route: WalkRoute; index: number; goal: WalkPoint | null; arrive?: () => void }
 
 export function WalkControls({ model, variant }: { model: HouseModel; variant: VariantKey }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -78,8 +79,8 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     if (w.tour.status === "playing") w.pauseTour();
   };
   const shutHint = () => useWalk.getState().say(`The door's shut — ${COARSE() ? "tap" : "click"} it to open`);
-  const startRoute = (route: WalkRoute, goal: WalkPoint | null, resetStall = true) => {
-    follow.current = { route, index: 0, goal };
+  const startRoute = (route: WalkRoute, goal: WalkPoint | null, resetStall = true, arrive?: () => void) => {
+    follow.current = { route, index: 0, goal, arrive };
     if (resetStall) stall.current = { t: 0, count: 0 };
     useWalk.getState().setRoute(route);
     inv.current();
@@ -98,7 +99,12 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       startRoute(yaw !== undefined ? { ...res.route, yaw } : res.route, point);
       showRing(ring3.x, ring3.y, ring3.z);
     } else if (res.reason === "shut-door") {
-      shutHint();
+      // Walk up to the shut door and say so there, as you would find it.
+      const door = navRef.current.doors.find((d) => d.key === res.door);
+      const part = door && stopBeforeDoor(res.route, door, { x: p.x, y: p.y, level: p.level, stair: p.stair });
+      const stop = part?.points[part.points.length - 1];
+      if (part && stop && Math.hypot(stop.x - p.x, stop.y - p.y) > 0.3) startRoute(part, null, true, shutHint);
+      else shutHint();
     } else {
       w.say("Can't get there from here");
     }
@@ -222,7 +228,11 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       yaw = fs.yaw;
       intended = Math.hypot(fs.dx, fs.dy);
       followed = true;
-      if (fs.done) clearRoute();
+      // Done once there and turned to the way the route asks you to face.
+      if (fs.done && (f.route.yaw === undefined || Math.abs(wrapAngle(f.route.yaw - fs.yaw)) < 0.02)) {
+        clearRoute();
+        f.arrive?.();
+      }
     }
 
     // Look inertia after a drag.
@@ -238,7 +248,11 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
 
     // Move.
     const before = p;
-    if (dx || dy) p = stepWalker(n, p, dx, dy, w.doors);
+    if (dx || dy) {
+      p = stepWalker(n, p, dx, dy, w.doors);
+      // Not moved at all: stood where nobody can (a door shut on you, an edit); step to the nearest free spot.
+      if (p.x === before.x && p.y === before.y) p = settle(n, p, w.doors);
+    }
     if (yaw !== p.yaw || pitch !== p.pitch) p = { ...p, yaw, pitch };
     // A route that makes no progress is replanned once, then reported.
     if (followed && follow.current && intended > 1e-6) {

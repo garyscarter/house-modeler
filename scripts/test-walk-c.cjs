@@ -1,7 +1,5 @@
-// Chunk C acceptance: the first-person walk controller. Usage: PORT=5313 node scripts/test-walk-c.cjs
-// Checks that need Chunk B (collision, shut-door blocking, stairs, routes through doors) or Chunk A (tappable door leaves)
-// print "NEEDS-B" / "NEEDS-A" instead of FAIL when they do not hold, so the script is green on the stubs; re-run after merging both,
-// when every NEEDS line should read PASS.
+// Walk-through acceptance: the first-person walk controller with the walk logic and the door leaves.
+// Usage: PORT=5191 node scripts/test-walk-c.cjs (against a running dev server). Every check must PASS.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const PORT = process.env.PORT || 5313;
@@ -9,7 +7,8 @@ const SHOTS = process.env.SHOTS || '/tmp/claude-0/-home-user-house-modeler/fb69d
 fs.mkdirSync(SHOTS, { recursive: true });
 let failed = 0;
 const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) failed++; };
-const needs = (tag, c, m) => console.log(c ? `PASS ${m} [${tag} present]` : `NEEDS-${tag} ${m}`);
+// Once tagged with the chunk each check needed; every chunk is merged now, so they are plain checks.
+const needs = (_tag, c, m) => ok(c, m);
 const args = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 
 async function open(tile = 0, ctxOpts = { viewport: { width: 1440, height: 900 } }) {
@@ -66,6 +65,7 @@ async function standLooking(page, room, d = 1.4) {
   ok(lens.fov === 65 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov}, near ${lens.near}, order ${lens.order}, controls off`);
   ok(/Click the floor to walk/.test(s.w.hint?.text || ''), `first-time hint on desktop ("${s.w.hint?.text}")`);
   ok(s.w.where && s.w.where.outside === true && !s.w.where.roomName, 'standing outside in the garden at the start');
+  const start = s.w.pose;
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${SHOTS}/walk-front.png` });
 
@@ -74,10 +74,13 @@ async function standLooking(page, room, d = 1.4) {
   await page.keyboard.down('w'); const polesW = await page.evaluate(() => window.__walk.sim(1)); await page.keyboard.up('w');
   s = await st(page);
   ok(polesW.length === 30 && Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y) > 0.8, `W walks about 1.4 m in a second (${Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y).toFixed(2)} m)`);
-  ok(s.w.pose.y < before.y, 'forward at yaw 0 goes towards the back of the house (-z)');
+  const fwd = { x: -Math.sin(before.yaw), y: -Math.cos(before.yaw) }, mx = s.w.pose.x - before.x, my = s.w.pose.y - before.y;
+  ok(mx * fwd.x + my * fwd.y > 0.9 * Math.hypot(mx, my), 'W walks the way you face');
+  const yawL = s.w.pose.yaw;
   await page.keyboard.down('ArrowLeft'); await page.evaluate(() => window.__walk.sim(1)); await page.keyboard.up('ArrowLeft');
   s = await st(page);
-  ok(s.w.pose.yaw > 1.2, `left arrow turns left (yaw ${s.w.pose.yaw.toFixed(2)})`);
+  const turned = Math.atan2(Math.sin(s.w.pose.yaw - yawL), Math.cos(s.w.pose.yaw - yawL));
+  ok(turned > 1.2, `left arrow turns left (${turned.toFixed(2)} rad in a second)`);
   await page.evaluate(() => { const w = window.__walkStore.getState(); w.setPose({ ...w.pose, yaw: 0 }); });
   const fl = s.m.editFloorId;
   await page.keyboard.press('1'); await page.keyboard.press('m');
@@ -99,13 +102,15 @@ async function standLooking(page, room, d = 1.4) {
   const front = await page.evaluate(() => window.__walk.nav().doors.find((d) => d.kind === 'front') || null);
   needs('B', !!front, 'nav has a front door');
   if (front) {
-    // Stand 3 m in front of the door, facing it.
-    await page.evaluate((f) => { const w = window.__walkStore.getState(); const nx = -f.dir.y, ny = f.dir.x; const side = ny > 0 ? 1 : -1; w.setPose({ ...w.pose, x: f.centre.x + nx * 3 * side, y: f.centre.y + ny * 3 * side, yaw: Math.atan2(nx * side, ny * side), pitch: 0 }); }, front);
+    // Back at the start, outside and facing the door.
+    await page.evaluate((p) => window.__walkStore.getState().setPose(p), start);
     await page.keyboard.down('w'); await page.evaluate(() => window.__walk.sim(5)); await page.keyboard.up('w');
     s = await st(page);
     needs('B', Math.hypot(s.w.pose.x - front.centre.x, s.w.pose.y - front.centre.y) > 0.2 && !s.w.where?.roomName, 'shut front door stops you outside');
+    // Step back to the start to see the door whole, then tap its leaf.
+    await page.evaluate((p) => window.__walkStore.getState().setPose(p), start);
     await page.evaluate(() => window.__walk.sim(0.2));
-    const p = await toScreen(page, front.centre.x, s.w.pose.feetY + 1.0, front.centre.y);
+    const p = await toScreen(page, front.centre.x, start.feetY + 1.0, front.centre.y);
     await page.mouse.click(p.x, p.y);
     const opened = await page.waitForFunction((k) => window.__walkStore.getState().doors[k] === true, front.key, { timeout: 4000 }).then(() => true, () => false);
     needs('A', opened, 'tapping the front door leaf opens it');
@@ -123,26 +128,47 @@ async function standLooking(page, room, d = 1.4) {
   await page.waitForTimeout(300);
   s = await st(page);
   ok(!!s.w.route && s.w.route.points.length >= 1, `clicking the floor sets a route (${s.w.route ? s.w.route.points.length : 0} points)`);
+  // The target is snapped to the nearest free spot (clear of the furniture), so check against the route's end.
+  const goalPt = s.w.route ? s.w.route.points[s.w.route.points.length - 1] : { x: hc.x, y: hc.y - 0.6 };
+  ok(Math.hypot(goalPt.x - hc.x, goalPt.y - (hc.y - 0.6)) < 1.0, 'the route ends near the tapped spot');
   const poses = await page.evaluate(() => window.__walk.sim(12));
   s = await st(page);
-  ok(!s.w.route && s.w.where?.roomName && Math.hypot(poses[poses.length - 1].x - hc.x, poses[poses.length - 1].y - (hc.y - 0.6)) < 0.4, `route followed to the tapped spot, now in ${s.w.where?.roomName}`);
+  const endP = poses[poses.length - 1];
+  ok(!s.w.route && s.w.where?.roomName && Math.hypot(endP.x - goalPt.x, endP.y - goalPt.y) < 0.3, `route followed to the tapped spot, now in ${s.w.where?.roomName}`);
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/walk-room.png` });
   const wallRoute = await page.evaluate(() => window.__walkStore.getState().route);
   ok(wallRoute === null, 'route cleared on arrival');
 
-  // Shut-door hint: shut the front door, tap the garden through the glass.
+  // A place behind a shut door: you walk up to the door, face it, and are told it is shut.
   if (front) {
     await page.evaluate((k) => window.__walkStore.getState().setDoor(k, false), front.key);
-    await page.evaluate(([f]) => { const w = window.__walkStore.getState(); const nx = -f.dir.y, ny = f.dir.x; const side = ny > 0 ? -1 : 1; w.setPose({ ...w.pose, x: f.centre.x + nx * 1.2 * side, y: f.centre.y + ny * 1.2 * side, level: 0, yaw: Math.atan2(-nx * side, -ny * side) , pitch: -0.1 }); }, [front]);
-    await page.evaluate(() => window.__walk.sim(0.1));
-    const g = await page.evaluate((f) => { const w = window.__walkStore.getState().pose; const fx = -Math.sin(w.yaw), fz = -Math.cos(w.yaw); return { x: f.centre.x + fx * 3, y: f.centre.y + fz * 3 }; }, front);
-    const gp = await toScreen(page, g.x, s.w.pose.feetY, g.y);
-    await page.evaluate(() => window.__walkStore.getState().clearHint());
-    await page.mouse.click(gp.x, gp.y);
-    await page.waitForTimeout(300);
-    const hint = await page.evaluate(() => window.__walkStore.getState().hint?.text || '');
-    needs('B', /shut/i.test(hint), `garden tapped through shut door says "${hint}"`);
+    const hallIn = await page.evaluate((f) => {
+      const l = window.__walk.nav().levels.find((x) => x.level === 0);
+      const nx = -f.dir.y, ny = f.dir.x;
+      // The room just inside the front door: 1 m along the normal, on whichever side is indoors.
+      for (const side of [1, -1]) {
+        const p = { x: f.centre.x + nx * 1.0 * side, y: f.centre.y + ny * 1.0 * side };
+        const r = l.rooms.find((room) => { let c = false; const q = room.poly; for (let i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i].y > p.y) !== (q[j].y > p.y) && p.x < ((q[j].x - q[i].x) * (p.y - q[i].y)) / (q[j].y - q[i].y) + q[i].x) c = !c; return c; });
+        if (r) return { p, baseY: l.baseY, name: r.name };
+      }
+      return null;
+    }, front);
+    ok(!!hallIn, `found the room inside the front door (${hallIn && hallIn.name})`);
+    if (hallIn) {
+      await page.evaluate(([h, f]) => { const w = window.__walkStore.getState(); w.setRoute(null); w.clearHint(); w.setPose({ x: h.p.x + (h.p.x - f.centre.x) * 0.8, y: h.p.y + (h.p.y - f.centre.y) * 0.8, level: 0, stair: null, feetY: h.baseY, yaw: 0, pitch: 0 }); }, [hallIn, front]);
+      await page.evaluate(() => window.__walk.sim(0.1));
+      await page.evaluate((p) => window.__walkStore.getState().requestGoal({ kind: 'point', level: 0, at: { x: p.x, y: p.y } }), start);
+      await page.evaluate(() => window.__walk.sim(0.1));
+      const hint0 = await page.evaluate(() => window.__walkStore.getState().hint?.text || '');
+      ok(!/shut/i.test(hint0), 'no shut-door hint before you get there');
+      await page.evaluate(() => window.__walk.sim(10));
+      s = await st(page);
+      const dDoor = Math.hypot(s.w.pose.x - front.centre.x, s.w.pose.y - front.centre.y);
+      const face = Math.atan2(-(front.centre.x - s.w.pose.x), -(front.centre.y - s.w.pose.y));
+      const off = Math.abs(Math.atan2(Math.sin(face - s.w.pose.yaw), Math.cos(face - s.w.pose.yaw)));
+      ok(/shut/i.test(s.w.hint?.text || '') && dDoor < 1.0 && s.w.where?.roomName && off < 0.2, `a place behind a shut door: walked up to it (${dDoor.toFixed(2)} m, facing ${off.toFixed(2)} rad off) and "${s.w.hint?.text}"`);
+    }
     await page.evaluate((k) => window.__walkStore.getState().setDoor(k, true), front.key);
   }
 
@@ -150,6 +176,8 @@ async function standLooking(page, room, d = 1.4) {
   const hasUp = await page.evaluate(() => window.__walk.nav().levels.some((l) => l.level === 1));
   if (hasUp) {
     const up = await bigRoom(page, 1);
+    // Every door open, so the bedroom door doesn't stop the climb.
+    await page.evaluate(() => { const w = window.__walkStore.getState(); for (const d of window.__walk.nav().doors) w.setDoor(d.key, true); w.clearHint(); });
     await page.evaluate((id) => window.__walkStore.getState().requestGoal({ kind: 'room', level: 1, roomId: id }), up.id);
     await page.waitForTimeout(200);
     const climb = await page.evaluate(() => window.__walk.sim(40));
@@ -305,9 +333,10 @@ async function standLooking(page, room, d = 1.4) {
   s = await st(page);
   ok(!!s.w.route, 'a finger tap on the floor sets a route');
   const t0 = s.w.pose;
-  await page.evaluate(() => window.__walk.sim(3));
+  const tEnd = s.w.route ? s.w.route.points[s.w.route.points.length - 1] : t0;
+  await page.evaluate(() => window.__walk.sim(4));
   s = await st(page);
-  ok(Math.hypot(s.w.pose.x - t0.x, s.w.pose.y - t0.y) > 0.8, 'and the walker follows it');
+  ok(Math.hypot(s.w.pose.x - tEnd.x, s.w.pose.y - tEnd.y) < 0.3 && Math.hypot(tEnd.x - t0.x, tEnd.y - t0.y) > 0.3, `and the walker follows it (${Math.hypot(tEnd.x - t0.x, tEnd.y - t0.y).toFixed(2)} m route, ends ${Math.hypot(s.w.pose.x - tEnd.x, s.w.pose.y - tEnd.y).toFixed(2)} m from its end)`);
   // Drag with a finger looks round (CDP touch).
   const cdp = await page.context().newCDPSession(page);
   const send = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, i) => ({ x: p.x, y: p.y, id: i })) });
@@ -321,6 +350,6 @@ async function standLooking(page, room, d = 1.4) {
   await page.evaluate(() => window.__walkStore.getState().setRoute(null));
   await browser.close();
 
-  console.log(failed ? `\n${failed} FAILED` : '\nall checks passed (NEEDS lines wait for the merge of Chunk A/B)');
+  console.log(failed ? `\n${failed} FAILED` : '\nall checks passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
