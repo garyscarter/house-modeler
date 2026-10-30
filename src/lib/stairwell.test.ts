@@ -167,4 +167,28 @@ describe("balustrades at doorways", () => {
     expect(ys[0][1]).toBeCloseTo(3 - 0.4 - 0.05);
     expect(ys[1][0]).toBeCloseTo(3 + 0.4 + 0.05);
   });
+
+  it("cuts for a door set back up to half a metre from the rail, not further", () => {
+    // As above, but the door is in a wall parallel to the well's west edge, `back` metres further west.
+    const westRail = (back: number) => {
+      const wall = 100 - back * 100;
+      const lowerF = mkFloor([rect("Hall", 100, 0, 200, 600)], [], { id: "g", level: 0 });
+      const upperF = mkFloor(
+        [rect("Landing", wall, 0, 300, 600), rect("Room", -300, 0, wall, 600)],
+        [{ id: "d", kind: "door", x: wall, y: 300, orientation: "v", widthM: 0.8 }],
+        { id: "u", level: 1 },
+      );
+      const model = { floors: [lowerF, upperF], ceilingHeight: 2.4 } as never;
+      const flight = { centre: { x: 1.5, y: 0 }, dir: { x: 0, y: 1 }, run: 6, width: 1, rise: 2.5, lowerId: "g", upperId: "u", wellStart: 0 } as never;
+      const well = { lowerId: "g", upperId: "u", flight, rects: [{ x0: 1, y0: 0, x1: 2, y1: 6 }] };
+      return balustrades(model, well).upper.filter((r) => Math.abs(r.a.x - 1) < 0.01 && Math.abs(r.b.x - 1) < 0.01);
+    };
+    // 0.4 m back: no room to step out of the doorway past a rail, so the rail stops either side of it.
+    const near = westRail(0.4);
+    expect(near).toHaveLength(2);
+    expect(near.some((r) => Math.min(r.a.y, r.b.y) < 3 && Math.max(r.a.y, r.b.y) > 3)).toBe(false);
+    // 0.7 m back: a landing in front of the door, so the rail guards the well along its whole length.
+    const far = westRail(0.7);
+    expect(far).toHaveLength(1);
+  });
 });

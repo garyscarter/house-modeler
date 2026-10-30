@@ -145,8 +145,11 @@ const NEWEL_DROP = 0.35;
 const WALK_THROUGH = new Set(["door", "front", "french", "bifold", "patio", "gap", "archway"]);
 /** Room left clear each side of an opening for its lining or frame, metres. */
 const FRAME = 0.05;
-/** How far an opening's line may sit from a run and still count as on it, metres. */
-const ON_LINE = 0.15;
+/**
+ * How far an opening's line may sit from a run and still count as on it, metres: closer than this there is no
+ * room to step out of the doorway past a rail, so a rail there would only block it.
+ */
+const ON_LINE = 0.5;
 /** Rail pieces shorter than this are dropped, metres. */
 const MIN_PIECE = 0.1;
 
