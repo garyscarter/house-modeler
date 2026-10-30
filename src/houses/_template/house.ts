@@ -97,7 +97,7 @@ export function templateHouse(image: string): HouseModel {
   // `stairsDir` is the way it RISES on the plan: "up" = towards the top (the back of the house), "down" = towards the
   // front, "left" / "right" likewise. The flight here rises from the hall (foot at y 392) to the landing (head at y 232).
   // Winders: `stairsTurn` turns the bottom steps a quarter turn, entered from that side facing up the flight;
-  // `stairsTopTurn` turns the top steps onto the landing towards that side (`stairsTopWinders` 2 or 3).
+  // `stairsTopTurn` turns the top steps onto the landing towards that side (`stairsTopWinders` 2 or 3); with `stairsTopSteps` 1 to 3 it is a flat square instead, with that many rises up to the landing.
   // A STRAIGHT flight is the same without the three turn fields. Give the upper floor the same fields and the same
   // world centre (here the ground centre plus DX), and put the arrival room (Landing) over it: the app cuts the stairwell.
   // The foot's room (Hall) is boxed in under the flight; a room the flight passes over (the Cupboard) sees only a soffit.

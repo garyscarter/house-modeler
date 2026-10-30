@@ -1,9 +1,9 @@
 import { memo } from "react";
-import { flightWinders, STAIRS_VECTOR } from "../../../lib/stairs";
+import { flightWinders, STAIRS_VECTOR, type StepSpan } from "../../../lib/stairs";
 import type { Floor } from "../../../types";
 import { StairsSymbol } from "../../StairsSymbol";
 
-type StairsProps = Pick<Floor, "stairs" | "stairsLen" | "stairsWidth" | "stairsDir" | "stairsTurn" | "stairsTopTurn" | "stairsTopWinders">;
+type StairsProps = Pick<Floor, "stairs" | "stairsLen" | "stairsWidth" | "stairsDir" | "stairsTurn" | "stairsTopTurn" | "stairsTopWinders" | "stairsTopSteps">;
 
 /** The stairs symbol, with its hit target; draggable in Build with the Select tool. */
 export const StairsMarker = memo(function StairsMarker({
@@ -14,12 +14,16 @@ export const StairsMarker = memo(function StairsMarker({
   stairsTurn,
   stairsTopTurn,
   stairsTopWinders,
+  stairsTopSteps,
+  stepSpans,
   ppm,
   px,
   active,
   interactive,
   onPointerDown,
 }: StairsProps & {
+  /** Where the head's steps go, metres along the run (from `floorFlight`). */
+  stepSpans?: StepSpan[];
   ppm: number;
   px: number;
   active: boolean;
@@ -43,7 +47,9 @@ export const StairsMarker = memo(function StairsMarker({
     turn: side(stairsTurn),
     topTurn: side(stairsTopTurn),
     topWinders: stairsTopWinders,
-  });
+    topSteps: stairsTopSteps,
+    stepSpans,
+  }, ppm);
   return (
     <g className={interactive ? "plan-handle" : undefined} style={interactive ? undefined : { pointerEvents: "none" }} onPointerDown={onPointerDown}>
       <rect x={s.x - rw / 2} y={s.y - rh / 2} width={rw} height={rh} fill="transparent" />

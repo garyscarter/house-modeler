@@ -167,6 +167,18 @@ describe("listingUpdates", () => {
     expect(out.floors[0].fixtures!.slice(0, -1)).toEqual(g.fixtures);
   });
 
+  it("offers a flat head with steps to a copy with the old winding head, and applies it", () => {
+    const mine = latest();
+    const l = latest();
+    l.floors[0].stairsTopSteps = 2;
+    const cs = listingUpdates(mine, l).filter((c) => c.group === "stairs");
+    expect(cs).toHaveLength(1);
+    expect(cs[0].label).toBe("Floor stairs: top winds right (2 winders) → turns right: a landing, then 2 rises up");
+    expect(cs[0].defaultSelected).toBe(true);
+    const out = applyListingUpdates(mine, l, [cs[0].id]).floors[0];
+    expect([out.stairsTopTurn, out.stairsTopSteps]).toEqual(["right", 2]);
+  });
+
   it("offers each floor's stairs as one change, ticked while the flight is where the listing's is", () => {
     const cs = listingUpdates(base(), latest()).filter((c) => c.group === "stairs");
     expect(cs).toHaveLength(1);

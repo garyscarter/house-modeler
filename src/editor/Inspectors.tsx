@@ -1407,15 +1407,22 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
           <label>
             Top of the flight
             <select
-              value={floor.stairsTopTurn ?? "straight"}
-              onChange={(e) => updateFloor(variant, floor.id, { stairsTopTurn: e.target.value === "straight" ? undefined : (e.target.value as "left" | "right") })}
+              value={floor.stairsTopTurn ? `${floor.stairsTopSteps ? "steps-" : ""}${floor.stairsTopTurn}` : "straight"}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "straight") updateFloor(variant, floor.id, { stairsTopTurn: undefined, stairsTopSteps: undefined });
+                else if (v.startsWith("steps-")) updateFloor(variant, floor.id, { stairsTopTurn: v.slice(6) as "left" | "right", stairsTopSteps: floor.stairsTopSteps ?? 2 });
+                else updateFloor(variant, floor.id, { stairsTopTurn: v as "left" | "right", stairsTopSteps: undefined });
+              }}
             >
               <option value="straight">Straight onto the landing</option>
-              <option value="left">Turns left onto the landing</option>
-              <option value="right">Turns right onto the landing</option>
+              <option value="left">Winds left onto the landing</option>
+              <option value="right">Winds right onto the landing</option>
+              <option value="steps-left">Landing, then steps up to the left</option>
+              <option value="steps-right">Landing, then steps up to the right</option>
             </select>
           </label>
-          {floor.stairsTopTurn && (
+          {floor.stairsTopTurn && !floor.stairsTopSteps && (
             <label>
               Winders at the top
               <select value={floor.stairsTopWinders ?? 2} onChange={(e) => updateFloor(variant, floor.id, { stairsTopWinders: parseInt(e.target.value, 10) === 3 ? 3 : 2 })}>
@@ -1423,6 +1430,19 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
                 <option value={3}>3</option>
               </select>
             </label>
+          )}
+          {floor.stairsTopTurn && floor.stairsTopSteps && (
+            <>
+              <label>
+                Rises from the landing
+                <select value={floor.stairsTopSteps} onChange={(e) => updateFloor(variant, floor.id, { stairsTopSteps: parseInt(e.target.value, 10) as 1 | 2 | 3 })}>
+                  <option value={1}>1: straight up onto the landing</option>
+                  <option value={2}>2: one step, then the landing</option>
+                  <option value={3}>3: two steps, then the landing</option>
+                </select>
+              </label>
+              <p className="muted small">Steps go up the other side too where the landing carries on past the head.</p>
+            </>
           )}
           <label>
             Length × width (m)
