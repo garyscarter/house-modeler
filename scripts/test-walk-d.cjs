@@ -79,13 +79,13 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     await page.click('.walk-eye .popover-btn');
     await page.waitForSelector('.walk-eye input[type=range]');
     const setRange = (v) => page.$eval('.walk-eye input[type=range]', (el, v) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, String(v)); el.dispatchEvent(new Event('input', { bubbles: true })); }, v);
-    await setRange(1.7);
-    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.7, 'eye height 1.7 written to settings');
-    ok((await page.$eval('.walk-eye .popover-btn', (e) => e.getAttribute('aria-label'))).includes('1.70'), 'eye label follows');
+    await setRange(1.8);
+    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.8, 'eye height 1.8 written to settings');
+    ok((await page.$eval('.walk-eye .popover-btn', (e) => e.getAttribute('aria-label'))).includes('1.80'), 'eye label follows');
     await page.screenshot({ path: `${SHOTS}/walk-eye-${name}.png` });
     await page.click('.walk-reset');
-    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.6, 'reset goes to 1.6');
-    await setRange(1.7);
+    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.7, 'reset goes to 1.7');
+    await setRange(1.8);
     await page.keyboard.press('Escape'); // closes the popover (the walk itself is C's to stop)
     await page.click('.walk-eye .popover-btn'); // toggle closed if still open
     // flip
@@ -112,7 +112,7 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     const plot = await page.$('.walk-map .wm-plot');
     if (plot) {
       ok(true, 'plot boundary drawn when outside');
-      ok(!phone ? (await page.$eval('.walk-where', (e) => e.textContent)) === 'Garden' : true, 'readout says Garden');
+      ok(!phone ? (await page.$eval('.walk-where', (e) => e.textContent)) === 'Outside' : true, 'readout says Outside');
       await page.evaluate(() => { window.__walkStore.getState().takeGoal(); window.__lastGoal = null; });
       const pt = await page.evaluate(() => { const svg = document.querySelector('.walk-map svg'); const r = svg.getBoundingClientRect();
         for (let y = 6; y < r.height; y += 6) for (let x = 6; x < r.width; x += 6) { const el = document.elementFromPoint(r.left + x, r.top + y); if (el === svg) return { x: r.left + x, y: r.top + y }; } return null; });
@@ -131,7 +131,7 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     // survives reload
     await page.reload();
     await page.waitForSelector('.dock', { timeout: 120000 });
-    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.7, 'eye height survives reload');
+    ok((await page.evaluate(() => window.__houseStore.getState().settings.eyeHeight)) === 1.8, 'eye height survives reload');
     await browser.close();
   }
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

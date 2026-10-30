@@ -60,7 +60,7 @@ async function standLooking(page, room, d = 1.4) {
   await page.evaluate(() => window.__walkStore.getState().requestWalk({ kind: 'front' }));
   await page.waitForFunction(() => window.__walkStore.getState().pose && window.__walk);
   let s = await st(page);
-  ok(Math.abs(s.cam[1] - (s.w.pose.feetY + 1.6)) < 0.05 && s.m.showCeilings && s.m.viewMode === 'single', 'eye at 1.6 m, ceilings on, single view');
+  ok(Math.abs(s.cam[1] - (s.w.pose.feetY + 1.7)) < 0.05 && s.m.showCeilings && s.m.viewMode === 'single', 'eye at 1.7 m, ceilings on, single view');
   const lens = await page.evaluate(() => { const c = window.__houseCamera.camera; return { fov: c.fov, near: c.near, order: c.rotation.order, ctl: window.__houseCamera.controls }; });
   ok(lens.fov === 65 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov}, near ${lens.near}, order ${lens.order}, controls off`);
   ok(/Click the floor to walk/.test(s.w.hint?.text || ''), `first-time hint on desktop ("${s.w.hint?.text}")`);

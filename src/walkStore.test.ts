@@ -47,7 +47,7 @@ describe("walk store", () => {
 
 describe("walk rules", () => {
   it("clamps the eye height", () => {
-    expect(eyeHeightOf({})).toBe(1.6);
+    expect(eyeHeightOf({})).toBe(1.7);
     expect(eyeHeightOf({ eyeHeight: 5 })).toBe(2);
     expect(eyeHeightOf({ eyeHeight: 1.75 })).toBe(1.75);
   });

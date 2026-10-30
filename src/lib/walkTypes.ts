@@ -5,7 +5,8 @@ import { effectiveOpenDeg } from "./openings";
 /** Walk-through: shared types and the few rules every walk chunk relies on (docs/walkthrough-plan.md). */
 
 // ---- eye height (persisted as settings.eyeHeight) ----
-export const EYE_HEIGHT = { min: 1.0, max: 2.0, step: 0.05, default: 1.6 } as const;
+/** Default: the eyes of an adult about 1.8 m tall, some 10 cm below the top of the head. */
+export const EYE_HEIGHT = { min: 1.0, max: 2.0, step: 0.05, default: 1.7 } as const;
 export function eyeHeightOf(settings: { eyeHeight?: number }): number {
   const v = settings.eyeHeight;
   return typeof v === "number" && Number.isFinite(v) ? Math.min(EYE_HEIGHT.max, Math.max(EYE_HEIGHT.min, v)) : EYE_HEIGHT.default;

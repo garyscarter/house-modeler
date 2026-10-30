@@ -9,6 +9,7 @@ Status: built (October 2026). The planner was Nancy Sinatra (Opus); the chunks w
 - **A place behind a shut door** (a floor tap or a mini-map tap) walks you up to that door, turns you to face it and then says it is shut (`stopBeforeDoor` in `walkMotion.ts`), rather than refusing on the spot.
 - **Arrival** finishes turning to the route's facing before the route clears, and a walker stood where nobody can (a door shut on you, an edit) is settled onto the nearest free spot when it next tries to move.
 - **While walking** the inspector card (desktop, iPad) and the bottom sheet (phone) are hidden, the phone's walk bar sits at the bottom, and the getting-started strip is hidden. Outside the house the readout says "Outside".
+- **Eye height starts at 1.7 m** (the owner: an adult about 1.8 m tall), not 1.6; the walk bar's slider still runs 1.0–2.0 m.
 - **Lighting is unchanged.** Upstairs rooms read flatter than downstairs because the roof blocks the sun and only the sky fill lights them; a walk-only interior fill would brighten them, at the cost of the night views. Not done.
 - **Checks:** `scripts/test-walk-a.cjs` (door leaves), `scripts/test-walk-c.cjs` (the walk itself: keys, look, taps, doors, stairs, tour, flip, menus, touch) and `scripts/test-walk-d.cjs` (Walk button, walk bar, mini-map, eye height, phone and iPad layout), each `PORT=<dev server port> node scripts/test-walk-x.cjs`.
 
