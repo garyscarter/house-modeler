@@ -809,8 +809,10 @@ function wellObs(F: Flight, r: Rect, sides: SideCut[] = []): Obs[] {
   const { run, width: w } = F;
   const top = F.topTurn ?? 0;
   const sp = headSpan(F);
-  // The way off the head: a flat head's steps' far edge, or the side a winding head turns to.
+  // The way off the head: a flat head's steps' far edge, or the side a winding head turns to. Between a flat
+  // head's square and its steps (on either side) the well is open too.
   const exit: SideCut[] = sp ? [{ side: top, s0: sp.s0, s1: sp.s1, edge: w / 2 + stepDepth(F) }] : top ? [{ side: top, s0: run - w, s1: run }] : [];
+  if (stepDepth(F) > 0) exit.push(...headSpans(F).map((x) => ({ side: x.side, s0: x.s0, s1: x.s1, edge: w / 2 })));
   const out: Obs[] = [];
   for (let i = 0; i < 4; i++) {
     const a = corners[i];

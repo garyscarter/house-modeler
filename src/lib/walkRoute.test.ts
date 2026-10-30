@@ -355,6 +355,14 @@ describe("a flat head: a square, then a step up onto the landing", () => {
     for (let i = 1; i < trail.length; i++) expect(Math.abs(trail[i].feetY - trail[i - 1].feetY)).toBeLessThanOrEqual(MAX_STEP + 1e-9);
     const offAt = trail.findIndex((p, i) => i > 0 && trail[i - 1].stair !== null && p.stair === null && p.level === 1);
     expect(trail[offAt].x).toBeLessThan(-0.67 + 1e-6);
+    // And back down the same way.
+    const open: DoorStates = Object.fromEntries(n.doors.map((d) => [d.key, true]));
+    const hall = goalPoint(n, { kind: "room", level: 0, roomId: n.levels[0].rooms.find((r) => r.name === "Hallway (front)")!.id })!;
+    const back = routeTo(n, end, hall.point, open);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const down = follow(n, end, back.route, open);
+    expect(down[down.length - 1]).toMatchObject({ level: 0, stair: null, feetY: 0 });
   });
 
   it("counts the steps as the stairs only from above: a ground-floor walker is never put on them", () => {

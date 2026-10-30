@@ -48,7 +48,11 @@ describe("the built-in house's stairwell", () => {
 
   it("opens the floor above over the flight, in the stairs room and on through the landing's west end to the head", () => {
     expect(stairwells(model)).toHaveLength(1);
-    expect(well.rects).toHaveLength(2);
+    // The flight's two, and the head's step up onto the landing east of its square.
+    expect(well.rects).toHaveLength(3);
+    const step = well.rects[2];
+    expect(step.x0).toBeCloseTo(0.45);
+    expect(step.x1).toBeCloseTo(0.67);
     const upper = model.floors.find((f) => f.id === well.upperId)!;
     const poly = (name: string) => roomWorldPolygon(upper, upper.rooms.find((r) => r.name === name)!);
     const inside = (r: Rect, name: string) => {
@@ -60,7 +64,7 @@ describe("the built-in house's stairwell", () => {
     const [stairs, landing] = ["Stairs", "Landing"].map((n) => well.rects.find((r) => inside(r, n))!);
     expect(stairs).toBeDefined();
     expect(landing).toBeDefined();
-    for (const r of well.rects) expect(r.x1 - r.x0).toBeCloseTo(0.9);
+    for (const r of well.rects.slice(0, 2)) expect(r.x1 - r.x0).toBeCloseTo(0.9);
     // The two meet at the stairs room's top edge; the head runs on up to the landing's north wall.
     expect(landing.y1).toBeCloseTo(stairs.y0);
     expect(landing.y0).toBeCloseTo(well.flight.centre.y - well.flight.run / 2);
@@ -85,10 +89,20 @@ describe("the built-in house's stairwell", () => {
     expect(b.upper).toHaveLength(0);
   });
 
-  it("leaves the head's far side open as a step when the landing is carried on past it", () => {
+  /** The house with winders at the head, as it was drawn before the owner described its flat square. */
+  const winding = () => {
+    const m = structuredClone(model);
+    m.floors.forEach((f) => {
+      delete f.stairsTopSteps;
+      if (f.stairsTopTurn) f.stairsTopWinders = 2;
+    });
+    return m;
+  };
+
+  it("leaves a winding head's far side open as a step when the landing is carried on past it", () => {
     // Like a landing carried west over the extension: the head's outer side now faces more landing, and the first
     // winder beside it is two risers down (0.38 m): a step up onto it, not a drop to guard (Part K: over 600 mm).
-    const m = structuredClone(model);
+    const m = winding();
     const upper = m.floors.find((f) => f.level === 1)!;
     const landing = upper.rooms.find((r) => r.name === "Landing")!;
     landing.polygon = landing.polygon.map((p) => ({ ...p, x: p.x === 610 ? 539 : p.x }));
@@ -100,12 +114,12 @@ describe("the built-in house's stairwell", () => {
     // Along the head's west side, the landing's depth over the well.
     expect(steps[0].s1 - steps[0].s0).toBeGreaterThan(0.75);
     // The listed house's head is walled on that side: nothing to step onto.
-    expect(headSideSteps(model, stairwells(model)[0])).toHaveLength(0);
+    expect(headSideSteps(winding(), stairwells(winding())[0])).toHaveLength(0);
   });
 
   it("guards the part of that side beside a winder more than two risers down", () => {
     // Three winders in the head: the first is three risers (0.53 m) down, the second two.
-    const m = structuredClone(model);
+    const m = winding();
     const upper = m.floors.find((f) => f.level === 1)!;
     const lower = m.floors.find((f) => f.level === 0)!;
     upper.rooms.find((r) => r.name === "Landing")!.polygon = upper.rooms
@@ -127,7 +141,7 @@ describe("the built-in house's stairwell", () => {
 
   it("opens the floor for a flat head's steps, and guards neither them nor the square's sides they go up from", () => {
     const m = structuredClone(model);
-    m.floors.find((f) => f.level === 0)!.stairsTopSteps = 2;
+    expect(m.floors.find((f) => f.level === 0)!.stairsTopSteps).toBe(2);
     const [w] = stairwells(m);
     // The step east of the square, a going deep, from the landing's south wall to the flight's end.
     const step = w.rects[w.rects.length - 1];
