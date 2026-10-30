@@ -80,8 +80,8 @@ const FF_WINDOW: Partial<Opening> = { ...UPVC, sill: 0.98, head: 1.95 };
 /** The hall's windows: frames about 1 m tall, sills about 0.95 m up (front-street, front-2, front-3). */
 const HALL_WINDOW: Partial<Opening> = { ...TILE_BOARD, sill: 0.95, head: 1.95 };
 
-export const LISTING_PRESET = { id: "listing-91770873", version: 24 };
-export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 24 };
+export const LISTING_PRESET = { id: "listing-91770873", version: 25 };
+export const LISTING_PROPOSED_PRESET = { id: "listing-91770873-proposed", version: 25 };
 /** The built-in plot for the listing. Bump the version whenever `listingSite()` changes, so browsers holding an older copy are offered the new one. */
 export const LISTING_SITE_PRESET = { id: "listing-91770873-site", version: 7 };
 
@@ -267,20 +267,20 @@ export function listing91770873(image: string): HouseModel {
   );
   // Ground-floor flight rises towards the top of the plan, arriving at the landing.
   // Its bottom steps wind a quarter turn so you step on from the hall side (photos).
-  // Its head winds a quarter turn the same way, two winders onto the west end of the landing,
-  // stepped off eastwards (owner; the floorplan's walk line turns east at the top, and landing-1
-  // is taken from there looking east). The flight runs on over the kitchen/hall wall: its head
+  // Its head is a flat square at the west end of the landing with two rises up to the landing on the
+  // right, one step then the landing (owner, 2026-10; not winders; the floorplan's walk line turns east
+  // at the top, and landing-1 is taken from there looking east). The flight runs on over the kitchen/hall wall: its head
   // fills the landing's depth, from the foot (plan y 514) to just short of the landing's north wall
   // (first-floor y 1046 = ground y 273). 13 risers of about 188 mm. It is 3.26 m, 4 cm short of the
-  // plan's 3.3 m, so that the riser up onto the head winders stands inside the kitchen/hall wall, as
-  // the first-floor plan draws one (its tread line at y 1116 = ground 343): the treads over the kitchen
-  // are then only the head winders, which the kitchen's bulkhead boxes in (NOTES "Stairs", "Length").
+  // plan's 3.3 m, so that the riser up onto the head's square stands inside the kitchen/hall wall, as
+  // the first-floor plan draws one (its tread line at y 1116 = ground 343): the tread over the kitchen
+  // is then only the head's square, which the kitchen's bulkhead boxes in (NOTES "Stairs", "Length").
   ground.stairsDir = "up";
   ground.stairsLen = 3.26;
   ground.stairsWidth = 0.9;
   ground.stairsTurn = "right";
   ground.stairsTopTurn = "right";
-  ground.stairsTopWinders = 2;
+  ground.stairsTopSteps = 2;
   // The partition holding the glazed door across the corridor between the front hall and the kitchen,
   // and the back of the rear living room's chimney breast: the notch leaves the party wall open there,
   // so a 0.1 m wall flush with the party wall's outer face (1290 + 9 px) closes it.
@@ -411,7 +411,7 @@ export function listing91770873(image: string): HouseModel {
   first.stairsWidth = 0.9;
   first.stairsTurn = "right";
   first.stairsTopTurn = "right";
-  first.stairsTopWinders = 2;
+  first.stairsTopSteps = 2;
   // Back of Bedroom 3's chimney breast, closing the party wall behind its notch (as on the ground floor).
   first.walls = [{ id: uid(), a: { x: 1080.5, y: 1040 }, b: { x: 1080.5, y: 1103 }, color: RENDER }];
   // Fitted wardrobes from the photos, backs against the walls at their inner faces
@@ -539,7 +539,7 @@ export function listing91770873Proposed(image: string): HouseModel {
   const newRoom = rect("New Room", 315, 795, 610, 1285, { w: 3.59, h: 6.77 }, { roofGroup: "extension" });
   first.rooms.push(newRoom);
   first.openings.push(
-    // From the landing (assumed). It opens beside the stair head's winders, so it can't be reached
+    // From the landing (assumed). It opens beside the stair head's square, so it can't be reached
     // from the landing as drawn: a placeholder until the owner settles the entrance (see NOTES.md).
     op("door", 610, 1075, "v", 0.8, WHITE_DOOR),
     op("window", 470, 795, "h", 1.8, FF_WINDOW), // north (assumed; the house's sill and head)

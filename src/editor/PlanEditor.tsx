@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { uid, type Fixture, type Floor, type Pt, type VariantKey } from "../types";
+import { floorFlight } from "../lib/stairs";
 import { pieceFixtureFields } from "../lib/myFurniture";
 import { byId, isElectricalItem, type CatalogueItem } from "../lib/catalogue";
 import { allControls, gangCount, gangOf, links as linksOf, numberPoints } from "../lib/electrics";
@@ -233,6 +234,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
 
   const imgOpacity = Math.min(1, Math.max(0.1, planImage.opacity));
   const imageState = imageStateOf(planImage);
+  const stepSpans = useMemo(() => (model && floor.stairsTopSteps ? floorFlight(model, floor)?.stepSpans : undefined), [model, floor]);
   const clip = useMemo(() => imageClipRect(roomsRect, ppm, { w: floor.imageW, h: floor.imageH }), [roomsRect, ppm, floor.imageW, floor.imageH]);
   const neutralFills = quiet && (build || furnish || electrics);
   const showRoomLabels = !(planImage.show && imageState === "trace");
@@ -324,6 +326,8 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
                 stairsTurn={floor.stairsTurn}
                 stairsTopTurn={floor.stairsTopTurn}
                 stairsTopWinders={floor.stairsTopWinders}
+                stairsTopSteps={floor.stairsTopSteps}
+                stepSpans={stepSpans}
                 ppm={ppm}
                 px={px}
                 active={drag.drag.kind === "stairs"}

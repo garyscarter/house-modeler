@@ -426,7 +426,7 @@ function fixtureChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
 // ---------------------------------------------------------------------------------------------------------
 // Stairs
 
-const STAIR_FIELDS = ["stairsDir", "stairsLen", "stairsWidth", "stairsTurn", "stairsTopTurn", "stairsTopWinders"] as const;
+const STAIR_FIELDS = ["stairsDir", "stairsLen", "stairsWidth", "stairsTurn", "stairsTopTurn", "stairsTopWinders", "stairsTopSteps"] as const;
 type StairField = (typeof STAIR_FIELDS)[number];
 
 function stairValue(f: Floor, k: StairField): unknown {
@@ -438,12 +438,15 @@ function stairValue(f: Floor, k: StairField): unknown {
     case "stairsWidth":
       return f.stairsWidth ?? 0.9;
     case "stairsTopWinders":
-      return f.stairsTopTurn ? (f.stairsTopWinders ?? 2) : undefined;
+      return f.stairsTopTurn && !f.stairsTopSteps ? (f.stairsTopWinders ?? 2) : undefined;
+    case "stairsTopSteps":
+      return f.stairsTopTurn ? f.stairsTopSteps : undefined;
     default:
       return f[k];
   }
 }
-const turnWords = (t: unknown, winders?: unknown) => (t ? `winds ${t}${winders ? ` (${winders} winders)` : ""}` : "straight");
+const turnWords = (t: unknown, winders?: unknown, steps?: unknown) =>
+  !t ? "straight" : steps ? `turns ${t}: a landing, then ${steps} rise${steps === 1 ? "" : "s"} up` : `winds ${t}${winders ? ` (${winders} winders)` : ""}`;
 const DIR_WORDS: Record<string, string> = { up: "towards the rear", down: "towards the front", left: "to the left", right: "to the right" };
 
 function direction(dx: number, dy: number): string {
@@ -468,8 +471,8 @@ function stairChanges(mine: HouseModel, latest: HouseModel): LayoutChange[] {
     if (stairValue(mf, "stairsLen") !== stairValue(lf, "stairsLen")) parts.push(`${metres(stairValue(mf, "stairsLen") as number)} → ${metres(stairValue(lf, "stairsLen") as number)} long`);
     if (stairValue(mf, "stairsWidth") !== stairValue(lf, "stairsWidth")) parts.push(`${metres(stairValue(mf, "stairsWidth") as number)} → ${metres(stairValue(lf, "stairsWidth") as number)} wide`);
     if (stairValue(mf, "stairsTurn") !== stairValue(lf, "stairsTurn")) parts.push(`foot ${turnWords(mf.stairsTurn)} → ${turnWords(lf.stairsTurn)}`);
-    if (stairValue(mf, "stairsTopTurn") !== stairValue(lf, "stairsTopTurn") || stairValue(mf, "stairsTopWinders") !== stairValue(lf, "stairsTopWinders"))
-      parts.push(`top ${turnWords(mf.stairsTopTurn, stairValue(mf, "stairsTopWinders"))} → ${turnWords(lf.stairsTopTurn, stairValue(lf, "stairsTopWinders"))}`);
+    if (stairValue(mf, "stairsTopTurn") !== stairValue(lf, "stairsTopTurn") || stairValue(mf, "stairsTopWinders") !== stairValue(lf, "stairsTopWinders") || stairValue(mf, "stairsTopSteps") !== stairValue(lf, "stairsTopSteps"))
+      parts.push(`top ${turnWords(mf.stairsTopTurn, stairValue(mf, "stairsTopWinders"), stairValue(mf, "stairsTopSteps"))} → ${turnWords(lf.stairsTopTurn, stairValue(lf, "stairsTopWinders"), stairValue(lf, "stairsTopSteps"))}`);
     if (!parts.length && mf.stairs) continue;
     const far = mf.stairs ? distM(toWorld(mf, mf.stairs), toWorld(lf, lf.stairs)) : Infinity;
     const note = !mf.stairs
