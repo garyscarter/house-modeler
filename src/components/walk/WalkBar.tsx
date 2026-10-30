@@ -25,7 +25,7 @@ export function WalkBar() {
 
   const floor = where && floors ? floorsByLevel(floors).find((f) => f.level === where.level) : undefined;
   const floorName = floor ? floorDisplayName(floor.name) : "";
-  const place = where ? (where.outside ? "Garden" : where.roomName) : null;
+  const place = where ? (where.outside ? "Outside" : where.roomName) : null;
   const readout = [place, where?.outside ? null : floorName].filter(Boolean).join(" · ");
   const other = activeVariant === "current" ? "proposed" : "current";
   const eyeText = `Eye ${eye.toFixed(2)} m`;

@@ -1,6 +1,16 @@
 # Walkthrough: plan
 
-Status: agreed with the owner and being built (October 2026). The planner was Nancy Sinatra (Opus); the chunks below were built in parallel worktrees.
+Status: built (October 2026). The planner was Nancy Sinatra (Opus); the chunks were built in parallel worktrees by Madonna (A, door leaves), Prince (B, walk logic), Freddie Mercury (C, controller) and Dua Lipa (D, on-screen parts). The spec below is as planned; "As built" lists where the build differs.
+
+## As built
+
+- **Side exits off the stairs** (not in the plan). Proposed's new room opens off the side of the top winders, about 0.35 m below the landing, so a flight can now be left sideways through a door, gap or archway on its side, stepping up to `SIDE_STEP` (0.45 m). A shut door there still blocks. See `walkNav.ts` (flight ends) and `walkMove.ts`.
+- **Walls are boxes, not capsules**, the grid is 0.1 m, and door frames take 0.02 m a side, so the 0.65 m bathroom door stays passable with a 0.25 m walker.
+- **A place behind a shut door** (a floor tap or a mini-map tap) walks you up to that door, turns you to face it and then says it is shut (`stopBeforeDoor` in `walkMotion.ts`), rather than refusing on the spot.
+- **Arrival** finishes turning to the route's facing before the route clears, and a walker stood where nobody can (a door shut on you, an edit) is settled onto the nearest free spot when it next tries to move.
+- **While walking** the inspector card (desktop, iPad) and the bottom sheet (phone) are hidden, the phone's walk bar sits at the bottom, and the getting-started strip is hidden. Outside the house the readout says "Outside".
+- **Lighting is unchanged.** Upstairs rooms read flatter than downstairs because the roof blocks the sun and only the sky fill lights them; a walk-only interior fill would brighten them, at the cost of the night views. Not done.
+- **Checks:** `scripts/test-walk-a.cjs` (door leaves), `scripts/test-walk-c.cjs` (the walk itself: keys, look, taps, doors, stairs, tour, flip, menus, touch) and `scripts/test-walk-d.cjs` (Walk button, walk bar, mini-map, eye height, phone and iPad layout), each `PORT=<dev server port> node scripts/test-walk-x.cjs`.
 
 ## What the owner asked
 
