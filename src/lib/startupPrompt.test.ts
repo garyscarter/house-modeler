@@ -77,33 +77,32 @@ describe("remembered answers", () => {
 });
 
 describe("describeUpdate with a Proposed review on offer", () => {
-  it("asks only about the review when nothing else is out of date", () => {
+  it("is one Update and Not now when only the review is on offer", () => {
     const p = { kind: "update" as const, version: 0, variants: [], review: 5 };
-    const d = describeUpdate(p);
-    expect(d.choices.map((c) => c.label)).toEqual(["Review updates for my Proposed", "Not now"]);
+    const d = describeUpdate(p, "The house");
+    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Not now"]);
     expect(d.choices[0].plan).toEqual({ layouts: [], sites: [], review: true, remember: [] });
-    expect(d.message).toContain("never replaced");
+    expect(d.choices[1].plan).toBeNull();
+    expect(d.message).toBe("The house has been updated. Your Proposed keeps all your changes: next you'll see what's new and pick what to add to it. You can undo it.");
     expect(notNowRemembers(p)).toEqual(["review"]);
   });
-  it("adds an update-and-review choice after Update; Keep mine declines both", () => {
+  it("updates As listed and then reviews Proposed in one Update; Not now declines both", () => {
     const p = { kind: "update" as const, version: 5, variants: ["current" as const], review: 5 };
-    const d = describeUpdate(p);
-    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Update, and review updates for my Proposed", "Keep mine"]);
-    expect(d.choices[0].plan).toEqual({ layouts: ["current"], sites: [], remember: [] });
-    expect(d.choices[1].plan).toEqual({ layouts: ["current"], sites: [], review: true, remember: [] });
-    expect(d.choices[2].plan).toBeNull();
+    const d = describeUpdate(p, "The house");
+    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Not now"]);
+    expect(d.choices[0].plan).toEqual({ layouts: ["current"], sites: [], review: true, remember: [] });
+    expect(d.choices[1].plan).toBeNull();
+    expect(d.message).toContain("As listed will match it (any edits to As listed are replaced).");
     expect(d.message).toMatch(/You can undo it\.$/);
     expect(notNowRemembers(p)).toEqual(["update", "review"]);
   });
-  it("pairs the review with the update that keeps the owner's plot edits", () => {
-    const d = describeUpdate({ kind: "update", version: 5, variants: ["current"], site: { version: 3, current: true, proposed: "own" }, review: 5 });
-    expect(d.choices.map((c) => c.label)).toEqual([
-      "Update",
-      "Update, and only the plot's boundaries and neighbours (keep my plot edits)",
-      "Update, keep my plot edits, and review updates for my Proposed",
-      "Update, and Proposed's plot too (your plot edits there are lost)",
-      "Not now",
-    ]);
-    expect(d.choices[2].plan).toEqual({ ...d.choices[1].plan, review: true });
+  it("keeps the owner's plot edits in that Update", () => {
+    const p = { kind: "update" as const, version: 5, variants: ["current" as const], site: { version: 3, current: true, proposed: "own" as const }, review: 5 };
+    const d = describeUpdate(p, "The house");
+    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Not now"]);
+    const keep = describeUpdate({ ...p, review: undefined }, "The house").choices.find((c) => c.plan?.boundaries?.length)!;
+    expect(d.choices[0].plan).toEqual({ ...keep.plan, review: true });
+    expect(d.message).toContain("Your plot edits are kept");
   });
 });
+

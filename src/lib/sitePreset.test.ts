@@ -134,7 +134,7 @@ describe("the startup prompt with a plot update", () => {
   });
   it("keeps the old wording and buttons when only layouts are on offer", () => {
     const d = describeUpdate({ kind: "update", version: 5, variants: ["current"] });
-    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Keep mine"]);
+    expect(d.choices.map((c) => c.label)).toEqual(["Update", "Not now"]);
     expect(d.message).toContain("built-in As listed layout");
   });
   it("describes layouts and plot together", () => {

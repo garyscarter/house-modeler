@@ -10,9 +10,10 @@
 .review-group label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 2px; line-height: 1.35; cursor: pointer; font-size: 13px; }
 .review-group label input { margin-top: 2px; flex: none; }
 .review-group small { display: block; font-size: 12px; }
-.review-group details { margin-top: 4px; font-size: 12px; }
-.review-group summary { cursor: pointer; }
-.review-left li { padding: 3px 0 3px 22px; line-height: 1.35; }
+.review-more { display: flex; flex-direction: column; gap: 10px; }
+.review-more > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); padding: 4px 0; }
+.review-more > p { margin: 0 0 6px; }
+.review-more[open] > summary { margin-bottom: 4px; }
 
 
 .app[data-chassis="phone"] .review-dialog { width: 100%; }

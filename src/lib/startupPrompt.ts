@@ -106,34 +106,32 @@ export const notNowRemembers = (p: UpdatePrompt): Answer[] => [
   ...(p.review ? (["review"] as const) : []),
 ];
 
-const REVIEW_LABEL = "review updates for my Proposed";
-const REVIEW_NOTE =
-  " Your Proposed design is your own and is never replaced, but you can review the built-in house's newer changes (roof, radiators, stairs and so on) and choose which to bring into it.";
-
 /**
  * The question and buttons for an "update" prompt. A choice with a null plan does nothing and remembers
  * `notNowRemembers`. Proposed's own edited plot is only replaced by the choice that says so.
+ *
+ * With a review of the listing's changes for Proposed on offer it is one Update and Not now: Update brings
+ * As listed (and the plots) up to date, keeping the owner's plot edits where there are any, then opens the
+ * review, where the owner picks what to add to Proposed.
  */
 export function describeUpdate(prompt: UpdatePrompt, houseName: string = activeHouseName()): { message: string; choices: UpdateChoice[] } {
   if (!prompt.review) return describeLayoutUpdate(prompt, houseName);
-  if (!prompt.variants.length && !prompt.site) {
-    return {
-      message: `${houseName} has changed since your Proposed design was copied from it.${REVIEW_NOTE} You can undo it.`,
-      choices: [
-        { label: "Review updates for my Proposed", plan: { layouts: [], sites: [], review: true, remember: [] } },
-        { label: "Not now", plan: null },
-      ],
-    };
-  }
-  // The review goes with the update that keeps the owner's plot edits when there is one (the same spirit), else
-  // with the plain update. Choosing another update leaves the review to be offered on its own next time.
-  const { message, choices } = describeLayoutUpdate(prompt, houseName);
-  const base = Math.max(0, choices.findIndex((c) => !!c.plan?.boundaries?.length));
-  const plan = choices[base].plan!;
-  const label = plan.boundaries?.length ? `Update, keep my plot edits, and ${REVIEW_LABEL}` : `${choices[base].label}, and ${REVIEW_LABEL}`;
+  const others = prompt.variants.length || prompt.site ? describeLayoutUpdate(prompt, houseName).choices.filter((c) => c.plan) : [];
+  const keep = others.find((c) => !!c.plan?.boundaries?.length) ?? others[0];
+  const plan: UpdatePlan = { ...(keep?.plan ?? { layouts: [], sites: [], remember: [] }), review: true };
+  const names = plan.layouts.map((k) => VARIANT_LABEL[k]).join(" and ");
+  const message = [
+    `${houseName} has been updated.`,
+    ...(plan.layouts.length ? [`${names} will match it (any edits to ${names} are replaced).`] : []),
+    ...(plan.boundaries?.length ? ["Your plot edits are kept: only new fences, walls and neighbouring buildings come in."] : plan.sites.length ? ["Its plot will match it too."] : []),
+    "Your Proposed keeps all your changes: next you'll see what's new and pick what to add to it. You can undo it.",
+  ].join(" ");
   return {
-    message: `${message.replace(/ You can undo it\.$/, "")}${REVIEW_NOTE} You can undo it.`,
-    choices: [...choices.slice(0, base + 1), { label, plan: { ...plan, review: true } }, ...choices.slice(base + 1)],
+    message,
+    choices: [
+      { label: "Update", plan },
+      { label: "Not now", plan: null },
+    ],
   };
 }
 
@@ -145,7 +143,7 @@ function describeLayoutUpdate(prompt: UpdatePrompt, houseName: string): { messag
       message: `Newer plans for ${houseName} are available. Update? This replaces any edits you made to the built-in ${names} layout${layouts.length > 1 ? "s" : ""}; layouts you copied or made yourself are not touched. You can undo it.`,
       choices: [
         { label: "Update", plan: { layouts, sites: [], remember: [] } },
-        { label: "Keep mine", plan: null },
+        { label: "Not now", plan: null },
       ],
     };
   }
