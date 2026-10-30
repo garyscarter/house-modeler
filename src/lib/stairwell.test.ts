@@ -125,6 +125,29 @@ describe("the built-in house's stairwell", () => {
     expect(st.s1 - st.s0).toBeGreaterThan(0.3);
   });
 
+  it("opens the floor for a flat head's steps, and guards neither them nor the square's sides they go up from", () => {
+    const m = structuredClone(model);
+    m.floors.find((f) => f.level === 0)!.stairsTopSteps = 2;
+    const [w] = stairwells(m);
+    // The step east of the square, a going deep, from the landing's south wall to the flight's end.
+    const step = w.rects[w.rects.length - 1];
+    expect(step.x0).toBeCloseTo(0.45);
+    expect(step.x1).toBeCloseTo(0.67);
+    expect(step.y1).toBeCloseTo((1110 - 1203) / 73, 1);
+    const b = balustrades(m, w);
+    expect(b.upper).toHaveLength(0);
+    // The hall's rail still runs up the open side to the newel where the head turns.
+    expect(b.lower).toEqual(balustrades(model, stairwells(model)[0]).lower);
+    expect(headSideSteps(m, w)).toEqual([]);
+    // Carried west past the head, the landing gets steps up that side too, and still no rail.
+    const upper = m.floors.find((f) => f.level === 1)!;
+    const landing = upper.rooms.find((r) => r.name === "Landing")!;
+    landing.polygon = landing.polygon.map((p) => ({ ...p, x: p.x === 610 ? 539 : p.x }));
+    const [w2] = stairwells(m);
+    expect(w2.rects.filter((r) => r.x1 <= -0.45 + 1e-6)).toHaveLength(1);
+    expect(balustrades(m, w2).upper).toHaveLength(0);
+  });
+
   it("removes the opening's area from the floor above", () => {
     const upper = model.floors.find((f) => f.id === well.upperId)!;
     const before = upper.rooms.reduce((s, r) => s + Math.abs(polygonArea(roomWorldPolygon(upper, r))), 0);

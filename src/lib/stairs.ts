@@ -5,14 +5,16 @@ import { BULKHEAD_REACH, growConvex, splitConvex, type Bulkhead } from "./bulkhe
 /**
  * The treads of a flight: a straight run, optionally with kite winders at the
  * foot so the bottom steps are entered from the side (a quarter turn), and at
- * the head so the top steps turn a quarter onto the landing.
+ * the head so the top steps turn a quarter onto the landing, or a flat square
+ * at the head with steps up from its side onto the landing.
  * Plain plan geometry shared by the 3D stairs, the stairwell and the plan drawings.
  */
 
 /**
  * A flight on the plan, world metres. `turn` is the side the foot's winders are
  * entered from: +1 right, -1 left (facing up the flight), 0 straight.
- * `topTurn` is the side the head's winders turn towards, onto the landing.
+ * `topTurn` is the side the head turns towards, onto the landing: by winders,
+ * or (`topSteps`) from a flat square up steps beyond that side.
  */
 export interface FlightShape {
   centre: V2;
@@ -26,6 +28,20 @@ export interface FlightShape {
   topTurn?: -1 | 0 | 1;
   /** Winders in a turned head, 2 or 3. Default 2. */
   topWinders?: number;
+  /**
+   * A turned head as a flat square (the w × w the winders would fill) with this many risers up from it to the
+   * floor above (1-3), the steps between going out beyond the square's side; absent or 0: winders.
+   */
+  topSteps?: number;
+  /** Where a flat head's steps go up from the square (see headStepSpans); absent: the turn side's whole length. */
+  stepSpans?: StepSpan[];
+}
+
+/** A stretch of a flat head's side (s from s0 to s1 up the run; side +1 right going up, -1 left) with steps up from it. */
+export interface StepSpan {
+  side: -1 | 1;
+  s0: number;
+  s1: number;
 }
 
 export interface Tread {
@@ -48,25 +64,46 @@ export const WALL_UNDER_TREAD = 0.003;
 /** Painted lining on the underside of a tread boxed into a bulkhead whose block would hang below it, metres. */
 export const LINING = 0.004;
 
-type Shape = Pick<FlightShape, "run" | "width" | "turn" | "topTurn" | "topWinders">;
+type Shape = Pick<FlightShape, "run" | "width" | "turn" | "topTurn" | "topWinders" | "topSteps" | "stepSpans">;
 
-/** Number of winders in a flight's head (0 when it arrives straight). */
-export function topWinderCount(f: Pick<FlightShape, "topTurn" | "topWinders">): number {
-  if (!f.topTurn) return 0;
+/** Number of risers from a flat head's square up to the floor above (0 when the head winds or arrives straight). */
+export function topStepCount(f: Pick<FlightShape, "topTurn" | "topSteps">): number {
+  if (!f.topTurn || !f.topSteps) return 0;
+  const n = Math.round(f.topSteps);
+  return Number.isFinite(n) ? Math.max(1, Math.min(3, n)) : 0;
+}
+
+/** How far a flat head's steps go out beyond the square's side: a going for each step between it and the floor. */
+export function stepDepth(f: Pick<FlightShape, "topTurn" | "topSteps">, metre = 1): number {
+  return Math.max(0, topStepCount(f) - 1) * GOING * metre;
+}
+
+/** Where a flat head's steps go up from its square (none for winders or a straight head). */
+export function headSpans(f: Pick<FlightShape, "run" | "width" | "topTurn" | "topSteps" | "stepSpans">): StepSpan[] {
+  if (!topStepCount(f)) return [];
+  return f.stepSpans ?? [{ side: f.topTurn as -1 | 1, s0: f.run - f.width, s1: f.run }];
+}
+
+/** Number of winders in a flight's head (0 when it arrives straight or on a flat square). */
+export function topWinderCount(f: Pick<FlightShape, "topTurn" | "topWinders" | "topSteps">): number {
+  if (!f.topTurn || topStepCount(f)) return 0;
   const n = Math.round(f.topWinders ?? TOP_WINDERS);
   return Math.max(2, Math.min(3, Number.isFinite(n) ? n : TOP_WINDERS));
 }
 
-/** How a flight's run is shared out: foot winders, straight treads from s0 to s1, head winders, and the risers in all. */
+/** How a flight's run is shared out: foot winders, straight treads from s0 to s1, head winders or square and steps, and the risers in all. */
 function layout(f: Shape) {
   const bottom = f.turn ? WINDERS : 0;
   const top = topWinderCount(f);
+  const steps = topStepCount(f);
+  const head = top > 0 || steps > 0;
   const s0 = f.turn ? f.width : 0;
-  const s1 = top ? Math.max(s0, f.run - f.width) : f.run;
-  const straight = !bottom && !top ? Math.max(6, Math.round(f.run / 0.25)) : Math.max(top ? 2 : 3, Math.round((s1 - s0) / GOING));
+  const s1 = head ? Math.max(s0, f.run - f.width) : f.run;
+  const straight = !bottom && !head ? Math.max(6, Math.round(f.run / 0.25)) : Math.max(head ? 2 : 3, Math.round((s1 - s0) / GOING));
   // A flight arriving straight ends on its last tread, which is the floor above; a turned
-  // head ends on its last winder, with one more riser up onto the landing beside it.
-  return { bottom, top, s0, s1, straight, risers: bottom + straight + top + (top ? 1 : 0) };
+  // head ends on its last winder, with one more riser up onto the landing beside it; a flat
+  // head is one riser up onto its square, then `steps` risers up onto the landing.
+  return { bottom, top, steps, head, s0, s1, straight, risers: bottom + straight + (top ? top + 1 : 0) + (steps ? steps + 1 : 0) };
 }
 
 /**
@@ -130,8 +167,8 @@ export function stairTreads(f: FlightShape): Tread[] {
   const L = layout(f);
   const riser = f.rise / L.risers;
   const out: Tread[] = [];
-  const push = (poly: [number, number][]) => out.push({ pts: poly.map(([s, l]) => flightAt(f, s, l)), top: (out.length + 1) * riser });
-  if (f.turn) footWinders(f.width, f.turn).forEach(push);
+  const push = (poly: [number, number][], k = out.length + 1) => out.push({ pts: poly.map(([s, l]) => flightAt(f, s, l)), top: k * riser });
+  if (f.turn) footWinders(f.width, f.turn).forEach((poly) => push(poly));
   const going = (L.s1 - L.s0) / L.straight;
   const hw = f.width / 2;
   for (let j = 0; j < L.straight; j++) {
@@ -144,16 +181,67 @@ export function stairTreads(f: FlightShape): Tread[] {
       [s0, hw],
     ]);
   }
-  if (L.top) headWinders(f.run, f.width, f.topTurn as 1 | -1, L.top).forEach(push);
+  if (L.top) headWinders(f.run, f.width, f.topTurn as 1 | -1, L.top).forEach((poly) => push(poly));
+  if (L.steps) headSquare(f).forEach((poly, j) => push(poly, L.bottom + L.straight + 1 + headStepRiser(f, j)));
   return out;
 }
 
-/** Outlines of a flight's winders, foot then head, for plan drawings. Independent of the flight's units (metres or image px). */
-export function flightWinders(f: Pick<FlightShape, "centre" | "dir" | "run" | "width" | "turn" | "topTurn" | "topWinders">): V2[][] {
+/**
+ * A flat head's square and the steps up from its sides, as (s, l) outlines: the square first, then for each
+ * step out from the square (nearest first), one outline per span. Lengths in the flight's own units, with
+ * `metre` of them to a metre.
+ */
+function headSquare(f: Shape, metre = 1): [number, number][][] {
+  const hw = f.width / 2;
+  const base = f.run - f.width;
+  const out: [number, number][][] = [
+    [
+      [base, -hw],
+      [f.run, -hw],
+      [f.run, hw],
+      [base, hw],
+    ],
+  ];
+  const spans = headSpans(f).map((sp) => ({ ...sp, s0: sp.s0 * metre, s1: sp.s1 * metre }));
+  for (let j = 1; j < topStepCount(f); j++) {
+    for (const sp of spans) {
+      const a = sp.side * (hw + (j - 1) * GOING * metre);
+      const b = sp.side * (hw + j * GOING * metre);
+      const [l0, l1] = [Math.min(a, b), Math.max(a, b)];
+      out.push([
+        [sp.s0, l0],
+        [sp.s1, l0],
+        [sp.s1, l1],
+        [sp.s0, l1],
+      ]);
+    }
+  }
+  return out;
+}
+
+/** The riser (counted from the square's, 0) of outline j of headSquare. */
+function headStepRiser(f: Shape, j: number): number {
+  return j === 0 ? 0 : Math.ceil(j / Math.max(1, headSpans(f).length));
+}
+
+/**
+ * Outlines of a flight's winders, foot then head (or a flat head's square and its steps), for plan drawings.
+ * In the flight's own units (metres or image px), with `metre` of them to a metre (for the steps' going and
+ * `stepSpans`, which are in metres).
+ */
+export function flightWinders(
+  f: Pick<FlightShape, "centre" | "dir" | "run" | "width" | "turn" | "topTurn" | "topWinders" | "topSteps" | "stepSpans">,
+  metre = 1,
+): V2[][] {
   const polys: [number, number][][] = [];
   if (f.turn) polys.push(...footWinders(f.width, f.turn));
   const k = topWinderCount(f);
   if (k) polys.push(...headWinders(f.run, f.width, f.topTurn as 1 | -1, k));
+  if (topStepCount(f)) {
+    // Without spans the turn side's whole length, in the flight's own units.
+    const spans = f.stepSpans ?? [{ side: f.topTurn as -1 | 1, s0: (f.run - f.width) / metre, s1: f.run / metre }];
+    polys.push(...headSquare({ ...f, stepSpans: spans }, metre));
+  }
   return polys.map((poly) => poly.map(([s, l]) => flightAt(f, s, l)));
 }
 
@@ -165,11 +253,22 @@ export function flightWinders(f: Pick<FlightShape, "centre" | "dir" | "run" | "w
 export function stairHeight(f: Shape & Pick<FlightShape, "rise">, s: number, l: number): number {
   const sc = Math.max(0, Math.min(f.run, s));
   const L = layout(f);
-  if (!f.turn && !L.top) return (sc / f.run) * f.rise;
+  if (!f.turn && !L.head) return (sc / f.run) * f.rise;
   const riser = f.rise / L.risers;
   const w = f.width;
   const low = L.bottom * riser;
-  const high = L.top ? (L.bottom + L.straight) * riser : f.rise;
+  const high = L.head ? (L.bottom + L.straight) * riser : f.rise;
+  if (L.steps) {
+    const square = high + riser;
+    // Out on a flat head's steps: from the square up to the floor above across them.
+    const out = Math.abs(l) - w / 2;
+    if (out > 0 && headSpans(f).some((sp) => sp.side === Math.sign(l) && s >= sp.s0 - 1e-6 && s <= sp.s1 + 1e-6)) {
+      const d = stepDepth(f);
+      return d > 1e-6 ? square + Math.min(1, out / d) * (f.rise - square) : f.rise;
+    }
+    // Up onto the square over its first going, then flat.
+    if (sc > L.s1) return Math.min(square, high + ((sc - L.s1) / GOING) * riser);
+  }
   if (f.turn && sc < w) {
     // Round the corner: 0 along the side you step on from, the winders' full height where the straight run starts.
     const phi = Math.atan2(-(l * f.turn - w / 2), w - sc);
@@ -196,7 +295,7 @@ const sideOf = (t: "left" | "right" | undefined): -1 | 0 | 1 => (t === "left" ? 
 /** The flight of a floor that has stairs, in world metres (rise from the model's storey height). */
 export function floorFlight(model: HouseModel, floor: Floor): FlightShape | null {
   if (!floor.stairs) return null;
-  return {
+  const shape: FlightShape = {
     centre: toWorld(floor, floor.stairs),
     dir: STAIRS_VECTOR[floor.stairsDir ?? "up"],
     run: floor.stairsLen ?? 2.6,
@@ -206,6 +305,55 @@ export function floorFlight(model: HouseModel, floor: Floor): FlightShape | null
     topTurn: sideOf(floor.stairsTopTurn),
     topWinders: floor.stairsTopWinders,
   };
+  if (floor.stairsTopTurn && floor.stairsTopSteps) {
+    shape.topSteps = floor.stairsTopSteps;
+    shape.stepSpans = headStepSpans(shape, model.floors.find((u) => u.level === floor.level + 1));
+  }
+  return shape;
+}
+
+/** Least stretch of a flat head's far side with landing beyond it for steps to go up there, metres. */
+const MIN_SPAN = 0.4;
+
+/**
+ * Where a flat head's steps go up onto the floor above: along the side the head turns to, and along its far
+ * side too where the same room carries on past it (a landing continued past the head), each over the longest
+ * stretch with that room both over the square and beyond the steps. The turn side keeps its whole length when
+ * it has no such stretch.
+ */
+export function headStepSpans(f: FlightShape, upper: Floor | undefined): StepSpan[] {
+  if (!topStepCount(f)) return [];
+  const rooms = upper ? upper.rooms.map((r) => roomWorldPolygon(upper, r)) : [];
+  const hw = f.width / 2;
+  const reach = hw + stepDepth(f) + 0.1;
+  const base = f.run - f.width;
+  const stretch = (side: number): [number, number] | null => {
+    const n = Math.max(1, Math.round(f.width / 0.01));
+    const ok = (s: number) => {
+      const a = flightAt(f, s, side * (hw - 0.05));
+      const b = flightAt(f, s, side * reach);
+      return rooms.some((poly) => pointInPolygon(a, poly) && pointInPolygon(b, poly));
+    };
+    let best: [number, number] | null = null;
+    let from = -1;
+    // Samples at the middle of each centimetre; a stretch runs to the edges of its first and last.
+    for (let k = 0; k <= n; k++) {
+      const good = k < n && ok(base + ((k + 0.5) * f.width) / n);
+      if (good && from < 0) from = k;
+      if (!good && from >= 0) {
+        const span: [number, number] = [base + (from * f.width) / n, base + (k * f.width) / n];
+        if (!best || span[1] - span[0] > best[1] - best[0]) best = span;
+        from = -1;
+      }
+    }
+    return best;
+  };
+  const t = f.topTurn as -1 | 1;
+  const near = stretch(t);
+  const out: StepSpan[] = [near && near[1] - near[0] >= MIN_SPAN ? { side: t, s0: near[0], s1: near[1] } : { side: t, s0: base, s1: f.run }];
+  const far = stretch(-t);
+  if (far && far[1] - far[0] >= MIN_SPAN) out.push({ side: -t as -1 | 1, s0: far[0], s1: far[1] });
+  return out;
 }
 
 /** A flight between two floors. */
@@ -465,7 +613,12 @@ export function flightBlocks(floor: Floor, f: FlightShape, bulkheads: Bulkhead[]
       }
       body.push({ pts: c.pts, y0: B, y1: B + LINING });
       carpet.push({ pts: c.pts, y0: B + LINING, y1: t.top });
-      const edge = k > 0 ? riserEdge(t.pts, treads[k - 1].pts) : null;
+      // The tread it rises from (a flat head's steps on two sides each rise from the square, not the one before).
+      const edge =
+        treads
+          .filter((u, j) => j < k && Math.abs(u.top - (t.top - riser)) < 1e-6)
+          .map((u) => riserEdge(t.pts, u.pts))
+          .find((e) => e) ?? null;
       if (!edge) continue;
       const [a, b] = edge;
       const len = Math.hypot(b.x - a.x, b.y - a.y);

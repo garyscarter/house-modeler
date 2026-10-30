@@ -507,6 +507,12 @@ export interface Floor {
   stairsTopTurn?: "left" | "right";
   /** Number of winders in a turned head (2 or 3). Default 2. */
   stairsTopWinders?: 2 | 3;
+  /**
+   * A turned head as a flat square (a quarter landing) with this many risers up from it to the floor above, the
+   * steps between going out beyond its side (and its far side too where the landing carries on past it); absent:
+   * winders (`stairsTopWinders`).
+   */
+  stairsTopSteps?: 1 | 2 | 3;
   /** Covered outdoor areas (porch, carport): polygons in image px, roofed at this floor's ceiling. */
   canopies?: Pt[][];
 }

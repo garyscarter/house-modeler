@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { builtInHouse } from "../houses/default";
 import { pointInPolygon, polygonArea, roomWorldPolygon, toWorld } from "./geometry";
-import { boxedIn, boxedPart, clipUnderFlight, flightAt, flightBlocks, flightFootprint, flightWinders, floorFlight, LINING, SOFFIT, stairHeight, stairTreads, treadCount, WALL_UNDER_TREAD, WINDERS, type FlightShape } from "./stairs";
+import { boxedIn, boxedPart, clipUnderFlight, flightAt, flightBlocks, flightFootprint, flightWinders, floorFlight, headStepSpans, LINING, SOFFIT, stairHeight, stairTreads, stepDepth, treadCount, WALL_UNDER_TREAD, WINDERS, type FlightShape } from "./stairs";
 import { splitConvex } from "./bulkhead";
 import type { Floor } from "../types";
 
@@ -107,6 +107,79 @@ describe("a flight whose head winds onto the landing", () => {
     expect(px).toHaveLength(WINDERS + 2);
     expect(px.reduce((s, p) => s + area(p), 0)).toBeCloseTo(2 * (0.9 * 73) ** 2);
     expect(Math.min(...px.flat().map((p) => p.y))).toBeCloseTo(393.5 - (3.3 * 73) / 2);
+  });
+});
+
+describe("a flight whose head is a flat square with steps up onto the landing", () => {
+  const flat = (topSteps: number, stepSpans?: FlightShape["stepSpans"]): FlightShape => ({ ...both(1), topSteps, ...(stepSpans ? { stepSpans } : {}) });
+
+  it("keeps the risers of a two-winder head: one up onto the square, then two up onto the landing", () => {
+    const f = flat(2);
+    expect(treadCount(f)).toBe(treadCount(both(1, 2)));
+    const t = stairTreads(f);
+    const riser = 2.65 / treadCount(f);
+    // The square, then one step beyond its right side (+x), a going deep; the landing is the last riser.
+    const [square, step] = t.slice(-2);
+    expect(area(square.pts)).toBeCloseTo(0.9 * 0.9);
+    expect(square.top).toBeCloseTo(2.65 - 2 * riser);
+    expect(step.top).toBeCloseTo(2.65 - riser);
+    expect(Math.min(...step.pts.map((p) => p.x))).toBeCloseTo(0.45);
+    expect(Math.max(...step.pts.map((p) => p.x))).toBeCloseTo(0.45 + stepDepth(f));
+    expect(stepDepth(f)).toBeCloseTo(0.22);
+    // One riser up from the square straight onto the landing: no step to draw.
+    expect(stairTreads(flat(1)).slice(-1)[0].top).toBeCloseTo(2.65 - 2.65 / treadCount(flat(1)));
+    expect(stepDepth(flat(1))).toBe(0);
+  });
+
+  it("is flat across the square and climbs across the steps to the floor", () => {
+    const f = flat(2);
+    const square = stairTreads(f).slice(-2)[0].top;
+    for (const [s, l] of [
+      [2.75, 0],
+      [3.1, -0.4],
+      [2.7, 0.44],
+    ])
+      expect(stairHeight(f, s, l)).toBeCloseTo(square);
+    expect(stairHeight(f, 2.9, 0.45 + 0.22)).toBeCloseTo(2.65);
+    expect(stairHeight(f, 2.9, 0.45 + 0.11)).toBeCloseTo((square + 2.65) / 2);
+    // Not on the left, where there are no steps.
+    expect(stairHeight(f, 2.9, -0.5)).toBeCloseTo(square);
+  });
+
+  it("puts steps on both sides when spans say so, each step up from the square", () => {
+    const f = flat(3, [
+      { side: 1, s0: 2.5, s1: 3.3 },
+      { side: -1, s0: 2.6, s1: 3.3 },
+    ]);
+    const t = stairTreads(f);
+    const riser = 2.65 / treadCount(f);
+    const steps = t.slice(-4);
+    expect(steps.map((x) => +(x.top / riser).toFixed(3))).toEqual([treadCount(f) - 2, treadCount(f) - 2, treadCount(f) - 1, treadCount(f) - 1]);
+    expect(Math.max(...steps[1].pts.map((p) => p.x))).toBeCloseTo(-0.45);
+    expect(Math.min(...steps[3].pts.map((p) => p.x))).toBeCloseTo(-0.45 - 0.44);
+    // The plan draws the square and the four steps.
+    expect(flightWinders(f).length).toBe(3 + 5);
+  });
+
+  it("finds where the steps go up from the landing's rooms: the turn side, and the far side where the landing carries on", () => {
+    const m = builtInHouse("");
+    const ground = m.floors.find((x) => x.level === 0)!;
+    ground.stairsTopSteps = 2;
+    const f = floorFlight(m, ground)!;
+    const upper = m.floors.find((x) => x.level === 1)!;
+    // Onto the landing east of the head, from its south wall (the bathroom's, y 1110) to the flight's end; the west is
+    // the outside wall.
+    expect(f.stepSpans).toHaveLength(1);
+    const [sp] = f.stepSpans!;
+    expect(sp.side).toBe(1);
+    expect(flightAt(f, sp.s0, 0).y).toBeCloseTo((1110 - 1203) / 73, 1);
+    expect(sp.s1).toBeCloseTo(f.run, 2);
+    // The landing carried west past the head: steps up that side too.
+    const landing = upper.rooms.find((r) => r.name === "Landing")!;
+    landing.polygon = landing.polygon.map((p) => ({ ...p, x: p.x === 610 ? 539 : p.x }));
+    const spans = headStepSpans(f, upper);
+    expect(spans.map((x) => x.side)).toEqual([1, -1]);
+    expect(spans[1].s1 - spans[1].s0).toBeGreaterThan(0.8);
   });
 });
 

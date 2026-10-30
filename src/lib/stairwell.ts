@@ -1,6 +1,6 @@
 import type { Floor, HouseModel } from "../types";
 import { areaOf, buildWalls, cutWall, pointInPolygon, roomWorldPolygon, type V2 } from "./geometry";
-import { boxedIn, flightAt as flightPoint, flightL, flightS, stairFlights, stairHeight, stairTreads, type Flight } from "./stairs";
+import { boxedIn, flightAt as flightPoint, flightL, flightS, headSpans, stairFlights, stairHeight, stairTreads, stepDepth, topStepCount, type Flight } from "./stairs";
 import { BULKHEAD_REACH, floorBulkheads, growConvex } from "./bulkhead";
 
 /**
@@ -36,6 +36,8 @@ const CIRCULATION = /stair|landing|hall/i;
  * hall room over the flight, the opening is kept within those rooms: a
  * bedroom or bathroom that the tracing puts over the flight keeps its floor
  * (in a real house that is the boxed-in bulkhead over the lower steps).
+ * A flat head's steps up onto the landing are opened too, one more rectangle
+ * beside the square for each side they go up from.
  */
 export function stairwells(model: HouseModel): Stairwell[] {
   return stairFlights(model, HEADROOM).map((flight) => {
@@ -47,9 +49,13 @@ export function stairwells(model: HouseModel): Stairwell[] {
       .filter((r) => CIRCULATION.test(r.name))
       .map((r) => intersect(full, boundsOf(roomWorldPolygon(upper, r))))
       .filter((r): r is Rect => !!r);
-    return { lowerId: flight.lowerId, upperId: flight.upperId, flight, rects: within.length ? within : [full] };
+    const d = stepDepth(flight);
+    const steps = d > 0 ? headSpans(flight).map((sp) => rectOf([flightPoint(flight, sp.s0, sp.side * (flight.width / 2)), flightPoint(flight, sp.s1, sp.side * (flight.width / 2 + d))])) : [];
+    return { lowerId: flight.lowerId, upperId: flight.upperId, flight, rects: [...(within.length ? within : [full]), ...steps] };
   });
 }
+
+const rectOf = ([a, b]: V2[]): Rect => ({ x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) });
 
 function boundsOf(poly: V2[]): Rect {
   const xs = poly.map((p) => p.x);
@@ -256,7 +262,8 @@ export interface SideStep {
 export function headSideSteps(model: HouseModel, well: Stairwell): SideStep[] {
   const f = well.flight;
   const upper = model.floors.find((u) => u.id === well.upperId);
-  if (!f.topTurn || !upper) return [];
+  // A flat head has steps up on that side instead (headStepSpans).
+  if (!f.topTurn || topStepCount(f) || !upper) return [];
   const side = -f.topTurn as -1 | 1;
   const hw = f.width / 2;
   const treads = stairTreads(f);
@@ -302,7 +309,8 @@ function subtractSpans(a: number, b: number, cut: [number, number][]): [number, 
  * leaving the top of the flight open to step off: its end when it arrives
  * straight, the side it turns to when its head winds onto the landing.
  * Runs are cut short of any doorway on their line, and leave a turned head's
- * far side open where it is a step up onto more landing (headSideSteps).
+ * far side open where it is a step up onto more landing (headSideSteps). A flat
+ * head is open along each side it has steps up from, and its steps' far edges.
  */
 export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRun[]; upper: RailRun[] } {
   const lower = model.floors.find((f) => f.id === well.lowerId);
@@ -342,6 +350,19 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     out.lower.push(...cutAtOpenings(run, lowerGaps, newelFoot));
   }
   const steps = headSideSteps(model, well);
+  const spans = headSpans(f);
+  const hw = f.width / 2;
+  const reach = hw + stepDepth(f);
+  /** Stretches (s) of the side at l (on the `sign` side) that are a way up onto the landing, not a drop. */
+  const openAlong = (l: number, sign: number): [number, number][] => {
+    const cut: [number, number][] = [];
+    // The side a turned head winds onto the landing.
+    if (f.topTurn && sign === f.topTurn && !spans.length) cut.push([headStart, f.run]);
+    for (const st of steps) if (st.side === sign && Math.abs(l - sign * hw) < 0.03) cut.push([st.s0, st.s1]);
+    // A flat head's square along its steps, and the steps' far edge.
+    for (const sp of spans) if (sp.side === sign && (Math.abs(l - sign * hw) < 0.03 || Math.abs(l - sign * reach) < 0.03)) cut.push([sp.s0, sp.s1]);
+    return cut;
+  };
   for (const r of well.rects) {
     const corners = [
       { x: r.x0, y: r.y0 },
@@ -356,10 +377,8 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
       [l0, -1],
       [l1, 1],
     ]) {
-      // The side a turned head steps off onto the landing stays open.
-      const e = f.topTurn && sign === f.topTurn ? Math.min(s1, headStart) : s1;
-      const open = steps.filter((st) => st.side === sign && Math.abs(l - (sign * f.width) / 2) < 0.03).map((st): [number, number] => [st.s0, st.s1]);
-      for (const [p0, p1] of subtractSpans(s0, e, open)) if (p1 - p0 > 0.05) edges.push([flightPoint(f, p0, l), flightPoint(f, p1, l), side(sign)]);
+      // Where the head steps off onto the landing stays open.
+      for (const [p0, p1] of subtractSpans(s0, s1, openAlong(l, sign))) if (p1 - p0 > 0.05) edges.push([flightPoint(f, p0, l), flightPoint(f, p1, l), side(sign)]);
     }
     edges.push([flightPoint(f, s0, l0), flightPoint(f, s0, l1), { x: -f.dir.x, y: -f.dir.y }]);
     // A turned head's far end is guarded too (usually it is against a wall).
