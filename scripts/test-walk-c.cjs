@@ -228,9 +228,12 @@ async function standLooking(page, room, d = 1.4) {
       const far = [...l.rooms].sort((a, b) => Math.hypot(cen(b).x - p.x, cen(b).y - p.y) - Math.hypot(cen(a).x - p.x, cen(a).y - p.y))[0];
       w.requestGoal({ kind: 'room', level: 0, roomId: far.id });
       // Same call, so no slow real frame runs between the request and the simulated frames.
-      return { id: far.id, name: far.name, route: window.__walkStore.getState().route, poses: window.__walk.sim(30) };
+      const out = { id: far.id, name: far.name, route: window.__walkStore.getState().route, poses: window.__walk.sim(30), stand: window.__walk.goalPoint({ kind: 'room', level: 0, roomId: far.id }).point };
+      return out;
     });
     const crossRoute = across.route, crossPoses = across.poses;
+    // The climb below starts from the room's stand spot, as it always did (the tap now stops in the doorway).
+    await page.evaluate((st0) => { const w = window.__walkStore.getState(), l = window.__walk.nav().levels.find((x) => x.level === 0); w.setRoute(null); w.setPose({ x: st0.x, y: st0.y, level: 0, stair: null, feetY: l.baseY, yaw: w.pose.yaw, pitch: w.pose.pitch }); window.__walk.sim(0.3); }, across.stand);
     const crossEnd = crossRoute ? crossRoute.points[crossRoute.points.length - 1] : null;
     const roomsSeen = await page.evaluate((ps) => {
       const l = window.__walk.nav().levels.find((x) => x.level === 0), seen = new Set();
@@ -257,17 +260,25 @@ async function standLooking(page, room, d = 1.4) {
   await page.evaluate(() => window.__walkStore.getState().playTour());
   // Run up to 3 minutes of tour in 5 s slices, noting how far it got and which doors it opened.
   const tourRun = await page.evaluate(() => {
-    let maxIndex = 0, stops = 0, ended = false;
-    const all = [];
+    let maxIndex = 0, stops = 0, ended = false, phase = 'walking';
+    const all = [], looks = [];
     for (let i = 0; i < 36 && !ended; i++) {
-      all.push(...window.__walk.sim(5));
+      for (let f = 0; f < 150; f++) {
+        all.push(...window.__walk.sim(1 / 30));
+        const t0 = window.__walkStore.getState().tour;
+        if (t0.status === 'playing' && t0.phase === 'looking' && phase !== 'looking') {
+          const w0 = window.__walkStore.getState(); const stop = t0.stops[t0.index];
+          looks.push({ index: t0.index, roomId: stop.roomId, name: stop.name, level: stop.level, pose: { ...w0.pose }, sweep: window.__walk.look() });
+        }
+        phase = t0.phase;
+      }
       const t = window.__walkStore.getState().tour;
       if (t.stops.length) stops = t.stops.length;
       maxIndex = Math.max(maxIndex, t.index);
       ended = t.status === 'off' && stops > 0;
     }
     const w = window.__walkStore.getState(), n = window.__walk.nav();
-    return { all, maxIndex, stops, ended, hint: w.hint?.text, opened: n.doors.some((d) => w.doors[d.key] === true && !d.initial) };
+    return { all, looks, nav: { levels: n.levels.map((l) => ({ level: l.level, rooms: l.rooms.map((r) => ({ id: r.id, name: r.name, poly: r.poly })) })), doors: n.doors.map((d) => ({ level: d.level, kind: d.kind, centre: d.centre, passage: d.passage })), plot: n.plot }, maxIndex, stops, ended, hint: w.hint?.text, opened: n.doors.some((d) => w.doors[d.key] === true && !d.initial) };
   });
   const tf = feel(tourRun.all);
   ok(tf.yawStep <= 0.08, `smooth tour (${tourRun.all.length} frames): ${fmt(tf)}`);
@@ -275,6 +286,25 @@ async function standLooking(page, room, d = 1.4) {
   ok(tourRun.stops >= 3 && tourRun.maxIndex >= 3, `tour advanced (reached stop ${tourRun.maxIndex} of ${tourRun.stops})`);
   ok(tourRun.ended && /tour/i.test(tourRun.hint || ''), `tour ends and says "${tourRun.hint}"`);
   needs('B', tourRun.opened, 'tour opened a shut door on the way');
+  ok(tf.rateChange <= 0.03, `tour yaw-rate change ${tf.rateChange.toFixed(3)} <= 0.03`);
+  {
+    // Each look-round starts in the doorway: inside the stop's room (outside, for the garden), within 1.2 m of an opening on its boundary.
+    const pip = (pt, q) => { let c = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i].y > pt.y) !== (q[j].y > pt.y) && pt.x < ((q[j].x - q[i].x) * (pt.y - q[i].y)) / (q[j].y - q[i].y) + q[i].x) c = !c; return c; };
+    const nv = tourRun.nav;
+    ok(tourRun.looks.length === tourRun.stops, `every stop reached its look-round (${tourRun.looks.length} of ${tourRun.stops})`);
+    for (const lk of tourRun.looks) {
+      const L = nv.levels.find((l) => l.level === lk.level);
+      const rm = lk.roomId === null ? null : L.rooms.find((r) => r.id === lk.roomId);
+      const inRoom = rm ? pip(lk.pose, rm.poly) : !nv.levels[0].rooms.some((r) => pip(lk.pose, r.poly)) && nv.plot && pip(lk.pose, nv.plot);
+      const polyEdgeDist = (pt, q) => { let b = Infinity; for (let i = 0, j = q.length - 1; i < q.length; j = i++) { const dx = q[i].x - q[j].x, dy = q[i].y - q[j].y; const u = Math.max(0, Math.min(1, ((pt.x - q[j].x) * dx + (pt.y - q[j].y) * dy) / (dx * dx + dy * dy || 1))); b = Math.min(b, Math.hypot(pt.x - (q[j].x + dx * u), pt.y - (q[j].y + dy * u))); } return b; };
+      const edgeSets = rm ? [rm.poly] : nv.levels[0].rooms.map((r) => r.poly);
+      let best = Infinity;
+      for (const d of nv.doors) { if (d.level !== lk.level) continue; const onB = Math.min(...edgeSets.map((q) => polyEdgeDist(d.centre, q))) < 0.5; if (onB && d.passage !== 'shut') best = Math.min(best, Math.hypot(d.centre.x - lk.pose.x, d.centre.y - lk.pose.y)); }
+      lk.dist = best;
+      ok(inRoom && best <= 1.2, `${lk.name}: look-round starts ${inRoom ? (rm ? 'inside' : 'outside') : 'NOT in'} the region, ${best.toFixed(2)} m from its opening, sweep ${lk.sweep ? (lk.sweep.left * 180 / Math.PI).toFixed(0) + '/' + (lk.sweep.right * 180 / Math.PI).toFixed(0) : 'n/a'} deg`);
+    }
+    console.log('TOUR TABLE:\n' + tourRun.looks.map((l) => `${l.name}\t${l.dist.toFixed(2)} m\t${l.sweep ? (l.sweep.left * 180 / Math.PI).toFixed(0) : '-'} deg`).join('\n'));
+  }
   await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.playTour(); });
   await page.evaluate(() => window.__walk.sim(3));
   s = await st(page);
@@ -316,6 +346,48 @@ async function standLooking(page, room, d = 1.4) {
     await page.screenshot({ path: `${SHOTS}/kitchen-old-lens.png` });
     await page.evaluate((f) => { const c = window.__houseCamera.camera; c.fov = f; c.updateProjectionMatrix(); }, newFov);
     console.log(`INFO screenshots in the ${k.name}: kitchen-new-lens.png (fov ${newFov.toFixed(1)}, pitch -8 deg), kitchen-old-lens.png (fov 65, pitch 0)`);
+  }
+
+  // Doorway screenshots: the start of the look-round in the kitchen and in the living room (rear).
+  {
+    const dir = process.env.SHOTS_DOOR || SHOTS;
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [want, file] of [['Kitchen', 'kitchen-doorway.png'], ['Living Room (rear)', 'living-rear-doorway.png']]) {
+      await page.evaluate(() => { const nav = window.__walk.nav(); const l = nav.levels.find((x) => x.level === 0); const r = l.rooms.find((q) => q.name === 'Hallway (front)'); const w = window.__walkStore.getState(); w.stopTour(); const c = r.poly.reduce((a, p) => ({ x: a.x + p.x / r.poly.length, y: a.y + p.y / r.poly.length }), { x: 0, y: 0 }); w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l.baseY, yaw: 0, pitch: 0 }); w.setRoute(null); w.playTour(); });
+      const found = await page.evaluate((want) => { for (let f = 0; f < 6000; f++) { window.__walk.sim(1 / 30); const t = window.__walkStore.getState().tour; if (t.status === 'playing' && t.phase === 'looking' && t.stops[t.index].name === want) return true; } return false; }, want);
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: `${dir}/${file}` });
+      console.log(`INFO ${want}: ${found ? 'screenshot' : 'NOT REACHED'} ${dir}/${file}`);
+      ok(found, `${want}: reached for the screenshot`);
+      await page.evaluate(() => window.__walkStore.getState().stopTour());
+    }
+  }
+
+  // Mini-map room goals stop just inside the doorway, facing into the room.
+  {
+    const rows = [];
+    for (const want of ['Kitchen', 'Living Room (rear)', 'Bedroom 2']) {
+      const r = await page.evaluate((want) => {
+        const nav = window.__walk.nav(); const w = window.__walkStore.getState();
+        const lvl = want.startsWith('Bedroom') ? 1 : 0;
+        const home = nav.levels.find((x) => x.level === 0).rooms.find((q) => q.name === 'Hallway (front)');
+        const l0 = nav.levels.find((x) => x.level === 0);
+        const c = home.poly.reduce((a, p) => ({ x: a.x + p.x / home.poly.length, y: a.y + p.y / home.poly.length }), { x: 0, y: 0 });
+        w.setRoute(null); w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l0.baseY, yaw: 0, pitch: 0 });
+        for (const d of nav.doors) w.setDoor(d.key, true);
+        const room = nav.levels.find((x) => x.level === lvl).rooms.find((q) => q.name === want);
+        window.__walk.sim(0.2);
+        window.__walkStore.getState().requestGoal({ kind: 'room', level: lvl, roomId: room.id });
+        for (let f = 0; f < 3000; f++) { window.__walk.sim(1 / 30); const s2 = window.__walkStore.getState(); if (!s2.route && f > 5) break; }
+        const p = window.__walkStore.getState().pose;
+        return { poly: room.poly, pose: p, doors: nav.doors.filter((d) => d.level === lvl && d.passage !== 'shut').map((d) => d.centre) };
+      }, want);
+      const inside = (() => { let c = false; const q = r.poly, pt = r.pose; for (let i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i].y > pt.y) !== (q[j].y > pt.y) && pt.x < ((q[j].x - q[i].x) * (pt.y - q[i].y)) / (q[j].y - q[i].y) + q[i].x) c = !c; return c; })();
+      const dist = Math.min(...r.doors.map((d) => Math.hypot(d.x - r.pose.x, d.y - r.pose.y)));
+      const cen = centroid(r.poly), fw = { x: -Math.sin(r.pose.yaw), y: -Math.cos(r.pose.yaw) };
+      const facing = (cen.x - r.pose.x) * fw.x + (cen.y - r.pose.y) * fw.y > 0;
+      ok(inside && dist <= 1.2 && facing, `mini-map tap on ${want}: arrives ${inside ? 'inside' : 'OUTSIDE'}, ${dist.toFixed(2)} m from an opening, ${facing ? 'facing in' : 'FACING OUT'}`);
+    }
   }
 
   // Esc stops, restores the view settings and the orbit camera.

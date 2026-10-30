@@ -22,3 +22,5 @@ export function roomAt(nav: NavWorld, level: number, p: V2): { id: string; name:
   const r = nav.levels.find((l) => l.level === level)?.rooms.find((x) => pointInPolygon(p, x.poly));
   return r ? { id: r.id, name: r.name } : null;
 }
+
+export { doorwayStop, DOORWAY_INSETS, type DoorwayRegion, type DoorwayStop } from "./walkDoorway";

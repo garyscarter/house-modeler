@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, STRAFE_FACTOR, TURN_RATE, walkFov, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion } from "./walkMotion";
+import { dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, STRAFE_FACTOR, sweepDuration, TURN_RATE, walkFov, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion } from "./walkMotion";
 import { PITCH_MAX, type WalkPose, type WalkRoute } from "./walkTypes";
 
 const pose = (over: Partial<WalkPose> = {}): WalkPose => ({ x: 0, y: 0, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0, ...over });
@@ -230,20 +230,37 @@ describe("followRoute", () => {
 });
 
 describe("lookSweep", () => {
-  it("0, +35 at 0.3 T, -35 at 0.75 T, 0 at T = 6 s", () => {
-    const d = (35 * Math.PI) / 180;
-    expect(lookSweep(1, 0)).toBeCloseTo(1);
-    expect(lookSweep(1, 1.8) - 1).toBeCloseTo(d);
-    expect(lookSweep(1, 4.5) - 1).toBeCloseTo(-d);
-    expect(lookSweep(1, 6)).toBeCloseTo(1);
+  const deg = Math.PI / 180;
+  it("0, +left at 0.3 T, -right at 0.75 T, 0 at T", () => {
+    const l = 40 * deg;
+    const r = 20 * deg;
+    const T = sweepDuration(l, r);
+    expect(lookSweep(1, 0, l, r)).toBeCloseTo(1);
+    expect(lookSweep(1, 0.3 * T, l, r) - 1).toBeCloseTo(l);
+    expect(lookSweep(1, 0.75 * T, l, r) - 1).toBeCloseTo(-r);
+    expect(lookSweep(1, T, l, r)).toBeCloseTo(1);
   });
-  it("starts and ends at rest and never jumps", () => {
-    const f = (i: number) => lookSweep(0, i / 30);
+  it("lasts 4 s plus up to 4 s for the wider side, clamped to 4-8 s", () => {
+    expect(sweepDuration(0, 0)).toBe(4);
+    expect(sweepDuration(37.5 * deg, 10 * deg)).toBeCloseTo(6);
+    expect(sweepDuration(10 * deg, 75 * deg)).toBeCloseTo(8);
+    expect(sweepDuration(120 * deg, 0)).toBe(8);
+    expect(sweepDuration(35 * deg, 35 * deg)).toBeCloseTo(4 + (4 * 35) / 75);
+  });
+  it("starts and ends at rest with zero velocity and never jumps", () => {
+    const l = 60 * deg;
+    const r = 30 * deg;
+    const T = sweepDuration(l, r);
+    const n = Math.round(T * 30);
+    const f = (i: number) => lookSweep(0, i / 30, l, r);
     let worst = 0;
-    for (let i = 1; i <= 180; i++) worst = Math.max(worst, Math.abs(f(i) - f(i - 1)));
+    for (let i = 1; i <= n; i++) worst = Math.max(worst, Math.abs(f(i) - f(i - 1)));
     expect(worst).toBeLessThan(0.03);
     expect(Math.abs(f(1) - f(0))).toBeLessThan(0.002);
-    expect(Math.abs(f(180) - f(179))).toBeLessThan(0.002);
+    expect(Math.abs(f(n) - f(n - 1))).toBeLessThan(0.002);
+    const eps = 1e-4;
+    expect(Math.abs(lookSweep(0, eps, l, r) - lookSweep(0, 0, l, r)) / eps).toBeLessThan(0.01);
+    expect(Math.abs(lookSweep(0, T, l, r) - lookSweep(0, T - eps, l, r)) / eps).toBeLessThan(0.01);
   });
 });
 
