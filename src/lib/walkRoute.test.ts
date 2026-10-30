@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { builtInHouse, listingSite } from "../houses/default";
+import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import type { HouseModel } from "../types";
 import { polygonCentroid, type V2 } from "./geometry";
 import { floor, rect } from "./testing";
 import { MAX_STEP, WALKER_R, buildNav, goalPoint, pickTarget, routeTo, startPose, stepWalker } from "./walk";
-import { ALL_OPEN, internalOf, standable } from "./walkNav";
+import { ALL_OPEN, SIDE_STEP, internalOf, standable } from "./walkNav";
 import type { DoorStates, NavWorld, WalkPose, WalkRoute } from "./walkTypes";
 
 const house = builtInHouse("");
@@ -238,5 +238,79 @@ describe("pickTarget and goalPoint", () => {
     expect(goalPoint(nav, { kind: "room", level: 0, roomId: "nope" })).toBeNull();
     const p = goalPoint(nav, { kind: "point", level: 0, at: { x: 0.7, y: 1.16 } })!;
     expect(standable(I, 0, p.point, ALL_OPEN)).toBe(true);
+  });
+});
+
+describe("side exits off the stairs (Proposed)", () => {
+  const pn = buildNav(builtInProposed(""), listingSite(), false);
+  const PI = internalOf(pn)!;
+  const open: DoorStates = Object.fromEntries(pn.doors.map((d) => [d.key, true]));
+  const r0 = (level: number, name: string) => pn.levels.find((l) => l.level === level)!.rooms.find((r) => r.name === name)!;
+  const hallGoal = goalPoint(pn, { kind: "room", level: 0, roomId: r0(0, "Hallway (front)").id })!;
+  const hall: WalkPose = { ...hallGoal.point, feetY: 0, yaw: 0, pitch: 0 };
+  const newRoom = goalPoint(pn, { kind: "room", level: 1, roomId: r0(1, "New Room").id })!;
+  const sideDoor = () => PI.doors[PI.flights[0].ends[2].door].nd.key;
+
+  it("finds the new room's doorway as a side exit off the top winders", () => {
+    const ends = PI.flights[0].ends;
+    expect(ends).toHaveLength(3);
+    expect(ends[2]).toMatchObject({ li: 1, side: -1 });
+    expect(ends[2].cell).toBeGreaterThanOrEqual(0);
+    expect(ends[2].door).toBeGreaterThanOrEqual(0);
+    // The owner's current house has no doorway off its flight's sides.
+    expect(I.flights[0].ends).toHaveLength(2);
+  });
+
+  it("routes from the hall up the stairs and through the side door into the new room, and the walk follows", () => {
+    const r = routeTo(pn, hall, newRoom.point, open);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const pts = r.route.points;
+    expect(pts[pts.length - 1]).toMatchObject({ level: 1, stair: null });
+    expect(r.route.doors.map((d) => d.key)).toContain(sideDoor());
+    // Stair points carry the flight; after the side step the points are on level 1, off the stairs.
+    const lastStair = pts.map((p) => p.stair).lastIndexOf(0);
+    expect(lastStair).toBeGreaterThan(0);
+    expect(pts.slice(lastStair + 1).every((p) => p.level === 1 && p.stair === null)).toBe(true);
+
+    const trail = follow(pn, hall, r.route, open);
+    const end = trail[trail.length - 1];
+    expect(Math.hypot(end.x - newRoom.point.x, end.y - newRoom.point.y)).toBeLessThan(0.3);
+    expect(end).toMatchObject({ level: 1, stair: null });
+    let sideSteps = 0;
+    for (let i = 1; i < trail.length; i++) {
+      const jump = Math.abs(trail[i].feetY - trail[i - 1].feetY);
+      expect(jump).toBeLessThanOrEqual(SIDE_STEP + 1e-9);
+      const sideStep = trail[i - 1].stair !== null && trail[i].stair === null && jump > 0.05 && trail[i].level === 1 && trail[i - 1].feetY < pn.levels[1].baseY - MAX_STEP;
+      if (sideStep) sideSteps++;
+      else expect(jump).toBeLessThanOrEqual(MAX_STEP + 1e-9);
+    }
+    expect(sideSteps).toBe(1);
+  });
+
+  it("is stopped by the side door while it is shut, and steps back onto the treads", () => {
+    const shut = { ...open, [sideDoor()]: false };
+    const r = routeTo(pn, hall, newRoom.point, shut);
+    expect(r).toMatchObject({ ok: false, reason: "shut-door", door: sideDoor() });
+    // From the new room back down to the hall.
+    const from: WalkPose = { ...newRoom.point, feetY: pn.levels[1].baseY, yaw: 0, pitch: 0 };
+    const back = routeTo(pn, from, hallGoal.point, open);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    const trail = follow(pn, from, back.route, open);
+    const end = trail[trail.length - 1];
+    expect(end).toMatchObject({ level: 0, stair: null, feetY: 0 });
+    expect(Math.hypot(end.x - hallGoal.point.x, end.y - hallGoal.point.y)).toBeLessThan(0.3);
+  });
+
+  it("still keeps upstairs walkers out of the well beside the landing", () => {
+    // Walking west along the landing into the well's right-hand side (not an exit) stops at the rail line.
+    const landing = goalPoint(pn, { kind: "room", level: 1, roomId: r0(1, "Landing").id })!;
+    let p: WalkPose = { ...landing.point, y: -1.0, feetY: pn.levels[1].baseY, yaw: 0, pitch: 0 };
+    p = { ...p, ...(goalPoint(pn, { kind: "point", level: 1, at: { x: 1.2, y: -0.9 } })!.point) };
+    for (let i = 0; i < 60; i++) p = stepWalker(pn, p, -0.05, 0, open);
+    expect(p.stair).toBeNull();
+    expect(p.level).toBe(1);
+    expect(p.x).toBeGreaterThanOrEqual(0.45 + WALKER_R - 1e-3);
   });
 });

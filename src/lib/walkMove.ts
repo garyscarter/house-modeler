@@ -1,6 +1,6 @@
 import { polygonCentroid, type V2 } from "./geometry";
 import {
-  NORMAL, WALKER_R, MAX_STEP, doorIsOpen, floorAt, insideFlight, insideWell, internalOf, leftBy, levelIndex, nearestCell, cellPt, obsDist,
+  NORMAL, WALKER_R, MAX_STEP, SIDE_STEP, sideAt, doorIsOpen, floorAt, insideFlight, insideWell, internalOf, leftBy, levelIndex, nearestCell, cellPt, obsDist,
   passable, penetration, roomStand, snapFree, stairState, standable, facing, ALL_OPEN, type Obs, type WalkInternal,
 } from "./walkNav";
 import { yawOf, type DoorStates, type NavWorld, type WalkPose, type WalkStart } from "./walkTypes";
@@ -57,6 +57,8 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
   }
   const p = { x, y };
   let next: State;
+  // On or off the treads sideways, through a doorway off the flight's side.
+  let side = false;
   if (st.stair !== null) {
     const F = I.flights[st.stair];
     if (insideFlight(F, p)) {
@@ -64,8 +66,11 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
       next = { x, y, li: s.li, stair: st.stair, feetY: s.feetY };
     } else {
       const by = leftBy(F, p);
-      const li = by === "entry" ? F.lower : by === "exit" ? F.upper : stairState(I, st.stair, p).li;
-      const feet = floorAt(I, li, p);
+      const k = by ? -1 : sideAt(F, p);
+      side = k >= 0;
+      const li = by === "entry" ? F.lower : by === "exit" ? F.upper : side ? F.ends[k].li : stairState(I, st.stair, p).li;
+      // Between the stringer and the wall line of a side doorway there may be no room polygon: it is still floor.
+      const feet = floorAt(I, li, p) ?? (side ? I.levels[li].baseY : null);
       if (feet === null) return st;
       next = { x, y, li, stair: null, feetY: feet };
     }
@@ -73,6 +78,8 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
     const fi = I.flights.findIndex((F) => (F.lower === st.li && insideFlight(F, p)) || (F.upper === st.li && insideWell(F, p)));
     if (fi >= 0) {
       const s = stairState(I, fi, p);
+      const k = sideAt(I.flights[fi], st);
+      side = k >= 0 && I.flights[fi].ends[k].li === st.li;
       next = { x, y, li: s.li, stair: fi, feetY: s.feetY };
     } else {
       const feet = floorAt(I, st.li, p);
@@ -80,7 +87,8 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
       next = { x, y, li: st.li, stair: null, feetY: feet };
     }
   }
-  if (next.feetY - st.feetY > MAX_STEP + 1e-6) return st;
+  const rise = next.feetY - st.feetY;
+  if (side ? Math.abs(rise) > SIDE_STEP + 1e-6 : rise > MAX_STEP + 1e-6) return st;
   return next;
 }
 
