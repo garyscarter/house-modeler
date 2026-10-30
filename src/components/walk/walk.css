@@ -1,0 +1,68 @@
+/* Walk-through chrome: the walk bar (in the dock), the mini-map and the hint pill. Tokens only. */
+.walk-bar { display: flex; align-items: center; gap: 6px; }
+.walk-bar button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: var(--pill); background: transparent; color: var(--text); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.walk-bar button:hover:not(:disabled) { background: var(--surface-2); }
+.walk-bar button.active { background: var(--accent-soft); color: var(--accent); }
+.walk-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.walk-bar .walk-stop { background: var(--text); color: var(--panel); padding: 0 14px 0 10px; }
+.walk-bar .walk-stop:hover:not(:disabled) { background: var(--text); opacity: 0.88; }
+.walk-where { display: inline-flex; align-items: center; gap: 6px; min-width: 9ch; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-weight: 500; padding: 0 4px; }
+.walk-tour { display: inline-flex; align-items: center; }
+.walk-bar .walk-tour .walk-x { width: 22px; height: 22px; padding: 0; justify-content: center; margin-left: -2px; color: var(--muted); }
+.walk-bar .popover-btn { height: 32px; padding: 0 12px; border-radius: var(--pill); background: transparent; font-weight: 500; }
+.walk-bar .popover-btn:hover:not(:disabled) { background: var(--surface-2); }
+.walk-bar .popover-btn.active { background: var(--accent-soft); color: var(--accent); }
+.walk-eye-pop { display: flex; flex-direction: column; gap: 10px; min-width: 220px; padding: 4px 2px; }
+.walk-eye-row { display: flex; justify-content: space-between; align-items: baseline; font-weight: 500; }
+.walk-eye-row output { font-family: var(--font-mono); color: var(--accent); }
+.walk-eye-pop input[type="range"] { width: 100%; accent-color: var(--accent); }
+.walk-bar .walk-reset { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--line); }
+.walk-bar .walk-reset:disabled { opacity: 0.4; cursor: default; }
+
+.walk-map {
+  position: absolute; right: var(--float-gap); bottom: 76px; z-index: var(--z-float);
+  width: 180px; height: 180px; border-radius: var(--radius-l); box-shadow: var(--shadow-card); overflow: hidden; line-height: 0;
+}
+.walk-map svg { display: block; cursor: pointer; touch-action: manipulation; }
+.walk-map .wm-room { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.25; stroke-linejoin: round; }
+.walk-map .wm-room:hover { fill: var(--surface-3); }
+.walk-map .wm-room.wm-here { fill: var(--accent-soft); stroke: var(--accent); }
+.walk-map .wm-plot { fill: none; stroke: var(--muted); stroke-width: 1.25; stroke-dasharray: 4 3; pointer-events: none; }
+.walk-map .wm-marker { pointer-events: none; }
+.walk-map .wm-cone { fill: var(--accent); fill-opacity: 0.28; }
+.walk-map .wm-dot { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+
+.walk-hint {
+  position: absolute; top: calc(var(--float-top) + 44px); left: 50%; transform: translateX(-50%); z-index: var(--z-float);
+  max-width: calc(100% - 2 * var(--float-gap)); padding: 7px 16px; border-radius: var(--pill); background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); box-shadow: var(--shadow-card); font-size: 13px; font-weight: 500; text-align: center; pointer-events: none;
+  animation: walk-hint-in .18s ease-out;
+}
+@keyframes walk-hint-in { from { opacity: 0; transform: translate(-50%, -4px); } }
+@media (prefers-reduced-motion: reduce) { .walk-hint { animation: none; } }
+
+/* The Walk button in the dock (not walking). */
+.dock .walk-start { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: var(--pill); background: transparent; color: inherit; font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.dock .walk-start:hover { background: var(--surface-2); }
+
+/* Walking: the dock is the walk bar. */
+.dock[data-walking] { max-width: calc(100% - 2 * var(--float-gap)); }
+
+/* Phone: icons only, 36 px targets; the map goes top-right; Flip replaces the layout pill. */
+.app[data-chassis="phone"] .dock[data-walking] { justify-content: center; }
+.app[data-chassis="phone"] .walk-bar { width: 100%; justify-content: space-between; gap: 2px; }
+.app[data-chassis="phone"] .walk-bar .walk-txt { display: none; }
+.app[data-chassis="phone"] .walk-bar button, .app[data-chassis="phone"] .walk-bar .popover-btn { width: 36px; height: 36px; padding: 0; justify-content: center; }
+.app[data-chassis="phone"] .walk-bar .walk-tour .walk-x { width: 22px; height: 22px; }
+.app[data-chassis="phone"] .walk-bar .dock-sep { display: none; }
+.app[data-chassis="phone"] .walk-map { width: 120px; height: 120px; bottom: auto; top: var(--float-gap); }
+.app[data-chassis="phone"] .walk-hint { left: var(--float-gap); transform: none; max-width: calc(100% - 120px - 3 * var(--float-gap)); text-align: left; border-radius: var(--radius-l); animation: none; }
+.app[data-chassis="phone"][data-walking] .layout-pill { display: none; }
+.app[data-chassis="phone"] .walk-eye .popover { right: -8px; }
+/* Touch tablet: 40 px targets, as the dock. */
+.app[data-touch]:not([data-chassis="phone"]) .walk-bar button, .app[data-touch]:not([data-chassis="phone"]) .walk-bar .popover-btn { height: 40px; }
+.app[data-touch]:not([data-chassis="phone"]) .walk-bar .walk-tour .walk-x { width: 28px; height: 28px; }
+.app[data-touch]:not([data-chassis="phone"]) .dock .walk-start { height: 40px; }
+
+/* The getting-started strip sits where the walk bar and map are. */
+.app[data-walking] .coach-strip { display: none; }
