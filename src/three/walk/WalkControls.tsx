@@ -8,25 +8,25 @@ import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
 import { buildNav, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, startPose, stepWalker } from "../../lib/walk";
 import { eyeHeightOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
-import { anyKey, dragLook, followStep, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, ROUTE_SPEED, stopBeforeDoor, wrapAngle, type HeldKeys } from "../../lib/walkMotion";
+import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, lookSweep, NO_KEY_MOTION, NO_KEYS, REST_PITCH, routePointS, routeStart, springValue, stopBeforeDoor, walkFov, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
 import { doorTagOf } from "./doorTag";
 
 /** First-person walk controller (docs/walkthrough-plan.md, Chunk C): keys, drag to look, tap to walk or open a door, routes and the tour. */
 
-const FOV_LANDSCAPE = 65;
-const FOV_PORTRAIT = 80;
 const NEAR = 0.05;
 const DRAG_PX = 6;
 const RING_S = 1.6;
-const LOOK_S = 4;
-const DOOR_WAIT_S = 0.6;
-const DOOR_REACH_M = 1.0;
+const LOOK_S = 6;
+const DOOR_REACH_M = 1.8; // a tour opens a shut door this far off (the leaf takes 0.7 s to swing)
+const DOOR_OPEN_S = 0.8;
+const DOOR_SLOW_M = 1.0;
+const DOOR_SLOW_SPEED = 0.7;
 const STALL_S = 0.5;
 const COARSE = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
 let hinted = false;
 
 /** A route being walked; `arrive` runs once the walker is there and facing the route's yaw. */
-interface Follow { route: WalkRoute; index: number; goal: WalkPoint | null; arrive?: () => void }
+interface Follow { route: WalkRoute; rs: RouteState; goal: WalkPoint | null; arrive?: () => void }
 
 export function WalkControls({ model, variant }: { model: HouseModel; variant: VariantKey }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -50,12 +50,15 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const keys = useRef<HeldKeys>({ ...NO_KEYS });
   const follow = useRef<Follow | null>(null);
   const lookVel = useRef({ yaw: 0, pitch: 0 });
-  const wait = useRef(0);
+  const keyMotion = useRef<KeyMotion>(NO_KEY_MOTION);
+  const yawVel = useRef(0);
+  const pitchVel = useRef(0);
+  const doorTimers = useRef(new Map<string, number>());
   const stall = useRef({ t: 0, count: 0 });
   const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string });
   const ring = useRef<THREE.Mesh>(null);
   const ringT = useRef(0);
-  const fovRad = useRef((FOV_LANDSCAPE * Math.PI) / 180);
+  const fovRad = useRef((walkFov(1.6) * Math.PI) / 180);
 
   const commit = (p: WalkPose) => {
     poseRef.current = p;
@@ -80,7 +83,9 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   };
   const shutHint = () => useWalk.getState().say(`The door's shut — ${COARSE() ? "tap" : "click"} it to open`);
   const startRoute = (route: WalkRoute, goal: WalkPoint | null, resetStall = true, arrive?: () => void) => {
-    follow.current = { route, index: 0, goal, arrive };
+    const p = poseRef.current;
+    // The new route starts from here; the view's turning speed (yawVel) carries over, so nothing jumps.
+    follow.current = { route, rs: routeStart(p ?? { x: route.points[0]?.x ?? 0, y: route.points[0]?.y ?? 0, yaw: 0 }, route), goal, arrive };
     if (resetStall) stall.current = { t: 0, count: 0 };
     useWalk.getState().setRoute(route);
     inv.current();
@@ -138,18 +143,40 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
 
     // Keys.
     const held = keys.current;
-    if (anyKey(held)) {
-      const km = keyMove(held, yaw, dt);
+    if (anyKey(held) || keyMotionActive(keyMotion.current)) {
+      const km = keyMove(held, yaw, dt, keyMotion.current);
+      keyMotion.current = km.motion;
       dx += km.dx;
       dy += km.dy;
       yaw += km.dyaw;
       busy = true;
     }
 
-    if (wait.current > 0) {
-      wait.current -= dt;
-      busy = true;
-    } else if (tour.status === "playing") {
+    // Doors the tour opened a moment ago are still swinging: slow down near them.
+    const timers = doorTimers.current;
+    let cap = Infinity;
+    for (const [key, left] of timers) {
+      if (left <= dt) timers.delete(key);
+      else timers.set(key, left - dt);
+      const nd = n.doors.find((x) => x.key === key);
+      if (nd && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) < DOOR_SLOW_M) cap = DOOR_SLOW_SPEED;
+    }
+    let looking = false;
+    const runRoute = (f: Follow) => {
+      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, cap);
+      f.rs = r.state;
+      dx += r.dx;
+      dy += r.dy;
+      yaw = r.yaw;
+      pitch = r.pitch;
+      yawVel.current = r.yawVel;
+      pitchVel.current = r.pitchVel;
+      intended = r.intended;
+      followed = true;
+      return r;
+    };
+
+    if (tour.status === "playing") {
       busy = true;
       if (!tour.stops.length) {
         const stops = planTour(n, p, w.doors);
@@ -177,29 +204,20 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           }
           const f = follow.current;
           if (f) {
-            // Open a shut door on the route when we reach it.
+            // Open a shut door on the route as we near it, without stopping.
             for (const d of f.route.doors) {
-              if (d.index < f.index || w.doors[d.key] !== false) continue;
+              if (routePointS(f.rs, d.index) < f.rs.s || w.doors[d.key] !== false) continue;
               const nd = n.doors.find((x) => x.key === d.key);
               if (nd && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) < DOOR_REACH_M) {
                 w.setDoor(d.key, true);
-                wait.current = DOOR_WAIT_S;
-                break;
+                timers.set(d.key, DOOR_OPEN_S);
               }
             }
-            if (wait.current <= 0) {
-              const fs = followStep(p, f.route, f.index, dt, ROUTE_SPEED);
-              f.index = fs.index;
-              dx += fs.dx;
-              dy += fs.dy;
-              yaw = fs.yaw;
-              intended = Math.hypot(fs.dx, fs.dy);
-              followed = true;
-              if (fs.done) {
-                clearRoute();
-                tr.lookT = 0;
-                w.setTour({ phase: "looking" });
-              }
+            const r = runRoute(f);
+            if (r.done) {
+              clearRoute();
+              tr.lookT = 0;
+              w.setTour({ phase: "looking" });
             }
           } else if (tr.routeFor === tour.index && tour.phase === "walking" && !follow.current) {
             tr.lookT = 0;
@@ -207,8 +225,11 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           }
         } else {
           tr.lookT += dt;
-          yaw = lookSweep(stop.yaw, tr.lookT);
-          pitch += (0 - pitch) * (1 - Math.exp(-6 * dt));
+          looking = true;
+          yaw = lookSweep(stop.yaw, tr.lookT, LOOK_S);
+          const ps = springValue(pitch, pitchVel.current, REST_PITCH, dt, 8);
+          pitch = ps.x;
+          pitchVel.current = ps.vel;
           if (tr.lookT >= LOOK_S) {
             tr.routeFor = -1;
             if (tour.index + 1 >= tour.stops.length) {
@@ -221,18 +242,16 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     } else if (follow.current) {
       busy = true;
       const f = follow.current;
-      const fs = followStep(p, f.route, f.index, dt, ROUTE_SPEED);
-      f.index = fs.index;
-      dx += fs.dx;
-      dy += fs.dy;
-      yaw = fs.yaw;
-      intended = Math.hypot(fs.dx, fs.dy);
-      followed = true;
-      // Done once there and turned to the way the route asks you to face.
-      if (fs.done && (f.route.yaw === undefined || Math.abs(wrapAngle(f.route.yaw - fs.yaw)) < 0.02)) {
+      const r = runRoute(f);
+      // Done once stopped there and turned to the way the route asks you to face.
+      if (r.done) {
         clearRoute();
         f.arrive?.();
       }
+    }
+    if (!followed) {
+      yawVel.current = 0;
+      if (!looking) pitchVel.current = 0;
     }
 
     // Look inertia after a drag.
@@ -331,7 +350,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   useEffect(() => {
     camera.rotation.order = "YXZ";
     camera.near = NEAR;
-    camera.fov = size.width / Math.max(1, size.height) < 1 ? FOV_PORTRAIT : FOV_LANDSCAPE;
+    camera.fov = walkFov(size.width / Math.max(1, size.height));
     fovRad.current = (camera.fov * Math.PI) / 180;
     camera.updateProjectionMatrix();
     inv.current();
@@ -353,8 +372,11 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const pending = useWalk((s) => s.pending);
   useEffect(() => {
     if (!pending) return;
-    const pose = startPose(nav, pending);
+    const pose = { ...startPose(nav, pending), pitch: REST_PITCH };
     clearRoute();
+    keyMotion.current = NO_KEY_MOTION;
+    yawVel.current = 0;
+    pitchVel.current = 0;
     useWalk.getState().placed(pose, initialDoors(nav));
     smoothY.current = pose.feetY;
     commit(pose);
@@ -391,7 +413,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           inv.current();
         }
         if (s.route !== prev.route && s.route !== (follow.current?.route ?? null)) {
-          follow.current = s.route ? { route: s.route, index: 0, goal: s.route.points[s.route.points.length - 1] ?? null } : null;
+          follow.current = s.route && poseRef.current ? { route: s.route, rs: routeStart(poseRef.current, s.route), goal: s.route.points[s.route.points.length - 1] ?? null } : null;
           inv.current();
         }
         if (s.tour.status !== prev.tour.status || s.doors !== prev.doors || s.doorsSettled !== prev.doorsSettled) inv.current();

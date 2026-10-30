@@ -31,6 +31,25 @@ const toScreen = (page, x, y, z) => page.evaluate(([x, y, z]) => {
 }, [x, y, z]);
 const st = (page) => page.evaluate(() => ({ w: window.__walkStore.getState(), cam: window.__houseCamera.camera.position.toArray(), m: window.__houseStore.getState() }));
 const poly = (r) => r.poly;
+const REST_PITCH = (-8 * Math.PI) / 180;
+const walkFovOf = (aspect) => Math.max(45, Math.min(78, (2 * Math.atan(Math.tan((75 * Math.PI) / 360) / aspect) * 180) / Math.PI));
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+// Per-frame feel of a pose series sampled at 30 fps: biggest yaw step (rad), biggest change of yaw step, biggest speed change (m/s).
+const feel = (ps) => {
+  let yawStep = 0, rateChange = 0, speedChange = 0, prevRate = 0, prevSp = 0, at = 0;
+  for (let i = 1; i < ps.length; i++) {
+    const r = wrap(ps[i].yaw - ps[i - 1].yaw), sp = Math.hypot(ps[i].x - ps[i - 1].x, ps[i].y - ps[i - 1].y) * 30;
+    yawStep = Math.max(yawStep, Math.abs(r));
+    if (i > 1) { // the first diff has no predecessor to compare with
+      rateChange = Math.max(rateChange, Math.abs(r - prevRate));
+      if (Math.abs(sp - prevSp) > speedChange) { speedChange = Math.abs(sp - prevSp); at = i; }
+    }
+    prevRate = r; prevSp = sp;
+  }
+  return { yawStep, rateChange, speedChange, at };
+};
+const fmt = (f) => `yaw step ${f.yawStep.toFixed(3)} rad, yaw-rate change ${f.rateChange.toFixed(3)} rad/frame, speed change ${(f.speedChange).toFixed(3)} m/s/frame (frame ${f.at})`;
+const feelOk = (f) => f.yawStep <= 0.08 && f.rateChange <= 0.03 && f.speedChange <= 0.06;
 const centroid = (p) => ({ x: p.reduce((a, q) => a + q.x, 0) / p.length, y: p.reduce((a, q) => a + q.y, 0) / p.length });
 // Largest ground-floor room of the nav.
 const bigRoom = (page, level = 0) => page.evaluate((level) => {
@@ -62,7 +81,9 @@ async function standLooking(page, room, d = 1.4) {
   let s = await st(page);
   ok(Math.abs(s.cam[1] - (s.w.pose.feetY + 1.7)) < 0.05 && s.m.showCeilings && s.m.viewMode === 'single', 'eye at 1.7 m, ceilings on, single view');
   const lens = await page.evaluate(() => { const c = window.__houseCamera.camera; return { fov: c.fov, near: c.near, order: c.rotation.order, ctl: window.__houseCamera.controls }; });
-  ok(lens.fov === 65 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov}, near ${lens.near}, order ${lens.order}, controls off`);
+  const aspect = await page.evaluate(() => { const r = document.querySelector('.viewer canvas').getBoundingClientRect(); return r.width / r.height; });
+  ok(Math.abs(lens.fov - walkFovOf(aspect)) < 0.01 && lens.fov < 56 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov.toFixed(1)} (walkFov(${aspect.toFixed(2)}) = ${walkFovOf(aspect).toFixed(1)}), near ${lens.near}, order ${lens.order}, controls off`);
+  ok(Math.abs(s.w.pose.pitch - REST_PITCH) < 0.01, `placed looking slightly down: pitch ${s.w.pose.pitch.toFixed(3)} rad (REST_PITCH ${REST_PITCH.toFixed(3)})`);
   ok(/Click the floor to walk/.test(s.w.hint?.text || ''), `first-time hint on desktop ("${s.w.hint?.text}")`);
   ok(s.w.where && s.w.where.outside === true && !s.w.where.roomName, 'standing outside in the garden at the start');
   const start = s.w.pose;
@@ -71,13 +92,13 @@ async function standLooking(page, room, d = 1.4) {
 
   // Keys: W walks forward, A/D strafe, arrows turn, digits are swallowed.
   const before = s.w.pose;
-  await page.keyboard.down('w'); const polesW = await page.evaluate(() => window.__walk.sim(1)); await page.keyboard.up('w');
+  const polesW = await page.evaluate(() => { const fire = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyW', key: 'w', bubbles: true, cancelable: true })); fire('keydown'); const r = window.__walk.sim(1); fire('keyup'); return r; });
   s = await st(page);
   ok(polesW.length === 30 && Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y) > 0.8, `W walks about 1.4 m in a second (${Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y).toFixed(2)} m)`);
   const fwd = { x: -Math.sin(before.yaw), y: -Math.cos(before.yaw) }, mx = s.w.pose.x - before.x, my = s.w.pose.y - before.y;
   ok(mx * fwd.x + my * fwd.y > 0.9 * Math.hypot(mx, my), 'W walks the way you face');
   const yawL = s.w.pose.yaw;
-  await page.keyboard.down('ArrowLeft'); await page.evaluate(() => window.__walk.sim(1)); await page.keyboard.up('ArrowLeft');
+  await page.keyboard.down('ArrowLeft'); await page.evaluate(() => window.__walk.sim(1)); await page.keyboard.up('ArrowLeft'); await page.evaluate(() => window.__walk.sim(1));
   s = await st(page);
   const turned = Math.atan2(Math.sin(s.w.pose.yaw - yawL), Math.cos(s.w.pose.yaw - yawL));
   ok(turned > 1.2, `left arrow turns left (${turned.toFixed(2)} rad in a second)`);
@@ -121,7 +142,7 @@ async function standLooking(page, room, d = 1.4) {
   const hall = await page.evaluate(() => { const n = window.__walk.nav(); const l = n.levels.find((x) => x.level === 0); const r = [...l.rooms].sort((a, b) => b.area - a.area)[0]; return { id: r.id, name: r.name, poly: r.poly, baseY: l.baseY }; });
   const hc = centroid(hall.poly);
   // Stand 1.5 m south of the centre, looking at the floor 2 m ahead.
-  await page.evaluate(([hc, hall]) => { const w = window.__walkStore.getState(); w.setPose({ x: hc.x, y: hc.y + 1.5, level: 0, stair: null, feetY: hall.baseY, yaw: 0, pitch: -0.4 }); }, [hc, hall]);
+  await page.evaluate(([hc, hall]) => { const w = window.__walkStore.getState(); w.setPose({ x: hc.x, y: hc.y + 1.5, level: 0, stair: null, feetY: hall.baseY, yaw: 0, pitch: -0.65 }); }, [hc, hall]);
   await page.evaluate(() => window.__walk.sim(0.1));
   const hp = await toScreen(page, hc.x, hall.baseY, hc.y - 0.6);
   await page.mouse.click(hp.x, hp.y);
@@ -132,11 +153,33 @@ async function standLooking(page, room, d = 1.4) {
   const goalPt = s.w.route ? s.w.route.points[s.w.route.points.length - 1] : { x: hc.x, y: hc.y - 0.6 };
   ok(Math.hypot(goalPt.x - hc.x, goalPt.y - (hc.y - 0.6)) < 1.0, 'the route ends near the tapped spot');
   const poses = await page.evaluate(() => window.__walk.sim(12));
+  console.log('INFO tap route in a room:', fmt(feel(poses)));
   s = await st(page);
   const endP = poses[poses.length - 1];
   ok(!s.w.route && s.w.where?.roomName && Math.hypot(endP.x - goalPt.x, endP.y - goalPt.y) < 0.3, `route followed to the tapped spot, now in ${s.w.where?.roomName}`);
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/walk-room.png` });
+  // Key ramps, in the open: stand mid-room facing along its longest side and hold W for 0.6 s, then let go.
+  {
+    const r = await page.evaluate(([hc, hall]) => {
+      const w = window.__walkStore.getState();
+      const poly = hall.poly; let best = null;
+      for (let a = 0; a < 16; a++) { const yaw = (a * Math.PI) / 8; const fx = -Math.sin(yaw), fy = -Math.cos(yaw); let t = 0; while (t < 4) { const p = { x: hc.x + fx * t, y: hc.y + fy * t }; let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if ((poly[i].y > p.y) !== (poly[j].y > p.y) && p.x < ((poly[j].x - poly[i].x) * (p.y - poly[i].y)) / (poly[j].y - poly[i].y) + poly[i].x) c = !c; if (!c) break; t += 0.1; } if (!best || t > best.t) best = { yaw, t }; }
+      w.setPose({ x: hc.x, y: hc.y, level: 0, stair: null, feetY: hall.baseY, yaw: best.yaw, pitch: 0 });
+      window.__walk.sim(1);
+      const p0 = window.__walkStore.getState().pose;
+      const fire = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyW', key: 'w', bubbles: true, cancelable: true }));
+      fire('keydown'); const up = window.__walk.sim(0.6); fire('keyup'); const down = window.__walk.sim(0.6);
+      return { p0, up, down, room: best.t };
+    }, [hc, hall]);
+    const sp = (ps, p0) => ps.map((q, i) => Math.hypot(q.x - (i ? ps[i - 1].x : p0.x), q.y - (i ? ps[i - 1].y : p0.y)) * 30);
+    const up = sp(r.up, r.p0), down = sp(r.down, r.up[r.up.length - 1]);
+    const vm = Math.max(...up);
+    const tUp = (up.findIndex((v) => v >= 0.9 * vm) + 1) / 30, tDown = (down.findIndex((v) => v <= 0.1 * vm) + 1) / 30;
+    console.log('INFO W speeds up:', up.slice(0, 10).map((v) => v.toFixed(2)).join(' '), '| down:', down.slice(0, 10).map((v) => v.toFixed(2)).join(' '), `| clear room ahead ${r.room.toFixed(1)} m`);
+    ok(vm > 1.3 && tUp >= 0.15 && tUp <= 0.3 && up[0] < 0.5 * vm, `holding W: speed ramps up to 90% in ${tUp.toFixed(2)} s (first frame ${up[0].toFixed(2)} of ${vm.toFixed(2)} m/s)`);
+    ok(tDown >= 0.1 && tDown <= 0.3 && down[0] > 0.4 * vm, `releasing W: speed falls below 10% in ${tDown.toFixed(2)} s (first frame ${down[0].toFixed(2)} m/s)`);
+  }
   const wallRoute = await page.evaluate(() => window.__walkStore.getState().route);
   ok(wallRoute === null, 'route cleared on arrival');
 
@@ -178,9 +221,32 @@ async function standLooking(page, room, d = 1.4) {
     const up = await bigRoom(page, 1);
     // Every door open, so the bedroom door doesn't stop the climb.
     await page.evaluate(() => { const w = window.__walkStore.getState(); for (const d of window.__walk.nav().doors) w.setDoor(d.key, true); w.clearHint(); });
-    await page.evaluate((id) => window.__walkStore.getState().requestGoal({ kind: 'room', level: 1, roomId: id }), up.id);
-    await page.waitForTimeout(200);
-    const climb = await page.evaluate(() => window.__walk.sim(40));
+    // First a route across at least two rooms on the ground floor (doors open): the farthest room from here.
+    const across = await page.evaluate(() => {
+      const w = window.__walkStore.getState(), p = w.pose, l = window.__walk.nav().levels.find((x) => x.level === 0);
+      const cen = (r) => r.poly.reduce((a, q) => ({ x: a.x + q.x / r.poly.length, y: a.y + q.y / r.poly.length }), { x: 0, y: 0 });
+      const far = [...l.rooms].sort((a, b) => Math.hypot(cen(b).x - p.x, cen(b).y - p.y) - Math.hypot(cen(a).x - p.x, cen(a).y - p.y))[0];
+      w.requestGoal({ kind: 'room', level: 0, roomId: far.id });
+      // Same call, so no slow real frame runs between the request and the simulated frames.
+      return { id: far.id, name: far.name, route: window.__walkStore.getState().route, poses: window.__walk.sim(30) };
+    });
+    const crossRoute = across.route, crossPoses = across.poses;
+    const crossEnd = crossRoute ? crossRoute.points[crossRoute.points.length - 1] : null;
+    const roomsSeen = await page.evaluate((ps) => {
+      const l = window.__walk.nav().levels.find((x) => x.level === 0), seen = new Set();
+      const inside = (q, p) => { let c = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i].y > p.y) !== (q[j].y > p.y) && p.x < ((q[j].x - q[i].x) * (p.y - q[i].y)) / (q[j].y - q[i].y) + q[i].x) c = !c; return c; };
+      for (const p of ps) for (const r of l.rooms) if (inside(r.poly, p)) seen.add(r.id);
+      return seen.size;
+    }, crossPoses);
+    const cf = feel(crossPoses), cl = crossPoses[crossPoses.length - 1];
+    ok(!!crossRoute && roomsSeen >= 2 && Math.hypot(cl.x - crossEnd.x, cl.y - crossEnd.y) < 0.3, `route across ${roomsSeen} rooms to ${across.name} arrives (${crossEnd ? Math.hypot(cl.x - crossEnd.x, cl.y - crossEnd.y).toFixed(2) : '?'} m off)`);
+    ok(feelOk(cf), `smooth across rooms: ${fmt(cf)}`);
+    const climbRun = await page.evaluate((id) => { window.__walkStore.getState().requestGoal({ kind: 'room', level: 1, roomId: id }); return { route: window.__walkStore.getState().route, poses: window.__walk.sim(40) }; }, up.id);
+    const climbRoute = climbRun.route, climb = climbRun.poses;
+    const climbEnd = climbRoute ? climbRoute.points[climbRoute.points.length - 1] : null, cle = climb[climb.length - 1];
+    const sf = feel(climb);
+    ok(!!climbEnd && Math.hypot(cle.x - climbEnd.x, cle.y - climbEnd.y) < 0.3, `upstairs route arrives (${climbEnd ? Math.hypot(cle.x - climbEnd.x, cle.y - climbEnd.y).toFixed(2) : '?'} m off)`);
+    ok(feelOk(sf), `smooth up the stairs: ${fmt(sf)}`);
     const last = climb[climb.length - 1];
     let maxStep = 0; for (let i = 1; i < climb.length; i++) maxStep = Math.max(maxStep, Math.abs(climb[i].feetY - climb[i - 1].feetY));
     needs('B', last.level === 1 && maxStep <= 0.3, `stairs: reaches level ${last.level} with biggest feet step ${maxStep.toFixed(3)} m`);
@@ -192,16 +258,20 @@ async function standLooking(page, room, d = 1.4) {
   // Run up to 3 minutes of tour in 5 s slices, noting how far it got and which doors it opened.
   const tourRun = await page.evaluate(() => {
     let maxIndex = 0, stops = 0, ended = false;
+    const all = [];
     for (let i = 0; i < 36 && !ended; i++) {
-      window.__walk.sim(5);
+      all.push(...window.__walk.sim(5));
       const t = window.__walkStore.getState().tour;
       if (t.stops.length) stops = t.stops.length;
       maxIndex = Math.max(maxIndex, t.index);
       ended = t.status === 'off' && stops > 0;
     }
     const w = window.__walkStore.getState(), n = window.__walk.nav();
-    return { maxIndex, stops, ended, hint: w.hint?.text, opened: n.doors.some((d) => w.doors[d.key] === true && !d.initial) };
+    return { all, maxIndex, stops, ended, hint: w.hint?.text, opened: n.doors.some((d) => w.doors[d.key] === true && !d.initial) };
   });
+  const tf = feel(tourRun.all);
+  ok(tf.yawStep <= 0.08, `smooth tour (${tourRun.all.length} frames): ${fmt(tf)}`);
+  console.log('INFO tour rate/speed:', fmt(tf));
   ok(tourRun.stops >= 3 && tourRun.maxIndex >= 3, `tour advanced (reached stop ${tourRun.maxIndex} of ${tourRun.stops})`);
   ok(tourRun.ended && /tour/i.test(tourRun.hint || ''), `tour ends and says "${tourRun.hint}"`);
   needs('B', tourRun.opened, 'tour opened a shut door on the way');
@@ -222,6 +292,31 @@ async function standLooking(page, room, d = 1.4) {
   s = await st(page);
   ok(s.w.tour.status === 'playing' && s.w.tour.stops.length > 0, 'tour resumes');
   await page.evaluate(() => window.__walkStore.getState().stopTour());
+
+  // Idle screenshots: the kitchen at REST_PITCH with the new lens, then at the old 65 degree lens with pitch 0.
+  {
+    await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
+    const k = await page.evaluate(() => {
+      const l = window.__walk.nav().levels.find((x) => x.level === 0);
+      const r = l.rooms.find((q) => /kitchen/i.test(q.name)) || [...l.rooms].sort((a, b) => b.area - a.area)[0];
+      const c = r.poly.reduce((a, q) => ({ x: a.x + q.x / r.poly.length, y: a.y + q.y / r.poly.length }), { x: 0, y: 0 });
+      // Face along the longest clear run inside the room.
+      const inside = (p) => { let q = r.poly, c2 = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i].y > p.y) !== (q[j].y > p.y) && p.x < ((q[j].x - q[i].x) * (p.y - q[i].y)) / (q[j].y - q[i].y) + q[i].x) c2 = !c2; return c2; };
+      let best = { yaw: 0, t: -1 };
+      for (let a = 0; a < 32; a++) { const yaw = (a * Math.PI) / 16; let t = 0; while (t < 6 && inside({ x: c.x - Math.sin(yaw) * t, y: c.y - Math.cos(yaw) * t })) t += 0.1; if (t > best.t) best = { yaw, t }; }
+      return { name: r.name, c, yaw: best.yaw, baseY: l.baseY };
+    });
+    const setView = (pitch) => page.evaluate(([k, pitch]) => { window.__walkStore.getState().setPose({ x: k.c.x, y: k.c.y, level: 0, stair: null, feetY: k.baseY, yaw: k.yaw, pitch }); window.__walk.sim(0.3); }, [k, pitch]);
+    await setView(REST_PITCH);
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${SHOTS}/kitchen-new-lens.png` });
+    const newFov = await page.evaluate(() => { const c = window.__houseCamera.camera; const f = c.fov; c.fov = 65; c.updateProjectionMatrix(); return f; });
+    await setView(0);
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${SHOTS}/kitchen-old-lens.png` });
+    await page.evaluate((f) => { const c = window.__houseCamera.camera; c.fov = f; c.updateProjectionMatrix(); }, newFov);
+    console.log(`INFO screenshots in the ${k.name}: kitchen-new-lens.png (fov ${newFov.toFixed(1)}, pitch -8 deg), kitchen-old-lens.png (fov 65, pitch 0)`);
+  }
 
   // Esc stops, restores the view settings and the orbit camera.
   await page.keyboard.press('Escape');
