@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { builtInHouse } from "../houses/default";
+import { builtInHouse, builtInProposed } from "../houses/default";
 import { polygonArea, roomWorldPolygon } from "./geometry";
+import { buildWalls, cutWall } from "./geometry";
+import { floor as mkFloor, rect } from "./testing";
 import { balustrades, cutWells, stairwells, subtractRect, type Rect } from "./stairwell";
 
 const sq = (x0: number, y0: number, x1: number, y1: number) => [
@@ -107,5 +109,62 @@ describe("the built-in house's stairwell", () => {
     const hole = well.rects.reduce((s, r) => s + (r.x1 - r.x0) * (r.y1 - r.y0), 0);
     expect(before - after).toBeGreaterThan(hole * 0.8);
     expect(before - after).toBeLessThanOrEqual(hole + 1e-6);
+  });
+});
+
+const round = (n: number | undefined) => (n === undefined ? n : Math.round(n * 1e4) / 1e4);
+const flat = (r: { a: { x: number; y: number }; b: { x: number; y: number }; ya: number; yb: number; fa?: number; fb?: number }) => ({
+  a: [round(r.a.x), round(r.a.y)], b: [round(r.b.x), round(r.b.y)], ya: round(r.ya), yb: round(r.yb), fa: round(r.fa), fb: round(r.fb),
+});
+
+describe("balustrades at doorways", () => {
+  it("leaves the listed house's runs as they were", () => {
+    const m = builtInHouse("");
+    const runs = stairwells(m).map((w) => balustrades(m, w));
+    expect(runs).toHaveLength(1);
+    expect(runs[0].upper).toEqual([]);
+    expect(runs[0].lower.map(flat)).toEqual([
+      { a: [0.45, 0.25], b: [0.45, -1.25], ya: 0.5654, yb: 1.8846, fa: 0, fb: 1.5346 },
+    ]);
+  });
+
+  it("stops the proposed stairwell's rail short of New Room's door", () => {
+    const m = builtInProposed("");
+    const well = stairwells(m)[0];
+    const upper = m.floors.find((f) => f.id === well.upperId)!;
+    const room = upper.rooms.find((r) => r.name === "New Room")!;
+    const doors = buildWalls(upper).flatMap((w) => cutWall(w, m.ceilingHeight).placements).filter((p) => p.opening.kind === "door" && Math.abs(p.centre.x + 0.55) < 0.05 && Math.abs(p.centre.y + 1.75) < 0.05);
+    expect(room).toBeTruthy();
+    expect(doors).toHaveLength(1);
+    const d = doors[0];
+    const [lo, hi] = [d.centre.y - d.width / 2, d.centre.y + d.width / 2];
+    const { lower, upper: rails } = balustrades(m, well);
+    for (const r of rails) {
+      const nearLine = Math.abs(r.a.x - d.centre.x) < 0.2 && Math.abs(r.b.x - d.centre.x) < 0.2;
+      const [y0, y1] = [Math.min(r.a.y, r.b.y), Math.max(r.a.y, r.b.y)];
+      if (nearLine) expect(y1 <= lo || y0 >= hi).toBe(true);
+    }
+    // The lower flight's rail is untouched.
+    expect(lower.map(flat)).toEqual([{ a: [0.45, 0.25], b: [0.45, -1.25], ya: 0.5654, yb: 1.8846, fa: 0, fb: 1.5346 }]);
+    expect(rails.map(flat)).toEqual([]);
+  });
+
+  it("cuts a run with a door in the middle into two pieces", () => {
+    // Flight up +y at x 1..2 (width 1, centre x = 1.5); the landing above is x 0..3, y 0..6, with a well over the flight.
+    // The well's west edge (x = 1, a wall line shared with Room to the west) has a door centred at y = 3.
+    const lowerF = mkFloor([rect("Hall", 100, 0, 200, 600)], [], { id: "g", level: 0 });
+    const upperF = mkFloor(
+      [rect("Landing", 100, 0, 300, 600), rect("Room", -300, 0, 100, 600)],
+      [{ id: "d", kind: "door", x: 100, y: 300, orientation: "v", widthM: 0.8 }],
+      { id: "u", level: 1 },
+    );
+    const model = { floors: [lowerF, upperF], ceilingHeight: 2.4 } as never;
+    const flight = { centre: { x: 1.5, y: 0 }, dir: { x: 0, y: 1 }, run: 6, width: 1, rise: 2.5, lowerId: "g", upperId: "u", wellStart: 0 } as never;
+    const well = { lowerId: "g", upperId: "u", flight, rects: [{ x0: 1, y0: 0, x1: 2, y1: 6 }] };
+    const west = balustrades(model, well).upper.filter((r) => Math.abs(r.a.x - 1) < 0.01 && Math.abs(r.b.x - 1) < 0.01);
+    expect(west).toHaveLength(2);
+    const ys = west.map((r) => [Math.min(r.a.y, r.b.y), Math.max(r.a.y, r.b.y)]).sort((p, q) => p[0] - q[0]);
+    expect(ys[0][1]).toBeCloseTo(3 - 0.4 - 0.05);
+    expect(ys[1][0]).toBeCloseTo(3 + 0.4 + 0.05);
   });
 });

@@ -140,11 +140,89 @@ export interface RailRun {
 /** How far a newel hanging from the flight drops below the pitch line, metres. */
 const NEWEL_DROP = 0.35;
 
+/** Openings a person walks through; a balustrade never runs across one. */
+const WALK_THROUGH = new Set(["door", "front", "french", "bifold", "patio", "gap", "archway"]);
+/** Room left clear each side of an opening for its lining or frame, metres. */
+const FRAME = 0.05;
+/** How far an opening's line may sit from a run and still count as on it, metres. */
+const ON_LINE = 0.15;
+/** Rail pieces shorter than this are dropped, metres. */
+const MIN_PIECE = 0.1;
+
+interface Gap {
+  centre: V2;
+  dir: V2;
+  half: number;
+}
+
+/** The walk-through openings on a floor, as lines on the plan (world metres). */
+function openingGaps(floor: Floor, ceiling: number): Gap[] {
+  const gaps: Gap[] = [];
+  for (const w of buildWalls(floor))
+    for (const p of cutWall(w, ceiling).placements)
+      if (WALK_THROUGH.has(p.opening.kind)) gaps.push({ centre: p.centre, dir: p.dir, half: p.width / 2 + FRAME });
+  return gaps;
+}
+
+/**
+ * Cut a run where an opening on its line crosses it, so the rail stops short
+ * of the doorway. Pieces end in newels like any run's ends; `foot` gives the
+ * newel start for a new end on a flight.
+ */
+function cutAtOpenings(run: RailRun, gaps: Gap[], foot?: (p: V2, y: number) => number): RailRun[] {
+  const dx = run.b.x - run.a.x;
+  const dy = run.b.y - run.a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return [run];
+  const u = { x: dx / len, y: dy / len };
+  const cuts: [number, number][] = [];
+  for (const g of gaps) {
+    // Only openings along the run, not walls that meet it side-on.
+    if (Math.abs(g.dir.x * u.y - g.dir.y * u.x) > 0.2) continue;
+    const rx = g.centre.x - run.a.x;
+    const ry = g.centre.y - run.a.y;
+    if (Math.abs(rx * u.y - ry * u.x) > ON_LINE) continue;
+    const c = rx * u.x + ry * u.y;
+    const t0 = Math.max(0, c - g.half);
+    const t1 = Math.min(len, c + g.half);
+    if (t1 > t0) cuts.push([t0, t1]);
+  }
+  if (!cuts.length) return [run];
+  cuts.sort((p, q) => p[0] - q[0]);
+  const keep: [number, number][] = [];
+  let cursor = 0;
+  for (const [t0, t1] of cuts) {
+    if (t0 > cursor) keep.push([cursor, t0]);
+    cursor = Math.max(cursor, t1);
+  }
+  if (cursor < len) keep.push([cursor, len]);
+  const out: RailRun[] = [];
+  for (const [t0, t1] of keep) {
+    if (t1 - t0 < MIN_PIECE) continue;
+    const at = (t: number) => {
+      const k = t / len;
+      const p = { x: run.a.x + dx * k, y: run.a.y + dy * k };
+      const y = run.ya + (run.yb - run.ya) * k;
+      if (t === 0) return { p: run.a, y: run.ya, f: run.fa };
+      if (t === len) return { p: run.b, y: run.yb, f: run.fb };
+      return { p, y, f: foot ? foot(p, y) : undefined };
+    };
+    const pa = at(t0);
+    const pb = at(t1);
+    const piece: RailRun = { a: pa.p, b: pb.p, ya: pa.y, yb: pb.y };
+    if (pa.f !== undefined) piece.fa = pa.f;
+    if (pb.f !== undefined) piece.fb = pb.f;
+    out.push(piece);
+  }
+  return out;
+}
+
 /**
  * Balustrades for a stairwell: along the open sides of the flight on the
  * floor below, and round the open edges of the opening on the floor above,
  * leaving the top of the flight open to step off: its end when it arrives
  * straight, the side it turns to when its head winds onto the landing.
+ * Runs are cut short of any doorway on their line.
  */
 export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRun[]; upper: RailRun[] } {
   const lower = model.floors.find((f) => f.id === well.lowerId);
@@ -156,6 +234,8 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
   const across = { x: -f.dir.y, y: f.dir.x };
   const side = (sign: number): V2 => ({ x: across.x * sign, y: across.y * sign });
   const boxed = boxedIn(lower, f);
+  const lowerGaps = openingGaps(lower, model.ceilingHeight);
+  const upperGaps = openingGaps(upper, model.ceilingHeight);
   /** The end of a turned head, where the side it turns to begins. */
   const headStart = f.topTurn ? f.run - f.width : f.run;
 
@@ -170,7 +250,8 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
     if (s1 - s0 < 0.05 || !openSide(lower, a, b, side(sign), model.ceilingHeight)) continue;
     const ya = stairHeight(f, s0, l * 0.999);
     const yb = stairHeight(f, s1, l * 0.999);
-    out.lower.push({ a, b, ya, yb, fa: boxed(a) ? 0 : Math.max(0, ya - NEWEL_DROP), fb: boxed(b) ? 0 : Math.max(0, yb - NEWEL_DROP) });
+    const run: RailRun = { a, b, ya, yb, fa: boxed(a) ? 0 : Math.max(0, ya - NEWEL_DROP), fb: boxed(b) ? 0 : Math.max(0, yb - NEWEL_DROP) };
+    out.lower.push(...cutAtOpenings(run, lowerGaps, (p, y) => (boxed(p) ? 0 : Math.max(0, y - NEWEL_DROP))));
   }
   for (const r of well.rects) {
     const corners = [
@@ -197,7 +278,7 @@ export function balustrades(model: HouseModel, well: Stairwell): { lower: RailRu
       // An edge shared with another part of the same opening (it spans two rooms) is not an edge.
       const m = { x: (a.x + b.x) / 2 + dir.x * 0.15, y: (a.y + b.y) / 2 + dir.y * 0.15 };
       if (well.rects.some((o) => o !== r && m.x > o.x0 && m.x < o.x1 && m.y > o.y0 && m.y < o.y1)) continue;
-      if (openSide(upper, a, b, dir, model.ceilingHeight)) out.upper.push({ a, b, ya: 0, yb: 0 });
+      if (openSide(upper, a, b, dir, model.ceilingHeight)) out.upper.push(...cutAtOpenings({ a, b, ya: 0, yb: 0 }, upperGaps));
     }
   }
   return out;
