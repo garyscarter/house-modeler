@@ -275,15 +275,24 @@ export function stopBeforeDoor(route: WalkRoute, door: Pick<NavDoor, "key" | "ce
   return { points: [...before, stop], doors: route.doors.filter((d) => d.index < at.index), yaw: yawOf({ x: door.centre.x - stop.x, y: door.centre.y - stop.y }) };
 }
 
-/** Look-round at a tour stop: 0, +35° at 0.3 T, -35° at 0.75 T, back to 0 at T, eased between so it starts and ends at rest. */
-export function lookSweep(baseYaw: number, t: number, period = 6, ampRad = (35 * Math.PI) / 180): number {
+/** Default look-round swing each side, radians. */
+export const LOOK_AMP = (35 * Math.PI) / 180;
+/** How long a look-round of this width takes: 4 s, up to 8 s at 75° each side. */
+export function sweepDuration(left: number, right: number): number {
+  return Math.max(4, Math.min(8, 4 + 4 * (Math.max(left, right) / ((75 * Math.PI) / 180))));
+}
+/**
+ * Look-round at a tour stop: 0, +left at 0.3 T, -right at 0.75 T, back to 0 at T, eased between so it starts and ends at rest.
+ * Positive turns left. T defaults to `sweepDuration`.
+ */
+export function lookSweep(baseYaw: number, t: number, left = LOOK_AMP, right = left, period = sweepDuration(left, right)): number {
   const u = Math.max(0, Math.min(1, t / period));
-  const keys: [number, number][] = [[0, 0], [0.3, 1], [0.75, -1], [1, 0]];
+  const keys: [number, number][] = [[0, 0], [0.3, left], [0.75, -right], [1, 0]];
   for (let i = 1; i < keys.length; i++) {
     if (u <= keys[i][0]) {
       const k = (u - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]);
       const e = 0.5 - 0.5 * Math.cos(Math.PI * k);
-      return baseYaw + ampRad * (keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * e);
+      return baseYaw + keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * e;
     }
   }
   return baseYaw;

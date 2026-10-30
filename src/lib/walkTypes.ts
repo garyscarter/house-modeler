@@ -71,6 +71,8 @@ export interface TourStop {
   level: number;
   at: V2;
   yaw: number;
+  /** How far the look-round swings each side of `yaw`, radians (set when the stop is trimmed to a doorway). */
+  sweep?: { left: number; right: number };
 }
 export interface TourState {
   status: "off" | "playing" | "paused";

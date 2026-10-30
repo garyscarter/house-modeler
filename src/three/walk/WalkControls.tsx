@@ -6,9 +6,9 @@ import { useStore } from "../../store";
 import { useWalk } from "../../walkStore";
 import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
-import { buildNav, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, startPose, stepWalker } from "../../lib/walk";
+import { buildNav, doorwayStop, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, startPose, stepWalker } from "../../lib/walk";
 import { eyeHeightOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
-import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, lookSweep, NO_KEY_MOTION, NO_KEYS, REST_PITCH, routePointS, routeStart, springValue, stopBeforeDoor, walkFov, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
+import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, lookSweep, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, REST_PITCH, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, walkFov, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
 import { doorTagOf } from "./doorTag";
 
 /** First-person walk controller (docs/walkthrough-plan.md, Chunk C): keys, drag to look, tap to walk or open a door, routes and the tour. */
@@ -16,7 +16,6 @@ import { doorTagOf } from "./doorTag";
 const NEAR = 0.05;
 const DRAG_PX = 6;
 const RING_S = 1.6;
-const LOOK_S = 6;
 const DOOR_REACH_M = 1.8; // a tour opens a shut door this far off (the leaf takes 0.7 s to swing)
 const DOOR_OPEN_S = 0.8;
 const DOOR_SLOW_M = 1.0;
@@ -55,7 +54,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const pitchVel = useRef(0);
   const doorTimers = useRef(new Map<string, number>());
   const stall = useRef({ t: 0, count: 0 });
-  const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string });
+  const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string, lookYaw: 0, left: LOOK_AMP, right: LOOK_AMP });
   const ring = useRef<THREE.Mesh>(null);
   const ringT = useRef(0);
   const fovRad = useRef((walkFov(1.6) * Math.PI) / 180);
@@ -95,14 +94,22 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     if (useWalk.getState().route) useWalk.getState().setRoute(null);
   };
   /** Route to a point, as a tap or the mini-map asks. */
-  const goTo = (point: WalkPoint, yaw: number | undefined, ring3: { x: number; y: number; z: number }) => {
+  const goTo = (point: WalkPoint, yaw: number | undefined, ring3: { x: number; y: number; z: number }, room?: { level: number; roomId: string }) => {
     const p = poseRef.current;
     if (!p) return;
     const w = useWalk.getState();
     const res = routeTo(navRef.current, p, point, w.doors);
     if (res.ok) {
-      startRoute(yaw !== undefined ? { ...res.route, yaw } : res.route, point);
-      showRing(ring3.x, ring3.y, ring3.z);
+      // A room tap stops just inside the doorway, facing into the room.
+      const ds = room && doorwayStop(navRef.current, res.route, p, room);
+      if (ds) {
+        const end = ds.route.points[ds.route.points.length - 1];
+        startRoute(ds.route, end ?? null);
+        showRing(end?.x ?? ring3.x, ring3.y, end?.y ?? ring3.z);
+      } else {
+        startRoute(yaw !== undefined ? { ...res.route, yaw } : res.route, point);
+        showRing(ring3.x, ring3.y, ring3.z);
+      }
     } else if (res.reason === "shut-door") {
       // Walk up to the shut door and say so there, as you would find it.
       const door = navRef.current.doors.find((d) => d.key === res.door);
@@ -195,8 +202,15 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
             const goal: WalkPoint = { x: stop.at.x, y: stop.at.y, level: stop.level, stair: null };
             const res = routeTo(n, p, goal, w.doors);
             const route = res.ok ? res.route : res.reason === "shut-door" ? res.route : null;
-            if (route) startRoute({ ...route, yaw: stop.yaw }, goal);
-            else {
+            if (route) {
+              // Stop just inside the doorway (the garden: just outside the door), looking in; the look-round sweeps the room from there.
+              const ds = doorwayStop(n, route, p, { level: stop.level, roomId: stop.roomId });
+              tr.lookYaw = ds ? ds.yaw : stop.yaw;
+              tr.left = ds ? ds.sweep.left : LOOK_AMP;
+              tr.right = ds ? ds.sweep.right : LOOK_AMP;
+              if (ds) startRoute(ds.route, ds.route.points[ds.route.points.length - 1] ?? null);
+              else startRoute({ ...route, yaw: stop.yaw }, goal);
+            } else {
               clearRoute();
               w.setTour({ index: tour.index + 1 });
               tr.routeFor = -1;
@@ -226,11 +240,12 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         } else {
           tr.lookT += dt;
           looking = true;
-          yaw = lookSweep(stop.yaw, tr.lookT, LOOK_S);
+          const lookS = sweepDuration(tr.left, tr.right);
+          yaw = lookSweep(tr.lookYaw, tr.lookT, tr.left, tr.right, lookS);
           const ps = springValue(pitch, pitchVel.current, REST_PITCH, dt, 8);
           pitch = ps.x;
           pitchVel.current = ps.vel;
-          if (tr.lookT >= LOOK_S) {
+          if (tr.lookT >= lookS) {
             tr.routeFor = -1;
             if (tour.index + 1 >= tour.stops.length) {
               w.stopTour();
@@ -435,7 +450,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         return;
       }
       const base = navRef.current.levels.find((l) => l.level === gp.point.level)?.baseY ?? 0;
-      goTo(gp.point, gp.yaw, { x: gp.point.x, y: base, z: gp.point.y });
+      goTo(gp.point, gp.yaw, { x: gp.point.x, y: base, z: gp.point.y }, g.kind === "room" ? { level: g.level, roomId: g.roomId } : undefined);
     };
     take();
     return useWalk.subscribe((s, prev) => {
@@ -629,7 +644,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       inv.current();
       return out;
     };
-    Object.assign(window, { __walk: { nav: () => navRef.current, sim } });
+    Object.assign(window, { __walk: { nav: () => navRef.current, sim, goalPoint: (g: Parameters<typeof goalPoint>[1]) => goalPoint(navRef.current, g), look: () => ({ yaw: tourRef.current.lookYaw, left: tourRef.current.left, right: tourRef.current.right }) } });
     return () => {
       delete (window as unknown as { __walk?: unknown }).__walk;
     };
