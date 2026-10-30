@@ -22,6 +22,8 @@ export { SITE_EDIT_ID };
 export interface Settings {
   /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
   quality: "high" | "balanced" | "low";
+  /** Walk-through eye height in metres (1.0–2.0); absent = 1.6. Read it through eyeHeightOf (lib/walkTypes). */
+  eyeHeight?: number;
 }
 
 /** Sun study controls. */
