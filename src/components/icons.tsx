@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "select" | "rect" | "polygon" | "wall" | "canopy" | "door" | "window" | "gap" | "measure" | "image" | "walls"
   | "zoomIn" | "zoomOut" | "fit" | "fitImage" | "undo" | "redo" | "search" | "help" | "sun" | "eye" | "compare"
-  | "chevronDown" | "chevronRight" | "close" | "circle" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil" | "brush" | "sofa" | "tree" | "clipboard" | "keyboard" | "flower" | "compass" | "plug";
+  | "chevronDown" | "chevronRight" | "close" | "circle" | "plus" | "paste" | "house" | "layers" | "info" | "more" | "pencil" | "brush" | "sofa" | "tree" | "clipboard" | "keyboard" | "flower" | "compass" | "plug" | "walk" | "play" | "pause" | "flip" | "map";
 
 /** Inline 24-viewBox stroke icons; they take their colour from the text (currentColor). */
 const PATHS: Record<IconName, ReactNode> = {
@@ -47,6 +47,11 @@ const PATHS: Record<IconName, ReactNode> = {
   compass: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2" /></>,
   plug: <><path d="M9 3v4M15 3v4" /><path d="M6 7h12v4a6 6 0 01-12 0z" /><path d="M12 17v4" /></>,
   keyboard: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" /></>,
+  walk: <><circle cx="13" cy="4.5" r="1.8" /><path d="M10 21l2-7 3 3v4M12 14l-1-5 4 1 2 3M11 9l-3 3" /></>,
+  play: <path d="M7 4.5l12 7.5-12 7.5z" />,
+  pause: <><path d="M8 5v14M16 5v14" /></>,
+  flip: <><path d="M4 8h15M15 4l4 4-4 4" /><path d="M20 16H5M9 12l-4 4 4 4" /></>,
+  map: <><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" /><path d="M9 4v14M15 6v14" /></>,
   more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
 };
 

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SITE_EDIT_ID, useStore } from "./store";
+import { useWalk } from "./walkStore";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
@@ -62,6 +63,7 @@ export default function App() {
   const lookPref = usePanelPrefs((s) => s.look);
   const chassis = useChassis((s) => s.chassis);
   const touch = useChassis((s) => s.touch);
+  const walking = useWalk((s) => s.on);
   // Glass needs a GPU with blur to spare: desktop only.
   const look = FEATURES[chassis].glass ? lookPref : "studio";
   const hydrationError = useHydration((s) => s.error);
@@ -175,7 +177,7 @@ export default function App() {
   const showInspector = tab === "3d" && mode !== "review" && (!!model || editsSite(mode));
 
   return (
-    <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined}>
+    <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined} data-walking={walking || undefined}>
       <TopBar />
 
       <main data-tab={tab}>

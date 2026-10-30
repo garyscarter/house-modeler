@@ -98,7 +98,20 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ["right-drag"], action: "Pan (or Shift-drag)" },
       { keys: ["two-finger swipe"], action: "Pan" },
       { keys: ["pinch"], action: "Zoom (or the mouse wheel, or Ctrl/⌘ + scroll)" },
-      { keys: ["right-click"], action: "Actions for the room under the pointer" },
+      { keys: ["right-click"], action: "Actions for the room under the pointer; Walk from here" },
+    ],
+  },
+  {
+    title: "Walk",
+    items: [
+      { keys: ["W", "A", "S", "D"], action: "Walk (or the arrow keys; ← → turn)" },
+      { keys: ["Q", "E"], action: "Turn" },
+      { keys: ["Shift"], action: "Walk faster" },
+      { keys: ["drag"], action: "Look round" },
+      { keys: ["click", "floor"], action: "Walk there" },
+      { keys: ["click", "door"], action: "Open or shut it" },
+      { keys: ["Space (hold)"], action: "Show the other layout" },
+      { keys: ["Esc"], action: "Stop walking" },
     ],
   },
 ];

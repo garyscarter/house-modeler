@@ -7,6 +7,11 @@ import { Popover, ViewToggles } from "./ViewMenu";
 import { Icon } from "./icons";
 import { SavedViewsMenu } from "./SavedViewsMenu";
 import { useChassis } from "./useChassis";
+import { useWalk } from "../walkStore";
+import { WalkBar } from "./walk/WalkBar";
+import { WalkMap } from "./walk/WalkMap";
+import { WalkHint } from "./walk/WalkHint";
+import "./walk/walk.css";
 import { FEATURES, effectiveCompare } from "../lib/chassis";
 import "./Dock.css";
 
@@ -32,6 +37,7 @@ export function Dock() {
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const setSun = useStore((s) => s.setSun);
   const chassis = useChassis((s) => s.chassis);
+  const walking = useWalk((s) => s.on);
   if (!floors) return null;
   const phone = chassis === "phone";
   const features = FEATURES[chassis];
@@ -46,6 +52,23 @@ export function Dock() {
   const compareRows = COMPARE.filter(([k]) => features.sideBySide || k !== "side-by-side");
   const compareLabel = COMPARE.find(([k]) => k === shownMode)?.[1] ?? "Single";
   const activeName = active === "all" ? "All" : floorDisplayName(sorted.find((f) => f.id === active)?.name ?? "");
+
+  if (walking) {
+    return (
+      <>
+        <div className="dock float-card" role="group" aria-label="Walking" data-walking>
+          <WalkBar />
+        </div>
+        <WalkMap />
+        <WalkHint />
+      </>
+    );
+  }
+
+  const startWalk = () => {
+    useWalk.getState().requestWalk({ kind: "front" });
+    (document.activeElement as HTMLElement | null)?.blur();
+  };
 
   return (
     <div className="dock float-card" role="group" aria-label="View">
@@ -121,6 +144,10 @@ export function Dock() {
           <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "View"} chevron={!phone} ariaLabel="View options" title={phone ? "View options" : undefined}>
             <ViewToggles />
           </Popover>
+          <button className={phone ? "icon-btn" : "walk-start"} aria-label="Walk through the house" title="Walk through the house · Esc to stop" onClick={startWalk}>
+            <Icon name="walk" />
+            {!phone && "Walk"}
+          </button>
           {features.savedViews && <SavedViewsMenu />}
         </>
       )}
