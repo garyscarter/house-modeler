@@ -6,7 +6,8 @@ import { bayOutline, frontUnit } from "./openings";
 import { fixtureSolids } from "./planMath";
 import { GROUND_DROP } from "./site";
 import { itemFootprint, itemsOf } from "./siteItems";
-import { flightAt, flightL, flightS, headSpans, stairHeight, stepDepth, type Flight, type StepSpan } from "./stairs";
+import { flightAt, flightBlocks, flightL, flightS, headSpans, stairHeight, stepDepth, type Flight, type StepSpan } from "./stairs";
+import { floorBulkheads } from "./bulkhead";
 import { headSideSteps, stairwells, type Rect } from "./stairwell";
 import { surfaceOutline } from "./surfaceCurve";
 import { effectiveSlope } from "./surfaceSlope";
@@ -39,6 +40,8 @@ const CLR_REACH = 0.6;
 const PIECE_MAX_Y0 = 0.3;
 /** How far beyond the flight's entry and exit edges its stand spots are. */
 export const STAND_OUT = 0.35;
+/** Clear height a walker needs under a flight to pass beneath it (its head boxed into a bulkhead, say), metres. */
+export const UNDER_CLEAR = 1.9;
 
 export interface BB {
   x0: number;
@@ -105,6 +108,8 @@ export interface FlightNav {
   upper: number;
   lowerBase: number;
   upperBase: number;
+  /** How far up the run the flight is solid on the floor below (boxed in, or hanging lower than UNDER_CLEAR); beyond, walkers there pass under it. */
+  lowTo: number;
   /** Stringers while on the stairs: the flight's outline less its entry and exit edges. */
   perim: Obs[];
   /** The stairwells over it on the upper storey. */
@@ -760,9 +765,27 @@ function gardenBits(G: GardenNav): { obs: Obs[]; solids: V2[][] } {
   return { obs, solids };
 }
 
-function rectPoly(F: Flight): V2[] {
+function rectPoly(F: Flight, upTo = F.run): V2[] {
   const hw = F.width / 2;
-  return [flightAt(F, 0, -hw), flightAt(F, F.run, -hw), flightAt(F, F.run, hw), flightAt(F, 0, hw)];
+  return [flightAt(F, 0, -hw), flightAt(F, upTo, -hw), flightAt(F, upTo, hw), flightAt(F, 0, hw)];
+}
+
+/**
+ * How far up a flight it is in the way on the floor below: to the far end of the last of its blocks (treads,
+ * soffits, boxing; see flightBlocks) whose underside is lower than UNDER_CLEAR. A head that runs on over a wall
+ * into the next room, boxed into a bulkhead there, leaves that room's floor free under it.
+ */
+function lowRun(model: HouseModel, floor: Floor, f: Flight): number {
+  const { body, carpet } = flightBlocks(floor, f, floorBulkheads(floor, model.ceilingHeight));
+  let s = 0;
+  for (const b of [...body, ...carpet]) {
+    if (b.y0 >= UNDER_CLEAR) continue;
+    // A flat head's steps out beside the flight hang over no more than a wall's width of floor: not in the way.
+    const c = polygonCentroid(b.pts);
+    if (Math.abs(flightL(f, c.x, c.y)) > f.width / 2) continue;
+    for (const p of b.pts) s = Math.max(s, flightS(f, p.x, p.y));
+  }
+  return Math.min(f.run, s);
 }
 
 type Edge = { s0: number; l0: number; s1: number; l1: number };
@@ -772,8 +795,10 @@ type SideCut = { side: number; s0: number; s1: number; edge?: number };
  * With `steps` (on the stairs, where the exit is open), a flat head's square opens onto its steps, whose ends
  * bound them and whose far edges are the ways off (the head's exit, and side exits on the far side).
  */
-function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCut[] = [], steps = false): Edge[] {
-  const { run, width: w, turn } = F;
+function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCut[] = [], steps = false, upTo = F.run): Edge[] {
+  const { width: w, turn } = F;
+  // Short of the head (the floor below, where walkers pass under the rest), the far edge is where it stops.
+  const run = Math.min(F.run, upTo);
   const hw = w / 2;
   const top = F.topTurn ?? 0;
   const spans = steps ? headSpans(F) : [];
@@ -782,7 +807,7 @@ function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCu
   const side = (l: number) => {
     const cut: [number, number][] = [];
     if (noEntry && turn && Math.sign(l) === turn) cut.push([0, w]);
-    if (noExit && top && Math.sign(l) === top && !headSpans(F).length) cut.push([run - w, run]);
+    if (noExit && top && Math.sign(l) === top && !headSpans(F).length) cut.push([F.run - w, F.run]);
     for (const c of sides) if (c.side === Math.sign(l) && (c.edge ?? hw) <= hw + 1e-6) cut.push([c.s0, c.s1]);
     for (const sp of spans) if (sp.side === Math.sign(l)) cut.push([sp.s0, sp.s1]);
     for (const [a, b] of subtract(0, run, cut)) out.push({ s0: a, l0: l, s1: b, l1: l });
@@ -793,7 +818,7 @@ function flightEdges(F: Flight, noEntry: boolean, noExit: boolean, sides: SideCu
     out.push({ s0: sp.s0, l0: sp.side * hw, s1: sp.s0, l1: sp.side * reach }, { s0: sp.s1, l0: sp.side * hw, s1: sp.s1, l1: sp.side * reach });
   }
   if (!(noEntry && !turn)) out.push({ s0: 0, l0: -hw, s1: 0, l1: hw });
-  if (!(noExit && !top)) out.push({ s0: run, l0: -hw, s1: run, l1: hw });
+  if (!(noExit && !top) || run < F.run) out.push({ s0: run, l0: -hw, s1: run, l1: hw });
   return out;
 }
 const edgeObs = (F: Flight, e: Edge) => boxObs(flightAt(F, e.s0, e.l0), flightAt(F, e.s1, e.l1), 0);
@@ -977,8 +1002,10 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
       });
     }
     const cutsOn = (li: number) => sides.filter((e) => e.li === li);
-    levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower).filter((e) => e.edge <= hw + 1e-6)).map((e) => edgeObs(f, e)));
-    solids[lower].push(rectPoly(f));
+    // Below, the flight is in the way only as far as it is low; walkers pass under the rest.
+    const lowTo = lowRun(model, floors[lower], f);
+    levels[lower].obs.push(...flightEdges(f, true, false, cutsOn(lower).filter((e) => e.edge <= hw + 1e-6), false, lowTo).map((e) => edgeObs(f, e)));
+    solids[lower].push(rectPoly(f, lowTo));
     for (const r of well.rects) {
       levels[upper].obs.push(...wellObs(f, r, cutsOn(upper)));
       solids[upper].push([
@@ -1004,7 +1031,7 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     // On the treads, the stringers block, and a side exit's door while it is shut.
     const leaves = sides.filter((e) => e.door >= 0).flatMap((e) => levels[e.li].obs.filter((o) => o.door === e.door));
     const F: FlightNav = {
-      f, lower, upper, lowerBase,
+      f, lower, upper, lowerBase, lowTo,
       upperBase: levels[upper].baseY,
       perim: [...flightEdges(f, true, true, sides, true).map((e) => edgeObs(f, e)), ...leaves],
       wells: well.rects,

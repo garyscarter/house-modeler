@@ -94,6 +94,28 @@ describe("buildNav on the owner's house", () => {
   });
 });
 
+describe("under the head of the stairs", () => {
+  // The listing's head runs on over the hall/kitchen wall, boxed into the kitchen's bulkhead (underside 2.0 m).
+  const F = I.flights[0];
+  const under = { x: 0, y: -1.7 };
+
+  it("leaves the kitchen floor free under a head boxed into a bulkhead", () => {
+    // Solid from the foot to the wall, where the last straight tread comes down below the bulkhead.
+    expect(F.lowTo).toBeGreaterThan(2.3);
+    expect(F.lowTo).toBeLessThan(2.45);
+    expect(passable(I.levels[0].grid, cellAt(I.levels[0].grid, under.x, under.y), ALL_OPEN)).toBe(true);
+  });
+
+  it("keeps it solid where the head has no bulkhead and its soffit hangs low", () => {
+    const m = structuredClone(house);
+    const ground = m.floors.find((f) => f.level === 0)!;
+    ground.fixtures = (ground.fixtures ?? []).filter((x) => x.type !== "bulkhead");
+    const I2 = internalOf(buildNav(m, site, false))!;
+    expect(I2.flights[0].lowTo).toBeCloseTo(I2.flights[0].f.run);
+    expect(passable(I2.levels[0].grid, cellAt(I2.levels[0].grid, under.x, under.y), ALL_OPEN)).toBe(false);
+  });
+});
+
 describe("buildNav on small floors", () => {
   it("blocks a table and the cells round it, and keeps the rest free", () => {
     const f = floor([rect("Room", 0, 0, 500, 500)], [], { fixtures: [{ id: "t", type: "table-4", x: 250, y: 250, rot: 0, w: 1, d: 1 }] });

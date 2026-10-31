@@ -1,6 +1,6 @@
 import { polygonCentroid, type V2 } from "./geometry";
 import {
-  NORMAL, WALKER_R, MAX_STEP, SIDE_STEP, sideAt, doorIsOpen, floorAt, insideFlight, insideWell, internalOf, leftBy, levelIndex, nearestCell, cellPt, obsDist,
+  NORMAL, WALKER_R, MAX_STEP, SIDE_STEP, sideAt, doorIsOpen, floorAt, flightSL, insideFlight, insideWell, internalOf, leftBy, levelIndex, nearestCell, cellPt, obsDist,
   passable, penetration, roomStand, snapFree, stairState, standable, facing, ALL_OPEN, type Obs, type WalkInternal,
 } from "./walkNav";
 import { yawOf, type DoorStates, type NavWorld, type WalkPose, type WalkStart } from "./walkTypes";
@@ -75,7 +75,8 @@ function subStep(I: WalkInternal, st: State, dx: number, dy: number, open: (d: n
       next = { x, y, li, stair: null, feetY: feet };
     }
   } else {
-    const fi = I.flights.findIndex((F) => (F.lower === st.li && insideFlight(F, p)) || (F.upper === st.li && insideWell(F, p)));
+    // From below, only where the flight comes down to the floor (its foot); walkers pass under a head high enough.
+    const fi = I.flights.findIndex((F) => (F.lower === st.li && insideFlight(F, p) && flightSL(F, p).s < F.lowTo) || (F.upper === st.li && insideWell(F, p)));
     if (fi >= 0) {
       const s = stairState(I, fi, p);
       const k = sideAt(I.flights[fi], st);
