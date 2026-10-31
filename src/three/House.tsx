@@ -11,6 +11,7 @@ import { Roof } from "./Roof";
 import { Fixtures, setLampGlow } from "./Fixtures";
 import { LampLights } from "./FixtureLights";
 import { useLampsReady } from "./lampPool";
+import { useOffstageCompile } from "./frameLoop";
 import { useSunInfo } from "./useSun";
 import { nightDark } from "./Lighting";
 import { byId } from "../lib/catalogue";
@@ -100,6 +101,8 @@ export function House({
   const structure = modelStructure(model);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wells = useMemo(() => stairwells(model), [structure]);
+  // The hover highlight is drawn only while the pointer is over a room: its shaders are built up front, in both lamp states.
+  useOffstageCompile(HOVER_STAND_INS);
 
   // Interior lights: whether the master lets lamps be lit now, the lit lamps of every shown floor (capped together
   // in LampLights), and how dark the night is for the ceilings.
@@ -642,6 +645,22 @@ function RoomFloor({ room, polys, selected, onSelect, onContext }: { room: Room;
 }
 
 /**
+ * The hover highlight's fill and outline, one of each for every view, made once and never disposed: a disposed
+ * material takes its compiled program with it, so materials made inline would rebuild their shaders on every hover,
+ * which stops the page (for seconds at night, when the lamps are part of every program).
+ */
+const HOVER_FILL = new THREE.MeshBasicMaterial({ color: "#14a89b", toneMapped: false, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+const HOVER_LINE = new THREE.LineBasicMaterial({ color: "#14a89b", toneMapped: false });
+/**
+ * Stand-ins for Precompile (see useOffstageCompile): the highlight is only in the scene while a room is hovered. Their
+ * geometry has the real one's attributes (a shape's position, normal and uv; a line's position), which pick the program.
+ */
+const HOVER_STAND_INS: THREE.Object3D[] = (() => {
+  const tri = [new THREE.Vector2(0, 0), new THREE.Vector2(1, 0), new THREE.Vector2(0, 1)];
+  return [new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(tri)), HOVER_FILL), new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(tri.map((v) => new THREE.Vector3(v.x, 0, v.y))), HOVER_LINE)];
+})();
+
+/**
  * The room under the pointer (here or in the plan), drawn on its floor. It
  * subscribes to the hovered room itself, so hovering never re-renders the floor.
  */
@@ -650,29 +669,35 @@ function RoomHover({ floor, holes }: { floor: Floor; holes: Rect[] }) {
   const invalidate = useThree((s) => s.invalidate);
   // Frames are drawn on demand: ask for one when the hovered room changes.
   useEffect(() => invalidate(), [id, invalidate]);
-  const room = id ? floor.rooms.find((r) => r.id === id) : undefined;
-  const polys = useMemo(() => (room ? cutWells(roomWorldPolygon(floor, room), holes) : []), [floor, room, holes]);
-  const geom = useMemo(() => (polys.length ? new THREE.ShapeGeometry(polys.map(shapeFrom)) : null), [polys]);
-  const outline = useMemo(
+  // Every room's highlight, built once per floor and kept: hovering only picks one. Building and disposing one per hover
+  // changed the renderer's geometry count, which reads as new content and redraws every shadow map (see ShadowUpdates).
+  const shapes = useMemo(
     () =>
-      polys.map((p) => {
-        const g = new THREE.BufferGeometry().setFromPoints(p.map((q) => new THREE.Vector3(q.x, 0.024, q.y)));
-        return g;
-      }),
-    [polys],
+      new Map(
+        floor.rooms.map((room) => {
+          const polys = cutWells(roomWorldPolygon(floor, room), holes);
+          const fill = polys.length ? new THREE.ShapeGeometry(polys.map(shapeFrom)) : null;
+          const outline = polys.map((p) => new THREE.BufferGeometry().setFromPoints(p.map((q) => new THREE.Vector3(q.x, 0.024, q.y))));
+          return [room.id, { fill, outline }] as const;
+        }),
+      ),
+    [floor, holes],
   );
-  useEffect(() => () => geom?.dispose(), [geom]);
-  useEffect(() => () => outline.forEach((g) => g.dispose()), [outline]);
-  if (!geom) return null;
+  useEffect(
+    () => () =>
+      shapes.forEach(({ fill, outline }) => {
+        fill?.dispose();
+        outline.forEach((g) => g.dispose());
+      }),
+    [shapes],
+  );
+  const shape = id ? shapes.get(id) : undefined;
+  if (!shape?.fill) return null;
   return (
     <group>
-      <mesh geometry={geom} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2} raycast={() => null}>
-        <meshBasicMaterial color="#14a89b" toneMapped={false} transparent opacity={0.34} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} />
-      </mesh>
-      {outline.map((g, i) => (
-        <lineLoop key={i} geometry={g} renderOrder={3} raycast={() => null}>
-          <lineBasicMaterial color="#14a89b" toneMapped={false} />
-        </lineLoop>
+      <mesh geometry={shape.fill} material={HOVER_FILL} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} renderOrder={2} raycast={() => null} />
+      {shape.outline.map((g, i) => (
+        <lineLoop key={i} geometry={g} material={HOVER_LINE} renderOrder={3} raycast={() => null} />
       ))}
     </group>
   );
