@@ -130,7 +130,8 @@ main[data-tab="plan"] { background: #fff; }
 main[data-tab="plan"]:has(> .site-canvas) { background: #fbfbf9; }
 main[data-tab="plan"] { padding-top: var(--float-top); }
 /* The drawing's own chrome is measured from the drawing's top edge, which is already below the islands. */
-main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north { top: var(--float-gap); }
+main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north, main[data-tab="plan"] .inspector-card { top: var(--float-gap); }
+main[data-tab="plan"] .inspector-card { max-height: calc(100% - var(--float-gap) - var(--card-clear)); }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }
