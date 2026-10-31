@@ -32,7 +32,7 @@ const toScreen = (page, x, y, z) => page.evaluate(([x, y, z]) => {
 const st = (page) => page.evaluate(() => ({ w: window.__walkStore.getState(), cam: window.__houseCamera.camera.position.toArray(), m: window.__houseStore.getState() }));
 const poly = (r) => r.poly;
 const REST_PITCH = (-8 * Math.PI) / 180;
-const walkFovOf = (aspect) => Math.max(45, Math.min(78, (2 * Math.atan(Math.tan((75 * Math.PI) / 360) / aspect) * 180) / Math.PI));
+const walkFovOf = (aspect, h = 90) => Math.max(45, Math.min(78, (2 * Math.atan(Math.tan((h * Math.PI) / 360) / aspect) * 180) / Math.PI));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // Per-frame feel of a pose series sampled at 30 fps: biggest yaw step (rad), biggest change of yaw step, biggest speed change (m/s).
 const feel = (ps) => {
@@ -82,7 +82,14 @@ async function standLooking(page, room, d = 1.4) {
   ok(Math.abs(s.cam[1] - (s.w.pose.feetY + 1.7)) < 0.05 && s.m.showCeilings && s.m.viewMode === 'single', 'eye at 1.7 m, ceilings on, single view');
   const lens = await page.evaluate(() => { const c = window.__houseCamera.camera; return { fov: c.fov, near: c.near, order: c.rotation.order, ctl: window.__houseCamera.controls }; });
   const aspect = await page.evaluate(() => { const r = document.querySelector('.viewer canvas').getBoundingClientRect(); return r.width / r.height; });
-  ok(Math.abs(lens.fov - walkFovOf(aspect)) < 0.01 && lens.fov < 56 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov.toFixed(1)} (walkFov(${aspect.toFixed(2)}) = ${walkFovOf(aspect).toFixed(1)}), near ${lens.near}, order ${lens.order}, controls off`);
+  ok(Math.abs(lens.fov - walkFovOf(aspect)) < 0.01 && lens.fov < 70 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov.toFixed(1)} (walkFov(${aspect.toFixed(2)}) = ${walkFovOf(aspect).toFixed(1)}), near ${lens.near}, order ${lens.order}, controls off`);
+  // The Lens setting narrows and widens it.
+  await page.evaluate(() => window.__houseStore.getState().setSettings({ walkLens: 75 }));
+  await page.waitForTimeout(300);
+  const narrow = await page.evaluate(() => window.__houseCamera.camera.fov);
+  await page.evaluate(() => window.__houseStore.getState().setSettings({ walkLens: undefined }));
+  await page.waitForTimeout(300);
+  ok(Math.abs(narrow - walkFovOf(aspect, 75)) < 0.01 && Math.abs((await page.evaluate(() => window.__houseCamera.camera.fov)) - walkFovOf(aspect)) < 0.01, `Lens setting: Natural ${narrow.toFixed(1)}, back to Wide`);
   ok(Math.abs(s.w.pose.pitch - REST_PITCH) < 0.01, `placed looking slightly down: pitch ${s.w.pose.pitch.toFixed(3)} rad (REST_PITCH ${REST_PITCH.toFixed(3)})`);
   ok(/Click the floor to walk/.test(s.w.hint?.text || ''), `first-time hint on desktop ("${s.w.hint?.text}")`);
   ok(s.w.where && s.w.where.outside === true && !s.w.where.roomName, 'standing outside in the garden at the start');

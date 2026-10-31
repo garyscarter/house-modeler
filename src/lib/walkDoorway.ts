@@ -1,7 +1,7 @@
 import { pointInPolygon, polygonCentroid, type V2 } from "./geometry";
-import { ALL_OPEN, internalOf, levelIndex, inGarden, standable } from "./walkNav";
+import { ALL_OPEN, internalOf, levelIndex, inGarden, standable, WALKER_R } from "./walkNav";
 import { wrapAngle } from "./walkMotion";
-import { yawOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "./walkTypes";
+import { clearOfSweeps, yawOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "./walkTypes";
 
 /**
  * Doorway stops: a tour stop or a mini-map room tap ends just inside the doorway, so one look round shows the
@@ -125,4 +125,38 @@ export function doorwayStop(nav: NavWorld, route: WalkRoute, from: WalkPose, reg
     return { route: { points, doors, yaw: face.yaw }, yaw: face.yaw, sweep: face.sweep, entry: { x: E.x, y: E.y }, fallback: false };
   }
   return keepAsIs();
+}
+
+/** Insets tried, each deeper into the room, to stand clear of the swing of the door you came in by. */
+const CLEAR_INSETS = [0.6, 0.8, 1.0, 1.2, 1.4];
+/** Room left between the walker and a leaf as it swings past, metres. */
+const SWING_MARGIN = 0.05;
+
+/**
+ * A tour stop that looks round a room with the door you came in by shut behind you: the doorway stop, moved on
+ * into the room as far as it takes to stand clear of that door's swing. `shut` is the door's key, null when the
+ * way in has no door to shut (an archway, the garden) or the room is too small to get clear of it (the door then
+ * stays open and the look round is from the doorway, as before).
+ */
+export function shutStop(nav: NavWorld, route: WalkRoute, from: WalkPose, region: DoorwayRegion): (DoorwayStop & { shut: string | null }) | null {
+  const first = doorwayStop(nav, route, from, region);
+  if (!first) return null;
+  if (first.fallback || !first.entry || region.roomId === null) return { ...first, shut: null };
+  const entry = first.entry;
+  // The door crossed on the way in: the route's last door before the stop, at the room's edge.
+  const door = first.route.doors
+    .map((d) => nav.doors.find((x) => x.key === d.key))
+    .filter((d): d is NonNullable<typeof d> => !!d && d.passage === "door" && d.level === region.level && Math.hypot(d.centre.x - entry.x, d.centre.y - entry.y) < 0.6)
+    .pop();
+  if (!door) return { ...first, shut: null };
+  const clear = (ds: DoorwayStop) => {
+    const end = ds.route.points[ds.route.points.length - 1];
+    return !!end && clearOfSweeps(door.sweeps, end, WALKER_R + SWING_MARGIN);
+  };
+  if (clear(first)) return { ...first, shut: door.key };
+  for (const inset of CLEAR_INSETS.slice(1)) {
+    const ds = doorwayStop(nav, route, from, region, inset);
+    if (ds && !ds.fallback && clear(ds)) return { ...ds, shut: door.key };
+  }
+  return { ...first, shut: null };
 }

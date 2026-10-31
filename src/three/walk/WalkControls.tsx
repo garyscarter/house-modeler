@@ -6,8 +6,8 @@ import { useStore } from "../../store";
 import { useWalk } from "../../walkStore";
 import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
-import { buildNav, doorwayStop, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, startPose, stepWalker } from "../../lib/walk";
-import { eyeHeightOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
+import { buildNav, doorwayStop, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, shutStop, startPose, stepWalker, WALKER_R } from "../../lib/walk";
+import { clearOfSweeps, eyeHeightOf, walkLensOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
 import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, lookSweep, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, REST_PITCH, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, walkFov, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
 import { doorTagOf } from "./doorTag";
 
@@ -18,6 +18,11 @@ const DRAG_PX = 6;
 const RING_S = 1.6;
 const DOOR_REACH_M = 1.8; // a tour opens a shut door this far off (the leaf takes 0.7 s to swing)
 const DOOR_OPEN_S = 0.8;
+/** A tour shuts the door behind it and waits this long for the leaf to swing to before it looks round, seconds. */
+const SHUT_HOLD_S = 0.8;
+/** A door the tour opened is shut behind it once the walker is this far clear of its swing and its opening, metres. */
+const SHUT_CLEAR_M = 0.05;
+const SHUT_AWAY_M = 0.6;
 const DOOR_SLOW_M = 1.0;
 const DOOR_SLOW_SPEED = 0.7;
 const STALL_S = 0.5;
@@ -54,7 +59,8 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const pitchVel = useRef(0);
   const doorTimers = useRef(new Map<string, number>());
   const stall = useRef({ t: 0, count: 0 });
-  const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string, lookYaw: 0, left: LOOK_AMP, right: LOOK_AMP });
+  // shut: the door to shut behind you at the stop; opened: doors the tour opened, shut again once you are clear of them.
+  const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string, lookYaw: 0, left: LOOK_AMP, right: LOOK_AMP, shut: null as string | null, opened: new Set<string>() });
   const ring = useRef<THREE.Mesh>(null);
   const ringT = useRef(0);
   const fovRad = useRef((walkFov(1.6) * Math.PI) / 180);
@@ -141,6 +147,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     if (tour.status !== "playing") {
       if (tr.prev === "playing" && follow.current && tr.routeFor >= 0) clearRoute();
       tr.routeFor = -1;
+      if (tour.status === "off") tr.opened.clear();
     } else if (tr.prev !== "playing" && tour.stops.length) {
       // Playing again replans from where you stand.
       tr.routeFor = -1;
@@ -183,6 +190,32 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       return r;
     };
 
+    /** At a stop: shut the door you came in by, if it is open, and give it time to swing to before looking round. */
+    const shutBehind = (): number => {
+      const key = tr.shut;
+      tr.shut = null;
+      const nd = key ? n.doors.find((x) => x.key === key) : undefined;
+      if (!key || !nd || !(w.doors[key] ?? nd.initial)) return 0;
+      w.setDoor(key, false);
+      tr.opened.delete(key);
+      return -SHUT_HOLD_S;
+    };
+    if (tour.status === "playing" && tr.opened.size) {
+      // Doors the tour opened are shut again behind it, once you are past them and clear of their swing.
+      const ahead = follow.current?.route.doors.filter((d) => routePointS(follow.current!.rs, d.index) >= follow.current!.rs.s).map((d) => d.key) ?? [];
+      for (const key of [...tr.opened]) {
+        const nd = n.doors.find((x) => x.key === key);
+        if (!nd || !(w.doors[key] ?? nd.initial)) {
+          tr.opened.delete(key);
+          continue;
+        }
+        if (ahead.includes(key) || nd.level !== p.level || p.stair !== null) continue;
+        if (clearOfSweeps(nd.sweeps, p, WALKER_R + SHUT_CLEAR_M) && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) > SHUT_AWAY_M) {
+          w.setDoor(key, false);
+          tr.opened.delete(key);
+        }
+      }
+    }
     if (tour.status === "playing") {
       busy = true;
       if (!tour.stops.length) {
@@ -203,8 +236,10 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
             const res = routeTo(n, p, goal, w.doors);
             const route = res.ok ? res.route : res.reason === "shut-door" ? res.route : null;
             if (route) {
-              // Stop just inside the doorway (the garden: just outside the door), looking in; the look-round sweeps the room from there.
-              const ds = doorwayStop(n, route, p, { level: stop.level, roomId: stop.roomId });
+              // Stop inside the doorway (the garden: just outside the door), looking in, clear of the door's swing so it
+              // can be shut behind you; the look-round sweeps the room from there.
+              const ds = shutStop(n, route, p, { level: stop.level, roomId: stop.roomId });
+              tr.shut = ds?.shut ?? null;
               tr.lookYaw = ds ? ds.yaw : stop.yaw;
               tr.left = ds ? ds.sweep.left : LOOK_AMP;
               tr.right = ds ? ds.sweep.right : LOOK_AMP;
@@ -225,16 +260,17 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
               if (nd && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) < DOOR_REACH_M) {
                 w.setDoor(d.key, true);
                 timers.set(d.key, DOOR_OPEN_S);
+                tr.opened.add(d.key);
               }
             }
             const r = runRoute(f);
             if (r.done) {
               clearRoute();
-              tr.lookT = 0;
+              tr.lookT = shutBehind();
               w.setTour({ phase: "looking" });
             }
           } else if (tr.routeFor === tour.index && tour.phase === "walking" && !follow.current) {
-            tr.lookT = 0;
+            tr.lookT = shutBehind();
             w.setTour({ phase: "looking" });
           }
         } else {
@@ -362,14 +398,15 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   });
 
   // ---- camera lens ----
+  const lens = useStore((s) => walkLensOf(s.settings));
   useEffect(() => {
     camera.rotation.order = "YXZ";
     camera.near = NEAR;
-    camera.fov = walkFov(size.width / Math.max(1, size.height));
+    camera.fov = walkFov(size.width / Math.max(1, size.height), lens);
     fovRad.current = (camera.fov * Math.PI) / 180;
     camera.updateProjectionMatrix();
     inv.current();
-  }, [camera, size.width, size.height]);
+  }, [camera, size.width, size.height, lens]);
   useEffect(
     () => () => {
       camera.fov = 45;

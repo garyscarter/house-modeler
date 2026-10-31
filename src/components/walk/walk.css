@@ -18,6 +18,8 @@
 .walk-eye-pop input[type="range"] { width: 100%; accent-color: var(--accent); }
 .walk-bar .walk-reset { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--line); }
 .walk-bar .walk-reset:disabled { opacity: 0.4; cursor: default; }
+.walk-lens { display: flex; }
+.walk-bar .walk-lens button { flex: 1; height: auto; padding: 5px 8px; font-size: 12px; border: 0; }
 
 .walk-map {
   position: absolute; right: var(--float-gap); bottom: 76px; z-index: var(--z-float);

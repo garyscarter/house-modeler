@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
 import { useWalk, WALK_UI } from "./walkStore";
-import { eyeHeightOf, forwardOf, initiallyOpen, patioSlider, yawOf } from "./lib/walkTypes";
+import { clearOfSweeps, DEFAULT_LENS, eyeHeightOf, forwardOf, initiallyOpen, leafSweeps, patioSlider, walkLensOf, yawOf } from "./lib/walkTypes";
+import { openingParts } from "./lib/openings";
+import type { Opening } from "./types";
 
 const st = () => useStore.getState();
 const walk = () => useWalk.getState();
@@ -64,6 +66,52 @@ describe("walk rules", () => {
     expect(initiallyOpen({ kind: "front" }, true)).toBe(false);
     expect(initiallyOpen({ kind: "gap" }, false)).toBe(true);
     expect(initiallyOpen({ kind: "window" }, true)).toBe(false);
+  });
+
+  it("reads the lens, 90° unless set to one of the three", () => {
+    expect(walkLensOf({})).toBe(DEFAULT_LENS);
+    expect(DEFAULT_LENS).toBe(90);
+    expect(walkLensOf({ walkLens: 75 })).toBe(75);
+    expect(walkLensOf({ walkLens: 60 })).toBe(90);
+  });
+
+  it("puts each leaf's swing where the 3D rig swings it", () => {
+    const cases: [Partial<Opening>, { x: number; y: number }, 1 | -1 | 0][] = [
+      [{ kind: "door" }, { x: 1, y: 0 }, 0],
+      [{ kind: "door", flipHinge: true, flipSwing: true }, { x: 0, y: 1 }, 0],
+      [{ kind: "door", flipSwing: true }, { x: 0, y: -1 }, 0],
+      [{ kind: "door" }, { x: 1, y: 0 }, 1],
+      [{ kind: "door", flipHinge: true }, { x: 0, y: 1 }, -1],
+      [{ kind: "french" }, { x: 1, y: 0 }, 1],
+      [{ kind: "front" }, { x: 0, y: 1 }, -1],
+    ];
+    for (const [o, dir, out] of cases) {
+      const op = { id: "o", x: 0, y: 0, orientation: "h", widthM: 0.8, ...o } as Opening;
+      const width = op.kind === "french" ? 1.5 : 0.8;
+      const centre = { x: 2, y: 3 };
+      const rig = openingParts({ opening: op, centre, dir, width, y0: 0, y1: 2 }, 0.1, out, true).rig!;
+      const sweeps = leafSweeps(op, centre, dir, width, out);
+      expect(sweeps).toHaveLength(rig.panels.length);
+      // The rig's frame on the plan: x along dir, z along (-dir.y, dir.x) (DoorLeaves turns it by atan2(-dir.y, dir.x)).
+      const toPlan = (x: number, z: number) => ({ x: centre.x + dir.x * x - dir.y * z, y: centre.y + dir.y * x + dir.x * z });
+      rig.panels.forEach((panel, i) => {
+        const pose = panel.pose(1);
+        const hinge = toPlan(pose.x, pose.z);
+        expect(Math.hypot(hinge.x - sweeps[i].hinge.x, hinge.y - sweeps[i].hinge.y)).toBeLessThan(0.1);
+        // The open leaf points away from its hinge along its local +x, turned by ry.
+        const tip = toPlan(pose.x + Math.cos(pose.ry), pose.z - Math.sin(pose.ry));
+        const way = { x: tip.x - hinge.x, y: tip.y - hinge.y };
+        expect(way.x * sweeps[i].side.x + way.y * sweeps[i].side.y, JSON.stringify(o)).toBeGreaterThan(0.5);
+      });
+    }
+  });
+
+  it("is clear of a sweep beyond the leaf's reach, or behind the wall it swings away from", () => {
+    const [sw] = leafSweeps({ kind: "door" }, { x: 0, y: 0 }, { x: 1, y: 0 }, 0.8, 0);
+    // Hinge at x -0.4, swinging to +y.
+    expect(clearOfSweeps([sw], { x: 0, y: 0.5 }, 0.25)).toBe(false);
+    expect(clearOfSweeps([sw], { x: 0, y: 1.2 }, 0.25)).toBe(true);
+    expect(clearOfSweeps([sw], { x: 0, y: -0.3 }, 0.25)).toBe(true);
   });
 
   it("the patio slider uncovers one panel", () => {
