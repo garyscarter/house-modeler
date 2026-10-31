@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, STRAFE_FACTOR, sweepDuration, TURN_RATE, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion } from "./walkMotion";
+import { cornerSpeed, dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, stopSpeed, STOP_RAMP_S, STRAFE_FACTOR, sweepDuration, TURN_RATE, TURN_RATE_LARGE, turnRateFor, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion, type RouteOpts } from "./walkMotion";
 import { PITCH_MAX, type WalkPose, type WalkRoute } from "./walkTypes";
 
 const pose = (over: Partial<WalkPose> = {}): WalkPose => ({ x: 0, y: 0, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0, ...over });
 
 /** Run the keys for `secs` at 30 fps, returning each frame's speed (m/s), turn rate (rad/s) and the final state. */
-function runKeys(keys: HeldKeys, secs: number, start: KeyMotion = NO_KEY_MOTION, yaw = 0) {
+function runKeys(keys: HeldKeys, secs: number, start: KeyMotion = NO_KEY_MOTION, yaw = 0, turnRate = TURN_RATE) {
   let m = start;
   const speeds: number[] = [];
   const turns: number[] = [];
   let x = 0;
   let y = 0;
   for (let i = 0; i < Math.round(secs * 30); i++) {
-    const k = keyMove(keys, yaw, 1 / 30, m);
+    const k = keyMove(keys, yaw, 1 / 30, m, turnRate);
     m = k.motion;
     x += k.dx;
     y += k.dy;
@@ -59,17 +59,33 @@ describe("keys", () => {
     expect(l.turns[l.turns.length - 1]).toBeCloseTo(TURN_RATE, 1);
     expect(runKeys({ ...NO_KEYS, turnRight: true }, 1).turns[29]).toBeLessThan(0);
   });
-  it("speed ramps up over 0.15-0.3 s and down over 0.1-0.3 s, never instantly", () => {
+  it("90% of speed in 0.30-0.36 s up, under 10% in 0.23-0.30 s down, never instantly", () => {
     const up = runKeys({ ...NO_KEYS, forward: true }, 1);
     const tUp = (up.speeds.findIndex((v) => v >= 0.9 * WALK_SPEED) + 1) / 30;
-    expect(tUp).toBeGreaterThanOrEqual(0.15);
-    expect(tUp).toBeLessThanOrEqual(0.3);
-    expect(up.speeds[0]).toBeLessThan(0.3 * WALK_SPEED);
+    expect(tUp).toBeGreaterThanOrEqual(0.3);
+    expect(tUp).toBeLessThanOrEqual(0.36);
+    expect(up.speeds[0]).toBeLessThan(0.1 * WALK_SPEED);
     const down = runKeys(NO_KEYS, 1, up.m);
     const tDown = (down.speeds.findIndex((v) => v <= 0.1 * WALK_SPEED) + 1) / 30;
-    expect(tDown).toBeGreaterThanOrEqual(0.1);
+    expect(tDown).toBeGreaterThanOrEqual(0.23);
     expect(tDown).toBeLessThanOrEqual(0.3);
-    expect(down.speeds[0]).toBeGreaterThan(0.5 * WALK_SPEED);
+    expect(down.speeds[0]).toBeGreaterThan(0.85 * up.speeds[up.speeds.length - 1]);
+  });
+  it("Shift tops out at 1.8 m/s", () => {
+    const r = runKeys({ ...NO_KEYS, forward: true, fast: true }, 3);
+    expect(Math.abs(r.speeds[r.speeds.length - 1] - 1.8)).toBeLessThan(0.05);
+  });
+  it("the turn rate follows the view: 1.3 rad/s on large, 1.6 by default, 90% in 0.13-0.19 s", () => {
+    expect(turnRateFor("large")).toBe(TURN_RATE_LARGE);
+    expect(turnRateFor("medium")).toBe(TURN_RATE);
+    expect(turnRateFor("small")).toBe(TURN_RATE);
+    const big = runKeys({ ...NO_KEYS, turnLeft: true }, 1, NO_KEY_MOTION, 0, 1.3);
+    expect(Math.abs(big.turns[big.turns.length - 1] - 1.3)).toBeLessThan(0.02);
+    const def = runKeys({ ...NO_KEYS, turnLeft: true }, 1);
+    expect(Math.abs(def.turns[def.turns.length - 1] - 1.6)).toBeLessThan(0.02);
+    const t90 = (def.turns.findIndex((v) => v >= 0.9 * 1.6) + 1) / 30;
+    expect(t90).toBeGreaterThanOrEqual(0.13);
+    expect(t90).toBeLessThanOrEqual(0.19);
   });
 });
 
@@ -168,9 +184,10 @@ describe("followRoute", () => {
     const r = run(pose(), bend);
     let worst = 0;
     for (let i = 1; i < r.frames.length; i++) worst = Math.max(worst, Math.abs(r.frames[i].speed - r.frames[i - 1].speed));
-    expect(worst).toBeLessThanOrEqual(0.06);
+    // The 0.8 s stop ramp peaks at 2.44 m/s2, which is 0.081 m/s per 1/30 s frame.
+    expect(worst).toBeLessThanOrEqual(0.085);
     const corner = r.frames.reduce((best, f) => (Math.hypot(f.x, f.y + 3) < Math.hypot(best.x, best.y + 3) ? f : best));
-    expect(corner.speed).toBeLessThan(ROUTE_SPEED * 0.8);
+    expect(corner.speed).toBeLessThan(ROUTE_SPEED * 0.65);
   });
   it("the view turns smoothly into the corner", () => {
     const r = run(pose(), bend);
@@ -202,7 +219,7 @@ describe("followRoute", () => {
     const m = { yawVel: 0, pitchVel: 0 };
     let top = 0;
     for (let i = 0; i < 90; i++) {
-      const r = followRoute(p, bend, rs, m, 1 / 30, 0.7);
+      const r = followRoute(p, bend, rs, m, 1 / 30, { speedCap: 0.7 });
       p = { ...p, x: p.x + r.dx, y: p.y + r.dy, yaw: r.yaw, pitch: r.pitch };
       rs = r.state;
       m.yawVel = r.yawVel;
@@ -218,7 +235,7 @@ describe("followRoute", () => {
     let rs = routeStart(p, bend);
     const m = { yawVel: 0, pitchVel: 0 };
     for (let i = 0; i < 120; i++) {
-      const r = followRoute(p, bend, rs, m, 1 / 30, Infinity, rest);
+      const r = followRoute(p, bend, rs, m, 1 / 30, { restPitch: rest });
       p = { ...p, x: p.x + r.dx, y: p.y + r.dy, yaw: r.yaw, pitch: r.pitch };
       rs = r.state;
       m.yawVel = r.yawVel;
@@ -233,6 +250,128 @@ describe("followRoute", () => {
     const p = pose(); // never moves
     for (let i = 0; i < 90; i++) st = followRoute(p, bend, st, m, 1 / 30).state;
     expect(st.s).toBeLessThan(1);
+  });
+});
+
+describe("route pacing", () => {
+  const pt = (x: number, y: number, stair: number | null = null) => ({ x, y, level: 0, stair });
+  const deg = Math.PI / 180;
+  interface Frame { s: number; x: number; y: number; yaw: number; speed: number; aim: number; heading: number; pitch: number; yawRate: number }
+  /** Walk a route east or wherever it points, from rest at 30 fps, until done. */
+  function walk(route: WalkRoute, doors: Parameters<typeof routeStart>[2] = [], opts: RouteOpts = {}, start = pose(), secs = 30): Frame[] {
+    let p = start;
+    let rs = routeStart(p, route, doors);
+    const m = { yawVel: 0, pitchVel: 0 };
+    const out: Frame[] = [];
+    for (let i = 0; i < secs * 30; i++) {
+      const r = followRoute(p, route, rs, m, 1 / 30, opts);
+      const yawRate = wrapAngle(r.yaw - p.yaw) * 30;
+      p = { ...p, x: p.x + r.dx, y: p.y + r.dy, yaw: r.yaw, pitch: r.pitch };
+      rs = r.state;
+      m.yawVel = r.yawVel;
+      m.pitchVel = r.pitchVel;
+      out.push({ s: rs.s, x: p.x, y: p.y, yaw: p.yaw, speed: Math.hypot(r.dx, r.dy) * 30, aim: r.aim, heading: r.heading, pitch: p.pitch, yawRate });
+      if (r.done) break;
+    }
+    return out;
+  }
+  // Facing east along +x: yaw of a +x step is -pi/2.
+  const east = -Math.PI / 2;
+  const straight = (len: number): WalkRoute => ({ points: [pt(len, 0)], doors: [] });
+  const door = (cx: number, cy: number, clear: number) => ({ key: "d", kind: "door" as const, passage: "door" as const, centre: { x: cx, y: cy }, span: [-clear / 2, clear / 2] as [number, number] });
+  const lRoute: WalkRoute = { points: [pt(4, 0), pt(4, 4)], doors: [] };
+  const bendBy = (deg_: number): WalkRoute => {
+    const a = deg_ * deg;
+    return { points: [pt(4, 0), pt(4 + 4 * Math.cos(a), 4 * Math.sin(a))], doors: [] };
+  };
+  const minNear = (f: Frame[], cx: number, cy: number, r: number) => Math.min(...f.filter((q) => Math.hypot(q.x - cx, q.y - cy) < r).map((q) => q.speed));
+
+  it("starts on a smoothstep ramp: 90% at 0.77-0.84 s, acceleration under 2 m/s2, cruising by 1.1 s", () => {
+    const f = walk(straight(10), [], { }, pose({ yaw: east }));
+    const t90 = (f.findIndex((q) => q.speed >= 0.9 * ROUTE_SPEED) + 1) / 30;
+    expect(t90).toBeGreaterThanOrEqual(0.77);
+    expect(t90).toBeLessThanOrEqual(0.84);
+    let peak = f[0].speed * 30;
+    for (let i = 1; i < f.length; i++) peak = Math.max(peak, ((f[i].speed - f[i - 1].speed) * 30) * 1);
+    expect(peak).toBeLessThanOrEqual(2.0);
+    expect(Math.abs(f[Math.round(1.1 * 30) - 1].speed - 1.3)).toBeLessThan(0.01);
+  });
+  it("stops on a smoothstep ramp: about 0.52 m, under 2.5 m/s2, at the end", () => {
+    const f = walk(straight(10), [], {}, pose({ yaw: east }));
+    // From the last frame at cruise: a smoothstep leaves cruise too gently to catch at 1.29 (its first 0.03 m cost under 1% of speed).
+    const i0 = f.findIndex((q, i) => i > 30 && q.speed < 1.299);
+    const slowed = 10 - f[i0 - 1].x;
+    expect(slowed).toBeGreaterThanOrEqual(0.47);
+    expect(slowed).toBeLessThanOrEqual(0.55);
+    let worst = 0;
+    for (let i = 1; i < f.length; i++) worst = Math.max(worst, ((f[i - 1].speed - f[i].speed) * 30));
+    expect(worst).toBeLessThanOrEqual(2.5 + 1e-6);
+    expect(Math.abs(f[f.length - 1].x - 10)).toBeLessThan(0.05);
+  });
+  it("stopSpeed is unlimited beyond the ramp and zero at the end", () => {
+    expect(stopSpeed(0.6)).toBe(Infinity);
+    expect(stopSpeed(0.52 - 1e-9)).toBeCloseTo(ROUTE_SPEED, 2);
+    expect(stopSpeed(0)).toBeLessThan(0.01);
+    expect(STOP_RAMP_S).toBe(0.8);
+  });
+  it("slows for corners in proportion to the turn", () => {
+    const table: [number, number][] = [[10, 1.3], [20, 1.128], [30, 0.981], [45, 0.849], [60, 0.76], [90, 0.633], [120, 0.527], [150, 0.408], [170, 0.3]];
+    for (const [d, v] of table) expect(cornerSpeed(d * deg)).toBeCloseTo(v, 2);
+    const l = walk(lRoute, [], {}, pose({ yaw: east }));
+    expect(Math.abs(minNear(l, 4, 0, 0.15) - 0.633)).toBeLessThan(0.03);
+    expect(Math.abs(minNear(walk(bendBy(45), [], {}, pose({ yaw: east })), 4, 0, 0.15) - 0.849)).toBeLessThan(0.03);
+    expect(Math.abs(minNear(walk(bendBy(20), [], {}, pose({ yaw: east })), 4, 0, 0.15) - 1.128)).toBeLessThan(0.03);
+  });
+  it("eases through a door frame: 0.9 m/s (0.7 narrow) and back to cruise", () => {
+    const wide = walk(straight(6), [door(3, 0, 0.8)], {}, pose({ yaw: east })).map((q) => q);
+    const route: WalkRoute = { points: [pt(6, 0)], doors: [{ key: "d", index: 0 }] };
+    const f = walk(route, [door(3, 0, 0.8)], {}, pose({ yaw: east }));
+    expect(wide.length).toBeGreaterThan(0);
+    for (const q of f.filter((q) => q.x >= 2.9 && q.x <= 3.4)) expect(q.speed).toBeLessThanOrEqual(0.92);
+    expect(f.find((q) => q.x >= 4.1)!.speed).toBeGreaterThan(1.25);
+    const n = walk(route, [door(3, 0, 0.7)], {}, pose({ yaw: east }));
+    for (const q of n.filter((q) => q.x >= 2.9 && q.x <= 3.4)) expect(q.speed).toBeLessThanOrEqual(0.72);
+  });
+  it("ignores open gaps and doors that are not on the route", () => {
+    const route: WalkRoute = { points: [pt(6, 0)], doors: [{ key: "d", index: 0 }] };
+    const gap = { ...door(3, 0, 0.8), passage: "open" as const, kind: "wall" as never };
+    expect(minNear(walk(route, [gap], {}, pose({ yaw: east })), 3, 0, 0.3)).toBeGreaterThan(1.25);
+    expect(minNear(walk(straight(6), [door(3, 0, 0.8)], {}, pose({ yaw: east })), 3, 0, 0.3)).toBeGreaterThan(1.25);
+    const arch = { ...door(3, 0, 0.8), passage: "open" as const, kind: "archway" as const };
+    expect(minNear(walk(route, [arch], {}, pose({ yaw: east })), 3, 0, 0.3)).toBeLessThanOrEqual(0.92);
+  });
+  it("the gaze leads into a corner: at least 10 degrees toward the new leg from 0.8 m before it, never over 25", () => {
+    const f = walk(lRoute, [], {}, pose({ yaw: east }));
+    const at = f.find((q) => q.x >= 3.2)!;
+    // Turning to +y (north on the plan) is a left turn on screen; either way its sign is the turn's.
+    expect(Math.abs(wrapAngle(at.aim - at.heading))).toBeGreaterThanOrEqual(10 * deg);
+    for (const q of f) expect(Math.abs(wrapAngle(q.aim - q.heading))).toBeLessThanOrEqual(25 * deg + 1e-9);
+  });
+  it("looks straight ahead on a long straight", () => {
+    const f = walk(straight(5), [], {}, pose({ yaw: east }));
+    for (const q of f.filter((q) => q.s >= 3)) expect(Math.abs(wrapAngle(q.yaw - q.heading))).toBeLessThan(1 * deg);
+  });
+  it("turns the head to a door ahead, at most 25 degrees off the heading", () => {
+    const route: WalkRoute = { points: [pt(6, 0)], doors: [{ key: "d", index: 0 }] };
+    const f = walk(route, [door(4, 0.3, 0.8)], {}, pose({ yaw: east }));
+    const at = f.find((q) => q.x >= 2.5)!;
+    const bearing = Math.atan2(-(4 - at.x), -(0.3 - at.y));
+    expect(Math.abs(wrapAngle(at.yaw - bearing))).toBeLessThan(5 * deg);
+    // A door 40 degrees off the heading is only looked at to the 25 degree limit.
+    const far = walk(route, [door(3, 3 * Math.tan(40 * deg), 0.8)], {}, pose({ yaw: east })).find((q) => q.x >= 1.6)!;
+    expect(Math.abs(wrapAngle(far.aim - far.heading))).toBeCloseTo(25 * deg, 6);
+  });
+  it("never exceeds the yaw cap it is given", () => {
+    const cap = 55 * deg;
+    for (const q of walk(lRoute, [], { yawCap: cap }, pose({ yaw: 1 })) ) expect(Math.abs(q.yawRate)).toBeLessThanOrEqual(cap + 1e-6);
+  });
+  it("drops the gaze to the stairs near a flight", () => {
+    const stairs: WalkRoute = { points: [pt(3, 0, 0), pt(7, 0, 0)], doors: [] };
+    const rest = -8 * deg;
+    const f = walk(stairs, [], { restPitch: rest }, pose({ yaw: east, pitch: rest }));
+    expect(f[0].pitch).toBeGreaterThan(-9 * deg);
+    const near = f.find((q) => q.s >= 3)!;
+    expect(Math.abs(near.pitch + 12 * deg)).toBeLessThan(0.5 * deg);
   });
 });
 

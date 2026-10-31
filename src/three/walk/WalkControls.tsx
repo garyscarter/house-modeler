@@ -7,12 +7,13 @@ import { useWalk } from "../../walkStore";
 import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
 import { buildNav, doorwayStop, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, shutStop, startPose, stepWalker, WALKER_R } from "../../lib/walk";
-import { clearOfSweeps, eyeHeightOf, walkLensOf, yawOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
-import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, wrapAngle, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
+import { clearOfSweeps, eyeHeightOf, walkLensOf, walkStepOf, yawOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
+import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, ROUTE_SPEED, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, turnRateFor, wrapAngle, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
 import { lensClass, restPitch, STOP_PITCH_UP, walkLens, yawCapDeg, type LensClass } from "../../lib/walkLens";
 import { exitPoint, fallbackTargets, lookCount, lookPlan, lookPose, lookResume, lookTargets, lookViewOf, type LookPlan } from "../../lib/walkLook";
+import { stepAdvance, stepEnabled, stepOffset, STEP_REST } from "../../lib/walkStep";
 import { doorTagOf } from "./doorTag";
-import { probeWalkTerm, stepWalkTerms, walkCounters } from "./walkTerms";
+import { probeWalkTerm, registerWalkTerm, stepWalkTerms, walkCounters } from "./walkTerms";
 
 /** First-person walk controller (docs/walkthrough-plan.md, Chunk C): keys, drag to look, tap to walk or open a door, routes and the tour. */
 
@@ -82,6 +83,8 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const lookingRef = useRef(false);
   const prevFrame = useRef<WalkPose | null>(null);
   const motionRef = useRef({ speed: 0, yawRate: 0 });
+  // The natural step's phase and amplitude. Only the camera shows it: never the pose or the walk store.
+  const stepRef = useRef(STEP_REST);
 
   const commit = (p: WalkPose) => {
     poseRef.current = p;
@@ -108,7 +111,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const startRoute = (route: WalkRoute, goal: WalkPoint | null, resetStall = true, arrive?: () => void) => {
     const p = poseRef.current;
     // The new route starts from here; the view's turning speed (yawVel) carries over, so nothing jumps.
-    follow.current = { route, rs: routeStart(p ?? { x: route.points[0]?.x ?? 0, y: route.points[0]?.y ?? 0, yaw: 0 }, route), goal, arrive };
+    follow.current = { route, rs: routeStart(p ?? { x: route.points[0]?.x ?? 0, y: route.points[0]?.y ?? 0, yaw: 0 }, route, navRef.current.doors), goal, arrive };
     if (resetStall) stall.current = { t: 0, count: 0 };
     useWalk.getState().setRoute(route);
     inv.current();
@@ -187,7 +190,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     // Keys.
     const held = keys.current;
     if (anyKey(held) || keyMotionActive(keyMotion.current)) {
-      const km = keyMove(held, yaw, dt, keyMotion.current);
+      const km = keyMove(held, yaw, dt, keyMotion.current, turnRateFor(lensRef.current.cls));
       keyMotion.current = km.motion;
       dx += km.dx;
       dy += km.dy;
@@ -206,7 +209,9 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     }
     let looking = false;
     const runRoute = (f: Follow) => {
-      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, cap, restPitch(lensRef.current.vfov));
+      const lens = lensRef.current;
+      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, { speedCap: cap, restPitch: restPitch(lens.vfov), yawCap: lookViewOf(lens.cls, lens.aspect).yawCap });
+      if (Math.abs(wrapAngle(r.aim - r.yaw)) > 0.002) busyNow.current.add("gaze");
       f.rs = r.state;
       dx += r.dx;
       dy += r.dy;
@@ -433,7 +438,15 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     if (!p) return;
     const eye = eyeHeightOf(useStore.getState().settings);
     camera.position.set(p.x, smoothY.current + eye, p.y);
-    camera.rotation.set(p.pitch, p.yaw, 0);
+    const st = stepRef.current;
+    if (st.amp > 0) {
+      // Natural step: a bounce and a sway on the camera only, with the pitch steadying the gaze on a point ahead.
+      const o = stepOffset(st.phase, st.amp);
+      camera.position.y += o.dy;
+      camera.position.x += Math.cos(p.yaw) * o.dx;
+      camera.position.z += -Math.sin(p.yaw) * o.dx;
+      camera.rotation.set(p.pitch + o.dPitch, p.yaw, 0);
+    } else camera.rotation.set(p.pitch, p.yaw, 0);
   };
 
   const ringStep = (dt: number) => {
@@ -468,6 +481,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     prevFrame.current = p;
     jumpedRef.current = false;
     const terms = stepWalkTerms({ dt, nav: navRef.current, pose: p, camera, jumped, looking: lookingRef.current, speed: motionRef.current.speed, yawRate: motionRef.current.yawRate, lens: lensRef.current }, busyNow.current);
+    applyCamera(); // again: the natural step has moved on since the first
     const want = busy || ringBusy || terms;
     if (want) walkCounters.invalidates++;
     return want;
@@ -475,6 +489,40 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   useFrame((_, delta) => {
     if (frame(Math.min(delta, 0.1))) inv.current();
   });
+
+  // ---- natural step: a walk term, busy only while its amplitude is fading in or out ----
+  useEffect(() => {
+    let reduced = false;
+    let mq: MediaQueryList | null = null;
+    const onMq = () => {
+      reduced = !!mq?.matches;
+    };
+    try {
+      mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      reduced = mq.matches;
+      mq.addEventListener("change", onMq);
+    } catch {
+      mq = null;
+    }
+    const off = registerWalkTerm("step", {
+      step: (ctx) => {
+        const portraitPhone = ctx.lens.cls === "small" && ctx.lens.aspect < 1;
+        if (stepEnabled(walkStepOf(useStore.getState().settings), reduced, portraitPhone)) stepRef.current = stepAdvance(stepRef.current, ctx.speed, ctx.yawRate, ctx.looking, ROUTE_SPEED, ctx.dt);
+        else stepRef.current = STEP_REST;
+        return stepRef.current.amp > 1e-4;
+      },
+      probe: () => stepRef.current.amp,
+    });
+    return () => {
+      off();
+      try {
+        mq?.removeEventListener("change", onMq);
+      } catch {
+        /* ignore */
+      }
+      stepRef.current = STEP_REST;
+    };
+  }, []);
 
   // ---- camera lens ----
   const choice = useStore((s) => walkLensOf(s.settings));
@@ -552,7 +600,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           inv.current();
         }
         if (s.route !== prev.route && s.route !== (follow.current?.route ?? null)) {
-          follow.current = s.route && poseRef.current ? { route: s.route, rs: routeStart(poseRef.current, s.route), goal: s.route.points[s.route.points.length - 1] ?? null } : null;
+          follow.current = s.route && poseRef.current ? { route: s.route, rs: routeStart(poseRef.current, s.route, navRef.current.doors), goal: s.route.points[s.route.points.length - 1] ?? null } : null;
           inv.current();
         }
         if (s.tour.status !== prev.tour.status || s.doors !== prev.doors || s.doorsSettled !== prev.doorsSettled) inv.current();
@@ -707,7 +755,9 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       const look = dragLook(p.yaw, p.pitch, ddx, ddy, fovRad.current, r.height);
       const dtS = Math.max(0.008, (now - g.lt) / 1000);
       const k = fovRad.current / Math.max(1, r.height);
-      lookVel.current = { yaw: (ddx * k) / dtS, pitch: (ddy * k) / dtS };
+      // The drag itself follows the finger; only the inertia after it is held to a comfortable turn rate.
+      const cap = turnRateFor(lensRef.current.cls);
+      lookVel.current = { yaw: Math.max(-cap, Math.min(cap, (ddx * k) / dtS)), pitch: Math.max(-cap, Math.min(cap, (ddy * k) / dtS)) };
       g.lx = e.clientX;
       g.ly = e.clientY;
       g.lt = now;
