@@ -7,9 +7,12 @@ import { useWalk } from "../../walkStore";
 import { siteOf } from "../../lib/sites";
 import { keyBelongsElsewhere } from "../../lib/nudge";
 import { buildNav, doorwayStop, goalPoint, initialDoors, pickTarget, planTour, roomAt, routeTo, settle, shutStop, startPose, stepWalker, WALKER_R } from "../../lib/walk";
-import { clearOfSweeps, eyeHeightOf, walkLensOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
-import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, lookSweep, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, REST_PITCH, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, walkFov, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
+import { clearOfSweeps, eyeHeightOf, walkLensOf, yawOf, type NavWorld, type WalkPoint, type WalkPose, type WalkRoute } from "../../lib/walkTypes";
+import { anyKey, dragLook, followRoute, isTap, keyIntent, keyMotionActive, keyMove, LOOK_AMP, NO_KEY_MOTION, NO_KEYS, routePointS, routeStart, springValue, sweepDuration, stopBeforeDoor, wrapAngle, type HeldKeys, type KeyMotion, type RouteState } from "../../lib/walkMotion";
+import { lensClass, restPitch, STOP_PITCH_UP, walkLens, yawCapDeg, type LensClass } from "../../lib/walkLens";
+import { exitPoint, fallbackTargets, lookCount, lookPlan, lookPose, lookResume, lookTargets, lookViewOf, type LookPlan } from "../../lib/walkLook";
 import { doorTagOf } from "./doorTag";
+import { probeWalkTerm, stepWalkTerms, walkCounters } from "./walkTerms";
 
 /** First-person walk controller (docs/walkthrough-plan.md, Chunk C): keys, drag to look, tap to walk or open a door, routes and the tour. */
 
@@ -26,6 +29,10 @@ const SHUT_AWAY_M = 0.6;
 const DOOR_SLOW_M = 1.0;
 const DOOR_SLOW_SPEED = 0.7;
 const STALL_S = 0.5;
+/** A paused look-round resumes in place when the walker is still this near its stand point, metres. */
+const RESUME_NEAR_M = 0.3;
+/** A frame that moves the walker further than this (a placement, the mini-map, a level change) is a jump: eased terms snap. */
+const JUMP_M = 1;
 const COARSE = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
 let hinted = false;
 
@@ -60,10 +67,21 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const doorTimers = useRef(new Map<string, number>());
   const stall = useRef({ t: 0, count: 0 });
   // shut: the door to shut behind you at the stop; opened: doors the tour opened, shut again once you are clear of them.
-  const tourRef = useRef({ routeFor: -1, lookT: 0, prev: "off" as string, lookYaw: 0, left: LOOK_AMP, right: LOOK_AMP, shut: null as string | null, opened: new Set<string>() });
+  // plan..budget: the look-round at the current stop (lib/walkLook): its targets' data, and where it stands.
+  const tourRef = useRef({
+    routeFor: -1, lookT: 0, prev: "off" as string, lookYaw: 0, left: LOOK_AMP, right: LOOK_AMP, shut: null as string | null, opened: new Set<string>(),
+    plan: null as LookPlan | null, stand: null as WalkPoint | null, entry: null as { x: number; y: number } | null, region: null as { level: number; roomId: string | null } | null, fallback: false, budget: 0,
+  });
   const ring = useRef<THREE.Mesh>(null);
   const ringT = useRef(0);
-  const fovRad = useRef((walkFov(1.6) * Math.PI) / 180);
+  const fovRad = useRef((walkLens(1440, 852).vfov * Math.PI) / 180);
+  const lensRef = useRef({ cls: "large" as LensClass, aspect: 1440 / 852, hfov: walkLens(1440, 852).hfov, vfov: walkLens(1440, 852).vfov });
+  // What the frame functions tell the walk terms (lib/walk terms): what is busy, a teleport, the speed and turn rate.
+  const busyNow = useRef(new Set<string>());
+  const jumpedRef = useRef(false);
+  const lookingRef = useRef(false);
+  const prevFrame = useRef<WalkPose | null>(null);
+  const motionRef = useRef({ speed: 0, yawRate: 0 });
 
   const commit = (p: WalkPose) => {
     poseRef.current = p;
@@ -135,6 +153,10 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     const w = useWalk.getState();
     const n = navRef.current;
     let busy = false;
+    const mark = (why: string) => {
+      busy = true;
+      busyNow.current.add(why);
+    };
     let { yaw, pitch } = p;
     let dx = 0;
     let dy = 0;
@@ -151,7 +173,14 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     } else if (tr.prev !== "playing" && tour.stops.length) {
       // Playing again replans from where you stand.
       tr.routeFor = -1;
-      if (tour.phase === "looking") w.setTour({ phase: "walking" });
+      if (tour.phase === "looking") {
+        // Paused in the middle of a look-round, still where it started: pick it up from the gaze as it is now.
+        if (tr.plan && tr.stand && Math.hypot(p.x - tr.stand.x, p.y - tr.stand.y) < RESUME_NEAR_M && p.level === tr.stand.level) {
+          const v = lookViewOf(lensRef.current.cls, lensRef.current.aspect);
+          tr.plan = lookResume(tr.plan, tr.lookT, yaw, v);
+          tr.lookT = 0;
+        } else w.setTour({ phase: "walking" });
+      }
     }
     tr.prev = tour.status;
 
@@ -163,7 +192,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       dx += km.dx;
       dy += km.dy;
       yaw += km.dyaw;
-      busy = true;
+      mark("keys");
     }
 
     // Doors the tour opened a moment ago are still swinging: slow down near them.
@@ -177,7 +206,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     }
     let looking = false;
     const runRoute = (f: Follow) => {
-      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, cap);
+      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, cap, restPitch(lensRef.current.vfov));
       f.rs = r.state;
       dx += r.dx;
       dy += r.dy;
@@ -216,8 +245,36 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         }
       }
     }
+    /**
+     * Arrived at a tour stop: plan the look-round. Targets come from the room's data (windows, the far corner, the biggest wall, the
+     * door to leave by); the plan keeps today's stop length. `shut`: the door-shut lead-in first (not after a stalled route).
+     */
+    const startLook = (shut: boolean) => {
+      const stop = tour.stops[tour.index];
+      tr.lookT = shut ? shutBehind() : 0;
+      if (!stop) return;
+      const T0 = sweepDuration(tr.left, tr.right);
+      const stand: WalkPoint = tr.stand ?? { x: p!.x, y: p!.y, level: p!.level, stair: null };
+      const region = tr.region ?? { level: stop.level, roomId: stop.roomId };
+      const next = tour.stops[tour.index + 1];
+      let exit = null as ReturnType<typeof exitPoint>;
+      if (next) {
+        const res = routeTo(n, { ...p!, x: stand.x, y: stand.y, level: stand.level, stair: null }, { x: next.at.x, y: next.at.y, level: next.level, stair: null }, w.doors);
+        const route = res.ok ? res.route : res.reason === "shut-door" ? res.route : null;
+        if (route) exit = exitPoint(n, route, stand, region);
+      }
+      let targets = region.roomId && !tr.fallback ? lookTargets(n, stand, region, tr.entry, exit) : [];
+      if (!targets.some((t) => t.kind !== "exit")) targets = fallbackTargets(yaw, tr.left, tr.right, exit ? yawOf({ x: exit.x - stand.x, y: exit.y - stand.y }) : null);
+      const lens = lensRef.current;
+      const area = n.levels.find((l) => l.level === region.level)?.rooms.find((r) => r.id === region.roomId)?.area ?? 10;
+      tr.plan = lookPlan(targets, lookViewOf(lens.cls, lens.aspect), yaw, T0, restPitch(lens.vfov) + STOP_PITCH_UP, lookCount(area));
+      tr.stand = stand;
+      tr.budget = T0;
+      w.setTour({ phase: "looking" });
+    };
+
     if (tour.status === "playing") {
-      busy = true;
+      mark("tour");
       if (!tour.stops.length) {
         const stops = planTour(n, p, w.doors);
         if (!stops.length) {
@@ -240,6 +297,11 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
               // can be shut behind you; the look-round sweeps the room from there.
               const ds = shutStop(n, route, p, { level: stop.level, roomId: stop.roomId });
               tr.shut = ds?.shut ?? null;
+              tr.entry = ds?.entry ?? null;
+              tr.fallback = !ds || ds.fallback;
+              tr.region = { level: stop.level, roomId: stop.roomId };
+              tr.stand = ds ? (ds.route.points[ds.route.points.length - 1] ?? null) : null;
+              tr.plan = null;
               tr.lookYaw = ds ? ds.yaw : stop.yaw;
               tr.left = ds ? ds.sweep.left : LOOK_AMP;
               tr.right = ds ? ds.sweep.right : LOOK_AMP;
@@ -266,23 +328,23 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
             const r = runRoute(f);
             if (r.done) {
               clearRoute();
-              tr.lookT = shutBehind();
-              w.setTour({ phase: "looking" });
+              startLook(true);
             }
           } else if (tr.routeFor === tour.index && tour.phase === "walking" && !follow.current) {
-            tr.lookT = shutBehind();
-            w.setTour({ phase: "looking" });
+            startLook(true);
           }
         } else {
           tr.lookT += dt;
           looking = true;
-          const lookS = sweepDuration(tr.left, tr.right);
-          yaw = lookSweep(tr.lookYaw, tr.lookT, tr.left, tr.right, lookS);
-          const ps = springValue(pitch, pitchVel.current, REST_PITCH, dt, 8);
+          const lp = tr.plan ? lookPose(tr.plan, tr.lookT) : { yaw, pitch: restPitch(lensRef.current.vfov), done: true };
+          yaw = lp.yaw;
+          const ps = springValue(pitch, pitchVel.current, lp.pitch, dt, 8);
           pitch = ps.x;
           pitchVel.current = ps.vel;
-          if (tr.lookT >= lookS) {
+          if (!lp.done) busyNow.current.add("look");
+          if (lp.done) {
             tr.routeFor = -1;
+            tr.plan = null;
             if (tour.index + 1 >= tour.stops.length) {
               w.stopTour();
               w.say("That's the tour");
@@ -291,7 +353,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         }
       }
     } else if (follow.current) {
-      busy = true;
+      mark("route");
       const f = follow.current;
       const r = runRoute(f);
       // Done once stopped there and turned to the way the route asks you to face.
@@ -313,7 +375,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       const k = Math.exp(-5 * dt);
       lv.yaw *= k;
       lv.pitch *= k;
-      busy = true;
+      mark("inertia");
     } else lv.yaw = lv.pitch = 0;
 
     // Move.
@@ -346,10 +408,8 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           }
         } else {
           clearRoute();
-          if (inTour) {
-            tr.lookT = 0;
-            useWalk.getState().setTour({ phase: "looking" });
-          } else shutHint();
+          if (inTour) startLook(false);
+          else shutHint();
         }
       }
     }
@@ -362,8 +422,9 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     const dyEye = p.feetY - smoothY.current;
     if (Math.abs(dyEye) > 0.002) {
       smoothY.current += dyEye * (1 - Math.exp(-12 * dt));
-      busy = true;
+      mark("eye");
     } else smoothY.current = p.feetY;
+    lookingRef.current = looking;
     return busy;
   };
 
@@ -389,24 +450,48 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     return false;
   };
 
-  useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.1);
+  /** One frame of everything: the walk, the ring, then the walk terms; true while anything still needs another frame. */
+  const frame = (dt: number): boolean => {
+    busyNow.current.clear();
     const busy = step(dt);
     const ringBusy = ringStep(dt);
+    if (ringBusy) busyNow.current.add("ring");
     applyCamera();
-    if (busy || ringBusy) inv.current();
+    const p = poseRef.current;
+    const prev = prevFrame.current;
+    let jumped = jumpedRef.current;
+    if (p && prev && dt > 0) {
+      const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+      motionRef.current = { speed: dist / dt, yawRate: wrapAngle(p.yaw - prev.yaw) / dt };
+      if (dist > JUMP_M || p.level !== prev.level) jumped = true;
+    } else motionRef.current = { speed: 0, yawRate: 0 };
+    prevFrame.current = p;
+    jumpedRef.current = false;
+    const terms = stepWalkTerms({ dt, nav: navRef.current, pose: p, camera, jumped, looking: lookingRef.current, speed: motionRef.current.speed, yawRate: motionRef.current.yawRate, lens: lensRef.current }, busyNow.current);
+    const want = busy || ringBusy || terms;
+    if (want) walkCounters.invalidates++;
+    return want;
+  };
+  useFrame((_, delta) => {
+    if (frame(Math.min(delta, 0.1))) inv.current();
   });
 
   // ---- camera lens ----
-  const lens = useStore((s) => walkLensOf(s.settings));
+  const choice = useStore((s) => walkLensOf(s.settings));
   useEffect(() => {
+    const w = size.width;
+    const h = size.height;
+    const l = walkLens(w, h, choice);
     camera.rotation.order = "YXZ";
     camera.near = NEAR;
-    camera.fov = walkFov(size.width / Math.max(1, size.height), lens);
+    camera.fov = l.vfov;
     fovRad.current = (camera.fov * Math.PI) / 180;
     camera.updateProjectionMatrix();
+    const cls = lensClass(w, h, COARSE());
+    lensRef.current = { cls, aspect: w / Math.max(1, h), hfov: l.hfov, vfov: l.vfov };
+    if (useWalk.getState().on) useWalk.getState().setLens({ choice, w, h, hfov: l.hfov, vfov: l.vfov, cls, options: { narrow: walkLens(w, h, "narrow").hfov, normal: walkLens(w, h, "normal").hfov, wide: walkLens(w, h, "wide").hfov } });
     inv.current();
-  }, [camera, size.width, size.height, lens]);
+  }, [camera, size.width, size.height, choice]);
   useEffect(
     () => () => {
       camera.fov = 45;
@@ -424,11 +509,12 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const pending = useWalk((s) => s.pending);
   useEffect(() => {
     if (!pending) return;
-    const pose = { ...startPose(nav, pending), pitch: REST_PITCH };
+    const pose = { ...startPose(nav, pending), pitch: restPitch(lensRef.current.vfov) };
     clearRoute();
     keyMotion.current = NO_KEY_MOTION;
     yawVel.current = 0;
     pitchVel.current = 0;
+    jumpedRef.current = true;
     useWalk.getState().placed(pose, initialDoors(nav));
     smoothY.current = pose.feetY;
     commit(pose);
@@ -461,6 +547,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         if (s.pose && s.pose !== lastSet.current) {
           poseRef.current = s.pose;
           lastSet.current = s.pose;
+          jumpedRef.current = true;
           if (!prev.pose || prev.pose.level !== s.pose.level || Math.abs(prev.pose.feetY - s.pose.feetY) > 1) smoothY.current = s.pose.feetY;
           inv.current();
         }
@@ -673,15 +760,36 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       const out: WalkPose[] = [];
       const n = Math.max(1, Math.round(seconds * 30));
       for (let i = 0; i < n; i++) {
-        step(1 / 30);
-        ringStep(1 / 30);
+        frame(1 / 30);
         if (poseRef.current) out.push({ ...poseRef.current });
       }
       applyCamera();
       inv.current();
       return out;
     };
-    Object.assign(window, { __walk: { nav: () => navRef.current, sim, goalPoint: (g: Parameters<typeof goalPoint>[1]) => goalPoint(navRef.current, g), look: () => ({ yaw: tourRef.current.lookYaw, left: tourRef.current.left, right: tourRef.current.right }) } });
+    const state = () => {
+      const p = poseRef.current;
+      const t = useWalk.getState().tour;
+      const tr = tourRef.current;
+      const lens = lensRef.current;
+      return {
+        yaw: p?.yaw ?? 0, pitch: p?.pitch ?? 0, speed: motionRef.current.speed, yawRate: motionRef.current.yawRate,
+        exposure: probeWalkTerm("exposure") ?? 0, stepAmp: probeWalkTerm("step") ?? 0, busy: [...busyNow.current],
+        tour: { status: t.status, phase: t.phase, index: t.index },
+        look: tr.plan ? { t: tr.lookT, total: tr.plan.total, pitch: tr.plan.pitch, yawCap: yawCapDeg(lens.cls, lens.aspect) } : null,
+        lens: { ...lens, choice: walkLensOf(useStore.getState().settings) }, restPitch: restPitch(lens.vfov), fov: camera.fov,
+      };
+    };
+    Object.assign(window, {
+      __walk: {
+        nav: () => navRef.current, sim, state, goalPoint: (g: Parameters<typeof goalPoint>[1]) => goalPoint(navRef.current, g),
+        get invalidates() { return walkCounters.invalidates; },
+        look: () => {
+          const tr = tourRef.current;
+          return { yaw: tr.lookYaw, left: tr.left, right: tr.right, ...(tr.plan ? { plan: { total: tr.plan.total, keys: tr.plan.keys.length, pitch: tr.plan.pitch, budget: tr.budget, kinds: tr.plan.targets.map((t) => t.kind), holds: tr.plan.keys.map((k) => +k.holdS.toFixed(2)), moves: tr.plan.keys.map((k) => +k.moveS.toFixed(2)) } } : {}) };
+        },
+      },
+    });
     return () => {
       delete (window as unknown as { __walk?: unknown }).__walk;
     };

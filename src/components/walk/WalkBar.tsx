@@ -1,7 +1,9 @@
 import { useStore } from "../../store";
 import { useWalk } from "../../walkStore";
 import { VARIANT_LABEL } from "../../types";
-import { DEFAULT_LENS, EYE_HEIGHT, eyeHeightOf, WALK_LENSES, walkLensOf } from "../../lib/walkTypes";
+import { ADAPT_READY } from "../../lib/walkExposure";
+import { STEP_READY } from "../../lib/walkStep";
+import { DEFAULT_LENS, EYE_HEIGHT, eyeHeightOf, WALK_LENS_CHOICES, walkAdaptOf, walkLensOf, walkStepOf } from "../../lib/walkTypes";
 import { floorDisplayName, floorsByLevel } from "../../lib/studio";
 import { useChassis } from "../useChassis";
 import { Popover } from "../ViewMenu";
@@ -20,7 +22,10 @@ export function WalkBar() {
   const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
   const floors = useStore((s) => s.variants[s.activeVariant]?.floors);
   const eye = useStore((s) => eyeHeightOf(s.settings));
-  const lens = useStore((s) => walkLensOf(s.settings));
+  const choice = useStore((s) => walkLensOf(s.settings));
+  const adapt = useStore((s) => walkAdaptOf(s.settings));
+  const step = useStore((s) => walkStepOf(s.settings));
+  const lens = useWalk((s) => s.lens);
   const setSettings = useStore((s) => s.setSettings);
   const walk = useWalk.getState;
 
@@ -29,7 +34,18 @@ export function WalkBar() {
   const place = where ? (where.outside ? "Outside" : where.roomName) : null;
   const readout = [place, where?.outside ? null : floorName].filter(Boolean).join(" · ");
   const other = activeVariant === "current" ? "proposed" : "current";
-  const eyeText = `Eye ${eye.toFixed(2)} m · ${lens}°`;
+  const eyeText = `Eye ${eye.toFixed(2)} m · ${Math.round(lens?.hfov ?? 90)}°`;
+  // A phone held upright keeps the walk steady: no natural step there. Reduced motion turns it off everywhere.
+  const upright = lens?.cls === "small" && lens.w < lens.h;
+  const reduced = (() => {
+    try {
+      return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    } catch {
+      return false;
+    }
+  })();
+  const stepOff = !STEP_READY || reduced;
+  const stepTitle = reduced ? "Off while your device asks for reduced motion" : !STEP_READY ? "Coming next" : "Gentle head motion as you walk";
 
   return (
     // Every button gives up focus after a click so Space can't press it again.
@@ -105,21 +121,43 @@ export function WalkBar() {
           </button>
           <div className="walk-eye-row">
             <span>Lens</span>
-            <output>{lens}° across</output>
+            <output>{Math.round(lens?.hfov ?? 90)}° across</output>
           </div>
           <div className="seg walk-lens" role="group" aria-label="Lens">
-            {WALK_LENSES.map((l) => (
-              <button
-                key={l.deg}
-                className={l.deg === lens ? "active" : undefined}
-                aria-pressed={l.deg === lens}
-                title={`${l.deg}° across${l.deg === DEFAULT_LENS ? " (default)" : ""}`}
-                onClick={() => setSettings({ walkLens: l.deg })}
-              >
-                {l.label}
-              </button>
-            ))}
+            {WALK_LENS_CHOICES.map((l) => {
+              const deg = Math.round(lens?.options[l.id] ?? 90);
+              return (
+                <button
+                  key={l.id}
+                  className={l.id === choice ? "active" : undefined}
+                  aria-pressed={l.id === choice}
+                  title={`${deg}° across on this screen${l.id === DEFAULT_LENS ? " (default)" : ""}`}
+                  onClick={() => setSettings({ walkLens: l.id })}
+                >
+                  <span>{l.label}</span>
+                  <small>{deg}°</small>
+                </button>
+              );
+            })}
           </div>
+          <p className="walk-help">Your eyes do the focusing: a real room is sharp beyond about 1.5 m, so the view stays sharp.</p>
+          <div className="walk-eye-adapt" data-ready={String(ADAPT_READY)}>
+            <div className="walk-eye-row">
+              <span>Eyes adjust</span>
+            </div>
+            <div className="seg walk-adapt" role="group" aria-label="Eyes adjust">
+              {(["off", "natural", "strong"] as const).map((id) => (
+                <button key={id} className={id === adapt ? "active" : undefined} aria-pressed={id === adapt} disabled={!ADAPT_READY} title={ADAPT_READY ? undefined : "Coming next"} onClick={() => setSettings({ walkAdapt: id })}>
+                  {id === "off" ? "Off" : id === "natural" ? "Natural" : "Strong"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {!upright && (
+            <label className="check walk-eye-step" data-ready={String(STEP_READY)} title={stepTitle}>
+              <input type="checkbox" checked={step === "natural"} disabled={stepOff} onChange={(e) => setSettings({ walkStep: e.target.checked ? "natural" : "off" })} /> Natural step
+            </label>
+          )}
         </div>
       </Popover>
 

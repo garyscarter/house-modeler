@@ -32,7 +32,25 @@ const toScreen = (page, x, y, z) => page.evaluate(([x, y, z]) => {
 const st = (page) => page.evaluate(() => ({ w: window.__walkStore.getState(), cam: window.__houseCamera.camera.position.toArray(), m: window.__houseStore.getState() }));
 const poly = (r) => r.poly;
 const REST_PITCH = (-8 * Math.PI) / 180;
-const walkFovOf = (aspect, h = 90) => Math.max(45, Math.min(78, (2 * Math.atan(Math.tan((h * Math.PI) / 360) / aspect) * 180) / Math.PI));
+// An exact copy of the lens rule and the rest pitch: keep in step with src/lib/walkLens.ts. Returns degrees { h, v }.
+const LENS_ZOOM = { narrow: 0.77, normal: 1, wide: 1.19 };
+const walkLensJs = (w, h, choice = 'normal') => {
+  const R = Math.PI / 180, Dg = 180 / Math.PI;
+  const a = Math.max(0.05, w / Math.max(1, h)), t = Math.tan((99 * R) / 2), sq = Math.sqrt(1 + a * a);
+  let tanH = (t * a) / sq, tanV = t / sq;
+  if (2 * Math.atan(tanV) * Dg < 46) { tanV = Math.tan((46 * R) / 2); tanH = tanV * a; }
+  if (2 * Math.atan(tanH) * Dg > 100) { tanH = Math.tan((100 * R) / 2); tanV = tanH / a; }
+  tanH *= LENS_ZOOM[choice]; tanV *= LENS_ZOOM[choice];
+  const cap = Math.tan((104 * R) / 2);
+  if (tanV > cap) { tanV = cap; tanH = tanV * a; }
+  if (tanH > cap) { tanH = cap; tanV = tanH / a; }
+  return { h: 2 * Math.atan(tanH) * Dg, v: 2 * Math.atan(tanV) * Dg };
+};
+const restPitchJs = (vDeg) => ((vDeg >= 55 ? -8 : Math.max(-12, -8 - (55 - vDeg) / 3)) * Math.PI) / 180;
+const canvasSize = (page) => page.evaluate(() => { const r = document.querySelector('.viewer canvas').getBoundingClientRect(); return { w: r.width, h: r.height }; });
+const camFov = (page) => page.evaluate(() => window.__houseCamera.camera.fov);
+// Tour length on commit 0373f84 (the sweep look-round), in sim seconds, from the same loop as below; the new tour must stay within 10% of it.
+const TOUR_BASE_S = 144.73;
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // Per-frame feel of a pose series sampled at 30 fps: biggest yaw step (rad), biggest change of yaw step, biggest speed change (m/s).
 const feel = (ps) => {
@@ -50,6 +68,47 @@ const feel = (ps) => {
 };
 const fmt = (f) => `yaw step ${f.yawStep.toFixed(3)} rad, yaw-rate change ${f.rateChange.toFixed(3)} rad/frame, speed change ${(f.speedChange).toFixed(3)} m/s/frame (frame ${f.at})`;
 const feelOk = (f) => f.yawStep <= 0.08 && f.rateChange <= 0.03 && f.speedChange <= 0.06;
+
+// Play the tour in virtual time from the first room's middle, recording state() after every frame; stops after `maxFrames` or when `until(row, i)` is true.
+const runTour = (page, opts = {}) => page.evaluate((opts) => {
+  const nav = window.__walk.nav(), w = window.__walkStore.getState();
+  const l = nav.levels.find((x) => x.level === 0), r = l.rooms[0];
+  const c = r.poly.reduce((a, p) => ({ x: a.x + p.x / r.poly.length, y: a.y + p.y / r.poly.length }), { x: 0, y: 0 });
+  w.stopTour(); w.setRoute(null);
+  w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l.baseY, yaw: 0, pitch: 0 });
+  w.playTour();
+  const rows = []; let stops = 0, ended = false;
+  for (let i = 0; i < (opts.maxFrames || 36 * 150) && !ended; i++) {
+    window.__walk.sim(1 / 30);
+    const st = window.__walk.state(), t = window.__walkStore.getState().tour;
+    if (t.stops.length) stops = t.stops.length;
+    rows.push({ yaw: st.yaw, pitch: st.pitch, ph: st.tour.phase, i: st.tour.index, busy: st.busy, lt: st.look ? st.look.t : null, lp: st.look ? st.look.total : null, cap: st.look ? st.look.yawCap : null });
+    ended = t.status === 'off' && stops > 0;
+    if (opts.stopAfterLooks && rows.filter((q) => q.lt !== null).length && !st.look && rows.filter((q) => q.lt !== null).length > 30 && rows[rows.length - 2].lt !== null) break;
+  }
+  return { rows, stops, ended, frames: rows.length };
+}, opts);
+const degWrap = (a) => (wrap(a) * 180) / Math.PI;
+// A hold is a stretch still (under 3 deg/s) for at least 0.5 s: the exit hold is fixed at 0.5 s (plus the tail of the move into it), and a room with one target
+// besides an exit behind you has no time for more (three 60 deg moves of the turn round eat the stop's length).
+const HOLD_FRAMES = 15;
+// Per-stop look-round facts from runTour rows: peak turn rate (deg/s), holds (still >= 0.6 s), the pitch at the end, and whether "look" was busy throughout.
+function lookFacts(rows) {
+  const byStop = new Map();
+  rows.forEach((q, k) => { if (q.ph === 'looking' && q.lt !== null) { if (!byStop.has(q.i)) byStop.set(q.i, []); byStop.get(q.i).push(k); } });
+  return [...byStop.entries()].map(([i, ks]) => {
+    let peak = 0, holds = 0, run = 0, lookBusy = true;
+    for (let a = 1; a < ks.length; a++) {
+      const rate = Math.abs(degWrap(rows[ks[a]].yaw - rows[ks[a - 1]].yaw)) * 30;
+      if (rows[ks[a]].lt >= 0) peak = Math.max(peak, rate);
+      if (rows[ks[a]].lt >= 0 && rate < 3) { run++; if (run === HOLD_FRAMES) holds++; } else run = 0;
+      if (rows[ks[a]].lt > 0.1 && rows[ks[a]].lt < rows[ks[a]].lp - 0.2 && !rows[ks[a]].busy.includes('look')) lookBusy = false;
+    }
+    const first = ks[0], last = ks[ks.length - 1];
+    const jump = first > 0 ? Math.abs(degWrap(rows[first].yaw - rows[first - 1].yaw)) : 0;
+    return { i, peak, holds, jump, endPitch: rows[last].pitch, frames: ks.length, lookBusy };
+  });
+}
 const centroid = (p) => ({ x: p.reduce((a, q) => a + q.x, 0) / p.length, y: p.reduce((a, q) => a + q.y, 0) / p.length });
 // Largest ground-floor room of the nav.
 const bigRoom = (page, level = 0) => page.evaluate((level) => {
@@ -81,16 +140,22 @@ async function standLooking(page, room, d = 1.4) {
   let s = await st(page);
   ok(Math.abs(s.cam[1] - (s.w.pose.feetY + 1.7)) < 0.05 && s.m.showCeilings && s.m.viewMode === 'single', 'eye at 1.7 m, ceilings on, single view');
   const lens = await page.evaluate(() => { const c = window.__houseCamera.camera; return { fov: c.fov, near: c.near, order: c.rotation.order, ctl: window.__houseCamera.controls }; });
-  const aspect = await page.evaluate(() => { const r = document.querySelector('.viewer canvas').getBoundingClientRect(); return r.width / r.height; });
-  ok(Math.abs(lens.fov - walkFovOf(aspect)) < 0.01 && lens.fov < 70 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov.toFixed(1)} (walkFov(${aspect.toFixed(2)}) = ${walkFovOf(aspect).toFixed(1)}), near ${lens.near}, order ${lens.order}, controls off`);
-  // The Lens setting narrows and widens it.
+  const cv = await canvasSize(page);
+  const want = walkLensJs(cv.w, cv.h);
+  ok(Math.abs(lens.fov - want.v) < 0.05 && lens.near === 0.05 && lens.order === 'YXZ' && lens.ctl === null, `lens: fov ${lens.fov.toFixed(2)} (rule for ${cv.w.toFixed(0)}x${cv.h.toFixed(0)} = ${want.v.toFixed(2)} V, ${want.h.toFixed(1)} H), near ${lens.near}, order ${lens.order}, controls off`);
+  // The Lens setting: legacy 75 reads as Narrow, 'wide' is Wide, nothing is Normal.
   await page.evaluate(() => window.__houseStore.getState().setSettings({ walkLens: 75 }));
   await page.waitForTimeout(300);
-  const narrow = await page.evaluate(() => window.__houseCamera.camera.fov);
+  const narrow = await camFov(page);
+  await page.evaluate(() => window.__houseStore.getState().setSettings({ walkLens: 'wide' }));
+  await page.waitForTimeout(300);
+  const wide = await camFov(page);
   await page.evaluate(() => window.__houseStore.getState().setSettings({ walkLens: undefined }));
   await page.waitForTimeout(300);
-  ok(Math.abs(narrow - walkFovOf(aspect, 75)) < 0.01 && Math.abs((await page.evaluate(() => window.__houseCamera.camera.fov)) - walkFovOf(aspect)) < 0.01, `Lens setting: Natural ${narrow.toFixed(1)}, back to Wide`);
-  ok(Math.abs(s.w.pose.pitch - REST_PITCH) < 0.01, `placed looking slightly down: pitch ${s.w.pose.pitch.toFixed(3)} rad (REST_PITCH ${REST_PITCH.toFixed(3)})`);
+  const normalAgain = await camFov(page);
+  ok(Math.abs(narrow - walkLensJs(cv.w, cv.h, 'narrow').v) < 0.05 && Math.abs(wide - walkLensJs(cv.w, cv.h, 'wide').v) < 0.05 && Math.abs(normalAgain - want.v) < 0.05, `Lens setting: Narrow ${narrow.toFixed(1)}, Wide ${wide.toFixed(1)}, back to Normal ${normalAgain.toFixed(1)}`);
+  const restWant = restPitchJs(want.v);
+  ok(Math.abs(s.w.pose.pitch - restWant) < 0.01, `placed looking slightly down: pitch ${s.w.pose.pitch.toFixed(3)} rad (restPitch(${want.v.toFixed(1)}) ${restWant.toFixed(3)})`);
   ok(/Click the floor to walk/.test(s.w.hint?.text || ''), `first-time hint on desktop ("${s.w.hint?.text}")`);
   ok(s.w.where && s.w.where.outside === true && !s.w.where.roomName, 'standing outside in the garden at the start');
   const start = s.w.pose;
@@ -330,6 +395,61 @@ async function standLooking(page, room, d = 1.4) {
   ok(s.w.tour.status === 'playing' && s.w.tour.stops.length > 0, 'tour resumes');
   await page.evaluate(() => window.__walkStore.getState().stopTour());
 
+  // ---- No frames when idle; the glance-and-hold look-round; interruption; tour length ----
+  {
+    await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
+    await page.evaluate(() => window.__walk.sim(3));
+    const c0 = await page.evaluate(() => window.__walk.invalidates);
+    await page.evaluate(() => window.__walk.sim(2));
+    const c1 = await page.evaluate(() => window.__walk.invalidates);
+    const idle = await page.evaluate(() => window.__walk.state());
+    ok(c1 === c0 && idle.busy.length === 0, `idle walker asks for no frames (invalidates ${c0} -> ${c1}, busy [${idle.busy}])`);
+
+    const V = walkLensJs((await canvasSize(page)).w, (await canvasSize(page)).h).v;
+    const run = await runTour(page);
+    const facts = lookFacts(run.rows);
+    ok(facts.length === run.stops, `every stop has a look-round (${facts.length} of ${run.stops})`);
+    for (const f of facts) {
+      ok(f.peak <= 75 + 3, `stop ${f.i}: look-round turns at most ${f.peak.toFixed(1)} deg/s (cap 75 + 3)`);
+      ok(f.holds >= 2, `stop ${f.i}: ${f.holds} holds of 0.5 s or more`);
+      ok(f.jump < 1, `stop ${f.i}: the look starts where the walk ended (${f.jump.toFixed(2)} deg)`);
+      ok(Math.abs(((f.endPitch - (restPitchJs(V) + (4 * Math.PI) / 180)) * 180) / Math.PI) < 0.5, `stop ${f.i}: pitch settles at the rest pitch + 4 deg (${((f.endPitch * 180) / Math.PI).toFixed(2)} deg)`);
+      ok(f.lookBusy, `stop ${f.i}: busy includes "look" for the whole look-round`);
+    }
+    await page.evaluate(() => window.__walk.sim(3));
+    const c2 = await page.evaluate(() => window.__walk.invalidates);
+    await page.evaluate(() => window.__walk.sim(2));
+    const idle2 = await page.evaluate(() => ({ n: window.__walk.invalidates, s: window.__walk.state() }));
+    ok(idle2.n === c2 && idle2.s.busy.length === 0, `idle again after the tour (busy [${idle2.s.busy}])`);
+    // Tour length against the sweep look-round it replaced.
+    const newS = run.frames / 30;
+    console.log(`INFO tour length: old ${TOUR_BASE_S.toFixed(2)} s, new ${newS.toFixed(2)} s (${((newS / TOUR_BASE_S - 1) * 100).toFixed(1)}%)`);
+    ok(run.ended && Math.abs(newS - TOUR_BASE_S) <= 0.1 * TOUR_BASE_S, `tour length within 10% of the old (${newS.toFixed(1)} s vs ${TOUR_BASE_S.toFixed(1)} s)`);
+
+    // Interruption: pause in the middle of the first look, turn 20 deg, play: the look carries on from there, no jump.
+    await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); });
+    const cut = await page.evaluate(() => {
+      const nav = window.__walk.nav(), w = window.__walkStore.getState();
+      const l = nav.levels.find((x) => x.level === 0), r = l.rooms[0];
+      const c = r.poly.reduce((a, p) => ({ x: a.x + p.x / r.poly.length, y: a.y + p.y / r.poly.length }), { x: 0, y: 0 });
+      w.setRoute(null); w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l.baseY, yaw: 0, pitch: 0 }); w.playTour();
+      let got = false;
+      for (let i = 0; i < 3000 && !got; i++) { window.__walk.sim(1 / 30); const s = window.__walk.state(); got = !!s.look && s.look.t > 2; }
+      if (!got) return null;
+      window.__walkStore.getState().pauseTour();
+      window.__walk.sim(1 / 30);
+      const p = window.__walkStore.getState().pose;
+      window.__walkStore.getState().setPose({ ...p, yaw: p.yaw + (20 * Math.PI) / 180 });
+      const turned = window.__walkStore.getState().pose.yaw;
+      window.__walkStore.getState().playTour();
+      window.__walk.sim(1 / 30);
+      const s = window.__walk.state();
+      return { turned, yaw: s.yaw, phase: s.tour.phase, look: !!s.look };
+    });
+    ok(!!cut && Math.abs(degWrap(cut.yaw - cut.turned)) < 1 && cut.phase === 'looking' && cut.look, `interrupted look resumes in place (${cut ? degWrap(cut.yaw - cut.turned).toFixed(2) : '?'} deg jump, ${cut && cut.phase})`);
+    await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
+  }
+
   // Idle screenshots: the kitchen at REST_PITCH with the new lens, then at the old 65 degree lens with pitch 0.
   {
     await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
@@ -500,6 +620,16 @@ async function standLooking(page, room, d = 1.4) {
   await page.waitForFunction(() => window.__walkStore.getState().pose && window.__walk);
   s = await st(page);
   ok(/Tap the floor to walk/.test(s.w.hint?.text || '') || /Click the floor/.test(s.w.hint?.text || ''), `touch hint ("${s.w.hint?.text}")`);
+  {
+    ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches === true), 'iPad context has a coarse pointer');
+    const cv2 = await canvasSize(page);
+    const fovI = await camFov(page);
+    ok(Math.abs(fovI - walkLensJs(cv2.w, cv2.h).v) < 0.05, `iPad lens ${fovI.toFixed(2)} V for ${cv2.w.toFixed(0)}x${cv2.h.toFixed(0)} (rule ${walkLensJs(cv2.w, cv2.h).v.toFixed(2)}, ${walkLensJs(cv2.w, cv2.h).h.toFixed(1)} across)`);
+    const runI = await runTour(page, { maxFrames: 1500 });
+    const factsI = lookFacts(runI.rows);
+    ok(factsI.length > 0 && factsI.every((f) => f.peak <= 85 + 3), `iPad look-round turns at most ${Math.max(...factsI.map((f) => f.peak)).toFixed(1)} deg/s (cap 85 + 3)`);
+    await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
+  }
   const r2 = await bigRoom(page, 0);
   const lk = await standLooking(page, r2, 1.4);
   await page.touchscreen.tap(lk.p.x, lk.p.y);

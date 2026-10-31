@@ -19,7 +19,16 @@
 .walk-bar .walk-reset { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--line); }
 .walk-bar .walk-reset:disabled { opacity: 0.4; cursor: default; }
 .walk-lens { display: flex; }
-.walk-bar .walk-lens button { flex: 1; height: auto; padding: 5px 8px; font-size: 12px; border: 0; }
+.walk-bar .walk-lens button { flex: 1; height: auto; padding: 5px 8px; font-size: 12px; border: 0; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.walk-lens small { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.walk-lens button.active small { color: inherit; }
+.walk-help { margin: 0; max-width: 240px; color: var(--muted); font-size: 12px; line-height: 1.4; white-space: normal; }
+.walk-eye-adapt { display: flex; flex-direction: column; gap: 6px; }
+.walk-eye-adapt .seg { display: flex; }
+.walk-bar .walk-adapt button { flex: 1; height: auto; padding: 5px 8px; font-size: 12px; border: 0; }
+.walk-bar .walk-adapt button:disabled { opacity: 0.5; cursor: default; }
+.walk-eye-step { color: var(--text); }
+.walk-eye-step input:disabled { cursor: default; }
 
 .walk-map {
   position: absolute; right: var(--float-gap); bottom: 76px; z-index: var(--z-float);
@@ -60,7 +69,9 @@
 .app[data-chassis="phone"] .walk-map { width: 120px; height: 120px; bottom: auto; top: var(--float-gap); }
 .app[data-chassis="phone"] .walk-hint { left: var(--float-gap); transform: none; max-width: calc(100% - 120px - 3 * var(--float-gap)); text-align: left; border-radius: var(--radius-l); animation: none; }
 .app[data-chassis="phone"][data-walking] .layout-pill { display: none; }
-.app[data-chassis="phone"] .walk-eye .popover { right: -8px; }
+.app[data-chassis="phone"] .walk-eye .popover { left: auto; right: -8px; }
+.app[data-chassis="phone"] .walk-eye-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
+.app[data-chassis="phone"] .walk-bar .walk-reset { width: auto; height: 28px; padding: 0 10px; }
 /* Touch tablet: 40 px targets, as the dock. */
 .app[data-touch]:not([data-chassis="phone"]) .walk-bar button, .app[data-touch]:not([data-chassis="phone"]) .walk-bar .popover-btn { height: 40px; }
 .app[data-touch]:not([data-chassis="phone"]) .walk-bar .walk-tour .walk-x { width: 28px; height: 28px; }
@@ -71,4 +82,11 @@
 
 /* Walking: the inspector steps aside so the view is the house; on the phone the walk bar drops to where the sheet was. */
 .app[data-walking] .inspector-card, .app[data-walking] .sheet { display: none; }
-.app[data-chassis="phone"][data-walking] .dock[data-walking] { bottom: 12px; opacity: 1; pointer-events: auto; }
+.app[data-chassis="phone"][data-walking] .dock[data-walking] { opacity: 1; pointer-events: auto; }
+
+/* Phone, walking: the view fills the screen; the walk bar, map and hint stay, clear of the notch and home bar. */
+.app[data-chassis="phone"][data-walking] header.topbar,
+.app[data-chassis="phone"][data-walking] .tab-bar { display: none; }
+.app[data-chassis="phone"][data-walking] .dock[data-walking] { bottom: calc(12px + env(safe-area-inset-bottom)); width: min(calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)), 560px); }
+.app[data-chassis="phone"][data-walking] .walk-map { top: calc(var(--float-gap) + env(safe-area-inset-top)); right: calc(var(--float-gap) + env(safe-area-inset-right)); }
+.app[data-chassis="phone"][data-walking] .walk-hint { top: calc(var(--float-gap) + env(safe-area-inset-top)); left: calc(var(--float-gap) + env(safe-area-inset-left)); }
