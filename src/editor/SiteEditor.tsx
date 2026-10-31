@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useChassis } from "../components/useChassis";
+import { canEditNow, useCanEdit, useChassis } from "../components/useChassis";
 import { useSite, useStore } from "../store";
 import { SURFACE_LABEL, uid, type BoundaryEdge, type HouseModel, type Neighbour, type ScreenPanel, type Site, type SurfaceKind, type WallFollow, type WPt } from "../types";
 import { useCurrentHouse } from "../lib/house";
@@ -18,6 +18,7 @@ import { type GardenDef } from "../lib/gardenCatalogue";
 import { copyItems, itemsOf, moveItems, placeSpot, snapItem } from "../lib/siteItems";
 import { surfaceArea } from "../lib/surfaceCurve";
 import { GardenPanel } from "../components/GardenPanel";
+import { ReadOnlyBody } from "../components/ReadOnly";
 import { ToolRail, type RailItem } from "./ToolRail";
 import { AddPopover, GardenPicker } from "./AddItem";
 import { InspectorCard } from "../components/InspectorCard";
@@ -73,6 +74,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
   const setUi = useStore((s) => s.setUi);
   const gardenSel = useStore((s) => s.gardenSel);
   const chassis = useChassis((s) => s.chassis);
+  const editable = useCanEdit();
   const svgRef = useRef<SVGSVGElement>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [drawKind, setDrawKind] = useState<SurfaceKind>("lawn");
@@ -268,6 +270,16 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
 
   // Esc during a drag is the core's (it restores the snapshot); this runs when nothing is being dragged.
   useEditorKeys((e) => {
+    if (!canEditNow(useStore.getState().mode)) {
+      // View only: Esc clears the selection, F and +/- move the view; nothing changes the plot.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (e.key === "Escape") setSel(null);
+      else if (k === "f") camera.fit();
+      else if (k === "+" || k === "=") camera.zoomBy(1.4);
+      else if (k === "-" || k === "_") camera.zoomBy(1 / 1.4);
+      return;
+    }
     if (garden && (e.ctrlKey || e.metaKey) && !e.altKey) {
       const k = e.key.toLowerCase();
       const picked = itemsOf(site).filter((it) => itemIds.includes(it.id));
@@ -430,7 +442,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
         </div>
       </div>
 
-      {!peeking && (
+      {!peeking && editable && (
         <ToolRail
           groups={railGroups}
           footer={
@@ -498,7 +510,9 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
       )}
 
       <InspectorCard className="side site-side" title={garden ? "Garden" : "Plot"}>
-        <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+        <ReadOnlyBody>
+          <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+        </ReadOnlyBody>
       </InspectorCard>
     </div>
   );

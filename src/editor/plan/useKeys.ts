@@ -9,6 +9,7 @@ import { arrowDelta, slideOpening } from "../../lib/nudge";
 import { planKeyAction } from "../../lib/planKeys";
 import { imageForState, imageStateOf, nearestSegment, segOrientation, turn, type ImageState, type Seg } from "../../lib/planMath";
 import { useStore } from "../../store";
+import { canEditNow } from "../../components/useChassis";
 import type { Floor, VariantKey } from "../../types";
 import { useEditorKeys, type CanvasCamera } from "../core";
 import type { PlanSelection } from "./useSelection";
@@ -77,20 +78,23 @@ export function usePlanKeys(a: PlanKeyArgs) {
   // dropped keys that belong to a field or dialog and keys pressed while peeking.
   useEditorKeys((e: KeyboardEvent) => {
     const { planImage, setUi, setMode } = useStore.getState();
+    const editable = canEditNow(mode);
     const mod = e.ctrlKey || e.metaKey;
-    const act = planKeyAction(e, { mode, fixtureSelected: liveIds.length > 0, placing: !!placing });
+    const raw = planKeyAction(e, { mode, fixtureSelected: liveIds.length > 0, placing: !!placing });
+    // Where editing is off, only the view keys (zoom, fit, image) and Measure survive.
+    const act = raw && !editable && !("zoom" in raw || "fit" in raw || "image" in raw || ("tool" in raw && (raw.tool === "select" || raw.tool === "measure"))) ? null : raw;
     const arrow = !mod && !e.altKey ? arrowDelta(e.key, e.shiftKey) : null;
     if (arrow) {
-      if (!placing && tool === "select" && nudgeSelection(arrow.x * ppm, arrow.y * ppm)) e.preventDefault();
+      if (editable && !placing && tool === "select" && nudgeSelection(arrow.x * ppm, arrow.y * ppm)) e.preventDefault();
     } else if (mod && e.key.toLowerCase() === "c" && liveIds.length) {
       e.preventDefault();
       sel.copyFixtureIds(liveIds);
-    } else if (mod && e.key.toLowerCase() === "v" && getClipboardFixtures().length) {
+    } else if (mod && e.key.toLowerCase() === "v" && editable && getClipboardFixtures().length) {
       e.preventDefault();
       // Furniture only lives in Furnish: switch there, then paste.
       if (!fixtureMode) setMode("furnish");
       sel.pasteFixtures();
-    } else if (mod && e.key.toLowerCase() === "g" && furnish) {
+    } else if (mod && e.key.toLowerCase() === "g" && furnish && editable) {
       e.preventDefault();
       if (e.shiftKey) sel.setFixtures((all) => ungroupFixtures(all, liveIds));
       else sel.groupSelected(liveIds);
@@ -110,7 +114,7 @@ export function usePlanKeys(a: PlanKeyArgs) {
         tools.setPlacing(null);
         tools.setTool("select");
       }
-    } else if (mod && e.key.toLowerCase() === "d" && liveIds.length) {
+    } else if (mod && e.key.toLowerCase() === "d" && liveIds.length && editable) {
       e.preventDefault();
       sel.duplicateFixtureIds(liveIds);
     } else if (act) {
@@ -123,7 +127,7 @@ export function usePlanKeys(a: PlanKeyArgs) {
       else if ("zoom" in act) camera.zoomBy(act.zoom > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
       else if ("fit" in act) camera.fit();
       else if ("add" in act) a.setAddOpen(true);
-    } else if ((e.key === "Delete" || e.key === "Backspace") && (build || fixtureMode)) {
+    } else if ((e.key === "Delete" || e.key === "Backspace") && editable && (build || fixtureMode)) {
       sel.removeSelected();
     }
   });

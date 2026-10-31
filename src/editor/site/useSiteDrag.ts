@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import { useStore } from "../../store";
+import { canEditNow } from "../../components/useChassis";
 import { siteOf } from "../../lib/sites";
 import { edgesOf, insertBoundaryVertex, rectPoly,type LevelOutline } from "../../lib/site";
 import { curvesAfterInsert, linksAfterInsert, relinkAfterInsert } from "../../lib/surfaceCurve";
@@ -11,6 +12,9 @@ import { itemsOf, snapItem } from "../../lib/siteItems";
 import { angleToward, moveRunEnd, patchItem, resizePatch, snapRot, toLocal } from "./gardenEdit";
 import { useDoublePress, useDrag, usePolygonEdit, type CanvasCamera, type DragSpec, type Press, type PolygonTarget } from "../core";
 import { keyOf, sameItem, type Draft, type Item, type Sel, type Tool } from "./types";
+
+/** Whether the site may be changed now (off in view-only modes on a phone). */
+const editing = (): boolean => canEditNow(useStore.getState().mode);
 
 /** The site as it is in the store now (callbacks captured at a press must not use render-time values). */
 const siteNow = (): Site | undefined => {
@@ -205,6 +209,7 @@ export function useSiteDrag(a: Args) {
   const clickSpec = (fn: (m: { at: WPt; shift: boolean }) => void): DragSpec => ({ kind: "tool-click", data: null, undo: false, tap: (m) => fn({ at: m.at, shift: m.shift }) });
 
   const backgroundSpec = (p: Press): DragSpec | null => {
+    if (!editing()) return null;
     switch (tool) {
       case "select":
         return null;
@@ -256,7 +261,7 @@ export function useSiteDrag(a: Args) {
 
   const itemDown = (e: React.PointerEvent, s: Item) => {
     if (tool !== "select") return; // let drawing start over items
-    const already = !!sel && sel.type !== "item" && sameItem(sel, s);
+    const already = editing() && !!sel && sel.type !== "item" && sameItem(sel, s);
     setSel(s);
     if (already && s.type !== "boundary") drag.begin(e, moveSpec(s));
     else if (already && s.type === "boundary" && s.edge !== null) edit.edgeDown(e, targetOf(s), s.edge);
@@ -304,12 +309,17 @@ export function useSiteDrag(a: Args) {
     }
     const ids = garden.selection.includes(id) ? garden.selection : [id];
     if (ids !== garden.selection) garden.selectItems(ids);
+    if (!editing()) {
+      drag.beginPan(e);
+      return;
+    }
     drag.begin(e, itemMoveSpec(ids));
   };
 
   const itemNow = (id: string) => itemsOf(siteNow() ?? site).find((it) => it.id === id);
 
   const rotateDown = (e: React.PointerEvent, id: string) => {
+    if (!editing()) return;
     const o = itemNow(id);
     if (!o) return;
     drag.begin(e, {
@@ -320,6 +330,7 @@ export function useSiteDrag(a: Args) {
     });
   };
   const resizeDown = (e: React.PointerEvent, id: string, handle: "spread" | "w" | "d") => {
+    if (!editing()) return;
     const o = itemNow(id);
     if (!o) return;
     drag.begin(e, {
@@ -330,6 +341,7 @@ export function useSiteDrag(a: Args) {
     });
   };
   const endDown = (e: React.PointerEvent, id: string, end: "from" | "to") => {
+    if (!editing()) return;
     drag.begin(e, {
       kind: "item-end",
       data: null,

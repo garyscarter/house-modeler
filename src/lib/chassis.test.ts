@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chassisFor, effectiveCompare, toolAllowed } from "./chassis";
+import { chassisFor, effectiveCompare, toolAllowed, isCompact, canEdit } from "./chassis";
 
 describe("chassisFor", () => {
   it("phones in both orientations are the phone chassis", () => {
@@ -42,5 +42,22 @@ describe("effectiveCompare", () => {
     expect(f("side-by-side", "tablet")).toBe("wipe");
     expect(f("side-by-side", "phone")).toBe("wipe");
     expect(f("overlay", "phone")).toBe("overlay");
+  });
+});
+
+describe("isCompact and canEdit", () => {
+  it("an iPhone is compact either way round, iPad portrait and desktop are not", () => {
+    expect(isCompact({ width: 390, height: 844 })).toBe(true);
+    expect(isCompact({ width: 844, height: 390 })).toBe(true);
+    expect(isCompact({ width: 820, height: 1180 })).toBe(false);
+    expect(isCompact({ width: 1440, height: 900 })).toBe(false);
+  });
+  it("on compact screens only decorate and furnish edit; elsewhere every mode does", () => {
+    for (const m of ["build", "electrics", "garden", "plot", "review"]) {
+      expect(canEdit(m, true)).toBe(false);
+      expect(canEdit(m, false)).toBe(true);
+    }
+    expect(canEdit("decorate", true)).toBe(true);
+    expect(canEdit("furnish", true)).toBe(true);
   });
 });

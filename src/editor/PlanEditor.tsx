@@ -16,7 +16,7 @@ import { useClipboardFixtures } from "../lib/clipboard";
 import { selectionBounds } from "../lib/fixtureGroups";
 import { wallClearances } from "../lib/planGuides";
 import { useCameraInsets, useCanvasCamera } from "./core";
-import { useChassis } from "../components/useChassis";
+import { useCanEdit, useChassis } from "../components/useChassis";
 import { usePlanSelection } from "./plan/useSelection";
 import { usePlanTools } from "./plan/useTools";
 import { usePlanDrag } from "./plan/useDrag";
@@ -80,6 +80,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   }, [floor.rooms, floor.imageW, floor.imageH]);
   // Scale limits: from 1 m filling about 2000 screen px to the whole image at a third of the element.
   const touch = useChassis((s) => s.touch);
+  const editable = useCanEdit(mode);
   const chassis = useChassis((s) => s.chassis);
   const insets = useCameraInsets();
   const camera = useCanvasCamera(wrapRef, {
@@ -126,6 +127,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   usePlanKeys({ variant, floor, mode, segs: geo.segs, camera, sel: selection, tools, selectedRoomId, setAddOpen });
   const pickEvent = useEvent(pick);
   const startPlacingEvent = useEvent((item: CatalogueItem) => {
+    if (!editable) return;
     if (!(electrics && chassis === "phone")) return startPlacing(item);
     // Phone, Electrics: picking drops the point at the middle of the view (on the nearest wall if one is in reach) and selects it; drag to move.
     const c = { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 };
@@ -238,7 +240,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
   const clip = useMemo(() => imageClipRect(roomsRect, ppm, { w: floor.imageW, h: floor.imageH }), [roomsRect, ppm, floor.imageW, floor.imageH]);
   const neutralFills = quiet && (build || furnish || electrics);
   const showRoomLabels = !(planImage.show && imageState === "trace");
-  const editSelect = build && tool === "select";
+  const editSelect = build && editable && tool === "select";
 
   const statusText = statusTextFor({
     tool, draftLen: draft.length, measureLen: measure.length, calibLen: calib.length, placing,

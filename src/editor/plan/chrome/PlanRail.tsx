@@ -6,7 +6,7 @@ import { editsFixtures, PLAN_TOOLS, type Mode, type Tool } from "../../../lib/mo
 import { imageForState, imageStateOf, type ImageState } from "../../../lib/planMath";
 import { TOOL_KEY, TOOL_LABEL } from "../../../lib/shortcuts";
 import { useStore } from "../../../store";
-import { useChassis } from "../../../components/useChassis";
+import { useCanEdit, useChassis } from "../../../components/useChassis";
 import { toolAllowed } from "../../../lib/chassis";
 import { AddPopover } from "../../AddItem";
 import { ToolRail, type RailItem } from "../../ToolRail";
@@ -50,13 +50,14 @@ export const PlanRail = memo(function PlanRail({
   const fixtureMode = editsFixtures(mode);
   const electrics = mode === "electrics";
   const chassis = useChassis((s) => s.chassis);
+  const editable = useCanEdit(mode);
   const groups = useMemo(() => {
-    const has = (t: Tool) => PLAN_TOOLS[mode].includes(t) && toolAllowed(chassis, t);
+    const has = (t: Tool) => PLAN_TOOLS[mode].includes(t) && toolAllowed(chassis, t) && (editable || t === "select" || t === "measure");
     const toolItems = (list: [Tool, IconName][]): RailItem[] =>
       list.filter(([t]) => has(t)).map(([t, icon]) => ({ id: t, icon, label: TOOL_LABEL[t], shortcut: TOOL_KEY[t], active: tool === t, onClick: () => onPick(t) }));
     const cycleImage = () => setImageState(IMAGE_STATES[(IMAGE_STATES.indexOf(imageState) + 1) % IMAGE_STATES.length]);
     const out: RailItem[][] = [
-      fixtureMode
+      fixtureMode && editable
         ? [
             {
               id: "add",
@@ -74,7 +75,7 @@ export const PlanRail = memo(function PlanRail({
       toolItems([["rect", "rect"], ["room", "polygon"], ["wall", "wall"], ["canopy", "canopy"]]),
       toolItems([["door", "door"], ["window", "window"], ["gap", "gap"]]),
       toolItems([["measure", "measure"]]),
-      [
+      editable ? [
         {
           id: "image",
           icon: "image",
@@ -94,12 +95,12 @@ export const PlanRail = memo(function PlanRail({
             />
           ),
         },
-      ],
+      ] : [],
     ];
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, chassis, tool, addOpen, activeId, clipboardCount, pasteLabel, imageState, imgOpacity, planImage.show, planImage.opacity, wallsOn]);
+  }, [mode, chassis, editable, tool, addOpen, activeId, clipboardCount, pasteLabel, imageState, imgOpacity, planImage.show, planImage.opacity, wallsOn]);
   const touch = useChassis((s) => s.touch);
-  const footer = useMemo(() => <Info label="How this works">{selectHintFor(mode, touch)}</Info>, [mode, touch]);
+  const footer = useMemo(() => (editable ? <Info label="How this works">{selectHintFor(mode, touch)}</Info> : undefined), [mode, touch, editable]);
   return <ToolRail groups={groups} footer={footer} />;
 });

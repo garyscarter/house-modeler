@@ -1,4 +1,5 @@
 import { InspectorCard } from "../../../components/InspectorCard";
+import { ReadOnlyBody } from "../../../components/ReadOnly";
 import { Info } from "../../../components/Info";
 import { defaultFit } from "../../../lib/recess";
 import { removeCanopy, resizeCanopy } from "../../../lib/canopy";
@@ -51,8 +52,11 @@ export function PlanInspector({
   const selectedFixture = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
   const selectedFixtureItem = selectedFixture ? byId(selectedFixture.type) : undefined;
   const paste = clipboardCount ? pasteFixtures : undefined;
+  // The Electrics panel (nothing picked) sets read-only up itself, so its wiring guide still downloads.
+  const electricsPanel = mode === "electrics" && liveIds.length < 2 && !(selectedFixture && selectedFixtureItem);
   return (
     <InspectorCard className="side">
+      <ReadOnlyBody skip={electricsPanel}>
       {editsFixtures(mode) ? (
         liveIds.length >= 2 ? (
           <MultiFixtureInspector
@@ -131,6 +135,7 @@ export function PlanInspector({
           </p>
         </>
       )}
+      </ReadOnlyBody>
     </InspectorCard>
   );
 }

@@ -7,6 +7,7 @@ import { BuildRoomPanel } from "../editor/Inspectors";
 import { PlotPanel } from "./PlotPanel";
 import { GardenPanel } from "./GardenPanel";
 import { ElectricsPanel } from "./ElectricsPanel";
+import { ReadOnlyBody } from "./ReadOnly";
 import { requestAddPicker } from "../editor/addPicker";
 
 /**
@@ -69,7 +70,7 @@ export function ModePanel() {
 
   return (
     <div className="mode-panel" data-mode={mode satisfies Mode} role="region" aria-label={`${MODE_LABEL[mode]} panel`}>
-      {body}
+      <ReadOnlyBody skip={mode === "electrics"}>{body}</ReadOnlyBody>
     </div>
   );
 }
