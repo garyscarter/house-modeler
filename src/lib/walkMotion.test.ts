@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, STRAFE_FACTOR, sweepDuration, TURN_RATE, walkFov, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion } from "./walkMotion";
+import { dragLook, followRoute, isTap, keyIntent, keyMove, lookSweep, NO_KEYS, NO_KEY_MOTION, REST_PITCH, ROUTE_SPEED, routeStart, RUN_SPEED, springAngle, stopBeforeDoor, STRAFE_FACTOR, sweepDuration, TURN_RATE, WALK_SPEED, wrapAngle, type HeldKeys, type KeyMotion } from "./walkMotion";
 import { PITCH_MAX, type WalkPose, type WalkRoute } from "./walkTypes";
 
 const pose = (over: Partial<WalkPose> = {}): WalkPose => ({ x: 0, y: 0, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0, ...over });
@@ -73,18 +73,7 @@ describe("keys", () => {
   });
 });
 
-describe("walkFov and springs", () => {
-  it("lens: about 51 at 16:10, 47 at 16:9, 60 at 4:3, 78 on a portrait phone", () => {
-    // Wide (90° across) by default.
-    expect(walkFov(1.6)).toBeCloseTo(64.0, 0);
-    expect(walkFov(16 / 9)).toBeCloseTo(58.7, 0);
-    expect(walkFov(4 / 3)).toBeCloseTo(73.7, 0);
-    expect(walkFov(0.46)).toBe(78);
-    expect(walkFov(4)).toBe(45);
-    // Natural and extra wide.
-    expect(walkFov(1.6, 75)).toBeCloseTo(51.2, 0);
-    expect(walkFov(1.6, 100)).toBeCloseTo(73.4, 0);
-  });
+describe("rest pitch and springs", () => {
   it("REST_PITCH is -8 degrees", () => {
     expect(REST_PITCH).toBeCloseTo((-8 * Math.PI) / 180);
   });
@@ -222,6 +211,20 @@ describe("followRoute", () => {
     }
     expect(Math.abs(p.pitch - REST_PITCH)).toBeLessThan(0.01);
     expect(top).toBeLessThanOrEqual(0.7 + 1e-6);
+  });
+  it("settles the gaze at the rest pitch it is given", () => {
+    const rest = (-11 * Math.PI) / 180;
+    let p = pose({ pitch: 0.3 });
+    let rs = routeStart(p, bend);
+    const m = { yawVel: 0, pitchVel: 0 };
+    for (let i = 0; i < 120; i++) {
+      const r = followRoute(p, bend, rs, m, 1 / 30, Infinity, rest);
+      p = { ...p, x: p.x + r.dx, y: p.y + r.dy, yaw: r.yaw, pitch: r.pitch };
+      rs = r.state;
+      m.yawVel = r.yawVel;
+      m.pitchVel = r.pitchVel;
+    }
+    expect(Math.abs(p.pitch - rest)).toBeLessThan(0.01);
   });
   it("waits for a walker that is blocked", () => {
     const rs = routeStart(pose(), bend);

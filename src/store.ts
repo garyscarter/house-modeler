@@ -12,6 +12,7 @@ import { editsSite, isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./l
 import type { EdgePick } from "./lib/decorPick";
 import { peekPatch } from "./lib/studio";
 import { activeHouseId, houseKey, storageSuffix } from "./lib/house";
+import type { WalkAdapt, WalkLensChoice, WalkStepMode } from "./lib/walkTypes";
 
 export type ViewMode = "single" | "side-by-side" | "overlay" | "wipe";
 const VIEW_MODES: ViewMode[] = ["single", "side-by-side", "overlay", "wipe"];
@@ -24,8 +25,12 @@ export interface Settings {
   quality: "high" | "balanced" | "low";
   /** Walk-through eye height in metres (1.0–2.0); absent = 1.7. Read it through eyeHeightOf (lib/walkTypes). */
   eyeHeight?: number;
-  /** Walk-through lens, degrees across the screen (75, 90 or 100); absent = 90. Read it through walkLensOf (lib/walkTypes). */
-  walkLens?: number;
+  /** Walk-through lens: "narrow" | "normal" | "wide" (legacy saves hold 75, 90 or 100 degrees); absent = normal. Read it through walkLensOf (lib/walkTypes). */
+  walkLens?: WalkLensChoice | number;
+  /** Walk-through eye adaptation between bright and dim rooms; absent = natural. Read it through walkAdaptOf (lib/walkTypes). */
+  walkAdapt?: WalkAdapt;
+  /** Walk-through natural step (gentle, gaze-steadied head motion); absent = off. Read it through walkStepOf (lib/walkTypes). */
+  walkStep?: WalkStepMode;
 }
 
 /** Sun study controls. */

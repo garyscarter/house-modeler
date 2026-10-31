@@ -148,3 +148,28 @@ describe("buildNav on small floors", () => {
     expect(Math.hypot(s.at.x - 2, s.at.y - 1.5)).toBeLessThan(0.15);
   });
 });
+
+describe("glazing", () => {
+  const byKind = (lvl: number) => nav.glazing.filter((g) => g.level === lvl).reduce<Record<string, number>>((m, g) => ({ ...m, [g.kind]: (m[g.kind] ?? 0) + 1 }), {});
+  it("lists the windows, bay and patio doors of the built-in house", () => {
+    // Recounted from the model and pinned (12): ground floor 5 windows + 1 bay + 1 patio, upstairs 5 windows (the brief guessed 6 + 1 + 1 downstairs;
+    // an internal window or the front door's side lights are not in an outside wall, so they are skipped).
+    expect(byKind(0)).toEqual({ window: 5, bay: 1, patio: 1 });
+    expect(byKind(1)).toEqual({ window: 5 });
+    expect(nav.glazing).toHaveLength(12);
+  });
+  it("has sane sizes and a room for every ground-floor entry", () => {
+    const ground = new Set(nav.levels.find((l) => l.level === 0)!.rooms.map((r) => r.id));
+    for (const g of nav.glazing) {
+      expect(g.head).toBeGreaterThan(g.sill);
+      expect(g.width).toBeGreaterThan(0);
+      expect(Math.hypot(g.dir.x, g.dir.y)).toBeCloseTo(1, 6);
+      expect(Math.abs(g.out)).toBe(1);
+    }
+    for (const g of nav.glazing.filter((x) => x.level === 0)) expect(ground.has(g.roomId ?? "")).toBe(true);
+  });
+  it("starts the patio doors at the floor", () => {
+    const patio = nav.glazing.find((g) => g.kind === "patio")!;
+    expect(patio.sill).toBe(0);
+  });
+});

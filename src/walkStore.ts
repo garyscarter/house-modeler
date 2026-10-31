@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useStore } from "./store";
-import type { DoorStates, TourState, WalkGoal, WalkPose, WalkRoute, WalkStart } from "./lib/walkTypes";
+import type { LensClass } from "./lib/walkLens";
+import type { DoorStates, TourState, WalkGoal, WalkLensChoice, WalkPose, WalkRoute, WalkStart } from "./lib/walkTypes";
 
 type Main = ReturnType<typeof useStore.getState>;
 /** The view settings a walk changes, saved when it starts and put back when it ends. */
@@ -16,6 +17,18 @@ export const TOUR_OFF: TourState = { status: "off", stops: [], index: 0, phase: 
 export interface WalkHint { text: string; id: number; ms: number }
 /** What the HUD names: the room you are in (null between rooms), the storey, and whether you are out in the garden. */
 export interface WalkWhere { level: number; roomName: string | null; outside: boolean }
+
+/** The lens in force on this screen, for the eye menu and the look-round: the choice, the canvas, its fields of view and what each choice would give. */
+export interface WalkLensInfo {
+  choice: WalkLensChoice;
+  w: number;
+  h: number;
+  hfov: number;
+  vfov: number;
+  cls: LensClass;
+  /** Degrees across for each choice on this screen. */
+  options: Record<WalkLensChoice, number>;
+}
 
 export interface WalkState {
   on: boolean;
@@ -34,6 +47,7 @@ export interface WalkState {
   where: WalkWhere | null;
   showMap: boolean;
   before: WalkUiSnapshot | null;
+  lens: WalkLensInfo | null;
 
   requestWalk: (start: WalkStart) => void;
   stopWalk: () => void;
@@ -55,13 +69,14 @@ export interface WalkState {
   clearHint: () => void;
   setWhere: (where: WalkWhere | null) => void;
   setShowMap: (show: boolean) => void;
+  setLens: (lens: WalkLensInfo | null) => void;
   /** Swap As listed and Proposed where you stand (the Flip button; holding Space peeks as everywhere else). */
   flipLayout: () => void;
 }
 
 let hintId = 0;
 const sameWhere = (a: WalkWhere | null, b: WalkWhere | null) => a === b || (!!a && !!b && a.level === b.level && a.roomName === b.roomName && a.outside === b.outside);
-const CLEAR = { pending: null, pose: null, doors: {}, route: null, goal: null, tour: TOUR_OFF, hint: null, where: null } as const;
+const CLEAR = { pending: null, pose: null, doors: {}, route: null, goal: null, tour: TOUR_OFF, hint: null, where: null, lens: null } as const;
 
 export const useWalk = create<WalkState>()((set, get) => ({
   on: false, ...CLEAR, doorsSettled: 0, showMap: true, before: null,
@@ -99,6 +114,7 @@ export const useWalk = create<WalkState>()((set, get) => ({
   clearHint: () => set({ hint: null }),
   setWhere: (where) => set((s) => (sameWhere(s.where, where) ? s : { where })),
   setShowMap: (showMap) => set({ showMap }),
+  setLens: (lens) => set({ lens }),
   flipLayout: () => {
     const m = useStore.getState();
     if (m.peek) return;

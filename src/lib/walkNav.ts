@@ -12,7 +12,7 @@ import { headSideSteps, stairwells, type Rect } from "./stairwell";
 import { surfaceOutline } from "./surfaceCurve";
 import { effectiveSlope } from "./surfaceSlope";
 import { outwardSign, wallThickness } from "./walls";
-import { doorKey, initiallyOpen, leafSweeps, passageOf, patioSlider, yawOf, type DoorStates, type NavDoor, type NavFlight, type NavLevel, type NavWorld } from "./walkTypes";
+import { doorKey, initiallyOpen, leafSweeps, passageOf, patioSlider, yawOf, type DoorStates, type NavDoor, type NavFlight, type NavGlazing, type NavLevel, type NavWorld } from "./walkTypes";
 
 /**
  * Walk-through: the walkable world (docs/walkthrough-plan.md, Chunk B). Per storey, the things that stop
@@ -648,13 +648,17 @@ interface FloorBits {
   bays: { poly: V2[]; room: number }[];
   obs: Obs[];
   solids: V2[][];
+  glazing: NavGlazing[];
 }
+
+const GLAZED_KINDS = new Set<string>(["window", "bay", "french", "patio", "bifold"]);
 
 function floorBits(model: HouseModel, floor: Floor, li: number, doors: DoorNav[], doorsOpen: boolean): FloorBits {
   const rooms = floor.rooms.map((r) => roomWorldPolygon(floor, r));
   const obs: Obs[] = [];
   const solids: V2[][] = [];
   const bays: FloorBits["bays"] = [];
+  const glazing: NavGlazing[] = [];
   const box = (pl: OpeningPlacement, x0: number, x1: number, ht: number, door = -1) => {
     if (x1 - x0 > 1e-3) obs.push(boxObs(along(pl, x0), along(pl, x1), ht, door));
   };
@@ -667,6 +671,12 @@ function floorBits(model: HouseModel, floor: Floor, li: number, doors: DoorNav[]
       const pass = passageOf(op.kind);
       const hw = pl.width / 2;
       const out = outwardSign(pl, rooms);
+      // Glazing in an outside wall, for the look-round and eye adaptation; the walk grid below does not read it.
+      if (GLAZED_KINDS.has(op.kind) && out !== 0) {
+        const inner = along(pl, 0, -out * 0.3);
+        const ri = rooms.findIndex((r) => pointInPolygon(inner, r));
+        glazing.push({ key: doorKey(floor.id, op.id), level: floor.level, kind: op.kind, roomId: ri >= 0 ? floor.rooms[ri].id : null, centre: pl.centre, dir: pl.dir, width: pl.width, sill: pl.y0, head: pl.y1, out: out > 0 ? 1 : -1 });
+      }
       const nd = (span: [number, number]): NavDoor => ({
         key: doorKey(floor.id, op.id), floorId: floor.id, openingId: op.id, level: floor.level, kind: op.kind, passage: pass,
         initial: initiallyOpen(op, doorsOpen), centre: pl.centre, dir: pl.dir, width: pl.width, span, sweeps: pass === "door" ? leafSweeps(op, pl.centre, pl.dir, pl.width, out) : [],
@@ -711,7 +721,7 @@ function floorBits(model: HouseModel, floor: Floor, li: number, doors: DoorNav[]
     obs.push(...edgesOf(poly));
     solids.push(poly);
   }
-  return { rooms, bays, obs, solids };
+  return { rooms, bays, obs, solids, glazing };
 }
 
 function gardenBits(G: GardenNav): { obs: Obs[]; solids: V2[][] } {
@@ -1118,7 +1128,7 @@ export function buildNav(model: HouseModel, site: Site | undefined, doorsOpen: b
     rooms: floors[li].rooms.map((r, ri) => ({ id: r.id, name: r.name, poly: L.rooms[ri], area: areaOf(L.rooms[ri]) })),
   }));
   const navFlights: NavFlight[] = flights.map((F) => ({ lowerLevel: levels[F.lower].level, upperLevel: levels[F.upper].level, footStand: F.footStand, headStand: F.headStand }));
-  return { levels: navLevels, flights: navFlights, doors: doors.map((d) => d.nd), plot: garden ? garden.boundary : null, internal: I };
+  return { levels: navLevels, flights: navFlights, doors: doors.map((d) => d.nd), glazing: bits.flatMap((b) => b.glazing), plot: garden ? garden.boundary : null, internal: I };
 }
 
 function polygonCentroidOfRooms(rooms: V2[][]): V2 {

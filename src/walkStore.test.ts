@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
 import { useWalk, WALK_UI } from "./walkStore";
-import { clearOfSweeps, DEFAULT_LENS, eyeHeightOf, forwardOf, initiallyOpen, leafSweeps, patioSlider, walkLensOf, yawOf } from "./lib/walkTypes";
+import { clearOfSweeps, DEFAULT_ADAPT, DEFAULT_LENS, DEFAULT_STEP, eyeHeightOf, forwardOf, initiallyOpen, leafSweeps, patioSlider, walkAdaptOf, walkLensOf, walkStepOf, yawOf } from "./lib/walkTypes";
 import { openingParts } from "./lib/openings";
 import type { Opening } from "./types";
 
@@ -68,11 +68,36 @@ describe("walk rules", () => {
     expect(initiallyOpen({ kind: "window" }, true)).toBe(false);
   });
 
-  it("reads the lens, 90° unless set to one of the three", () => {
-    expect(walkLensOf({})).toBe(DEFAULT_LENS);
-    expect(DEFAULT_LENS).toBe(90);
-    expect(walkLensOf({ walkLens: 75 })).toBe(75);
-    expect(walkLensOf({ walkLens: 60 })).toBe(90);
+  it("reads the lens: normal unless narrow or wide, legacy degrees mapped", () => {
+    expect(walkLensOf({})).toBe("normal");
+    expect(DEFAULT_LENS).toBe("normal");
+    expect(walkLensOf({ walkLens: 75 })).toBe("narrow");
+    expect(walkLensOf({ walkLens: 90 })).toBe("normal");
+    expect(walkLensOf({ walkLens: 100 })).toBe("wide");
+    expect(walkLensOf({ walkLens: 60 })).toBe("normal");
+    expect(walkLensOf({ walkLens: "wide" })).toBe("wide");
+    expect(walkLensOf({ walkLens: "narrow" })).toBe("narrow");
+    expect(walkLensOf({ walkLens: "huge" })).toBe("normal");
+  });
+
+  it("reads eyes adjust (natural) and natural step (off), unknowns falling back", () => {
+    expect(walkAdaptOf({})).toBe("natural");
+    expect(DEFAULT_ADAPT).toBe("natural");
+    expect(walkAdaptOf({ walkAdapt: "strong" })).toBe("strong");
+    expect(walkAdaptOf({ walkAdapt: "off" })).toBe("off");
+    expect(walkAdaptOf({ walkAdapt: "extreme" })).toBe("natural");
+    expect(walkStepOf({})).toBe("off");
+    expect(DEFAULT_STEP).toBe("off");
+    expect(walkStepOf({ walkStep: "natural" })).toBe("natural");
+    expect(walkStepOf({ walkStep: "lots" })).toBe("off");
+  });
+
+  it("keeps the lens info while walking and clears it when the walk stops", () => {
+    walk().requestWalk({ kind: "front" });
+    walk().setLens({ choice: "normal", w: 1, h: 1, hfov: 90, vfov: 60, cls: "large", options: { narrow: 75, normal: 90, wide: 100 } });
+    expect(walk().lens?.hfov).toBe(90);
+    walk().stopWalk();
+    expect(walk().lens).toBeNull();
   });
 
   it("puts each leaf's swing where the 3D rig swings it", () => {

@@ -27,17 +27,6 @@ export const wrapAngle = (a: number): number => {
 
 /** Resting gaze: a little below level (people look at the ground two steps ahead about half the time). */
 export const REST_PITCH = (-8 * Math.PI) / 180;
-/** Horizontal field of view the walk lens aims for by default, degrees: a property photographer's wide view. */
-export const WALK_HFOV = 90;
-/**
- * Vertical FOV in degrees for a horizontal FOV of `hfov` (90° by default), clamped to [45, 78]: at 90°, about 64° at
- * 16:10, 59° at 16:9 and 74° at 4:3; a phone held upright gets the 78° cap.
- */
-export function walkFov(aspect: number, hfov: number = WALK_HFOV): number {
-  const a = Math.max(0.05, aspect);
-  const v = (2 * Math.atan(Math.tan((hfov * Math.PI) / 360) / a) * 180) / Math.PI;
-  return Math.max(45, Math.min(78, v));
-}
 
 export interface SpringLimits { maxVel?: number; maxAccel?: number }
 /** A critically damped spring on a plain value (no wrap). With limits it caps the rate and how fast the rate may change. */
@@ -220,7 +209,7 @@ export interface RouteResult { dx: number; dy: number; yaw: number; pitch: numbe
  * and to stop at the goal. The view yaw is a spring towards a point 1.2 m further along, so it leads into turns, and in the last
  * 0.8 m turns to route.yaw. Done once stopped at the end and facing route.yaw (if set). `speedCap` caps the speed this frame.
  */
-export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, route: WalkRoute, st: RouteState, motion: RouteMotion, dt: number, speedCap = Infinity): RouteResult {
+export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, route: WalkRoute, st: RouteState, motion: RouteMotion, dt: number, speedCap = Infinity, restPitch = REST_PITCH): RouteResult {
   const { poly } = st;
   const end = total(poly);
   // Where the path says we should be; if the walker has fallen well behind (blocked), wait for it.
@@ -256,7 +245,7 @@ export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, r
     aim = dir + k * wrapAngle(route.yaw - dir);
   }
   const ys = springAngle(pose.yaw, motion.yawVel, aim, dt, YAW_OMEGA, { maxVel: YAW_MAX, maxAccel: YAW_MAX_ACCEL });
-  const ps = springValue(pose.pitch, motion.pitchVel, REST_PITCH, dt, PITCH_OMEGA);
+  const ps = springValue(pose.pitch, motion.pitchVel, restPitch, dt, PITCH_OMEGA);
 
   const stopped = v < 0.03 && rem < 0.03 && lag < 0.2;
   const facing = route.yaw === undefined || Math.abs(wrapAngle(route.yaw - ys.angle)) < 0.02;

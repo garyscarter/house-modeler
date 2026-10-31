@@ -12,17 +12,38 @@ export function eyeHeightOf(settings: { eyeHeight?: number }): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.min(EYE_HEIGHT.max, Math.max(EYE_HEIGHT.min, v)) : EYE_HEIGHT.default;
 }
 
-// ---- lens (persisted as settings.walkLens) ----
-/** The walk's lenses, as the field of view across the screen in degrees: natural, wide (a property photo), extra wide. */
-export const WALK_LENSES = [
-  { deg: 75, label: "Natural" },
-  { deg: 90, label: "Wide" },
-  { deg: 100, label: "Extra wide" },
-] as const;
-export type WalkLens = (typeof WALK_LENSES)[number]["deg"];
-export const DEFAULT_LENS: WalkLens = 90;
-export function walkLensOf(settings: { walkLens?: number }): WalkLens {
-  return WALK_LENSES.find((l) => l.deg === settings.walkLens)?.deg ?? DEFAULT_LENS;
+// ---- lens, eye adaptation and natural step (persisted as settings.walkLens, walkAdapt, walkStep) ----
+/** The walk's lens choices; each means a field of view that depends on the screen (lib/walkLens). */
+export type WalkLensChoice = "narrow" | "normal" | "wide";
+export const WALK_LENS_CHOICES: readonly { id: WalkLensChoice; label: string }[] = [
+  { id: "narrow", label: "Narrow" },
+  { id: "normal", label: "Normal" },
+  { id: "wide", label: "Wide" },
+];
+export const DEFAULT_LENS: WalkLensChoice = "normal";
+/** The lens choice; legacy degree values 75 / 90 / 100 read as narrow / normal / wide; anything else is normal. */
+export function walkLensOf(settings: { walkLens?: number | string }): WalkLensChoice {
+  const v = settings.walkLens;
+  if (v === "narrow" || v === "normal" || v === "wide") return v;
+  if (v === 75) return "narrow";
+  if (v === 100) return "wide";
+  return DEFAULT_LENS;
+}
+
+/** How far the eyes adjust between bright and dim rooms. */
+export type WalkAdapt = "off" | "natural" | "strong";
+export const DEFAULT_ADAPT: WalkAdapt = "natural";
+export function walkAdaptOf(settings: { walkAdapt?: string }): WalkAdapt {
+  const v = settings.walkAdapt;
+  return v === "off" || v === "natural" || v === "strong" ? v : DEFAULT_ADAPT;
+}
+
+/** Natural step: gentle, gaze-steadied head motion while walking. */
+export type WalkStepMode = "off" | "natural";
+export const DEFAULT_STEP: WalkStepMode = "off";
+export function walkStepOf(settings: { walkStep?: string }): WalkStepMode {
+  const v = settings.walkStep;
+  return v === "off" || v === "natural" ? v : DEFAULT_STEP;
 }
 
 // ---- facing ----
@@ -240,10 +261,35 @@ export function clearOfSweeps(sweeps: LeafSweep[], p: V2, r: number): boolean {
   });
 }
 
+/** A window, bay or glazed door in an outside wall, for the walk's look-round and eye adaptation. */
+export interface NavGlazing {
+  /** doorKey(floorId, openingId) */
+  key: string;
+  level: number;
+  /** window | bay | french | patio | bifold */
+  kind: OpeningKind;
+  /** The room it lights (the room containing the point 0.3 m inside it), null if none. */
+  roomId: string | null;
+  /** Plan metres, on the wall line. */
+  centre: V2;
+  /** Wall direction (unit). */
+  dir: V2;
+  /** Metres along the wall. */
+  width: number;
+  /** Bottom of the opening above the finished floor, metres. */
+  sill: number;
+  /** Top of the opening, metres. */
+  head: number;
+  /** Outward side: the outside is centre + n * out * 0.3 with n = (-dir.y, dir.x). */
+  out: 1 | -1;
+}
+
 export interface NavWorld {
   levels: NavLevel[];
   flights: NavFlight[];
   doors: NavDoor[];
+  /** Windows, bays and glazed doors in outside walls, every storey. */
+  glazing: NavGlazing[];
   /** Plot boundary (or a box round the house when there is no plot). */
   plot: V2[] | null;
   /** Chunk B's grids and obstacles; nobody else reads this. */
