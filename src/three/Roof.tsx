@@ -5,7 +5,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { HouseModel } from "../types";
 import { GUTTER_R, PIPE_R, exteriorOf, planRoofs, type P3 } from "../lib/roof";
 import { SOIL_R, roofParts, type RoofParts } from "../lib/roofParts";
-import { useStore } from "../store";
+import { useQuality } from "./useQuality";
 import { roofStructure } from "../lib/structure";
 import { shade } from "./shell";
 import { triangles } from "./geometryUtil";
@@ -169,7 +169,7 @@ function buildGeometry(p: RoofParts): RoofGeometry {
  */
 export function Roof({ model }: { model: HouseModel }) {
   const ext = exteriorOf(model);
-  const low = useStore((s) => s.settings.quality === "low");
+  const low = useQuality() === "low";
   // Keyed on what planning reads, so recolouring a room or moving a fixture leaves the roof alone.
   const sig = roofStructure(model);
   // eslint-disable-next-line react-hooks/exhaustive-deps

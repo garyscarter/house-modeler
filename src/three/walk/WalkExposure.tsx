@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
 import { useStore } from "../../store";
+import { currentQuality } from "../useQuality";
 import type { HouseModel } from "../../types";
 import { useSunInfo } from "../useSun";
 import { floorBaseY } from "../floorBase";
@@ -93,7 +94,7 @@ export function WalkExposure({ model }: { model: HouseModel }) {
         state = easeExposure(state, next, ctx.dt, snap);
       }
       const f = exposureFactor(state.ev);
-      if (settings.quality === "high") {
+      if (currentQuality() === "high") {
         out.factor = f;
         gl.toneMappingExposure = 1;
       } else {

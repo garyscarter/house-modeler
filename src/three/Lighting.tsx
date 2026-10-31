@@ -4,6 +4,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Sky } from "three-stdlib";
 import { useStore } from "../store";
+import { useQuality } from "./useQuality";
 import { useViewedSite } from "./viewedVariant";
 import { daylight, worldToBearing } from "../lib/sun";
 import { skyLevel as skyLevelOf } from "../lib/walkExposure";
@@ -63,7 +64,7 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   const sun = useSunInfo();
   const site = useViewedSite();
   const showSite = useStore((s) => s.showSite);
-  const quality = useStore((s) => s.settings.quality);
+  const quality = useQuality();
   const invalidate = useThree((s) => s.invalidate);
   const light = useRef<THREE.DirectionalLight>(null);
 

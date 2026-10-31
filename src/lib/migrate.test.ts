@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
+import { IMAGE_FAINT } from "./planMath";
 import { migrateModel, migratePersisted, migrateSite, PERSIST_VERSION } from "./migrate";
 
 describe("persisted-state migration", () => {
@@ -31,7 +32,22 @@ describe("persisted-state migration", () => {
     expect(st.sites?.proposed?.boundary).toEqual(listingSite().boundary);
   });
 
-  it("is at version 7", () => expect(PERSIST_VERSION).toBe(7));
+  it("is at version 8", () => expect(PERSIST_VERSION).toBe(8));
+
+  it("turns a missing or saved high quality into auto once, and keeps an explicit low or balanced", () => {
+    expect(migratePersisted({ settings: {} }, 7).settings?.quality).toBe("auto");
+    expect(migratePersisted({ settings: { quality: "high" } }, 7).settings?.quality).toBe("auto");
+    expect(migratePersisted({ settings: { quality: "low" } }, 7).settings?.quality).toBe("low");
+    expect(migratePersisted({ settings: { quality: "balanced" } }, 7).settings?.quality).toBe("balanced");
+    // Already at version 8: a chosen High stays High.
+    expect(migratePersisted({ settings: { quality: "high" } }, 8).settings?.quality).toBe("high");
+  });
+
+  it("turns the old default plan image (shown at 30%) off, and leaves a chosen one alone", () => {
+    expect(migratePersisted({ planImage: { show: true, opacity: 0.3 } }, 7).planImage).toEqual({ show: false, opacity: IMAGE_FAINT });
+    expect(migratePersisted({ planImage: { show: true, opacity: 0.65 } }, 7).planImage).toEqual({ show: true, opacity: 0.65 });
+    expect(migratePersisted({ planImage: { show: false, opacity: 0.3 } }, 7).planImage).toEqual({ show: false, opacity: 0.3 });
+  });
 
   it("renames the attached neighbour's buildings in a version 5 save", () => {
     const site = listingSite();

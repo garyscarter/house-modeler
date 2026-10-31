@@ -169,3 +169,13 @@ describe("section cut commands", () => {
     expect(cmds.some((x) => x.id === "section:off")).toBe(true);
   });
 });
+
+describe("render quality commands", () => {
+  it("offers Auto beside High, Balanced and Low, and each sets that setting", () => {
+    const c = ctx();
+    const cmds = buildCommands(c);
+    expect(cmds.filter((x) => x.id.startsWith("quality:")).map((x) => x.id)).toEqual(["quality:auto", "quality:high", "quality:balanced", "quality:low"]);
+    cmds.find((x) => x.id === "quality:auto")!.run();
+    expect(c.setSettings).toHaveBeenCalledWith({ quality: "auto" });
+  });
+});

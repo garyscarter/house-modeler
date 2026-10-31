@@ -1,4 +1,6 @@
 import { useStore } from "../store";
+import { useChassis } from "./useChassis";
+import { qualityChoices, type QualitySetting } from "../lib/quality";
 import { ask } from "./Dialogs";
 import { applyProject, syncNow, useSyncStatus } from "../lib/sync";
 import { statusText } from "../lib/syncLogic";
@@ -9,21 +11,26 @@ import { BRAND_NAME, downloadPrefix } from "../lib/brand";
 import { fileDate, slug } from "../lib/fileNames";
 import { houseName } from "../lib/studio";
 
-const QUALITY: [string, string, string][] = [
-  ["high", "High", "Ambient occlusion and soft shadows"],
-  ["balanced", "Balanced", "Soft shadows"],
-  ["low", "Low", "Fastest"],
-];
+const QUALITY: Record<QualitySetting, [string, string]> = {
+  auto: ["Auto", "Picks for this screen: High on a desktop, Balanced on a tablet or phone"],
+  high: ["High", "Ambient occlusion and soft shadows"],
+  balanced: ["Balanced", "Soft shadows"],
+  low: ["Low", "Fastest"],
+};
 
-/** Render quality as a three-way switch (House menu, Settings). */
+/** Render quality as a switch: Auto, High, Balanced and Low (Auto and Low on a phone). House menu, Settings. */
 export function RenderQuality() {
-  const settings = useStore((s) => s.settings);
+  const quality = useStore((s) => s.settings.quality);
   const setSettings = useStore((s) => s.setSettings);
+  const chassis = useChassis((s) => s.chassis);
+  const choices = qualityChoices(chassis);
+  // A saved setting a phone does not offer (High, Balanced) still shows as itself, so nothing looks switched off.
+  const shown = choices.includes(quality) ? choices : [...choices.slice(0, 1), quality, ...choices.slice(1)];
   return (
     <div className="seg" role="group" aria-label="Render quality">
-      {QUALITY.map(([k, label, hint]) => (
-        <button key={k} className={settings.quality === k ? "active" : ""} title={hint} onClick={() => setSettings({ quality: k as typeof settings.quality })}>
-          {label}
+      {shown.map((k) => (
+        <button key={k} className={quality === k ? "active" : ""} title={QUALITY[k][1]} onClick={() => setSettings({ quality: k })}>
+          {QUALITY[k][0]}
         </button>
       ))}
     </div>
