@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CatalogueItem } from "../../lib/catalogue";
 import type { Mode, Tool } from "../../lib/modes";
 import { useStore } from "../../store";
-import { useChassis } from "../../components/useChassis";
-import { toolAllowed } from "../../lib/chassis";
+import { canEditNow, useChassis } from "../../components/useChassis";
+import { canEdit, toolAllowed, type Chassis } from "../../lib/chassis";
 import type { Floor, Pt } from "../../types";
 import { pieceItem } from "../../lib/myFurniture";
 import { takePendingPlace } from "../MyFurniture";
@@ -16,6 +16,9 @@ import { PLAN_TOOL_EVENT, takePendingTool } from "../planTool";
  */
 export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void) {
   const chassis = useChassis((s) => s.chassis);
+  const editable = useChassis((s) => canEdit(mode, s.compact));
+  /** Select and Measure always work; every other tool changes the model, so it needs the chassis and the edit gate. */
+  const usable = (t: Tool, ch: Chassis = chassis) => (t === "select" || t === "measure" || canEditNow(useStore.getState().mode)) && toolAllowed(ch, t);
   const [tool, setTool] = useState<Tool>(mode === "build" && !floor.rooms.length && toolAllowed(chassis, "rect") ? "rect" : "select");
   const [calib, setCalib] = useState<Pt[]>([]);
   const [draft, setDraft] = useState<Pt[]>([]);
@@ -25,8 +28,8 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
   const [placing, setPlacing] = useState<{ item: CatalogueItem; rot: number } | null>(null);
 
   const pick = (t: Tool) => {
-    // The phone has no drawing tools: their keys and requests from elsewhere do nothing.
-    if (!toolAllowed(useChassis.getState().chassis, t)) return;
+    // Where editing is off or the chassis has no drawing tools, their keys and requests from elsewhere do nothing.
+    if (!usable(t, useChassis.getState().chassis)) return;
     setTool(t);
     setCalib([]);
     setDraft([]);
@@ -35,7 +38,8 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
     if (t !== "place") setPlacing(null);
   };
   const startPlacing = (item: CatalogueItem) => {
-    setPlacing({ item, rot: placing?.rot ?? 0 });
+    if (!canEditNow(useStore.getState().mode)) return;
+    setPlacing((p) => ({ item, rot: p?.rot ?? 0 }));
     setTool("place");
     setCalib([]);
     setDraft([]);
@@ -44,13 +48,14 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
 
   // The chassis changed (a rotation, a resize) to one that cannot offer the tool in hand: fall back to Select.
   useEffect(() => {
-    if (!toolAllowed(chassis, tool)) {
+    if (!usable(tool)) {
       setTool("select");
       setDraft([]);
       setCalib([]);
       setMeasure([]);
     }
-  }, [chassis, tool]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chassis, tool, editable]);
 
   // A tool asked for from outside (Floor settings' "Calibrate from two points…"): on mount, or while the plan is open.
   const pickRef = useRef(pick);
@@ -75,7 +80,6 @@ export function usePlanTools(mode: Mode, floor: Floor, closeEdgeEdit: () => void
     go();
     window.addEventListener("house:place-piece", go);
     return () => window.removeEventListener("house:place-piece", go);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { tool, setTool, calib, setCalib, draft, setDraft, hover, setHover, altHeld, setAltHeld, measure, setMeasure, placing, setPlacing, pick, startPlacing };

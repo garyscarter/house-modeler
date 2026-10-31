@@ -81,12 +81,17 @@ export function SiteWorld({ site, mode, sel, tool, px, outlines, walls, clearanc
       {site.neighbours.map((n) => {
         const c = polygonCentroid(n.polygon);
         const isSel = selected({ type: "neighbour", id: n.id, vertex: null });
+        // A name wider than its building on screen would spill over the plot: leave it out (fs is metres per label pixel).
+        const xs = n.polygon.map((p) => p.x);
+        const fits = n.name.length * fs * 0.58 <= Math.max(...xs) - Math.min(...xs);
         return (
           <g key={n.id} pointerEvents={garden ? "none" : undefined} onPointerDown={garden ? undefined : (e) => onItemDown(e, { type: "neighbour", id: n.id, vertex: null })}>
             <polygon points={svgPoints(n.polygon)} fill="#d6d8dc" stroke={isSel ? "#2563eb" : "#8b9099"} strokeWidth={(isSel ? 2 : 1) * px} />
-            <text x={c.x} y={c.y} fontSize={fs} textAnchor="middle" dominantBaseline="central" className="site-label">
-              {n.name}
-            </text>
+            {fits && (
+              <text x={c.x} y={c.y} fontSize={fs} textAnchor="middle" dominantBaseline="central" className="site-label">
+                {n.name}
+              </text>
+            )}
           </g>
         );
       })}

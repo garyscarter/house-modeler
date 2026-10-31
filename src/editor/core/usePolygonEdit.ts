@@ -1,4 +1,6 @@
 import { useMemo, useRef } from "react";
+import { canEditNow } from "../../components/useChassis";
+import { useStore } from "../../store";
 import { edgeOffset, midpointOf, outwardNormal, slideEdge, snapEdgeOffset, snapPoint, SNAP_PX } from "../../lib/polygonEdit";
 import type { Pt } from "../../types";
 import type { useDoublePress } from "./useDoublePress";
@@ -74,7 +76,7 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
     };
 
     const vertexDown = (e: React.PointerEvent, t: PolygonTarget, i: number) => {
-      if (t.locked || !isPrimary(e)) return;
+      if (t.locked || !isPrimary(e) || !canEditNow(useStore.getState().mode)) return;
       const { drag: dg, dbl: doublePress } = live.current;
       if (doublePress(`${t.key}#${i}`, e)) {
         e.stopPropagation();
@@ -86,7 +88,7 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
     };
 
     const edgeDown = (e: React.PointerEvent, t: PolygonTarget, i: number) => {
-      if (t.locked || !isPrimary(e)) return;
+      if (t.locked || !isPrimary(e) || !canEditNow(useStore.getState().mode)) return;
       const poly0 = t.poly.map((p) => ({ ...p }));
       const targets = t.snapTargets({ edge: i });
       const ctx = t.edgeBegin?.(i);
@@ -104,7 +106,7 @@ export function usePolygonEdit(drag: DragApi, camera: CanvasCamera, dbl: DoubleP
     };
 
     const midDown = (e: React.PointerEvent, t: PolygonTarget, i: number) => {
-      if (t.locked || !isPrimary(e)) return;
+      if (t.locked || !isPrimary(e) || !canEditNow(useStore.getState().mode)) return;
       const { drag: dg } = live.current;
       const spec = vertexSpec(t, i + 1, true);
       // begin() snapshots first, so the insert and the drag that follows share one undo step and Esc removes the corner again.

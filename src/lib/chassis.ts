@@ -51,3 +51,10 @@ export function effectiveCompare<M extends string>(viewMode: M, chassis: Chassis
   if (viewMode === sideBySide && !FEATURES[chassis].sideBySide) return wipe;
   return viewMode;
 }
+
+/** A compact screen: the shortest side is under 600 px (an iPhone either way round; iPad portrait is not). */
+export const COMPACT_MAX = 600;
+export const isCompact = (s: { width: number; height: number }): boolean => Math.min(s.width, s.height) < COMPACT_MAX;
+
+/** Whether the plan, inspectors and panels may change the model. On compact screens only Decorate and Furnish edit; elsewhere every mode does. */
+export const canEdit = (mode: string, compact: boolean): boolean => !compact || mode === "decorate" || mode === "furnish";

@@ -19,6 +19,8 @@ export function TabBar() {
           aria-current={mode === m ? "page" : undefined}
           onClick={() => {
             const sheet = useSheet.getState();
+            // The active tab again opens (or closes) its panel, so every mode's panel is one tap away.
+            if (m === mode) return sheet.toggle();
             if (sheet.detent === "full") sheet.set("half");
             setMode(m);
           }}

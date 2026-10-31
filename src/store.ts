@@ -297,7 +297,7 @@ export const useStore = create<State>()(
         floorBeforeSite: null,
         setMode: (m) =>
           rawSet((st) => ({
-            ...modeSwitchPatch(st, m),
+            ...modeSwitchPatch({ ...st, floors: st.variants[st.activeVariant]?.floors }, m),
             ...(m === "review" && st.mode !== "review" ? { modeBeforeReview: st.mode } : {}),
           })),
         modeBeforeReview: null,

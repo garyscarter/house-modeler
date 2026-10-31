@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStats,
+  houseStats,
   decorateSummary,
   detailsSummary,
   eachWallSummary,
@@ -39,6 +40,15 @@ describe("floor summaries", () => {
       { id: "4", type: "bed", x: 100, y: 400, rot: 0 },
     ] },
   );
+
+  it("houseStats adds the floors up", () => {
+    expect(houseStats([f, f])).toEqual([
+      { value: "60.0", label: "m²" },
+      { value: "6", label: "rooms" },
+      { value: "4", label: "openings" },
+    ]);
+    expect(houseStats([floor([])])).toEqual([]);
+  });
 
   it("buildStats", () => {
     expect(buildStats(f)).toEqual([

@@ -1,4 +1,5 @@
 import { InspectorCard } from "../../../components/InspectorCard";
+import { ReadOnlyBody } from "../../../components/ReadOnly";
 import { Info } from "../../../components/Info";
 import { defaultFit } from "../../../lib/recess";
 import { removeCanopy, resizeCanopy } from "../../../lib/canopy";
@@ -7,7 +8,7 @@ import { DOUBLE_DOOR_M, outsideSide } from "../../../lib/planMath";
 import { byId } from "../../../lib/catalogue";
 import type { Fixture, Floor, Room, VariantKey } from "../../../types";
 import { editsFixtures, type Mode } from "../../../lib/modes";
-import { ElectricsPanel } from "../../../components/ElectricsPanel";
+import { ElectricsPanelLazy as ElectricsPanel } from "../../../components/lazyPanels";
 import { useStore } from "../../../store";
 import { DecoratePanel } from "../../DecoratePanel";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../Inspectors";
@@ -51,8 +52,11 @@ export function PlanInspector({
   const selectedFixture = (floor.fixtures ?? []).find((x) => x.id === selectedFixtureId);
   const selectedFixtureItem = selectedFixture ? byId(selectedFixture.type) : undefined;
   const paste = clipboardCount ? pasteFixtures : undefined;
+  // The Electrics panel (nothing picked) sets read-only up itself, so its wiring guide still downloads.
+  const electricsPanel = mode === "electrics" && liveIds.length < 2 && !(selectedFixture && selectedFixtureItem);
   return (
     <InspectorCard className="side">
+      <ReadOnlyBody skip={electricsPanel}>
       {editsFixtures(mode) ? (
         liveIds.length >= 2 ? (
           <MultiFixtureInspector
@@ -131,6 +135,7 @@ export function PlanInspector({
           </p>
         </>
       )}
+      </ReadOnlyBody>
     </InspectorCard>
   );
 }

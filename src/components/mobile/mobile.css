@@ -62,3 +62,9 @@
 .app[data-chassis="phone"] main .save-notice { top: var(--float-top); }
 .app[data-chassis="phone"] main .viewer-title { top: calc(var(--float-top) + 40px); }
 .app[data-chassis="phone"] main .sun-panel { bottom: calc(var(--sheet-peek) + 12px + 52px + 8px); }
+
+/* ---- Hidden sheet (Robbie Williams): in the view-only modes with nothing selected the sheet is gone and the chrome above it drops ---- */
+.app[data-sheet="hidden"] { --sheet-peek: 0px; }
+.sheet[data-detent="hidden"] { height: 0; box-shadow: none; border: 0; pointer-events: none; }
+.sheet { interpolate-size: allow-keywords; }
+.sheet[data-detent="half"] { height: auto; max-height: 50%; }

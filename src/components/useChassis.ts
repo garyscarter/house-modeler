@@ -1,5 +1,7 @@
 import { create } from "zustand";
-import { chassisFor, type Chassis } from "../lib/chassis";
+import { canEdit, chassisFor, isCompact, type Chassis } from "../lib/chassis";
+import type { Mode } from "../lib/modes";
+import { useStore } from "../store";
 
 /**
  * The chassis the app is running in (see lib/chassis.ts) and whether the primary pointer is a finger.
@@ -10,14 +12,16 @@ interface ChassisState {
   touch: boolean;
   width: number;
   height: number;
+  /** Shortest side under 600 px: a phone. Only Decorate and Furnish edit there (lib/chassis.ts canEdit). */
+  compact: boolean;
 }
 
 const read = (): ChassisState => {
-  if (typeof window === "undefined") return { chassis: "desktop", touch: false, width: 1440, height: 900 };
+  if (typeof window === "undefined") return { chassis: "desktop", touch: false, width: 1440, height: 900, compact: false };
   const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
   const width = window.innerWidth;
   const height = window.innerHeight;
-  return { chassis: chassisFor({ width, height, coarse }), touch: coarse, width, height };
+  return { chassis: chassisFor({ width, height, coarse }), touch: coarse, width, height, compact: isCompact({ width, height }) };
 };
 
 export const useChassis = create<ChassisState>()(() => read());
@@ -32,11 +36,20 @@ export function startChassisWatch(): void {
     if (document.activeElement?.matches("input, textarea, select")) return;
     const next = read();
     const cur = useChassis.getState();
-    if (next.chassis !== cur.chassis || next.touch !== cur.touch || next.width !== cur.width || next.height !== cur.height) useChassis.setState(next);
+    if (next.chassis !== cur.chassis || next.touch !== cur.touch || next.width !== cur.width || next.height !== cur.height || next.compact !== cur.compact) useChassis.setState(next);
   };
   window.addEventListener("resize", update);
   window.addEventListener("orientationchange", update);
   document.addEventListener("focusout", () => setTimeout(update, 50));
   window.matchMedia?.("(pointer: coarse)").addEventListener?.("change", update);
   update();
+}
+
+/** Whether the model may be edited in `mode` on this screen (lib/chassis.ts canEdit); for handlers and callbacks. */
+export const canEditNow = (mode: Mode): boolean => canEdit(mode, useChassis.getState().compact);
+/** The same as a hook, for the current mode (or the one given). */
+export function useCanEdit(mode?: Mode): boolean {
+  const current = useStore((s) => s.mode);
+  const compact = useChassis((s) => s.compact);
+  return canEdit(mode ?? current, compact);
 }

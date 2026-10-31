@@ -3,6 +3,7 @@ import { clampScale, frameOf, liveTransform, resizeCam, WHEEL_COMMIT_MS, type Fr
 import { fitCamInset, INSPECTOR_INSET, panCam, zoomCam, type Cam, type Rect, type Size } from "../../lib/planMath";
 import { wheelClassifier, wheelPixels, wheelZoomFactor } from "../../lib/wheelGesture";
 import { usePanelPrefs } from "../../components/panelPrefs";
+import { camToShow } from "../../lib/cameraVisible";
 import type { Pt } from "../../types";
 
 export interface CameraOptions {
@@ -43,6 +44,8 @@ export interface CanvasCamera {
   limits(): { minS: number; maxS: number };
   fit(r?: Rect): void;
   zoomBy(factor: number, at?: Pt): void;
+  /** Pan (never zoom) just enough that `rect`, in model units, sits above the bottom `insetBottom` screen px (the phone sheet). */
+  ensureVisible(rect: Rect, insetBottom: number): void;
   setCam(c: Cam): void;
   gesture: { begin(): void; update(c: Cam): void; commit(): void; cancel(): void };
 }
@@ -194,6 +197,17 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
     [limitsNow, setCam],
   );
 
+  const ensureVisible = useCallback(
+    (rect: Rect, insetBottom: number) => {
+      const s = sizeRef.current;
+      const base = liveRef.current ?? camRef.current;
+      if (!s || !base) return;
+      const next = camToShow(base, s, rect, insetBottom);
+      if (next !== base) setCam(next);
+    },
+    [setCam],
+  );
+
   // React's onWheel is passive, so the page would scroll too; listen natively.
   useEffect(() => {
     const node = el.current;
@@ -229,5 +243,5 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
 
   const viewBox = cam && size ? `${cam.x} ${cam.y} ${size.w * cam.s} ${size.h * cam.s}` : "0 0 1 1";
 
-  return { size, cam, px: cam?.s ?? 1, viewBox, layerRef, frame, live, limits: limitsNow, fit, zoomBy, setCam, gesture };
+  return { size, cam, px: cam?.s ?? 1, viewBox, layerRef, frame, live, limits: limitsNow, fit, zoomBy, ensureVisible, setCam, gesture };
 }

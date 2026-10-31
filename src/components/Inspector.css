@@ -178,3 +178,14 @@
 .inspector .link-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; }
 .inspector .link-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .app[data-touch] .inspector .link-list .link { min-width: 36px; min-height: 36px; }
+
+/* Read-only bodies (components/ReadOnly.tsx): disabled fields read as plain text, actions fade. */
+.ro-body { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ro-body input, .ro-body select, .ro-body textarea {
+  appearance: none; -webkit-appearance: none; background: transparent; border-color: transparent; box-shadow: none;
+  padding-left: 0; padding-right: 0; color: inherit; opacity: 1; -webkit-text-fill-color: currentColor; pointer-events: none;
+}
+.ro-body input[type="range"] { display: none; }
+.ro-body button:disabled { opacity: 0.4; }
+.ro-body .sect-head { cursor: pointer; }
+.stat-caption { margin: var(--sp-2) 0 0; }

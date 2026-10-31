@@ -50,6 +50,20 @@ export function buildStats(floor: Floor): Stat[] {
   return stats;
 }
 
+/** The whole house at a glance: every floor's area, rooms and openings added up. Empty when there are no rooms. */
+export function houseStats(floors: Floor[]): Stat[] {
+  const rooms = floors.reduce((n, f) => n + f.rooms.length, 0);
+  if (!rooms) return [];
+  const area = floors.reduce((s, f) => s + f.rooms.reduce((a, r) => a + areaM2(r.polygon, f.pxPerM), 0), 0);
+  const n = floors.reduce((k, f) => k + f.openings.length, 0);
+  const stats: Stat[] = [
+    { value: area.toFixed(1), label: "m²" },
+    { value: String(rooms), label: rooms === 1 ? "room" : "rooms" },
+  ];
+  if (n) stats.push({ value: String(n), label: n === 1 ? "opening" : "openings" });
+  return stats;
+}
+
 /** Edge keys of a room's wallFinishes that still name an edge. */
 const featureKeys = (room: Room) =>
   Object.entries(room.wallFinishes ?? {})

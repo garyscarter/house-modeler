@@ -11,6 +11,7 @@ import { knockThroughNeighbours } from "../../lib/mergeRooms";
 import { planTargetAt, type HitSolid, type PlanTarget } from "../../lib/planHit";
 import { closestOnSegment, DOUBLE_DOOR_M, outsideSide, SWING_KINDS } from "../../lib/planMath";
 import { useStore } from "../../store";
+import { canEditNow } from "../../components/useChassis";
 import { toWorld } from "../../lib/geometry";
 import { useWalk } from "../../walkStore";
 import type { Fixture, Floor, Opening, Pt, VariantKey } from "../../types";
@@ -87,8 +88,9 @@ export function usePlanMenu(a: PlanMenuArgs) {
   const menuItemsFor = (t: PlanTarget, raw: Pt): MenuItem[] => {
     const { planImage, setUi, setMode, updateRoom, updateFloor } = useStore.getState();
     const px = camera.px;
+    const editable = canEditNow(mode);
     const empty: MenuItem[] = [
-      ...(a.clipboardCount && (build || fixtureMode)
+      ...(editable && a.clipboardCount && (build || fixtureMode)
         ? [
             {
               label: `${a.pasteLabel} here`,
@@ -104,6 +106,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
       { label: planImage.show ? "Hide floorplan image" : "Show floorplan image", hint: "I", run: toggleImage },
     ];
     if (t.kind === "fixture" && fixtureMode) {
+      if (!editable) return empty;
       const id = t.id;
       const ids = targetIds(id);
       const grouped = !!allFixtures.find((x) => x.id === id)?.groupId;
@@ -128,6 +131,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
       ];
     }
     if (t.kind === "opening" && build) {
+      if (!editable) return empty;
       const o = floor.openings.find((x) => x.id === t.id);
       if (!o) return empty;
       const patch = (p: Partial<Opening>) => sel.patchOpening(o.id, p);
@@ -145,7 +149,7 @@ export function usePlanMenu(a: PlanMenuArgs) {
     }
     if (t.kind === "wall") {
       const w = (floor.walls ?? []).find((x) => x.id === t.id);
-      if (!w) return empty;
+      if (!w || !editable) return empty;
       if (decorate) return [{ label: "Decorate this wall", run: () => select({ wall: w.id }) }];
       const at = closestOnSegment(raw, w.a, w.b).q;
       return [
@@ -174,6 +178,12 @@ export function usePlanMenu(a: PlanMenuArgs) {
             ? [{ label: "Decorate this wall", run: () => { select({ room: room.id }); setUi({ selectedEdge: { edge: hit.edge!, side: hit.side } }); } } satisfies MenuItem]
             : []),
           { label: "Edit shape in Build", run: () => { select({ room: room.id }); setMode("build"); } },
+        ];
+      }
+      if (!editable) {
+        return [
+          { label: "Walk from here", run: () => { select({ room: room.id }); useWalk.getState().requestWalk({ kind: "room", level: floor.level, roomId: room.id, at: toWorld(floor, raw) }); } },
+          { label: "Decorate this room", run: () => { select({ room: room.id }); setMode("decorate"); } },
         ];
       }
       const neighbours = knockThroughNeighbours(floor, room.id);

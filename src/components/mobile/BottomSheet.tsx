@@ -1,6 +1,8 @@
 import "./mobile.css";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSheet, SHEET_PEEK_PX, type SheetDetent } from "./sheet";
+import { useStore } from "../../store";
+import { useChassis } from "../useChassis";
 
 const ORDER: SheetDetent[] = ["peek", "half", "full"];
 /** Faster than this (px per ms) a release snaps in the direction of travel, wherever the sheet is. */
@@ -8,8 +10,16 @@ const FLING = 0.5;
 /** Less movement than this (px) is a tap, not a drag. */
 const SLOP = 6;
 
-/** The pixel height of each detent inside a canvas of the given height. */
-export const detentHeights = (canvas: number): Record<SheetDetent, number> => ({ peek: SHEET_PEEK_PX, half: Math.round(canvas / 2), full: canvas - 8 });
+/**
+ * The pixel height of each detent inside a canvas of the given height. Half is half the canvas, or the content's own
+ * height when that is less (`content`: the head plus the body at its natural height), so a short panel has no empty space.
+ */
+export const detentHeights = (canvas: number, content?: number): Record<SheetDetent, number> => ({
+  hidden: 0,
+  peek: SHEET_PEEK_PX,
+  half: Math.max(SHEET_PEEK_PX, Math.min(Math.round(canvas / 2), content ? Math.ceil(content) : Infinity)),
+  full: canvas - 8,
+});
 
 /**
  * Where a release lands: the nearest detent, or with a fling (px/ms, positive = upwards) the next detent that way.
@@ -42,9 +52,17 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
   const setDetent = useSheet((s) => s.set);
   const root = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  const mode = useStore((s) => s.mode);
+  const compact = useChassis((s) => s.compact);
+  // A change of mode (or of screen) rests the sheet: hidden in a view-only mode with nothing picked, else where it was.
+  useEffect(() => {
+    useSheet.getState().rest();
+  }, [mode, compact]);
   /** Live height in px while a finger is down; null otherwise. */
   const [dragH, setDragH] = useState<number | null>(null);
   const drag = useRef<Drag | null>(null);
+  const open = detent === "half" || detent === "full";
 
   // Tell the chrome around the canvas (the dock) where the sheet is.
   useEffect(() => {
@@ -57,7 +75,8 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
     const el = root.current;
     const canvas = el?.parentElement?.clientHeight ?? 0;
     if (!el || !canvas) return false;
-    drag.current = { startY: y, startH: el.getBoundingClientRect().height, heights: detentHeights(canvas), samples: [[performance.now(), y]], moved: false };
+    const content = body.current ? (head.current?.offsetHeight ?? 0) + body.current.scrollHeight : undefined;
+    drag.current = { startY: y, startH: el.getBoundingClientRect().height, heights: detentHeights(canvas, content), samples: [[performance.now(), y]], moved: false };
     return true;
   };
   const clampH = (d: Drag, y: number) => Math.max(d.heights.peek, Math.min(d.heights.full, d.startH + d.startY - y));
@@ -91,7 +110,7 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
   };
   const onHeadUp = (e: React.PointerEvent) => {
     if (!drag.current) return;
-    if (end(e.clientY)) setDetent(detent === "peek" ? "half" : "peek");
+    if (end(e.clientY)) useSheet.getState().toggle();
   };
 
   // A pull-down that starts with the body scrolled to the top lowers the sheet; anything else scrolls. Touch events, so the
@@ -139,7 +158,7 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
       el.removeEventListener("touchend", fin);
       el.removeEventListener("touchcancel", fin);
     };
-  }, [detent !== "peek"]);
+  }, [open]);
 
   return (
     <section
@@ -147,10 +166,12 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
       className={`sheet float-card ${className}${peeking ? " peeking" : ""}${dragH !== null ? " dragging" : ""}`.trim()}
       data-detent={detent}
       style={dragH !== null ? { height: dragH } : undefined}
-      inert={peeking}
+      inert={peeking || detent === "hidden"}
+      aria-hidden={detent === "hidden" || undefined}
       aria-label={label}
     >
       <div
+        ref={head}
         className="sheet-head"
         onPointerDown={onHeadDown}
         onPointerMove={(e) => drag.current && move(e.clientY)}
@@ -161,12 +182,12 @@ export function BottomSheet({ title, subtitle, className = "", peeking, label, c
         }}
       >
         <span className="sheet-handle" aria-hidden="true" />
-        <button type="button" className="sheet-title" aria-expanded={detent !== "peek"} onClick={(e) => e.detail === 0 && setDetent(detent === "peek" ? "half" : "peek")}>
+        <button type="button" className="sheet-title" aria-expanded={open} onClick={(e) => e.detail === 0 && useSheet.getState().toggle()}>
           <h2>{title}</h2>
           {subtitle && <p className="mode-sub">{subtitle}</p>}
         </button>
       </div>
-      {detent !== "peek" && (
+      {open && (
         <div className="sheet-body" ref={body}>
           {children}
         </div>

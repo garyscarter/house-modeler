@@ -7,6 +7,8 @@ import { NameField } from "../editor/Inspectors";
 import { requestAddPicker } from "../editor/addPicker";
 import { Section } from "./Section";
 import { Loader } from "./Loader";
+import { ReadOnlyBody } from "./ReadOnly";
+import { useCanEdit } from "./useChassis";
 import { exportWiringGuide } from "./wiringGuideExport";
 import "./ElectricsPanel.css";
 
@@ -25,6 +27,7 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
   const [problem, setProblem] = useState<string | null>(null);
   const [pickSwitch, setPickSwitch] = useState("");
   const numbered = useMemo(() => (model ? numberPoints(model) : []), [model]);
+  const editable = useCanEdit("electrics");
   if (!model) return null;
 
   const circuits = model.circuits ?? [];
@@ -50,8 +53,9 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
 
   return (
     <div className="electrics-panel" data-electrics-panel>
+      <ReadOnlyBody>
       <p className="instruction">{electricsSummary(model)}</p>
-      <div className="row">
+      {editable && <div className="row">
         <button
           className="primary big"
           onClick={() => {
@@ -64,7 +68,7 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
         >
           Add point
         </button>
-      </div>
+      </div>}
 
       {rows.length > 0 && (
         <table className="electrics-counts" aria-label="Points by kind">
@@ -149,6 +153,7 @@ export function ElectricsPanel({ variant, floor, onAdd }: { variant: VariantKey;
         </div>
         <p className="muted small">Assign points to a circuit in the inspector.</p>
       </Section>
+      </ReadOnlyBody>
 
       <Section id="electrics.guide" title="Wiring guide" summary="Print or schedule" defaultOpen>
         <div className="row">

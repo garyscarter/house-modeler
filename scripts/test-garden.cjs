@@ -209,7 +209,7 @@ const lawnCentre = async (page) => {
     ok(bar.fits && bar.labels.length === 7 && bar.clipped.length === 0, `${w}px: seven tab labels fit and none clips (${bar.labels.join(', ')}; clipped: ${bar.clipped.join(',') || 'none'})`);
     if (w === 390) {
       const rail = await page.$$eval('.tool-rail [data-tool]', (els) => els.map((e) => e.getAttribute('data-tool')));
-      ok(!['surface', 'circle', 'polygon', 'rect'].some((t) => rail.includes(t)) && rail.includes('add') && rail.includes('select'), `phone rail has no draw tools (${rail.join(',')})`);
+      ok(rail.length === 0, `phone Garden is view only: no rail (${rail.join(',')})`);
       await page.screenshot({ path: `${shots}/garden-phone.png`, timeout: 180000, animations: 'disabled' });
     }
     await ctx.close();

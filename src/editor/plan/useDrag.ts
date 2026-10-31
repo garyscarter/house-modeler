@@ -17,6 +17,7 @@ import { knockThroughNeighbours } from "../../lib/mergeRooms";
 import { editsFixtures, type Mode } from "../../lib/modes";
 import { usePanelPrefs } from "../../components/panelPrefs";
 import { useStore } from "../../store";
+import { canEditNow } from "../../components/useChassis";
 import { uid, type Fixture, type Floor, type JoineryConfig, type Opening, type Pt, type Room, type VariantKey, type Wall } from "../../types";
 import { askText } from "../../components/Dialogs";
 import { confirmKnockThrough } from "../KnockThrough";
@@ -236,7 +237,7 @@ export function usePlanDrag(args: PlanDragArgs) {
       const hit = [...floor.rooms].reverse().find((r) => pointInPolygon(raw, r.polygon));
       // Shift+click a neighbour of the selected room: knock the two through.
       const from = floor.rooms.find((r) => r.id === A.selectedRoomId);
-      if (m.shift && from && hit && hit.id !== from.id && knockThroughNeighbours(floor, from.id).some((r) => r.id === hit.id)) {
+      if (m.shift && canEditNow(mode) && from && hit && hit.id !== from.id && knockThroughNeighbours(floor, from.id).some((r) => r.id === hit.id)) {
         void confirmKnockThrough(variant, floor, from, hit);
         return;
       }
@@ -330,20 +331,24 @@ export function usePlanDrag(args: PlanDragArgs) {
     };
   };
   const cornerDown = (e: React.PointerEvent, roomId: string, i: number) => {
+    if (!canEditNow(L.current.mode)) return;
     const t = roomTarget(roomId);
     if (t) poly.vertexDown(e, t, i);
   };
   const midDown = (e: React.PointerEvent, roomId: string, i: number) => {
+    if (!canEditNow(L.current.mode)) return;
     const t = roomTarget(roomId);
     if (t) poly.midDown(e, t, i);
   };
   const edgeDown = (e: React.PointerEvent, roomId: string, i: number) => {
+    if (!canEditNow(L.current.mode)) return;
     const t = roomTarget(roomId);
     if (t) poly.edgeDown(e, t, i);
   };
 
   // ---- Free-standing walls
   const wallEndDown = (e: React.PointerEvent, wallId: string, end: "a" | "b") => {
+    if (!canEditNow(L.current.mode)) return;
     L.current.sel.select({ wall: wallId });
     const w = (getFloor().walls ?? []).find((x) => x.id === wallId);
     if (!w) return;
@@ -362,7 +367,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     const A = L.current;
     if (A.tools.tool !== "select") return;
     A.sel.select({ wall: w.id });
-    if (!(selected && A.mode === "build" && isMousePrimary(e))) {
+    if (!(selected && A.mode === "build" && canEditNow(A.mode) && isMousePrimary(e))) {
       e.stopPropagation();
       return;
     }
@@ -389,6 +394,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     const A = L.current;
     if (A.tools.tool !== "select") return;
     A.sel.select({ opening: o.id });
+    if (!canEditNow(A.mode)) return; // view only: the press pans
     const p = atOf(e);
     const dx = o.x - p.x;
     const dy = o.y - p.y;
@@ -409,7 +415,7 @@ export function usePlanDrag(args: PlanDragArgs) {
   const canopyDown = (e: React.PointerEvent, idx: number, selected: boolean) => {
     const A = L.current;
     // Only the selected canopy drags, so a swipe over an unselected one still pans the plan.
-    if (A.mode !== "build" || A.tools.tool !== "select" || !selected) return;
+    if (A.mode !== "build" || !canEditNow(A.mode) || A.tools.tool !== "select" || !selected) return;
     const list0 = A.sel.canopies;
     const p0 = atOf(e);
     drag.begin(e, {
@@ -427,6 +433,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     });
   };
   const canopyCornerDown = (e: React.PointerEvent, idx: number) => {
+    if (!canEditNow(L.current.mode)) return;
     const at = L.current.sel.selectedCanopy;
     drag.begin(e, {
       kind: "canopyCorner",
@@ -440,7 +447,7 @@ export function usePlanDrag(args: PlanDragArgs) {
   // ---- Stairs
   const stairsDown = (e: React.PointerEvent) => {
     const s = L.current.floor.stairs;
-    if (!s) return;
+    if (!s || !canEditNow(L.current.mode)) return;
     const p = atOf(e);
     const dx = s.x - p.x;
     const dy = s.y - p.y;
@@ -455,6 +462,7 @@ export function usePlanDrag(args: PlanDragArgs) {
 
   // ---- An edge-length chip: a tap opens the field, a press never pans.
   const chipDown = (e: React.PointerEvent, roomId: string, idx: number, locked: boolean) => {
+    if (!canEditNow(L.current.mode)) return;
     drag.begin(e, {
       kind: "chip",
       data: null,
@@ -474,7 +482,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     const fxItem = byId(fx.type);
     if (!fxItem || !fixtureSelectable(A.mode, fxItem)) return;
     // Linking: a tap on a light toggles it in the switch's controls; any other tap does nothing (and never selects or drags).
-    const linkId = A.mode === "electrics" ? useStore.getState().linkSwitchId : null;
+    const linkId = A.mode === "electrics" && canEditNow(A.mode) ? useStore.getState().linkSwitchId : null;
     if (linkId) {
       e.stopPropagation();
       drag.begin(e, {
@@ -499,7 +507,7 @@ export function usePlanDrag(args: PlanDragArgs) {
       sel.select({ fixtures: sel.liveIds.includes(fx.id) ? sel.liveIds.filter((id) => !set.includes(id)) : [...new Set([...sel.liveIds, ...set])] });
       return;
     }
-    if (dbl(`fx:${fx.id}`, e)) {
+    if (canEditNow(A.mode) && dbl(`fx:${fx.id}`, e)) {
       // A double press turns it 90° and begins no drag (it must not fall through to a pan).
       e.stopPropagation();
       const ids = sel.targetIds(fx.id);
@@ -514,7 +522,7 @@ export function usePlanDrag(args: PlanDragArgs) {
     if (ids !== sel.liveIds) sel.select({ fixtures: ids });
     // A locked item selects but never drags; the press pans instead, and its release must not deselect it again
     // (a fall-through to the background would run backgroundTap, whose Furnish branch clears the selection).
-    if (sel.anyLocked(ids)) {
+    if (sel.anyLocked(ids) || !canEditNow(A.mode)) {
       drag.beginPan(e);
       return;
     }
