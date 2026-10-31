@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { easeInOut, faceDirection, fitDistance, frameFor, homeView, isValidPose, poseFits, presetView, type CameraPose } from "./cameraViews";
+import { easeInOut, faceDirection, fitDistance, frameFor, HOME_ELEVATION_DEG, homeView, isValidPose, poseFits, presetView, type CameraPose } from "./cameraViews";
 import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 
 const project = (pose: ReturnType<typeof homeView>, p: { x: number; y: number; z: number }, fov: number, aspect: number) => {
@@ -47,16 +47,16 @@ describe("homeView", () => {
 
 describe("homeView with the inspector card open", () => {
   const box = { x0: -5, x1: 15, y0: -8, y1: 20, height: 8 };
-  it("pitches down about 35 degrees", () => {
+  it("pitches down at the home elevation", () => {
     const pose = homeView(box, 45, 1.6);
     const dy = pose.position.y - pose.target.y;
     const dh = Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z);
-    expect((Math.atan2(dy, dh) * 180) / Math.PI).toBeCloseTo(35, 5);
+    expect((Math.atan2(dy, dh) * 180) / Math.PI).toBeCloseTo(HOME_ELEVATION_DEG, 5);
   });
   it("centres the box in the strip left of the card and keeps it in frame", () => {
     const W = 1400;
     const H = 875;
-    const pose = homeView(box, 45, W / H, 35, 35, 0.15, 344, W);
+    const pose = homeView(box, 45, W / H, 35, HOME_ELEVATION_DEG, 0.15, 344, W);
     const centre = { x: (box.x0 + box.x1) / 2, y: box.height / 2, z: (box.y0 + box.y1) / 2 };
     const c = project(pose, centre, 45, W / H);
     // nx is |.| in y only; x sign is checked via the corners' extent below.
@@ -81,16 +81,16 @@ describe("homeView with the inspector card open", () => {
     expect((px(minX) + px(maxX)) / 2).toBeLessThan(W / 2 - 100);
   });
   it("is unchanged without an inset", () => {
-    expect(homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1400)).toEqual(homeView(box, 45, 1.6));
+    expect(homeView(box, 45, 1.6, 35, HOME_ELEVATION_DEG, 0.15, 0, 1400)).toEqual(homeView(box, 45, 1.6));
   });
 
   it("a bottom inset for the dock lifts the box and backs the camera off", () => {
     const box = { x0: -5, x1: 5, y0: -4, y1: 4, height: 6 };
-    const plain = homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1280);
-    const docked = homeView(box, 45, 1.6, 35, 35, 0.15, 0, 1280, 88, 800);
+    const plain = homeView(box, 45, 1.6, 35, HOME_ELEVATION_DEG, 0.15, 0, 1280);
+    const docked = homeView(box, 45, 1.6, 35, HOME_ELEVATION_DEG, 0.15, 0, 1280, 88, 800);
     const dist = (p: CameraPose) => Math.hypot(p.position.x - p.target.x, p.position.y - p.target.y, p.position.z - p.target.z);
     expect(dist(docked)).toBeGreaterThan(dist(plain));
-    // The target moves down the screen's up axis, which for a 35° pitch is mostly -y and a little toward the camera.
+    // The target moves down the screen's up axis, which for a shallow pitch is mostly -y and a little toward the camera.
     expect(docked.target.y).toBeLessThan(plain.target.y);
   });
 });
