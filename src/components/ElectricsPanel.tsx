@@ -3,7 +3,7 @@ import { useStore } from "../store";
 import { uid, type CircuitKind, type Floor, type VariantKey } from "../types";
 import { electricsSummary } from "../lib/modeSummary";
 import { CIRCUIT_KINDS, CIRCUIT_KIND_LABEL, POINT_KINDS, POINT_KIND_LABEL, addCircuit, deleteCircuit, gangCount, numberPoints, renameCircuit, setCircuitKind } from "../lib/electrics";
-import { NameField } from "../editor/Inspectors";
+import { NameField } from "../editor/inspectors";
 import { requestAddPicker } from "../editor/addPicker";
 import { Section } from "./Section";
 import { Loader } from "./Loader";

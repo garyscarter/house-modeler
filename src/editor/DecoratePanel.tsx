@@ -12,7 +12,7 @@ import { longAxisAngle, normaliseAngle } from "../lib/floorPattern";
 import { roomColor } from "../lib/roomColor";
 import { useSite, useStore } from "../store";
 import { FeatureWalls, WallFinishRow } from "./FeatureWalls";
-import { hoverRoom } from "./Inspectors";
+import { hoverRoom } from "./inspectors";
 import { DirectionField, FinishPicker, StatHeader, SwatchField } from "../components/inspector";
 import { FLOOR_GROUPS, FLOOR_TILE_NAME, WALL_GROUPS, WALL_TILE_NAME } from "../lib/finishGroups";
 
