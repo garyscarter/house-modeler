@@ -65,7 +65,7 @@ header.topbar {
   background: transparent; border: 0; pointer-events: none;
 }
 .island {
-  pointer-events: auto; display: flex; align-items: center; height: var(--island-h); min-width: 0; padding: 0 6px;
+  pointer-events: auto; display: flex; align-items: center; height: var(--island-h); padding: 0 6px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--pill); box-shadow: var(--shadow-card);
 }
 /* Not overflow: hidden, which would clip the house menu's dropdown. */
@@ -103,6 +103,7 @@ nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
   .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
 }
 @media (max-width: 1359px) {
+  header.topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
   .topbar-sep { margin: 0 2px; }
   .topbar-right { gap: 2px; }
 }
@@ -120,6 +121,16 @@ nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
 /* ---- Canvas ---- */
 main { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
 main[data-tab="3d"] { --card-clear: 196px; }
+/*
+ * The 3D view runs behind the islands, but a drawing must not: its fit-to-view and its top edge chips would sit
+ * under them. Until the editor camera takes a top inset (src/editor/core/useCanvasCamera.ts has right, bottom and left),
+ * the drawing starts below the islands, on the drawing's own white so the strip reads as part of it.
+ */
+main[data-tab="plan"] { background: #fff; }
+main[data-tab="plan"]:has(> .site-canvas) { background: #fbfbf9; }
+main[data-tab="plan"] { padding-top: var(--float-top); }
+/* The drawing's own chrome is measured from the drawing's top edge, which is already below the islands. */
+main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north { top: var(--float-gap); }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }

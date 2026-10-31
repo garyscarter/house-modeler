@@ -59,9 +59,6 @@
 }
 
 /* ---- Phone: chrome that used to sit under the old top bar or layout pill now clears the floating islands. ---- */
-.app[data-chassis="phone"] main .tool-rail { top: var(--float-top); left: var(--inset-l); }
-.app[data-chassis="phone"] main .plan-zoom, .app[data-chassis="phone"] main .site-zoom { top: var(--float-top); right: var(--inset-r); }
-.app[data-chassis="phone"] main .site-north { top: calc(var(--float-top) + 48px); right: var(--inset-r); }
 .app[data-chassis="phone"] main .save-notice { top: var(--float-top); }
 .app[data-chassis="phone"] main .viewer-title { top: calc(var(--float-top) + 40px); }
 .app[data-chassis="phone"] main .sun-panel { bottom: calc(var(--sheet-peek) + 12px + 52px + 8px); }
