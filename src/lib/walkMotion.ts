@@ -128,7 +128,7 @@ const PITCH_OMEGA = 8;
 const FACE_BLEND = 0.8;
 
 /** A door the route passes: where along the path it is (the path point closest to its centre), its clear width and its centre. */
-interface PolyDoor { s: number; clear: number; centre: V2 }
+interface PolyDoor { key: string; s: number; clear: number; centre: V2 }
 interface Poly { x: number[]; y: number[]; cum: number[]; corners: { s: number; cos: number }[]; pointS: number[]; doors: PolyDoor[]; stairs: { from: number; to: number }[] }
 /** Where a route has got to: a distance along its polyline (starting at the walker's position), the speed and the seconds since it started. */
 export interface RouteState { poly: Poly; s: number; v: number; aim: number; lastDir: number; t: number }
@@ -140,7 +140,7 @@ const ROUND_STEPS = 4;
  * centimetres (a small curve of at most ~4 cm off the vertex) so the walker does not turn on a dime. `doors` are the nav doors,
  * so the route can ease through the ones it passes (a door with a leaf or an archway; open gaps are not slowed for).
  */
-export function routeStart(pose: Pick<WalkPose, "x" | "y" | "yaw">, route: WalkRoute, doors: Pick<NavDoor, "key" | "kind" | "passage" | "centre" | "span">[] = []): RouteState {
+export function routeStart(pose: Pick<WalkPose, "x" | "y" | "yaw">, route: WalkRoute, doors: (Pick<NavDoor, "key" | "kind" | "passage" | "centre" | "span"> & Partial<Pick<NavDoor, "dir" | "level">>)[] = [], v0 = 0): RouteState {
   const raw: { x: number; y: number; idx: number }[] = [{ x: pose.x, y: pose.y, idx: -1 }];
   route.points.forEach((p, idx) => {
     const l = raw[raw.length - 1];
@@ -202,8 +202,34 @@ export function routeStart(pose: Pick<WalkPose, "x" | "y" | "yaw">, route: WalkR
     const nd = doors.find((d) => d.key === rd.key);
     if (!nd || !(nd.passage === "door" || nd.kind === "archway")) continue;
     const lo = rd.index > 0 ? pointS[rd.index - 1] : 0;
-    poly.doors.push({ s: closestS(poly, nd.centre, lo, pointS[rd.index] ?? lo), clear: nd.span[1] - nd.span[0], centre: nd.centre });
+    poly.doors.push({ key: nd.key, s: closestS(poly, nd.centre, lo, pointS[rd.index] ?? lo), clear: nd.span[1] - nd.span[0], centre: nd.centre });
   }
+  // Archways are open passages the route does not list as doors: find where the path crosses each one.
+  for (const nd of doors) {
+    if (nd.kind !== "archway" || !nd.dir || poly.doors.some((d) => d.key === nd.key)) continue;
+    const dir = nd.dir;
+    const ax = nd.centre.x + dir.x * nd.span[0];
+    const ay = nd.centre.y + dir.y * nd.span[0];
+    const ex = dir.x * (nd.span[1] - nd.span[0]);
+    const ey = dir.y * (nd.span[1] - nd.span[0]);
+    for (let i = 1; i < x.length; i++) {
+      const sx = x[i] - x[i - 1];
+      const sy = y[i] - y[i - 1];
+      const den = sx * ey - sy * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      const u = ((ax - x[i - 1]) * ey - (ay - y[i - 1]) * ex) / den; // along the path segment
+      const w = ((ax - x[i - 1]) * sy - (ay - y[i - 1]) * sx) / den; // along the opening
+      if (u < 0 || u > 1 || w < 0 || w > 1) continue;
+      const cx = x[i - 1] + sx * u;
+      const cy = y[i - 1] + sy * u;
+      let near = route.points[0];
+      for (const q of route.points) if (Math.hypot(q.x - cx, q.y - cy) < Math.hypot(near.x - cx, near.y - cy)) near = q;
+      if (nd.level !== undefined && near && near.level !== nd.level) continue;
+      poly.doors.push({ key: nd.key, s: cum[i - 1] + Math.hypot(sx, sy) * u, clear: nd.span[1] - nd.span[0], centre: nd.centre });
+      break;
+    }
+  }
+  poly.doors.sort((a, b) => a.s - b.s);
   // Flights: from STAIR_LEAD before the first point on a flight to the last point on it.
   for (let i = 0; i < route.points.length; i++) {
     if (route.points[i].stair === null) continue;
@@ -212,7 +238,20 @@ export function routeStart(pose: Pick<WalkPose, "x" | "y" | "yaw">, route: WalkR
     poly.stairs.push({ from: pointS[i] - STAIR_LEAD, to: pointS[j] });
     i = j;
   }
-  return { poly, s: 0, v: 0, aim: pose.yaw, lastDir: pose.yaw, t: 0 };
+  // A route begun while walking carries the speed over: the start ramp is taken as already run up to it.
+  let t = 0;
+  if (v0 > 0) {
+    const target = Math.min(1, v0 / ROUTE_SPEED);
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 24; i++) {
+      const u = (lo + hi) / 2;
+      if (smoothstep(u) < target) lo = u;
+      else hi = u;
+    }
+    t = START_RAMP_S * hi;
+  }
+  return { poly, s: 0, v: Math.max(0, v0), aim: pose.yaw, lastDir: pose.yaw, t };
 }
 /** The arc length of the point on the polyline closest to `c`, searched between arc lengths lo and hi. */
 function closestS(poly: Poly, c: V2, lo: number, hi: number): number {
@@ -286,10 +325,10 @@ export function stopSpeed(r: number): number {
   return ROUTE_SPEED * (1 - 3 * u * u + 2 * u ** 3);
 }
 /** The speed ceiling through the doors on the route: cruise, easing to the door speed over the 0.6 m before the frame, held to 0.4 m past, easing back out. */
-function doorCap(poly: Poly, s: number): number {
+function doorCap(poly: Poly, s: number, swinging?: ReadonlySet<string>): number {
   let cap = Infinity;
   for (const d of poly.doors) {
-    const vd = d.clear < DOOR_NARROW ? DOOR_SPEED_NARROW : DOOR_SPEED;
+    const vd = d.clear < DOOR_NARROW || swinging?.has(d.key) ? DOOR_SPEED_NARROW : DOOR_SPEED;
     const a = d.s - DOOR_FRAME;
     const b = d.s + DOOR_PAST;
     let v = ROUTE_SPEED;
@@ -313,6 +352,8 @@ export interface RouteOpts {
   yawCap?: number;
   /** rad, gaze pitch near and on stairs, default max(-12 deg, restPitch - 4 deg). */
   stairPitch?: number;
+  /** Keys of doors still swinging: passing one on the route is taken at the narrow door speed. */
+  swinging?: ReadonlySet<string>;
 }
 export interface RouteResult {
   dx: number; dy: number; yaw: number; pitch: number; yawVel: number; pitchVel: number; state: RouteState; done: boolean; intended: number;
@@ -336,7 +377,7 @@ export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, r
   let { s, v } = st;
   const t = st.t + dt;
   const ramp = ROUTE_SPEED * smoothstep(Math.min(1, t / START_RAMP_S));
-  let target = Math.min(ROUTE_SPEED, opts.speedCap ?? Infinity, ramp, stopSpeed(Math.max(0, end - s)), cornerCap(poly, s), doorCap(poly, s));
+  let target = Math.min(ROUTE_SPEED, opts.speedCap ?? Infinity, ramp, stopSpeed(Math.max(0, end - s)), cornerCap(poly, s), doorCap(poly, s, opts.swinging));
   if (lag > 0.4) target = 0;
   const accel = t < START_RAMP_S ? START_ACCEL_MAX : ROUTE_ACCEL;
   v = target > v ? Math.min(target, v + accel * dt) : Math.max(target, v - DECEL_MAX * dt);
@@ -361,7 +402,9 @@ export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, r
   let look = pointAt(poly, s + Math.max(0.6, v) * GAZE_SECONDS);
   let bearing = Math.hypot(look.x - wx, look.y - wy) > 0.08 ? yawOf({ x: look.x - wx, y: look.y - wy }) : heading;
   if (nextDoor && nextDoor.s - s <= GAZE_DOOR) {
-    look = nextDoor.centre;
+    // Look through the door (a point on the path just beyond it), not at its centre: a route that crosses off-centre
+    // would otherwise swing the head to the jamb in the last metre and back.
+    look = pointAt(poly, nextDoor.s + 1.0);
     if (Math.hypot(look.x - wx, look.y - wy) > 0.08) bearing = yawOf({ x: look.x - wx, y: look.y - wy });
   } else if (route.yaw !== undefined && poly.doors.length && s >= poly.doors[poly.doors.length - 1].s + GAZE_ROOM_PAST) bearing = route.yaw;
   let dNext = end - s;
@@ -380,7 +423,7 @@ export function followRoute(pose: Pick<WalkPose, "x" | "y" | "yaw" | "pitch">, r
   const ps = springValue(pose.pitch, motion.pitchVel, pitchAim, dt, PITCH_OMEGA);
 
   const stopped = v < 0.03 && rem < 0.03 && lag < 0.2;
-  const facing = route.yaw === undefined || Math.abs(wrapAngle(route.yaw - ys.angle)) < 0.02;
+  const facing = route.yaw === undefined ? Math.abs(wrapAngle(aim - ys.angle)) < 0.02 && Math.abs(ys.vel) < 0.05 : Math.abs(wrapAngle(route.yaw - ys.angle)) < 0.02;
   return { dx: mx, dy: my, yaw: ys.angle, pitch: ps.x, yawVel: ys.vel, pitchVel: ps.vel, state: { poly, s, v, aim, lastDir: heading, t }, done: stopped && facing, intended, aim, heading };
 }
 /** The direction of the polyline segment containing s (the last one at the end); `fallback` for a route with no length. */

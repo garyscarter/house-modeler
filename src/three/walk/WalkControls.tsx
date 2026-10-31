@@ -111,7 +111,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
   const startRoute = (route: WalkRoute, goal: WalkPoint | null, resetStall = true, arrive?: () => void) => {
     const p = poseRef.current;
     // The new route starts from here; the view's turning speed (yawVel) carries over, so nothing jumps.
-    follow.current = { route, rs: routeStart(p ?? { x: route.points[0]?.x ?? 0, y: route.points[0]?.y ?? 0, yaw: 0 }, route, navRef.current.doors), goal, arrive };
+    follow.current = { route, rs: routeStart(p ?? { x: route.points[0]?.x ?? 0, y: route.points[0]?.y ?? 0, yaw: 0 }, route, navRef.current.doors, follow.current?.rs.v ?? 0), goal, arrive };
     if (resetStall) stall.current = { t: 0, count: 0 };
     useWalk.getState().setRoute(route);
     inv.current();
@@ -201,16 +201,18 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     // Doors the tour opened a moment ago are still swinging: slow down near them.
     const timers = doorTimers.current;
     let cap = Infinity;
+    const onRoute = new Set(follow.current?.rs.poly.doors.map((d) => d.key) ?? []);
     for (const [key, left] of timers) {
       if (left <= dt) timers.delete(key);
       else timers.set(key, left - dt);
       const nd = n.doors.find((x) => x.key === key);
-      if (nd && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) < DOOR_SLOW_M) cap = DOOR_SLOW_SPEED;
+      // A door on the route is eased through by followRoute (doorCap); only the others get the flat slow-down.
+      if (nd && !onRoute.has(key) && Math.hypot(nd.centre.x - p.x, nd.centre.y - p.y) < DOOR_SLOW_M) cap = DOOR_SLOW_SPEED;
     }
     let looking = false;
     const runRoute = (f: Follow) => {
       const lens = lensRef.current;
-      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, { speedCap: cap, restPitch: restPitch(lens.vfov), yawCap: lookViewOf(lens.cls, lens.aspect).yawCap });
+      const r = followRoute({ x: p!.x, y: p!.y, yaw, pitch }, f.route, f.rs, { yawVel: yawVel.current, pitchVel: pitchVel.current }, dt, { speedCap: cap, swinging: new Set(timers.keys()), restPitch: restPitch(lens.vfov), yawCap: lookViewOf(lens.cls, lens.aspect).yawCap });
       if (Math.abs(wrapAngle(r.aim - r.yaw)) > 0.002) busyNow.current.add("gaze");
       f.rs = r.state;
       dx += r.dx;
@@ -506,6 +508,10 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     }
     const off = registerWalkTerm("step", {
       step: (ctx) => {
+        if (ctx.jumped) {
+          stepRef.current = { ...stepRef.current, amp: 0 }; // a teleport is not a fast walk
+          return false;
+        }
         if (mq) reduced = mq.matches; // also read here: a change event is not always delivered to a query that is held only by us
         const portraitPhone = ctx.lens.cls === "small" && ctx.lens.aspect < 1;
         if (stepEnabled(walkStepOf(useStore.getState().settings), reduced, portraitPhone)) stepRef.current = stepAdvance(stepRef.current, ctx.speed, ctx.yawRate, ctx.looking, ROUTE_SPEED, ctx.dt);
@@ -601,7 +607,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
           inv.current();
         }
         if (s.route !== prev.route && s.route !== (follow.current?.route ?? null)) {
-          follow.current = s.route && poseRef.current ? { route: s.route, rs: routeStart(poseRef.current, s.route, navRef.current.doors), goal: s.route.points[s.route.points.length - 1] ?? null } : null;
+          follow.current = s.route && poseRef.current ? { route: s.route, rs: routeStart(poseRef.current, s.route, navRef.current.doors, follow.current?.rs.v ?? 0), goal: s.route.points[s.route.points.length - 1] ?? null } : null;
           inv.current();
         }
         if (s.tour.status !== prev.tour.status || s.doors !== prev.doors || s.doorsSettled !== prev.doorsSettled) inv.current();
@@ -757,8 +763,13 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
       const dtS = Math.max(0.008, (now - g.lt) / 1000);
       const k = fovRad.current / Math.max(1, r.height);
       // The drag itself follows the finger; only the inertia after it is held to a comfortable turn rate.
-      const cap = turnRateFor(lensRef.current.cls);
-      lookVel.current = { yaw: Math.max(-cap, Math.min(cap, (ddx * k) / dtS)), pitch: Math.max(-cap, Math.min(cap, (ddy * k) / dtS)) };
+      const lensNow = lensRef.current;
+      const cap = Math.min(turnRateFor(lensNow.cls), lookViewOf(lensNow.cls, lensNow.aspect).yawCap);
+      const vy = (ddx * k) / dtS;
+      const vp = (ddy * k) / dtS;
+      const mag = Math.hypot(vy, vp);
+      const sc = mag > cap ? cap / mag : 1;
+      lookVel.current = { yaw: vy * sc, pitch: vp * sc };
       g.lx = e.clientX;
       g.ly = e.clientY;
       g.lt = now;

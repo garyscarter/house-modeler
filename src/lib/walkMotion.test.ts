@@ -351,15 +351,49 @@ describe("route pacing", () => {
     const f = walk(straight(5), [], {}, pose({ yaw: east }));
     for (const q of f.filter((q) => q.s >= 3)) expect(Math.abs(wrapAngle(q.yaw - q.heading))).toBeLessThan(1 * deg);
   });
-  it("turns the head to a door ahead, at most 25 degrees off the heading", () => {
-    const route: WalkRoute = { points: [pt(6, 0)], doors: [{ key: "d", index: 0 }] };
-    const f = walk(route, [door(4, 0.3, 0.8)], {}, pose({ yaw: east }));
-    const at = f.find((q) => q.x >= 2.5)!;
-    const bearing = Math.atan2(-(4 - at.x), -(0.3 - at.y));
-    expect(Math.abs(wrapAngle(at.yaw - bearing))).toBeLessThan(5 * deg);
-    // A door 40 degrees off the heading is only looked at to the 25 degree limit.
-    const far = walk(route, [door(3, 3 * Math.tan(40 * deg), 0.8)], {}, pose({ yaw: east })).find((q) => q.x >= 1.6)!;
-    expect(Math.abs(wrapAngle(far.aim - far.heading))).toBeCloseTo(25 * deg, 6);
+  it("looks through a door ahead, not at its jamb: an off-centre crossing never swings the head", () => {
+    const route: WalkRoute = { points: [pt(8, 0)], doors: [{ key: "d", index: 0 }] };
+    for (const off of [0.1, 0.3, 0.6]) {
+      const f = walk(route, [door(4, off, 0.9)], {}, pose({ yaw: east }));
+      const sd = 4;
+      for (const q of f.filter((q) => q.x >= sd - 0.3 && q.x <= sd + 0.3)) expect(Math.abs(wrapAngle(q.yaw - q.heading))).toBeLessThanOrEqual(8 * deg);
+      for (let i = 1; i < f.length; i++) expect(Math.abs(wrapAngle(f[i].aim - f[i - 1].aim))).toBeLessThanOrEqual(3 * deg);
+    }
+  });
+  it("eases through an archway the route does not list as a door, found from the nav doors", () => {
+    const route: WalkRoute = { points: [pt(6, 0)], doors: [] };
+    const arch = { ...door(3, 0, 0.8), passage: "open" as const, kind: "archway" as const, dir: { x: 0, y: 1 }, level: 0 };
+    expect(minNear(walk(route, [arch], {}, pose({ yaw: east })), 3, 0, 0.3)).toBeLessThanOrEqual(0.92);
+    const away = { ...arch, centre: { x: 3, y: 5 } };
+    expect(minNear(walk(route, [away], {}, pose({ yaw: east })), 3, 0, 0.3)).toBeGreaterThan(1.25);
+  });
+  it("a swinging door on the route is eased to once, not capped then released", () => {
+    const route: WalkRoute = { points: [pt(8, 0)], doors: [{ key: "d", index: 0 }] };
+    const f = walk(route, [door(6, 0, 0.9)], { swinging: new Set(["d"]) }, pose({ yaw: east }));
+    const upto = f.filter((q) => q.x > 4 && q.x <= 5.9);
+    for (let i = 1; i < upto.length; i++) expect(upto[i].speed).toBeLessThanOrEqual(upto[i - 1].speed + 1e-9);
+    expect(minNear(f, 6, 0, 0.1)).toBeLessThanOrEqual(0.72);
+  });
+  it("a route begun at cruise carries the speed: it never falls faster than the decel limit", () => {
+    let p = pose({ yaw: east });
+    let rs = routeStart(p, straight(30));
+    const m = { yawVel: 0, pitchVel: 0 };
+    for (let i = 0; i < 90; i++) {
+      const r = followRoute(p, straight(30), rs, m, 1 / 30);
+      p = { ...p, x: p.x + r.dx, y: p.y + r.dy, yaw: r.yaw };
+      rs = r.state;
+    }
+    const before = rs.v;
+    expect(before).toBeGreaterThan(1.29);
+    rs = routeStart(p, straight(30), [], rs.v);
+    const r = followRoute(p, straight(30), rs, m, 1 / 30);
+    expect(before - r.state.v).toBeLessThanOrEqual(2.5 / 30 + 1e-9);
+  });
+  it("a floor tap finishes its turn before it is done", () => {
+    const f = walk({ points: [pt(-0.6, 0)], doors: [] }, [], { yawCap: 75 * deg }, pose({ yaw: east }));
+    const last = f[f.length - 1];
+    expect(Math.abs(wrapAngle(last.aim - last.yaw))).toBeLessThan(0.03);
+    expect(Math.abs(last.yawRate)).toBeLessThan(0.1);
   });
   it("never exceeds the yaw cap it is given", () => {
     const cap = 55 * deg;

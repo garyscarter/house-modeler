@@ -718,6 +718,7 @@ async function standLooking(page, room, d = 1.4) {
     const capP = factsP.length ? Math.max(...factsP.map((f) => f.peak)) : 0;
     ok(factsP.length === runP.stops && runP.ended, `${pname}: every stop has a look-round (${factsP.length} of ${runP.stops})`);
     ok(capP <= capWant + 3, `${pname}: look-round turns at most ${capP.toFixed(1)} deg/s (cap ${capWant} + 3)`);
+    { const wp = walkingYawPeak(runP.rows); ok(wp <= capWant + 3, `${pname}: walking turns at most ${wp.toFixed(1)} deg/s (cap ${capWant} + 3)`); }
     for (const f of factsP) {
       const nonExit = f.plan ? f.plan.kinds.filter((k) => k !== 'exit').length : 0;
       ok(f.plan && Math.abs(f.plan.total - f.plan.budget) <= 1.0001, `${pname} stop ${f.i}: ${f.plan && f.plan.total.toFixed(2)} s against a ${f.plan && f.plan.budget.toFixed(2)} s budget (within 1 s)`);
