@@ -27,7 +27,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   // Rail: no drawing tools.
   const tools = await page.$$eval('.tool-rail [data-tool]', (els) => els.map((e) => e.getAttribute('data-tool')));
   ok(!['rect', 'room', 'wall', 'canopy', 'gap', 'calibrate'].some((t) => tools.includes(t)), `rail has no drawing tools (${tools.join(',')})`);
-  ok(tools.includes('select') && tools.includes('door') && tools.includes('window') && tools.includes('measure'), 'rail keeps select, door, window, measure');
+  ok(tools.join() === 'select,measure', `Build on the phone is view only: the rail is select and measure (${tools.join(',')})`);
 
   // A point inside a room clear of the tool rail (the first room whose centre is right of it), in client px.
   const roomPoint = async () => page.evaluate(() => {
@@ -105,33 +105,32 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   await page.waitForTimeout(1500);
   const bar = await page.evaluate(() => { const n = document.querySelector('.tab-bar'); return { fits: n.scrollWidth <= n.clientWidth, count: n.querySelectorAll('button').length }; });
   ok(bar.fits && bar.count === 7, `garden: the seven-tab bar fits at 390 px (${bar.count} tabs)`);
+  // The phone only views the garden: no rail, no add, and a finger drag pans instead of moving an item.
   const gtools = await page.$$eval('.tool-rail [data-tool]', (els) => els.map((e) => e.getAttribute('data-tool')));
-  ok(gtools.includes('add') && gtools.includes('select') && !['surface', 'circle', 'polygon', 'rect'].some((t) => gtools.includes(t)), `garden: rail has add and select, no draw tools (${gtools.join(',')})`);
+  ok(gtools.length === 0, `garden: view only, no rail on the phone (${gtools.join(',')})`);
   const gitems = () => page.evaluate(() => { const st = window.__houseStore.getState(); return ((st.sites[st.activeVariant] || st.sites.current).items || []).map((i) => ({ ...i })); });
-  const tapEl = async (sel) => { await page.locator(sel).first().scrollIntoViewIfNeeded(); const b = await page.locator(sel).first().boundingBox(); await touch('touchStart', [{ x: b.x + b.width / 2, y: b.y + b.height / 2 }]); await touch('touchEnd', []); await page.waitForTimeout(400); };
-  const before = (await gitems()).length;
-  await tapEl('[data-tool="add"]');
-  ok((await page.locator('.garden-picker').count()) === 1, 'garden: tapping Add opens the picker');
-  await tapEl('.garden-picker [data-garden-id="bench"]');
-  let items = await gitems();
-  ok(items.length === before + 1 && items[items.length - 1].type === 'bench', 'garden: tapping an entry places it');
-  const bench = items[items.length - 1];
-  ok((await page.evaluate(() => window.__houseStore.getState().gardenSel)).join() === bench.id, 'garden: the new item is selected');
-  // Drag it by 60 screen px.
+  await page.evaluate(() => {
+    const s = window.__houseStore.getState();
+    const site = s.sites[s.activeVariant] || s.sites.current;
+    const lawn = site.surfaces.filter((x) => x.kind === 'lawn').sort((a, b) => b.polygon.length - a.polygon.length)[0];
+    const cx = lawn.polygon.reduce((a, p) => a + p.x, 0) / lawn.polygon.length, cy = lawn.polygon.reduce((a, p) => a + p.y, 0) / lawn.polygon.length;
+    s.updateSite((st) => ({ ...st, items: [...(st.items || []), { id: 'touch-bench', type: 'bench', x: cx, y: cy, rot: 0 }] }));
+  });
+  await page.waitForTimeout(600);
+  const bench = (await gitems()).find((i) => i.id === 'touch-bench');
   const toClient = (x, y) => page.evaluate(([x, y]) => { const svg = document.querySelector('.site-canvas svg'); const g = svg.querySelector(':scope > g'); const pt = svg.createSVGPoint(); pt.x = x; pt.y = y; const m = pt.matrixTransform(g.getScreenCTM()); return { x: m.x, y: m.y, scale: g.getScreenCTM().a }; }, [x, y]);
-  await tapEl('.sheet-head'); // the selection raised the sheet over the lawn; tap its header to drop it
-  const c = await toClient(bench.x, bench.y);
+  let c = await toClient(bench.x, bench.y);
+  await touch('touchStart', [{ x: c.x, y: c.y }]); await touch('touchEnd', []);
+  await page.waitForTimeout(500);
+  ok((await page.evaluate(() => window.__houseStore.getState().gardenSel)).join() === 'touch-bench', 'garden: a tap selects the item');
+  ok((await page.evaluate(() => document.querySelector('.sheet')?.dataset.detent)) === 'peek', 'garden: the sheet shows at peek, not half');
+  c = await toClient(bench.x, bench.y);
   await touch('touchStart', [{ x: c.x, y: c.y }]);
   for (let i = 1; i <= 6; i++) { await touch('touchMove', [{ x: c.x + i * 10, y: c.y }]); await page.waitForTimeout(30); }
   await touch('touchEnd', []);
   await page.waitForTimeout(400);
-  const after = (await gitems()).find((i) => i.id === bench.id);
-  ok(Math.abs(after.x - bench.x - 60 / c.scale) < 0.15, `garden: dragging with a finger moves it (dx ${(after.x - bench.x).toFixed(2)} m, expected ${(60 / c.scale).toFixed(2)})`);
-  // Turn by the inspector button (the sheet shows the item's fields).
-  await tapEl('.sheet-head'); // raise the sheet again
-  const turn = page.locator('button[aria-label="Turn 15 degrees clockwise"]').first();
-  if (await turn.count()) { await turn.tap(); await page.waitForTimeout(300); }
-  ok((await gitems()).find((i) => i.id === bench.id).rot === 15, 'garden: the +15 button turns it');
+  const after = (await gitems()).find((i) => i.id === 'touch-bench');
+  ok(after.x === bench.x && after.y === bench.y, 'garden: dragging with a finger does not move the item');
 
   await browser.close();
   process.exit(failed ? 1 : 0);
