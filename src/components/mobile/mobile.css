@@ -58,3 +58,9 @@
 .ctx-menu.ctx-sheet button.ctx-cancel[role="menuitem"] { justify-content: center; }
 .app[data-sheet="full"] .layout-pill { opacity: 0; pointer-events: none; }
 .layout-pill { transition: opacity .2s; }
+
+/* ---- Hidden sheet (Robbie Williams): in the view-only modes with nothing selected the sheet is gone and the chrome above it drops ---- */
+.app[data-sheet="hidden"] { --sheet-peek: 0px; }
+.sheet[data-detent="hidden"] { height: 0; box-shadow: none; border: 0; pointer-events: none; }
+.sheet { interpolate-size: allow-keywords; }
+.sheet[data-detent="half"] { height: auto; max-height: 50%; }
