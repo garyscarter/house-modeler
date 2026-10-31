@@ -67,7 +67,10 @@ const feel = (ps) => {
   return { yawStep, rateChange, speedChange, at };
 };
 const fmt = (f) => `yaw step ${f.yawStep.toFixed(3)} rad, yaw-rate change ${f.rateChange.toFixed(3)} rad/frame, speed change ${(f.speedChange).toFixed(3)} m/s/frame (frame ${f.at})`;
-const feelOk = (f) => f.yawStep <= 0.08 && f.rateChange <= 0.03 && f.speedChange <= 0.06;
+// The 0.8 s stop ramp peaks at 2.44 m/s2, which is 0.081 m/s per 1/30 s frame.
+const feelOk = (f) => f.yawStep <= 0.08 && f.rateChange <= 0.03 && f.speedChange <= 0.085;
+// Peak yaw rate (deg/s) over the walking phases of a runTour result.
+const walkingYawPeak = (rows) => { let m = 0; for (let k = 1; k < rows.length; k++) if (rows[k].ph === 'walking' && rows[k - 1].ph === 'walking') m = Math.max(m, Math.abs(degWrap(rows[k].yaw - rows[k - 1].yaw)) * 30); return m; };
 
 // Play the tour in virtual time from the first room's middle, recording state() after every frame; stops after `maxFrames` or when `until(row, i)` is true.
 const runTour = (page, opts = {}) => page.evaluate((opts) => {
@@ -82,7 +85,8 @@ const runTour = (page, opts = {}) => page.evaluate((opts) => {
     window.__walk.sim(1 / 30);
     const st = window.__walk.state(), t = window.__walkStore.getState().tour;
     if (t.stops.length) stops = t.stops.length;
-    if (st.look && !plans[st.tour.index]) { const lk = window.__walk.look(); if (lk.plan) plans[st.tour.index] = lk.plan; }
+    // Only once this stop's look has begun: until then the walk may still hold the last tour's plan.
+    if (st.look && st.tour.phase === 'looking' && !plans[st.tour.index]) { const lk = window.__walk.look(); if (lk.plan) plans[st.tour.index] = lk.plan; }
     rows.push({ yaw: st.yaw, pitch: st.pitch, ph: st.tour.phase, i: st.tour.index, busy: st.busy, lt: st.look ? st.look.t : null, lp: st.look ? st.look.total : null, cap: st.look ? st.look.yawCap : null });
     ended = t.status === 'off' && stops > 0;
     if (opts.stopAfterLooks && rows.filter((q) => q.lt !== null).length && !st.look && rows.filter((q) => q.lt !== null).length > 30 && rows[rows.length - 2].lt !== null) break;
@@ -172,7 +176,7 @@ async function standLooking(page, room, d = 1.4) {
   const before = s.w.pose;
   const polesW = await page.evaluate(() => { const fire = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyW', key: 'w', bubbles: true, cancelable: true })); fire('keydown'); const r = window.__walk.sim(1); fire('keyup'); return r; });
   s = await st(page);
-  ok(polesW.length === 30 && Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y) > 0.8, `W walks about 1.4 m in a second (${Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y).toFixed(2)} m)`);
+  ok(polesW.length === 30 && Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y) > 0.8, `W walks about 1.3 m in a second (${Math.hypot(s.w.pose.x - before.x, s.w.pose.y - before.y).toFixed(2)} m)`);
   const fwd = { x: -Math.sin(before.yaw), y: -Math.cos(before.yaw) }, mx = s.w.pose.x - before.x, my = s.w.pose.y - before.y;
   ok(mx * fwd.x + my * fwd.y > 0.9 * Math.hypot(mx, my), 'W walks the way you face');
   const yawL = s.w.pose.yaw;
@@ -255,8 +259,8 @@ async function standLooking(page, room, d = 1.4) {
     const vm = Math.max(...up);
     const tUp = (up.findIndex((v) => v >= 0.9 * vm) + 1) / 30, tDown = (down.findIndex((v) => v <= 0.1 * vm) + 1) / 30;
     console.log('INFO W speeds up:', up.slice(0, 10).map((v) => v.toFixed(2)).join(' '), '| down:', down.slice(0, 10).map((v) => v.toFixed(2)).join(' '), `| clear room ahead ${r.room.toFixed(1)} m`);
-    ok(vm > 1.3 && tUp >= 0.15 && tUp <= 0.3 && up[0] < 0.5 * vm, `holding W: speed ramps up to 90% in ${tUp.toFixed(2)} s (first frame ${up[0].toFixed(2)} of ${vm.toFixed(2)} m/s)`);
-    ok(tDown >= 0.1 && tDown <= 0.3 && down[0] > 0.4 * vm, `releasing W: speed falls below 10% in ${tDown.toFixed(2)} s (first frame ${down[0].toFixed(2)} m/s)`);
+    ok(vm > 1.2 && tUp >= 0.28 && tUp <= 0.38 && up[0] < 0.5 * vm, `holding W: speed ramps up to 90% in ${tUp.toFixed(2)} s (first frame ${up[0].toFixed(2)} of ${vm.toFixed(2)} m/s)`);
+    ok(tDown >= 0.2 && tDown <= 0.32 && down[0] > 0.4 * vm, `releasing W: speed falls below 10% in ${tDown.toFixed(2)} s (first frame ${down[0].toFixed(2)} m/s)`);
   }
   const wallRoute = await page.evaluate(() => window.__walkStore.getState().route);
   ok(wallRoute === null, 'route cleared on arrival');
@@ -412,6 +416,8 @@ async function standLooking(page, room, d = 1.4) {
     ok(c1 === c0 && idle.busy.length === 0, `idle walker asks for no frames (invalidates ${c0} -> ${c1}, busy [${idle.busy}])`);
 
     const V = walkLensJs((await canvasSize(page)).w, (await canvasSize(page)).h).v;
+    // Every door as the house has it, whatever the earlier checks left open or shut: the look-round plans depend on it.
+    await page.evaluate(() => { const w = window.__walkStore.getState(); for (const d of window.__walk.nav().doors) w.setDoor(d.key, d.initial); });
     const run = await runTour(page);
     const facts = lookFacts(run.rows, run.plans);
     ok(facts.length === run.stops, `every stop has a look-round (${facts.length} of ${run.stops})`);
@@ -419,7 +425,7 @@ async function standLooking(page, room, d = 1.4) {
       ok(f.peak <= 75 + 3, `stop ${f.i}: look-round turns at most ${f.peak.toFixed(1)} deg/s (cap 75 + 3)`);
       const nonExit = f.plan ? f.plan.kinds.filter((k) => k !== 'exit').length : 0;
       ok(f.plan && Math.abs(f.plan.total - f.plan.budget) <= 1.0001, `stop ${f.i}: look-round ${f.plan && f.plan.total.toFixed(2)} s against its ${f.plan && f.plan.budget.toFixed(2)} s budget (within 1 s)`);
-      ok(f.holds >= Math.min(2, nonExit), `stop ${f.i}: ${f.holds} holds of 0.6 s or more on its ${nonExit} glanced targets`);
+      ok(f.holds >= Math.min(2, nonExit), `stop ${f.i}: ${f.holds} holds of 0.6 s or more on its ${nonExit} glanced targets` + (f.holds < Math.min(2, nonExit) && f.plan ? ` [kinds ${f.plan.keyKinds}, holds ${f.plan.holds}, moves ${f.plan.moves}]` : ''));
       ok(f.plan && f.plan.keys <= 2 * nonExit + 3, `stop ${f.i}: ${f.plan && f.plan.keys} moves, not a stuttering turn-round`);
       ok(f.jump < 1, `stop ${f.i}: the look starts where the walk ended (${f.jump.toFixed(2)} deg)`);
       ok(Math.abs(((f.endPitch - (restPitchJs(V) + (4 * Math.PI) / 180)) * 180) / Math.PI) < 0.5, `stop ${f.i}: pitch settles at the rest pitch + 4 deg (${((f.endPitch * 180) / Math.PI).toFixed(2)} deg)`);
@@ -430,10 +436,87 @@ async function standLooking(page, room, d = 1.4) {
     await page.evaluate(() => window.__walk.sim(2));
     const idle2 = await page.evaluate(() => ({ n: window.__walk.invalidates, s: window.__walk.state() }));
     ok(idle2.n === c2 && idle2.s.busy.length === 0, `idle again after the tour (busy [${idle2.s.busy}])`);
+    // The tour never spins the view faster than the large-view comfort rate while it walks.
+    const wp = walkingYawPeak(run.rows);
+    ok(wp <= 75 + 3, `tour walking turns the view at most ${wp.toFixed(1)} deg/s at 1440x900 (cap 75 + 3)`);
+    // Per-stop walking and looking times.
+    {
+      const per = new Map();
+      run.rows.forEach((q) => { const e = per.get(q.i) || { walk: 0, look: 0 }; if (q.ph === 'looking') e.look++; else e.walk++; per.set(q.i, e); });
+      console.log('INFO stop | walking s | looking s');
+      for (const [i, e] of [...per.entries()].sort((a, b) => a[0] - b[0])) console.log(`INFO ${String(i).padStart(4)} | ${(e.walk / 30).toFixed(1).padStart(9)} | ${(e.look / 30).toFixed(1).padStart(9)}`);
+    }
     // Tour length against the sweep look-round it replaced.
     const newS = run.frames / 30;
     console.log(`INFO tour length: old ${TOUR_BASE_S.toFixed(2)} s, new ${newS.toFixed(2)} s (${((newS / TOUR_BASE_S - 1) * 100).toFixed(1)}%)`);
     ok(run.ended && Math.abs(newS - TOUR_BASE_S) <= 0.1 * TOUR_BASE_S, `tour length within 10% of the old (${newS.toFixed(1)} s vs ${TOUR_BASE_S.toFixed(1)} s)`);
+
+    // ---- Natural step: off by default; on, the eye bobs 2.2-2.6 cm while walking steadily and sits exactly still when stopped ----
+    {
+      await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
+      // A free 4 m straight to walk: the first room centre and heading (largest rooms first) the walker really gets along.
+      const line = await page.evaluate(() => {
+        const w = window.__walkStore.getState();
+        const l = window.__walk.nav().levels.find((x) => x.level === 0);
+        for (const r of [...l.rooms].sort((a, b) => b.area - a.area)) {
+          const c = r.poly.reduce((a, p) => ({ x: a.x + p.x / r.poly.length, y: a.y + p.y / r.poly.length }), { x: 0, y: 0 });
+          for (let a = 0; a < 16; a++) {
+            const yaw = (a * Math.PI) / 8;
+            w.setRoute(null);
+            w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l.baseY, yaw, pitch: -0.14 });
+            window.__walk.sim(0.3);
+            const p0 = window.__walkStore.getState().pose;
+            const end = { x: p0.x - Math.sin(yaw) * 4, y: p0.y - Math.cos(yaw) * 4, level: 0, stair: null };
+            w.setRoute({ points: [end], doors: [], yaw: undefined });
+            let level = true;
+            for (let i = 0; i < 7 * 30; i++) { window.__walk.sim(1 / 30); if (Math.abs(window.__walkStore.getState().pose.feetY - p0.feetY) > 1e-6) level = false; }
+            const p = window.__walkStore.getState().pose;
+            if (level && Math.hypot(p.x - end.x, p.y - end.y) < 0.05) return { room: r.name, x: p0.x, y: p0.y, yaw, baseY: l.baseY };
+          }
+        }
+        return null;
+      });
+      ok(!!line, `a free, level 4 m straight to walk${line ? ` (${line.room})` : ''}`);
+      const stepRun = () => page.evaluate((line) => {
+        const w = window.__walkStore.getState();
+        w.setRoute(null);
+        w.setPose({ x: line.x, y: line.y, level: 0, stair: null, feetY: line.baseY, yaw: line.yaw, pitch: -0.14 });
+        window.__walk.sim(0.5);
+        const end = { x: line.x - Math.sin(line.yaw) * 4, y: line.y - Math.cos(line.yaw) * 4, level: 0, stair: null };
+        w.setRoute({ points: [end], doors: [], yaw: undefined });
+        const cam = window.__houseCamera.camera;
+        const ys = [];
+        let amp = 0;
+        for (let i = 0; i < 30 * 8; i++) {
+          window.__walk.sim(1 / 30);
+          const s = window.__walk.state();
+          if (s.speed > 1.2) ys.push(cam.position.y);
+          amp = Math.max(amp, s.stepAmp);
+        }
+        window.__walk.sim(0.6);
+        const after = window.__walk.state();
+        const p = window.__walkStore.getState().pose;
+        const eye = window.__houseStore.getState().settings.eyeHeight ?? 1.7;
+        const n0 = window.__walk.invalidates;
+        window.__walk.sim(1);
+        const n1 = window.__walk.invalidates;
+        return { range: ys.length ? Math.max(...ys) - Math.min(...ys) : -1, samples: ys.length, amp, endAmp: after.stepAmp, camY: cam.position.y, wantY: p.feetY + eye, n0, n1, len: 4, arrived: Math.hypot(p.x - end.x, p.y - end.y), busy: after.busy };
+      }, line);
+      const base = await stepRun();
+      ok(base.arrived < 0.1 && base.range >= 0 && base.range < 1e-6 && base.amp === 0, `natural step off by default: the eye stays level over a ${base.len.toFixed(1)} m walk (range ${(base.range * 100).toFixed(2)} cm)`);
+      await page.evaluate(() => window.__houseStore.getState().setSettings({ walkStep: 'natural' }));
+      const on = await stepRun();
+      ok(on.arrived < 0.1 && on.range >= 0.022 && on.range <= 0.026, `natural step on: the eye moves ${(on.range * 100).toFixed(2)} cm over ${on.samples} cruise frames (2.2-2.6 cm)`);
+      ok(Math.abs(on.camY - on.wantY) <= 1e-6 && on.endAmp === 0, `0.6 s after arrival the eye is exactly at standing height (${on.camY.toFixed(6)} vs ${on.wantY.toFixed(6)}, amplitude ${on.endAmp})`);
+      ok(on.n1 === on.n0, `and nothing is left running (invalidates ${on.n0} -> ${on.n1}, busy [${on.busy}])`);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.waitForTimeout(100);
+      const rm = await stepRun();
+      ok(rm.arrived < 0.1 && rm.range >= 0 && rm.range < 1e-6 && rm.amp === 0, `reduced motion forces the step off (range ${(rm.range * 100).toFixed(2)} cm)`);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.evaluate(() => window.__houseStore.getState().setSettings({ walkStep: 'off' }));
+      await page.evaluate(() => { const w = window.__walkStore.getState(); w.setRoute(null); window.__walk.sim(0.5); });
+    }
 
     // Interruption: pause in the middle of the first look, turn 20 deg, play: the look carries on from there, no jump.
     await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); });
@@ -659,6 +742,8 @@ async function standLooking(page, room, d = 1.4) {
     ok(Math.abs(fovI - walkLensJs(cv2.w, cv2.h).v) < 0.05, `iPad lens ${fovI.toFixed(2)} V for ${cv2.w.toFixed(0)}x${cv2.h.toFixed(0)} (rule ${walkLensJs(cv2.w, cv2.h).v.toFixed(2)}, ${walkLensJs(cv2.w, cv2.h).h.toFixed(1)} across)`);
     const runI = await runTour(page, { maxFrames: 1500 });
     const factsI = lookFacts(runI.rows, runI.plans);
+    const wpI = walkingYawPeak(runI.rows);
+    ok(wpI <= 85 + 3, `iPad tour walking turns the view at most ${wpI.toFixed(1)} deg/s (cap 85 + 3)`);
     ok(factsI.length > 0 && factsI.every((f) => f.peak <= 85 + 3), `iPad look-round turns at most ${Math.max(...factsI.map((f) => f.peak)).toFixed(1)} deg/s (cap 85 + 3)`);
     await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
   }

@@ -506,6 +506,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
     }
     const off = registerWalkTerm("step", {
       step: (ctx) => {
+        if (mq) reduced = mq.matches; // also read here: a change event is not always delivered to a query that is held only by us
         const portraitPhone = ctx.lens.cls === "small" && ctx.lens.aspect < 1;
         if (stepEnabled(walkStepOf(useStore.getState().settings), reduced, portraitPhone)) stepRef.current = stepAdvance(stepRef.current, ctx.speed, ctx.yawRate, ctx.looking, ROUTE_SPEED, ctx.dt);
         else stepRef.current = STEP_REST;
