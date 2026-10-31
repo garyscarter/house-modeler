@@ -3,6 +3,7 @@ import { SIDE_AZIMUTH, type ViewSide } from "../lib/cameraViews";
 import { Icon } from "../components/icons";
 import { useSunInfo } from "./useSun";
 import { requestView } from "./viewRequest";
+import { useChassis } from "../components/useChassis";
 import "./ViewCube.css";
 
 const SHORT: Record<Exclude<ViewSide, "top">, string> = { front: "F", rear: "B", left: "L", right: "R" };
@@ -22,6 +23,24 @@ const MARKS: [string, number][] = [
  * out through requestView, so linked views move together.
  */
 export function ViewCube() {
+  const phone = useChassis((s) => s.chassis) === "phone";
+  return phone ? <Compass /> : <Cube />;
+}
+
+/** The phone's stand-in for the cube: one 44 px button whose north needle turns with the camera and that returns to the home view. */
+function Compass() {
+  return (
+    <button className="view-compass float-card" onClick={() => requestView("home")} aria-label="Home view (compass)" title="Home view">
+      <svg className="vc-needle" width="30" height="30" viewBox="0 0 30 30" aria-hidden>
+        <circle cx="15" cy="15" r="13" fill="none" stroke="var(--line)" strokeWidth="1.5" />
+        <path d="M15 4 L19 15 L11 15 Z" fill="var(--danger)" />
+        <path d="M15 26 L19 15 L11 15 Z" fill="var(--muted)" opacity="0.5" />
+      </svg>
+    </button>
+  );
+}
+
+function Cube() {
   const sun = useStore((s) => s.sun);
   const info = useSunInfo();
   const sunAzimuth = sun.enabled && info && info.position.altitude > 0 ? info.position.azimuth : null;

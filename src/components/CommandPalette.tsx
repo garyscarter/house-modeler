@@ -3,7 +3,6 @@ import { useShallow } from "zustand/react/shallow";
 import { SITE_EDIT_ID, useStore } from "../store";
 import { buildCommands, defaultCommands, isMacPlatform, rankCommands } from "../lib/commands";
 import { goToSavedView, saveCurrentView } from "./savedViewActions";
-import { usePanelPrefs } from "./panelPrefs";
 import { OPEN_PALETTE } from "../lib/studio";
 import "./CommandPalette.css";
 
@@ -57,8 +56,6 @@ function Palette({ close }: { close: () => void }) {
       viewMode: st.viewMode,
     })),
   );
-  const look = usePanelPrefs((p) => p.look);
-  const setPrefs = usePanelPrefs((p) => p.setPrefs);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -71,8 +68,6 @@ function Palette({ close }: { close: () => void }) {
       viewMode: s.viewMode,
       mode: s.mode,
       setMode: s.setMode,
-      look,
-      setLook: (l) => setPrefs({ look: l }),
       selectedRoomId: s.selectedRoomId,
       showLabels: s.showLabels,
       showCeilings: s.showCeilings,
@@ -96,7 +91,7 @@ function Palette({ close }: { close: () => void }) {
       },
     });
     return query.trim() ? rankCommands(query, all, 30) : defaultCommands(all);
-  }, [query, s, look, setPrefs]);
+  }, [query, s]);
 
   const idx = Math.min(active, Math.max(0, results.length - 1));
   useEffect(() => {

@@ -5,8 +5,8 @@ import { useSyncStatus } from "../lib/sync";
 import { Icon } from "./icons";
 import { usePanelPrefs } from "./panelPrefs";
 import { useChassis } from "./useChassis";
-import { FEATURES } from "../lib/chassis";
-import { OPEN_SHORTCUTS } from "../lib/studio";
+import { OPEN_PALETTE, OPEN_SHORTCUTS } from "../lib/studio";
+import { BrandMark } from "./BrandMark";
 import { useListingUpdateCount } from "./ImportPanel";
 import { openListingReview } from "./ListingUpdatesDialog";
 import { openLayouts } from "./LayoutsDialog";
@@ -24,7 +24,7 @@ const WHEEL_OPTIONS: [WheelMode, string, string][] = [
   ["pan", "Pans", "A trackpad: every swipe pans (pinch or Ctrl/⌘ + scroll to zoom)"],
 ];
 
-/** The house name in the top bar; opens everything that is about the project rather than the view. */
+/** The house menu button in the top bar (the house name and a chevron; on the phone, just the Storey mark); opens everything that is about the project rather than the view. */
 export function HouseMenu({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -33,14 +33,12 @@ export function HouseMenu({ name }: { name: string }) {
   const root = useRef<HTMLDivElement>(null);
   const proposed = useStore((s) => s.variants.proposed);
   const updates = useListingUpdateCount("proposed");
-  const look = usePanelPrefs((s) => s.look);
   const quiet = usePanelPrefs((s) => s.quiet);
   const wheel = usePanelPrefs((s) => s.wheel);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const chassis = useChassis((s) => s.chassis);
   const touch = useChassis((s) => s.touch);
-  // Under 1000 px the top bar drops its ? button (styles.css), so the item lives here instead.
-  const narrow = useChassis((s) => s.width < 1000);
+  const phone = chassis === "phone";
   const syncOff = useSyncStatus((s) => s.status.kind === "off");
 
   useEffect(() => {
@@ -69,9 +67,15 @@ export function HouseMenu({ name }: { name: string }) {
 
   return (
     <div className="house-menu" ref={root}>
-      <button className={open ? "house-menu-btn active" : "house-menu-btn"} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
-        <span>{name}</span>
-        <Icon name="chevronDown" size={16} />
+      <button className={open ? "house-menu-btn active" : "house-menu-btn"} aria-expanded={open} aria-haspopup="true" aria-label={phone ? `House menu: ${name}` : undefined} onClick={() => setOpen((o) => !o)}>
+        {phone ? (
+          <BrandMark />
+        ) : (
+          <>
+            <span>{name}</span>
+            <Icon name="chevronDown" size={16} />
+          </>
+        )}
       </button>
       {open && (
         <div className="popover house-pop" role="menu" aria-label="House menu">
@@ -92,10 +96,22 @@ export function HouseMenu({ name }: { name: string }) {
               <span>Switch house…</span>
             </button>
           )}
-          {(chassis === "phone" || (chassis === "tablet" && narrow)) && (
+          {phone && (
+            <div className="hm-name" aria-hidden="true">
+              {name}
+            </div>
+          )}
+          {phone && (
+            <button className="hm-item" role="menuitem" onClick={run(() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE)))}>
+              <Icon name="search" />
+              <span>Search…</span>
+            </button>
+          )}
+          {!phone && (
             <button className="hm-item" role="menuitem" onClick={run(() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS)))}>
               <Icon name="keyboard" />
               <span>Keyboard shortcuts…</span>
+              <span className="hm-hint">?</span>
             </button>
           )}
 
@@ -105,19 +121,6 @@ export function HouseMenu({ name }: { name: string }) {
               <span>Render quality</span>
               <RenderQuality />
             </div>
-            {FEATURES[chassis].glass && (
-            <div className="hm-row">
-              <span>Look</span>
-              <div className="seg" role="group" aria-label="Look">
-                <button className={look === "studio" ? "active" : ""} onClick={() => setPrefs({ look: "studio" })}>
-                  Studio
-                </button>
-                <button className={look === "glass" ? "active" : ""} onClick={() => setPrefs({ look: "glass" })}>
-                  Glass
-                </button>
-              </div>
-            </div>
-            )}
             {!touch && (
             <div className="hm-row">
               <span>Scroll wheel</span>
@@ -130,6 +133,7 @@ export function HouseMenu({ name }: { name: string }) {
               </div>
             </div>
             )}
+            {!phone && (
             <div className="hm-row">
               <span>Canvas</span>
               <div className="seg" role="group" aria-label="Canvas">
@@ -141,6 +145,7 @@ export function HouseMenu({ name }: { name: string }) {
                 </button>
               </div>
             </div>
+            )}
           </div>
 
           <div className="hm-group">

@@ -74,7 +74,7 @@ export function HousePicker({ current, onClose }: { current?: string; onClose?: 
   );
 
   if (!onClose) return <div className="house-picker-page">{card}</div>;
-  // Portalled to the body: the top bar's glass blur would otherwise trap a fixed backdrop inside it.
+  // Portalled to the body: a fixed backdrop must not sit inside the top bar's stacking context.
   return createPortal(
     <div className="dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       {card}

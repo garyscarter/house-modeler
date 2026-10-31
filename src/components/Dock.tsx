@@ -1,4 +1,4 @@
-import { useStore, type ViewMode } from "../store";
+import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
 import { editsSite } from "../lib/modes";
 import { dockFloorActive, dockFloorPick, floorDisplayName, floorsByLevel, tabSwitchPatch } from "../lib/studio";
@@ -12,30 +12,22 @@ import { WalkBar } from "./walk/WalkBar";
 import { WalkMap } from "./walk/WalkMap";
 import { WalkHint } from "./walk/WalkHint";
 import "./walk/walk.css";
-import { FEATURES, effectiveCompare } from "../lib/chassis";
+import { FEATURES } from "../lib/chassis";
 import "./Dock.css";
 
-const COMPARE: [ViewMode, string][] = [
-  ["single", "Single"],
-  ["side-by-side", "Side by side"],
-  ["overlay", "Overlay"],
-  ["wipe", "Wipe"],
-];
-
-/** The floating bar at the bottom of the canvas: Plan / 3D, floors, and in 3D the compare mode, sun and view options. */
+/** The floating bar at the bottom of the canvas: Plan / 3D, floors, and in 3D sun, view options and the measure and walk buttons. */
 export function Dock() {
   const tab = useStore((s) => s.tab);
   const mode = useStore((s) => s.mode);
   const maxLevel = useStore((s) => s.maxLevel);
   const editFloorId = useStore((s) => s.editFloorId);
-  const viewMode = useStore((s) => s.viewMode);
   const floors = useStore((s) => s.variants[s.activeVariant]?.floors);
-  const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
   const hasSite = useStore((s) => !!siteOf(s.sites, s.activeVariant));
   const setUi = useStore((s) => s.setUi);
   const sunOpen = usePanelPrefs((s) => s.sunOpen);
   const setPrefs = usePanelPrefs((s) => s.setPrefs);
   const setSun = useStore((s) => s.setSun);
+  const measuring = useStore((s) => s.measureTool);
   const chassis = useChassis((s) => s.chassis);
   const walking = useWalk((s) => s.on);
   if (!floors) return null;
@@ -47,10 +39,6 @@ export function Dock() {
   const active = dockFloorActive(ui, floors);
   const showFloors = tab === "3d" ? sorted.length > 0 : !editsSite(mode) && sorted.length > 1;
   const keyOf = (i: number) => (i < 9 ? ` (${i + 1})` : "");
-  // Side by side is off where two views don't fit: the app shows wipe instead, and so does this menu.
-  const shownMode = effectiveCompare<ViewMode>(viewMode, chassis, both, "single", "wipe", "side-by-side");
-  const compareRows = COMPARE.filter(([k]) => features.sideBySide || k !== "side-by-side");
-  const compareLabel = COMPARE.find(([k]) => k === shownMode)?.[1] ?? "Single";
   const activeName = active === "all" ? "All" : floorDisplayName(sorted.find((f) => f.id === active)?.name ?? "");
 
   if (walking) {
@@ -117,16 +105,6 @@ export function Dock() {
       {tab === "3d" && (
         <>
           <span className="dock-sep" aria-hidden="true" />
-          <Popover className="dock-compare" label={phone ? <Icon name="compare" /> : `Compare: ${compareLabel}`} chevron={!phone} ariaLabel={`Compare: ${compareLabel}`} disabled={!both} title={both ? "Compare As listed and Proposed" : "Load both layouts to compare them"}>
-            <div className="compare-rows" role="radiogroup" aria-label="Compare">
-              {compareRows.map(([k, label]) => (
-                <button key={k} data-pick role="radio" aria-checked={shownMode === k} className="compare-row" onClick={() => setUi({ viewMode: k })}>
-                  <span className="radio" aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </Popover>
           <button
             className={sunOpen ? "icon-btn active" : "icon-btn"}
             aria-label="Sun study"
@@ -141,9 +119,18 @@ export function Dock() {
           >
             <Icon name="sun" />
           </button>
-          <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "View"} chevron={!phone} ariaLabel="View options" title={phone ? "View options" : undefined}>
+          <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "Show"} chevron={!phone} ariaLabel="Show options" title={phone ? "Show options" : undefined}>
             <ViewToggles />
           </Popover>
+          <button
+            className={measuring ? "icon-btn active" : "icon-btn"}
+            aria-label="Measure"
+            aria-pressed={measuring}
+            title={measuring ? "Measuring: click two points (Esc to clear, M to stop)" : "Measure (M)"}
+            onClick={() => setUi({ measureTool: !measuring })}
+          >
+            <Icon name="measure" />
+          </button>
           <button className={phone ? "icon-btn" : "walk-start"} aria-label="Walk through the house" title="Walk through the house · Esc to stop" onClick={startWalk}>
             <Icon name="walk" />
             {!phone && "Walk"}

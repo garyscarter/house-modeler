@@ -33,14 +33,12 @@ export interface Features {
   sideBySide: boolean;
   /** The saved camera views menu in the dock. */
   savedViews: boolean;
-  /** The Glass look (translucent, blurred cards). Blur is slow on phone and tablet GPUs. */
-  glass: boolean;
 }
 
 export const FEATURES: Record<Chassis, Features> = {
-  phone: { draw: false, sideBySide: false, savedViews: false, glass: false },
-  tablet: { draw: true, sideBySide: false, savedViews: false, glass: false },
-  desktop: { draw: true, sideBySide: true, savedViews: true, glass: true },
+  phone: { draw: false, sideBySide: false, savedViews: false },
+  tablet: { draw: true, sideBySide: false, savedViews: false },
+  desktop: { draw: true, sideBySide: true, savedViews: true },
 };
 
 /** The tools the chassis cannot offer; the plan rail filters these out. */

@@ -8,10 +8,11 @@ import { RenderDialogHost } from "./components/RenderDialog";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
-import { TopBar, LayoutSwitch } from "./components/TopBar";
+import { TopBar } from "./components/TopBar";
 import { Dock } from "./components/Dock";
 import { InspectorCard } from "./components/InspectorCard";
 import { useStudioKeys } from "./components/useStudioKeys";
+import { useGestureFade } from "./components/useGestureFade";
 import { decideStartupPrompt, readRemembered } from "./lib/startupPrompt";
 import { decideSiteUpdate } from "./lib/sitePreset";
 import { startSync } from "./lib/sync";
@@ -35,7 +36,7 @@ import { SaveNotice } from "./components/SaveNotice";
 import { startChassisWatch, useChassis } from "./components/useChassis";
 import { TabBar } from "./components/mobile/TabBar";
 import { useSheet } from "./components/mobile/sheet";
-import { effectiveCompare, FEATURES } from "./lib/chassis";
+import { effectiveCompare } from "./lib/chassis";
 
 // three.js, react-three-fiber and drei load with the 3D view, not with the app shell.
 const Viewer = lazy(() => import("./three/Viewer").then((m) => ({ default: m.Viewer })));
@@ -60,16 +61,14 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const peek = useStore((s) => s.peek);
   const peekReturn = useStore((s) => s.peekReturn);
-  const lookPref = usePanelPrefs((s) => s.look);
   const chassis = useChassis((s) => s.chassis);
   const touch = useChassis((s) => s.touch);
   const walking = useWalk((s) => s.on);
-  // Glass needs a GPU with blur to spare: desktop only.
-  const look = FEATURES[chassis].glass ? lookPref : "studio";
   const hydrationError = useHydration((s) => s.error);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
 
   useStudioKeys();
+  useGestureFade();
   useEffect(startChassisWatch, []);
   useEffect(() => {
     const off = useStore.persist.onFinishHydration(() => setHydrated(true));
@@ -182,7 +181,7 @@ export default function App() {
   const showInspector = tab === "3d" && mode !== "review" && (!!model || editsSite(mode));
 
   return (
-    <div className="app" data-mode={mode} data-tab={tab} data-look={look} data-chassis={chassis} data-touch={touch || undefined} data-walking={walking || undefined}>
+    <div className="app" data-mode={mode} data-tab={tab} data-chassis={chassis} data-touch={touch || undefined} data-walking={walking || undefined}>
       <TopBar />
 
       <main data-tab={tab}>
@@ -296,7 +295,6 @@ export default function App() {
             <ModePanel />
           </InspectorCard>
         )}
-        {model && chassis === "phone" && both && <LayoutSwitch className="layout-pill float-card" />}
         {model && <CoachStrip />}
         <SaveNotice />
         {model && <Dock />}

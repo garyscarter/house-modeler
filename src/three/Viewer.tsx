@@ -31,7 +31,7 @@ import { useSunInfo } from "./useSun";
 import { isLightItem, lightsMaster, lightsOn, switchedOn } from "../lib/lights";
 import { controlIndex } from "../lib/electrics";
 import { byId } from "../lib/catalogue";
-import { Measure, MeasureButton } from "./Measure";
+import { Measure } from "./Measure";
 import { useWalk } from "../walkStore";
 import { WalkControls } from "./walk/WalkControls";
 import { WalkExposure } from "./walk/WalkExposure";
@@ -185,7 +185,6 @@ function ViewerImpl(props: ViewerProps) {
     <div className="viewer">
       {chrome && title && <div className="viewer-title">{title}</div>}
       {chrome && !walking && <ViewCube />}
-      {chrome && !walking && <MeasureButton />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
       {chrome && compiled !== null && !lost && <LightsWarming model={model} />}

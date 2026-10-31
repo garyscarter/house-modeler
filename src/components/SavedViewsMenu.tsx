@@ -23,7 +23,7 @@ export function SavedViewsMenu() {
   };
 
   return (
-    <Popover className="dock-views" label="Views" title="Saved camera views">
+    <Popover className="dock-views" label="Cameras" title="Saved camera views">
       <div className="saved-views">
         <div className="sv-save">
           <input

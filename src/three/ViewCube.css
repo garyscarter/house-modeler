@@ -1,6 +1,6 @@
 /* 108 x 108 card, centre at (54, 54). Marks ride the outer ring (r 44); faces sit inside it (r 24, 22 px, so out to 35). */
 .view-cube {
-  position: absolute; right: var(--float-gap, 12px); bottom: 76px; /* clear of the bottom dock */ z-index: 12; width: 108px; height: 108px;
+  position: absolute; right: var(--inset-r, 12px); bottom: 76px; /* clear of the bottom dock */ z-index: 12; width: 108px; height: 108px;
   border-radius: var(--radius-l); color: var(--text); user-select: none;
 }
 .vc-ring { position: absolute; inset: 0; pointer-events: none; transform: rotate(calc(var(--view-bearing, 0) * -1deg)); }
@@ -18,7 +18,7 @@
 .vc-mark.north { color: var(--danger); font-weight: 700; }
 .vc-sun {
   position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
-  background: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.28);
+  background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
   transform: rotate(calc(var(--a) * 1deg)) translateY(-44px);
 }
 .view-cube button {
@@ -46,7 +46,11 @@
 }
 
 
-/* Phone: 84 px cube at the top right of the 3D tab (layout pill is top-centre, plan rail top-left). */
-.app[data-chassis="phone"] .view-cube { top: var(--float-gap, 12px); bottom: auto; right: var(--float-gap, 12px); transform: scale(0.78); transform-origin: top right; }
+/* Phone: no cube. One 44 px compass button under the top row, at the right; its needle turns with the camera. */
+.view-compass {
+  position: absolute; top: var(--float-top); right: var(--inset-r); z-index: 12; width: 44px; height: 44px; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; cursor: pointer; touch-action: manipulation;
+}
+.view-compass:hover:not(:disabled) { background: var(--panel); border-color: var(--accent); }
+.view-compass .vc-needle { transform: rotate(calc(var(--view-bearing, 0) * -1deg)); }
 .app[data-touch] .view-cube button { touch-action: manipulation; }
-
