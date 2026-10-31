@@ -77,11 +77,14 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         // React rarely changes between releases, so it gets a chunk of its own that browsers keep cached.
-        // The path tracer (and its BVH library, not drei's older copy) loads only when a still is rendered.
+        // three.js has a chunk of its own, so the path tracer (three-gpu-pathtracer and its BVH library, not drei's older
+        // copy) is the only thing left for the "pathtrace" chunk, which loads only when a still is rendered. Without this
+        // group three itself landed in "pathtrace" and the 3D view downloaded the tracer with it.
         codeSplitting: {
           groups: [
             { name: "react", test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
-            { name: "pathtrace", test: /^(?!.*[\\/]drei[\\/]).*[\\/]node_modules[\\/](three-gpu-pathtracer|three-mesh-bvh)[\\/]/ },
+            { name: "three", priority: 20, test: /[\\/]node_modules[\\/]three[\\/]/ },
+            { name: "pathtrace", priority: 10, test: /^(?!.*[\\/]drei[\\/]).*[\\/]node_modules[\\/](three-gpu-pathtracer|three-mesh-bvh)[\\/]/ },
           ],
         },
       },
