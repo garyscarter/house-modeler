@@ -188,3 +188,4 @@
 .ro-body input[type="range"] { display: none; }
 .ro-body button:disabled { opacity: 0.4; }
 .ro-body .sect-head { cursor: pointer; }
+.stat-caption { margin: var(--sp-2) 0 0; }

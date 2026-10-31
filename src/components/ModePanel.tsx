@@ -4,9 +4,7 @@ import { MODE_LABEL, type Mode } from "../lib/modes";
 import { BuildSummary, DecorateSummary, FurnishSummary, useClashCount } from "../editor/ModeSummaries";
 import { DecoratePanel } from "../editor/DecoratePanel";
 import { BuildRoomPanel } from "../editor/Inspectors";
-import { PlotPanel } from "./PlotPanel";
-import { GardenPanel } from "./GardenPanel";
-import { ElectricsPanel } from "./ElectricsPanel";
+import { ElectricsPanelLazy as ElectricsPanel, GardenPanelLazy as GardenPanel, PlotPanelLazy as PlotPanel } from "./lazyPanels";
 import { ReadOnlyBody } from "./ReadOnly";
 import { requestAddPicker } from "../editor/addPicker";
 

@@ -8,7 +8,7 @@ import { DOUBLE_DOOR_M, outsideSide } from "../../../lib/planMath";
 import { byId } from "../../../lib/catalogue";
 import type { Fixture, Floor, Room, VariantKey } from "../../../types";
 import { editsFixtures, type Mode } from "../../../lib/modes";
-import { ElectricsPanel } from "../../../components/ElectricsPanel";
+import { ElectricsPanelLazy as ElectricsPanel } from "../../../components/lazyPanels";
 import { useStore } from "../../../store";
 import { DecoratePanel } from "../../DecoratePanel";
 import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../Inspectors";

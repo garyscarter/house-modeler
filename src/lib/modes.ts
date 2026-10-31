@@ -98,6 +98,10 @@ export interface ModeUi {
   linkSwitchId?: string | null;
   /** Electrics: which rocker (gang, 0-based) of the linking switch the tapped lights go on. */
   linkGang?: number;
+  /** The 3D view's highest level shown; null = every floor, roof included. */
+  maxLevel?: number | null;
+  /** The active layout's floors, so entering Decorate or Furnish can cut the 3D view to the floor being edited. */
+  floors?: readonly { id: string; level: number }[];
 }
 
 /** Modes whose plan places, selects and moves fixtures (Furnish: furniture and lights; Electrics: electrical points and lights). */
@@ -117,6 +121,12 @@ export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> 
 /** The UI fields that change when the mode does. Selections the new mode cannot hold are cleared. */
 export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
   const patch: Partial<ModeUi> = { mode: next, gardenSel: [], linkSwitchId: null, linkGang: 0 };
+  // Decorate and Furnish pick rooms in 3D: with every floor showing the roof hides them, so cut the view to the edited floor.
+  if ((next === "decorate" || next === "furnish") && ui.maxLevel === null && ui.floors?.length) {
+    const editing = ui.editFloorId === SITE_EDIT_ID ? ui.floorBeforeSite : ui.editFloorId;
+    const ground = ui.floors.reduce((lo, f) => (f.level < lo.level ? f : lo));
+    patch.maxLevel = (ui.floors.find((f) => f.id === editing) ?? ground).level;
+  }
   if (!roomTapSelects(next)) patch.selectedRoomId = null;
   if (next !== "decorate") patch.selectedEdge = null;
   if (editsSite(next)) {

@@ -113,4 +113,20 @@ describe("electrics mode", () => {
   it("a mode switch ends any linking", () => {
     expect(modeSwitchPatch(ui({ mode: "electrics", linkSwitchId: "sw" }), "furnish").linkSwitchId).toBeNull();
   });
+
+  it("entering Decorate or Furnish with every floor showing cuts the 3D view to the edited floor", () => {
+    const floors = [{ id: "f0", level: 0 }, { id: "f1", level: 1 }];
+    const base = ui({ maxLevel: null, floors, editFloorId: "f1" });
+    expect(modeSwitchPatch(base, "decorate").maxLevel).toBe(1);
+    expect(modeSwitchPatch(base, "furnish").maxLevel).toBe(1);
+    expect(modeSwitchPatch(ui({ maxLevel: null, floors, editFloorId: null }), "furnish").maxLevel).toBe(0);
+    expect(modeSwitchPatch(ui({ maxLevel: null, floors, editFloorId: SITE_EDIT_ID, floorBeforeSite: "f1" }), "decorate").maxLevel).toBe(1);
+  });
+
+  it("leaves the cutaway alone in Build, when a level is already chosen, and without floors", () => {
+    const floors = [{ id: "f0", level: 0 }, { id: "f1", level: 1 }];
+    expect("maxLevel" in modeSwitchPatch(ui({ maxLevel: null, floors }), "build")).toBe(false);
+    expect("maxLevel" in modeSwitchPatch(ui({ maxLevel: 0, floors, editFloorId: "f1" }), "decorate")).toBe(false);
+    expect("maxLevel" in modeSwitchPatch(ui({ maxLevel: null }), "decorate")).toBe(false);
+  });
 });

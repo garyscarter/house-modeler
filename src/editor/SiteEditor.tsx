@@ -10,14 +10,13 @@ import { boundaryWallSegments, groundAlong, resolveFollow } from "../lib/wallSte
 import { screenBand } from "../lib/screenBlocks";
 import { bearingToWorld } from "../lib/sun";
 import { areaOf, defaultDepths, edgesOf, houseOutlines, removeBoundaryVertex, sideClearances, simpleSite } from "../lib/site";
-import { PlotPanel } from "../components/PlotPanel";
+import { GardenPanelLazy as GardenPanel, PlotPanelLazy as PlotPanel } from "../components/lazyPanels";
 import { MIN_OPENING, defaultOpeningEnd, edgeLength, moveBoundaryCorner, neighbourEdgeOf, setOpeningWidth, slideCorner, type OpeningEnd } from "../lib/boundaryOpening";
 import { arrowDelta, shiftPts } from "../lib/nudge";
 import { toolAllowed } from "../lib/chassis";
 import { type GardenDef } from "../lib/gardenCatalogue";
 import { copyItems, itemsOf, moveItems, placeSpot, snapItem } from "../lib/siteItems";
 import { surfaceArea } from "../lib/surfaceCurve";
-import { GardenPanel } from "../components/GardenPanel";
 import { ReadOnlyBody } from "../components/ReadOnly";
 import { ToolRail, type RailItem } from "./ToolRail";
 import { AddPopover, GardenPicker } from "./AddItem";
@@ -26,6 +25,7 @@ import { Info } from "../components/Info";
 import { Icon } from "../components/icons";
 import { BrandMark } from "../components/BrandMark";
 import { lowerSheet, raiseSheet, useCameraInsets, useCanvasCamera, useEditorKeys } from "./core";
+import { useSheet } from "../components/mobile/sheet";
 import { slideFor, useSiteDrag, type GardenActions } from "./site/useSiteDrag";
 import { DraftRect, SelectionLayer, SiteWorld } from "./site/SiteLayers";
 import { GardenItems, ItemHandles, PlacementGhost, PolyDraftView, RunDraftView } from "./site/GardenLayers";
@@ -110,12 +110,14 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
   const clearances = useMemo(() => sideClearances(outlines, site.boundary), [outlines, site.boundary]);
   const walls = useMemo(() => (model ? siteWalls(model) : []), [model]);
 
-  // Home: the plot, house and neighbours (not the long road) with a 2 m margin.
+  // Home: the plot, house and neighbours (not the long road) with a 2 m margin. On a phone the neighbours stay out, so
+  // the plot fills the screen; pinching out still shows the street.
+  const compact = useChassis((s) => s.compact);
   const home = useMemo<Rect>(() => {
-    const pts = [...site.boundary, ...outlines.flatMap((o) => o.polys.flat()), ...walls.flatMap((l) => l.walls.flatMap((w) => w.poly)), ...site.neighbours.flatMap((n) => n.polygon)];
+    const pts = [...site.boundary, ...outlines.flatMap((o) => o.polys.flat()), ...walls.flatMap((l) => l.walls.flatMap((w) => w.poly)), ...(compact ? [] : site.neighbours.flatMap((n) => n.polygon))];
     const b = pts.length ? bbox(pts) : { x0: -10, y0: -10, x1: 10, y1: 10, w: 20, h: 20 };
     return { x0: b.x0 - 2, y0: b.y0 - 2, x1: b.x1 + 2, y1: b.y1 + 2 };
-  }, [site.boundary, site.neighbours, outlines, walls]);
+  }, [site.boundary, site.neighbours, outlines, walls, compact]);
   const touch = useChassis((s) => s.touch);
   const insets = useCameraInsets();
   const camera = useCanvasCamera(svgRef as unknown as RefObject<HTMLElement | null>, { home, fitKey: `site:${insets.fitSuffix}`, insetRight: insets.insetRight, insetBottom: insets.insetBottom, insetLeft: insets.insetLeft, unitsPerM: 1, limits: SITE_LIMITS, anchor: "centre", padFrac: 0 });
@@ -359,6 +361,15 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
     prevSelKey.current = selKey;
     if (selKey) raiseSheet();
     else lowerSheet();
+    // Phone: if the sheet rose over the pick (Garden is view-only, so this is the half-open case), pan it clear of the sheet.
+    const open = useSheet.getState().detent;
+    if (selKey && size && chassis === "phone" && (open === "half" || open === "full")) {
+      const pts = sel?.type === "item" ? itemsOf(site).filter((it) => sel.ids.includes(it.id)).flatMap((it) => [{ x: it.x, y: it.y }, ...(it.to ? [it.to] : [])]) : selPoly;
+      if (pts.length) {
+        const b = bbox(pts);
+        camera.ensureVisible({ x0: b.x0 - 0.5, y0: b.y0 - 0.5, x1: b.x1 + 0.5, y1: b.y1 + 0.5 }, size.h * (open === "full" ? 0.92 : 0.5));
+      }
+    }
   }, [selKey]);
 
   const selPoly = psel ? polyOf(psel) : [];

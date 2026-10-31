@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Floor, VariantKey } from "../types";
-import { buildStats, decorateSummary, furnishSummary } from "../lib/modeSummary";
+import { buildStats, decorateSummary, furnishSummary, houseStats } from "../lib/modeSummary";
+import { floorDisplayName } from "../lib/studio";
 import { Info } from "../components/Info";
 import { byId } from "../lib/catalogue";
 import { fixtureSolids, overlappingIds } from "../lib/planMath";
@@ -21,9 +22,17 @@ export function useClashCount(floor: Floor): number {
 export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: Floor }) {
   const ceilingHeight = useStore((s) => s.variants[variant]?.ceilingHeight);
   const updateModel = useStore((s) => s.updateModel);
-  const stats = buildStats(floor);
+  const tab = useStore((s) => s.tab);
+  const maxLevel = useStore((s) => s.maxLevel);
+  const floors = useStore((s) => s.variants[variant]?.floors);
+  const onPlan = tab === "plan";
+  // In 3D with every floor showing, the numbers are the whole house; otherwise the floor, named.
+  const wholeHouse = !onPlan && maxLevel === null && !!floors && floors.length > 1;
+  const stats = wholeHouse ? houseStats(floors) : buildStats(floor);
+  const caption = wholeHouse ? "Whole house" : floorDisplayName(floor.name);
   const touch = useChassis((s) => s.touch);
-  const draw = useChassis((s) => FEATURES[s.chassis].draw);
+  // Drawing is a plan job: the hint about R belongs on the Plan tab only.
+  const draw = useChassis((s) => FEATURES[s.chassis].draw) && onPlan;
   const verb = touch ? "Tap" : "Click";
   return (
     <div className="mode-summary">
@@ -40,12 +49,15 @@ export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: F
           <>
             No rooms yet. Draw one with <kbd className="keycap">R</kbd>
           </>
-        ) : (
+        ) : onPlan ? (
           <>No rooms yet. Draw one on a tablet or desktop.</>
+        ) : (
+          <>No rooms yet. Open the Plan to draw one.</>
         )}
       </p>
+      {stats.length > 0 && <p className="stat-caption muted small">{caption}</p>}
       {stats.length > 0 && (
-        <div className="stat-row" aria-label="This floor">
+        <div className="stat-row" aria-label={caption}>
           {stats.map((st) => (
             <div key={st.label}>
               <b>{st.value}</b>
@@ -62,7 +74,7 @@ export function BuildSummary({ variant, floor }: { variant: VariantKey; floor: F
           </label>
         </Section>
       </div>
-      <FloorSettings variant={variant} floor={floor} />
+      {onPlan && <FloorSettings variant={variant} floor={floor} />}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { editsFixtures, pruneSelection } from "../lib/modes";
 import { snapKind } from "../lib/planHit";
 import { useStore } from "../store";
 import { bbox } from "../lib/geometry";
+import type { Rect } from "../lib/planMath";
 import { fixtureBox, imageClipRect, imageStateOf, setEdgeLength, viewBoxOf } from "../lib/planMath";
 import { refitFixture } from "../lib/recess";
 import { useClipboardFixtures } from "../lib/clipboard";
@@ -17,6 +18,7 @@ import { selectionBounds } from "../lib/fixtureGroups";
 import { wallClearances } from "../lib/planGuides";
 import { useCameraInsets, useCanvasCamera } from "./core";
 import { useCanEdit, useChassis } from "../components/useChassis";
+import { useSheet } from "../components/mobile/sheet";
 import { usePlanSelection } from "./plan/useSelection";
 import { usePlanTools } from "./plan/useTools";
 import { usePlanDrag } from "./plan/useDrag";
@@ -159,6 +161,23 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     const grouped = liveIds.length === 1 && allFixtures.find((x) => x.id === liveIds[0])?.groupId;
     return liveIds.length >= 2 || grouped ? selectionBounds(allFixtures, liveIds, ppm) : null;
   }, [allFixtures, liveIds, ppm]);
+  // Phone: when the sheet rises over a selection, pan the plan just enough that the selection sits above it.
+  const selKey = `${selectedRoomId}|${selectedOpeningId}|${selectedWallId}|${liveIds.join(",")}|${selectedCanopy}`;
+  useEffect(() => {
+    const open = useSheet.getState().detent;
+    if (chassis !== "phone" || !size || (open !== "half" && open !== "full")) return;
+    let rect: Rect | null = null;
+    const opening = floor.openings.find((o) => o.id === selectedOpeningId);
+    const wall = (floor.walls ?? []).find((w) => w.id === selectedWallId);
+    const canopy = canopies[selectedCanopy ?? -1];
+    if (liveIds.length) rect = selectionBounds(allFixtures, liveIds, ppm);
+    else if (opening) rect = { x0: opening.x - 0.5 * ppm, y0: opening.y - 0.5 * ppm, x1: opening.x + 0.5 * ppm, y1: opening.y + 0.5 * ppm };
+    else if (wall) rect = { x0: Math.min(wall.a.x, wall.b.x), y0: Math.min(wall.a.y, wall.b.y), x1: Math.max(wall.a.x, wall.b.x), y1: Math.max(wall.a.y, wall.b.y) };
+    else if (canopy) rect = bbox(canopy);
+    else if (selected) rect = bbox(selected.polygon);
+    if (rect) camera.ensureVisible(rect, size.h * (open === "full" ? 0.92 : 0.5));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selKey]);
   /** Gaps from the selected furniture (or the box around several) to the walls on each side. */
   const clearances = useMemo(() => {
     if (!furnish || tool !== "select" || !liveIds.length) return [];
