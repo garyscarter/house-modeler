@@ -17,8 +17,8 @@ Status: proposal, not started. Written 31 Oct 2026. Source findings: PERF9; docs
 
 - Browsers do not gzip request bodies, so all of that goes over the wire on every edit. On an iPhone on mobile data, 30 small edits in a session cost ~10 MB for listing 91770873 and ~330 MB for a PNG-traced house.
 - Server: `readBody()` (`server/server.mjs:173`) buffers up to `MAX_PROJECT_BODY_BYTES = 50 MB` (`server/project.mjs:7`), then `JSON.parse` (`parsePutBody`) and `JSON.stringify` (`save`) run synchronously on the event loop. Two large saves at once can exhaust the 512 MB starter instance.
-- Data loss: `createProjectStore().save()` replaces the one file (`project.mjs:40-49`); no history. An unreadable `project.json` is logged ("Ignoring unreadable", `project.mjs:27`), treated as empty, and overwritten by the next upload. **Not built since the October review** (checked: no `revisions` or `backup` anywhere in `server/`).
-- Already fine, keep: `?since=<revision>` skips the download when nothing changed (B11, built); the revision protocol never overwrites silently (`decideSync()`, `syncLogic.ts:41`); `persist.ts` stores each image once locally under `@@img:<uid>`.
+- Data loss: `createProjectStore().save()` replaces the one file (`project.mjs:40-50`); no history. An unreadable `project.json` is logged ("Ignoring unreadable", `project.mjs:27`), treated as empty, and overwritten by the next upload. **Not built since the October review** (checked: no `revisions` or `backup` anywhere in `server/`).
+- Already fine, keep: `?since=<revision>` skips the download when nothing changed (B11, built); the revision protocol never overwrites silently (`decideSync()`, `syncLogic.ts:40`); `persist.ts` stores each image once locally under `@@img:<uid>`.
 
 ## Goal and non-goals
 
@@ -88,7 +88,7 @@ Payloads, listing 91770873:
 | Reload after another device edited | 321 KB down | 36 KB down, 0 image requests (image already local) |
 | PNG-traced house, any edit (est.) | ~11 MB up | 36 KB up |
 
-States of the status line (text in `statusText()`, `syncLogic.ts:96`):
+States of the status line (text in `statusText()`, `syncLogic.ts:92`):
 
 | State | Desktop and phone text | Notes |
 |---|---|---|
@@ -100,10 +100,16 @@ States of the status line (text in `statusText()`, `syncLogic.ts:96`):
 | Server full (per-house quota) | "The server is full: tell whoever runs it, then Sync now" | new kind `serverFull` |
 | Server copy missing an image | dialog (below) | new |
 
-Missing-image dialog (via `choose()`, like the conflict dialog): "The shared copy refers to a floorplan image the server no longer has." Buttons: **Keep mine and overwrite** / **Cancel**. Cancel pauses as the conflict Cancel does. The project is never applied with a hole in it.
+Missing-image dialog (via `choose()` in `components/Dialogs`, like the conflict dialog): "The shared copy refers to a floorplan image the server no longer has."
+- This browser holds a project: **Keep mine and overwrite** / **Cancel**.
+- This browser is empty (`isProjectEmpty()`, a new device): **Cancel** only, plus the line "Open it on the device that last saved it, then Sync now there." Never offer "Keep mine" here: it would overwrite the shared copy with an empty project.
+- Cancel pauses as the conflict Cancel does. The project is never applied with a hole in it.
+
+Unchanged by this spec, on every chassis: Walk, Compare, Measure and the canvas keep running while a save or image upload is in flight (it is all in the background); a server copy that loads still clears undo history (`clearHistory()` in `applyProject`), as today; undo to an earlier floorplan re-uploads it if the server has dropped it (422 path). Keyboard, touch and reduced motion: nothing new beyond `<Loader>` and `choose()`, which already handle them.
 
 Phone
-- Save delay 10 s instead of 3 s, and an immediate flush when the app is hidden (`visibilitychange` to hidden, `pagehide`). On iOS, `navigator.connection` does not exist, so the phone chassis is the signal; where `navigator.connection.saveData` is true (Android, Chrome), the 10 s rule applies on any chassis.
+- Save delay 10 s instead of 3 s, and an immediate flush when the app is hidden (`visibilitychange` to hidden, `pagehide`). On iOS, `navigator.connection` does not exist, so the compact screen is the signal (portrait 390x844 and landscape 844x390 both count: `isCompact` uses the shortest side); where `navigator.connection.saveData` is true (Android, Chrome), the 10 s rule applies on any chassis.
+- Most phone modes are view-only (owner decision 1), so only Decorate and Furnish edits, and Import JSON, ever schedule a save.
 - No new chrome. The status line only appears in the House menu.
 
 Desktop
@@ -130,7 +136,7 @@ Export and Import
 | `PUT /api/project` | `{ baseRevision, format: 2, data }`, data with refs | 200, 409 (as today), 422 `{ missing: [hex] }` when a ref is not in the store, 413 over 8 MB, 400 |
 
 - `<hex>` is the lower-case SHA-256 of the decoded image bytes, `/^[0-9a-f]{64}$/`.
-- Ref string in project JSON: `"@@sha256:<hex>"`. Distinct from `@@img:` (local uids, `persist.ts:18`) on purpose: the two never mix.
+- Ref string in project JSON: `"@@sha256:<hex>"`. Distinct from `@@img:` (local uids, `IMG_REF`, `persist.ts:17`) on purpose: the two never mix.
 - A PUT body that still holds data URLs (old tab, or a browser without `crypto.subtle`, e.g. `npm start` reached over plain http on a LAN) is accepted: the server extracts the images itself (`extractImages`) before saving. So **the stored copy never holds inline images**, whatever sent it.
 - Every `/api/` call from the new client sends `X-Storey-Sync: 2`.
 
@@ -142,15 +148,17 @@ New `server/images.mjs` (Node built-ins only, like the rest):
   - `find(hex)` → `{ file, type, size } | null`; `touch(hex)`.
   - `put(hex, type, stream)` → `Promise<"stored" | "exists" | "mismatch" | "tooLarge" | "quota">`. Streams to `<hex>.<pid>.tmp` through `crypto.createHash("sha256")`, counts bytes, compares, then `rename`. Never holds the body in memory.
   - `gc(roots: Set<string>, now)` → number deleted. Async (`fs.promises`). Deletes files not in `roots` whose mtime is older than `GC_GRACE_MS`; removes stray `.tmp` files older than an hour.
-  - `usedBytes()` kept in memory (summed at start, updated on put and gc).
+  - `usedBytes()` kept in memory (summed at start, updated on put and gc). With `PASSCODES` several houses share the 1 GB disk, so `put` also refuses (`quota`) when the sum over all houses would pass `DISK_QUOTA_BYTES = 800 MB`.
 - Pure helpers with tests: `refHashes(text)` (regex `"@@sha256:([0-9a-f]{64})"`), `extractImages(data, store)` (walks the object, decodes base64 data URLs of allowed types, writes them, swaps in refs; other data URLs stay inline), `inlineImages(text, store)` (compat GET; string replace of refs by data URLs).
 
 `server/project.mjs` changes (`createProjectStore`):
 - Stored file gains `format: 2`: `{ revision, savedAt, format, data }`.
-- Revisions: before the rename in `save()`, `fs.renameSync(file, revisions/<stem>/<revision>.json)` (the old file is already complete, so this is atomic and cheap), then write the new one. Prune to `KEEP_REVISIONS = 20` (newest kept). `<stem>` = `projectFileName()` without `.json`, so the default house's `project.json` maps to `revisions/project/`.
+- Revisions: in `save()`, after writing the tmp file and before `renameSync(tmp, file)`, `fs.linkSync(file, revisions/<stem>/<old revision>.json)` (a hard link: atomic, no copy, and `project.json` is never absent; never rename the old file away, a crash between the two renames would leave no project file and the store would start empty). Prune to `KEEP_REVISIONS = 20` (newest kept; `*.v1.json` and `*.unreadable-*` are never pruned). `<stem>` = `projectFileName()` without `.json`, so the default house's `project.json` maps to `revisions/project/`.
+- `saveId`: `save(baseRevision, data, now, saveId?)` stores an optional client `saveId` (`/^[A-Za-z0-9_-]{8,40}$/`) in the file and in `meta()`, so GET `?since`, full GET, 200 and 409 replies all carry it (they already spread `meta`). `parsePutBody` returns it. See "Lost replies" under Client.
 - Unreadable file at start: rename it to `project.json.unreadable-<ISO time>` and log; start empty (today it is overwritten on the next save).
 - `keptRefs()` → `Set<hex>` of refs in the current file and every kept revision (the GC roots). Read lazily, cached per revision.
 - `rewrite(data)` → replaces the data without bumping revision or savedAt (used only by the migration).
+- Existing test `survives a restart and leaves no temp files` asserts `readdirSync(dir)` is `["project.json"]`; it becomes `["project.json", "revisions"]` (chunk B updates it). `treats a corrupt file as nothing saved` still passes and gains an assertion that the bad file was set aside.
 - `MAX_PROJECT_BODY_BYTES` → 8 MB for format 2 bodies. Legacy bodies (no `format`) keep the 50 MB limit for one release.
 
 `server/server.mjs` changes:
@@ -178,15 +186,17 @@ New `src/lib/syncImages.ts` (pure, with `syncImages.test.ts`):
 - If `crypto.subtle` is missing, skip `ensureImages` and send inline (the server extracts).
 - `pushOnce(base)`: `await ensureImages()`, then PUT `{ baseRevision, format: 2, data }` with the body from `toRefs()`. On 422, drop `missing` from `known`, `ensureImages()` again, retry once; a second 422 → `goOffline()`. 409, 401, 200 exactly as today. **The revision rules are untouched**: images are idempotent and not revisioned, so they cannot conflict.
 - `loadServerCopy(have?)`: set status `loading`; seed `urlOf` from images in the current store (hash them, so a reload downloads nothing); `GET /api/images/<hex>` for the rest, blob to data URL; `fromRefs()`; only then `applyProject(…, true)`. A 404 opens the missing-image dialog; other failures → `goOffline()` and nothing is applied.
-- `call()` gains the `X-Storey-Sync: 2` header; add a small `callBytes(method, url, body?, type?)` for images.
+- `call()` gains the `X-Storey-Sync: 2` header; add a small `callBytes(method, url, body?, type?)` for images. `callBytes` GETs use the default HTTP cache (not `cache: "no-store"` as `call()` does), so the `immutable` header works.
 - `scheduleSave()` uses `saveDelayMs({ compact: isCompact(innerWidth, innerHeight), saveData: navigator.connection?.saveData === true })`, read at schedule time.
-- Flush on hide: in `startSync()`, on `visibilitychange` to hidden and on `pagehide`, if `dirty` and nothing is in flight, send the project PUT at once with `fetch(…, { keepalive: true })` when the body is under 60 KB (keepalive's limit is 64 KB) and no image is unknown; otherwise leave it to `resume()`, which already flushes first (`decideResume()`).
+- Flush on hide: in `startSync()` (beside the existing `visibilitychange` listener, `sync.ts:253`), on `visibilitychange` to hidden and on `pagehide`, if `dirty`, not `paused` and `saving === 0`: `clearTimeout(saveTimer)` and run the normal `serial(() => push(...))`, with `pushOnce` passing `keepalive: true` to `fetch` when the body is under 60 KB (keepalive's limit is 64 KB) and no image is unknown. It goes through `serial` and `pushOnce` like any save, so the revision rules apply unchanged; if the page survives, the reply is handled as usual. Otherwise leave it to `resume()`, which already flushes first (`decideResume()`).
+- Lost replies (new, needed because hide flushes make them routine on iPhone): each PUT carries a random `saveId`; before sending, `Memory` (localStorage `house-modeler/sync`) records `sent: { saveId, base }`; `onChange()` clears `sent` (something changed after that send). In `check()` and `conflict()`, if `sent` is set and the server's `saveId === sent.saveId`, the server holds exactly this browser's project: adopt its revision (`synced()`, `dirty = false`) instead of calling `decideSync()` / opening the dialog. Without this, a lost reply makes the next check show "changed on another device" for the user's own save. A pre-step only; `decideSync()` is unchanged.
 - `importProject(data): Promise<boolean>` wraps `applyProject` for Import JSON: resolves refs when present (see Design).
 
 `src/lib/syncLogic.ts`:
 - `ProjectData` unchanged (the store shape). `SyncStatus` gains `{ kind: "loading" }` and `{ kind: "serverFull" }`; `statusText()` texts as in Design; `tooLarge` text changes.
 - New `missingImageMessage` and `MISSING_IMAGE_CHOICES` beside `CONFLICT_CHOICES`.
 - `decideSync()`, `decideResume()`, `conflictAction()`: **no change**. Their tests must pass unedited.
+- New pure `ownSave(sent, server): boolean` (the lost-reply pre-step above), with tests.
 
 `src/components/SettingsPanel.tsx`: `importJson` calls `importProject`; `SyncStatus` shows `<Loader kind="lift">` for `loading` as it does for `saving`.
 
@@ -195,17 +205,17 @@ New `src/lib/syncImages.ts` (pure, with `syncImages.test.ts`):
 | Where | Change | Migration |
 |---|---|---|
 | IndexedDB project (persist.ts) | none | none |
-| `house-modeler/sync` memory (localStorage) | none | none |
-| Server `project*.json` | `format: 2`, refs | at startup, same revision; v1 copy kept as `<revision>.v1.json` |
+| `house-modeler/sync` memory (localStorage, per house via `houseKey`) | gains optional `sent: { saveId, base }` | none: old memory has no `sent`, which means "no pending send" |
+| Server `project*.json` | `format: 2`, refs, optional `saveId` | at startup, same revision; v1 copy kept as `<revision>.v1.json` |
 | Server new dirs | `DATA_DIR/images/<house>/`, `DATA_DIR/revisions/<stem>/` | created on demand |
 | Old tabs still open | GET without header gets inline images; PUT with inline images is extracted | compat for one release, then delete `inlineImages` and the 50 MB legacy limit (dated TODO in `server.mjs`) |
 
 ### Tests to add
 
 - `src/lib/syncImages.test.ts`: four copies of one image give one hash; refs round-trip; `fromRefs` reports every missing hex and returns no partial value; short strings and non-image data URLs stay inline; SVG stays inline; `@@img:` strings are left alone; `saveDelayMs` table.
-- `src/lib/syncLogic.test.ts`: the new status texts. Existing `decideSync` and `decideResume` cases unchanged.
+- `src/lib/syncLogic.test.ts`: the new status texts; `ownSave` (match, mismatch, no `sent`, server without `saveId`). Existing `decideSync` and `decideResume` cases unchanged.
 - `server/images.test.mjs`: put then find; hash mismatch leaves no file; 15 MB limit stops mid-stream and leaves no file; quota; SVG refused; gc keeps roots and anything newer than the grace time, deletes the rest; `extractImages` and `inlineImages` round-trip; a house's store cannot see another house's file.
-- `server/project.test.mjs`: 25 saves keep revisions 5–24 plus the current one; an unreadable file is set aside, not overwritten; `rewrite()` keeps revision and savedAt; `keptRefs()` covers kept revisions; `parsePutBody` accepts `format: 2`.
+- `server/project.test.mjs`: 25 saves keep revisions 5–24 plus the current one; an unreadable file is set aside, not overwritten; `rewrite()` keeps revision and savedAt; `keptRefs()` covers kept revisions; `parsePutBody` accepts `format: 2` and `saveId`; a crash simulated between link and rename leaves `project.json` readable; `.v1.json` is never pruned.
 
 ### Performance
 
@@ -230,17 +240,17 @@ A, B and C can run in parallel: they build to the Protocol table above. D runs a
 **Chunk B — project revisions and safe start** (Sonnet, medium)
 - Owns: `server/project.mjs`, `server/project.test.mjs`.
 - Stay out of: `server/server.mjs`, `server/images.mjs`, `src/`.
-- Steps: `format` field; revisions dir and prune to 20; unreadable file set aside; `rewrite(data)`; `keptRefs()`; body limits (8 MB format 2, 50 MB legacy) exported as two constants.
+- Steps: `format` field; `saveId` in the file, `meta()` and `parsePutBody`; revisions by hard link and prune to 20; unreadable file set aside; `rewrite(data)`; `keptRefs()`; body limits (8 MB format 2, 50 MB legacy) exported as two constants; update the `readdirSync` assertion in the existing restart test.
 - Verify: `npm run check` (the server tests run under vitest, `vite.config.ts:92`).
 
 **Chunk C — client** (Sonnet, medium)
 - Owns: `src/lib/syncImages.ts` (new) and its test, `src/lib/sync.ts`, `src/lib/syncLogic.ts` and its test, `src/components/SettingsPanel.tsx`, and the one-word export of `isImageData` in `src/lib/persist.ts`.
 - Stay out of: `server/`, `src/store.ts`, everything else in `persist.ts`.
-- Steps: 1) `syncImages.ts` with tests. 2) Status kinds and texts. 3) `ensureImages`, `pushOnce`, the 422 retry. 4) `loadServerCopy` all-or-nothing and the missing-image dialog. 5) `saveDelayMs` and the hide flush with `keepalive`. 6) `importProject`.
+- Steps: 1) `syncImages.ts` with tests. 2) Status kinds and texts; `ownSave`. 3) `ensureImages`, `pushOnce` (sends `saveId`, records `sent`), the 422 retry. 4) `loadServerCopy` all-or-nothing and the missing-image dialog (Cancel only when empty). 5) `saveDelayMs` and the hide flush through `serial` with `keepalive`. 6) The lost-reply pre-step in `check()` and `conflict()`. 7) `importProject`.
 - Verify: `npm run check`; `npm run build`; existing `decideSync` and `decideResume` tests unchanged and passing.
 
 **Chunk D — end-to-end check and docs** (Sonnet, medium; after A, B, C)
-- Owns: `scripts/test-sync.cjs` (new), `package.json` (one script, `test:sync`), README "Sync" and "Hosting on Render" sections.
+- Owns: `scripts/test-sync.cjs` (new), `package.json` (one script, `test:sync`), README sync section (lines 39–44, which still say "Settings → Project"; it is the House menu now) and "Hosting on Render".
 - Stay out of: all `src/` and `server/` code (report bugs back; do not fix them here).
 - Steps: write the Playwright script (see Acceptance checks); document the image store, revisions, the 15 MB and 200 MB limits, and how to restore a revision by hand (copy `revisions/<stem>/<n>.json` over the project file and restart).
 - Verify: `npm run build && npm run test:sync` passes twice in a row.
@@ -250,7 +260,7 @@ Merge order: B, then A (drop its stubs), then C, then D. Each merge runs `npm ru
 ## Acceptance checks (runnable: npm run check and build, which Playwright scripts or new checks, which screenshots at which sizes, and measurable targets)
 
 - `npm run check` and `npm run build` pass; CI green.
-- New `scripts/test-sync.cjs` (Playwright from /opt/node22/lib/node_modules, Chromium with the usual swiftshader flags). It builds nothing; it starts `node server/server.mjs` on a free port with `PASSCODE`, a temp `DATA_DIR`, and a seed `project.json` in format 1 (inline images, from an Export of the listing 91770873 presets), then:
+- New `scripts/test-sync.cjs` (Playwright from /opt/node22/lib/node_modules, Chromium with the usual swiftshader flags). Sync is off under `npm run dev` (`startSync()` returns early on `import.meta.env.DEV`), so it needs `dist/` from `npm run build` and fails with a clear message without it. It builds nothing itself; it starts `node server/server.mjs` on a free port with `PASSCODE`, a temp `DATA_DIR`, and a seed `project.json` in format 1 (inline images, from an Export of the listing 91770873 presets), then:
   1. Startup migrates: the file has `format: 2`, the same revision, no `data:image` in it, one file in `images/listing-91770873/`, and `revisions/project/<n>.v1.json` exists.
   2. Desktop context 1440x900, signed in: page loads the shared copy; the floor image in the plan is the real floorplan (natural width 2000, not 1x1).
   3. Edits through Import JSON (the House menu's file input, with an exported file changed in Node): every `PUT /api/project` body ≤ 45 KB; 0 image requests after the first save.
@@ -261,8 +271,11 @@ Merge order: B, then A (drop its stubs), then C, then D. Each merge runs `npm ru
   8. 25 edits leave 20 files plus the v1 copy in `revisions/project/`.
   9. Export JSON from any context contains `data:image/webp` and no `@@sha256:`.
   10. An old-format PUT (inline images, no header) is accepted and stored with refs.
+  11. Lost reply: route one `PUT /api/project` so the server saves but the browser sees a network error (`route.fetch()` then `route.abort()`); after "Sync now" the status is "Synced", with no conflict dialog.
+  12. Missing image on a fresh context: delete the file under `images/`, open a fresh 1440x900 context: the dialog offers only Cancel; nothing is applied; the server file is unchanged.
+  13. Phone landscape 844x390: same 10 s delay as step 5.
 - `server/*.test.mjs`: GC deletes an unreferenced image older than 24 h and keeps one referenced only by revision 3.
-- Screenshots: none needed beyond `scripts/shoot-chassis.cjs` at phone 390x844 and desktop 1440x900 of the House menu showing the status line in "Synced" (the visible UI barely changes).
+- Screenshots: `scripts/shoot-chassis.cjs` runs against the dev server, where sync is off, so it cannot show the status line. `test-sync.cjs` saves its own shots to the scratchpad: House menu at 390x844 and 1440x900 in "Synced" and in the `loading` state (images held back with `page.route`), and the missing-image dialog at both sizes. Check by eye that the `<Loader>` sits beside the label.
 - Targets: per-edit upload for listing 91770873 from 321 KB to ≤ 45 KB (−86 % or better); zero repeated image bytes; phone PUTs at least 3x fewer in a burst of edits.
 
 ## Risks and mitigations
@@ -274,7 +287,9 @@ Merge order: B, then A (drop its stubs), then C, then D. Each merge runs `npm ru
 | Old tabs (cached build) during rollout | Server inlines on GET without the header, extracts on PUT; removed after one release. |
 | `crypto.subtle` missing (plain-http LAN testing) | Client sends inline; server extracts. Same result, bigger upload. |
 | Migration bug corrupts the only copy | v1 copy written before rewrite; on error keep serving v1; the end-to-end check runs the migration. |
-| Disk fills (1 GB) | 200 MB per-house quota with a clear status; revisions capped at 20; stray tmp files swept. |
+| Disk fills (1 GB) | 200 MB per-house and 800 MB total quota with a clear status; revisions capped at 20; stray tmp files swept. |
+| Lost reply (iOS suspends the page mid-save) shows the user a conflict with their own save | `saveId` echo: the client recognises its own save and adopts the revision (`ownSave`). |
+| A new device's "Keep mine" wipes the shared copy after a missing image | Empty devices get Cancel only in the missing-image dialog. |
 | Hash cache holds old multi-MB strings | Entries not in the current project are dropped after each push. |
 | keepalive request lost when iOS kills the page | `resume()` already flushes unsaved changes first on return (`decideResume`); `dirty` is remembered in localStorage. |
 | Two images with the same bytes but different types | Hash is over bytes; first type stored wins; browsers sniff image types anyway. Harmless. |
