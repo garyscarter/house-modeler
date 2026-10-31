@@ -13,13 +13,10 @@ import { areaOf, defaultDepths, gardenArea, houseOutlines, sideClearances, simpl
 import { useSiteView } from "../three/siteView";
 import { Info } from "./Info";
 import { Section } from "./Section";
+import { NumberField } from "./inspector";
 import "./SitePanel.css";
 
 const fmtArea = (a: number) => `${a.toFixed(a < 100 ? 1 : 0)} m²`;
-const num = (v: string, fallback: number) => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : fallback;
-};
 
 /** Plot, orientation, location, neighbours and garden surfaces. */
 export function SitePanel() {
@@ -83,14 +80,7 @@ export function SitePanel() {
                 Front of the house faces
                 <span className="site-bearing">
                   <span className="pair-input">
-                    <input
-                      type="number"
-                      min={0}
-                      max={359}
-                      value={Math.round(site.frontBearing)}
-                      aria-label="Bearing in degrees"
-                      onChange={(e) => updateSite({ frontBearing: ((num(e.target.value, site.frontBearing) % 360) + 360) % 360 })}
-                    />
+                    <NumberField value={Math.round(site.frontBearing)} min={-Infinity} step={1} label="Bearing in degrees" onCommit={(b) => updateSite({ frontBearing: ((b % 360) + 360) % 360 })} />
                     <span className="pair-unit" aria-hidden="true">
                       °
                     </span>
@@ -105,11 +95,11 @@ export function SitePanel() {
             <div className="site-latlon">
               <label>
                 Latitude
-                <input type="number" step={0.01} min={-90} max={90} value={site.latitude} onChange={(e) => updateSite({ latitude: num(e.target.value, site.latitude) })} />
+                <NumberField value={site.latitude} step={0.01} min={-90} max={90} label="Latitude" onCommit={(latitude) => updateSite({ latitude })} />
               </label>
               <label>
                 Longitude
-                <input type="number" step={0.01} min={-180} max={180} value={site.longitude} onChange={(e) => updateSite({ longitude: num(e.target.value, site.longitude) })} />
+                <NumberField value={site.longitude} step={0.01} min={-180} max={180} label="Longitude" onCommit={(longitude) => updateSite({ longitude })} />
               </label>
             </div>
             <p className="muted small">The town is close enough for the location; east is positive longitude.</p>
@@ -252,7 +242,7 @@ function NeighbourRow({ n, onChange, onRemove }: { n: Neighbour; onChange: (p: P
     <div className="site-item site-neighbour">
       <input className="site-name" type="text" value={n.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Name" />
       <span className="site-unit">
-        <input type="number" step={0.1} min={1} max={20} value={n.eaves} onChange={(e) => onChange({ eaves: Math.max(0.5, num(e.target.value, n.eaves)) })} aria-label="Eaves height in metres" />m
+        <NumberField value={n.eaves} step={0.1} min={0.5} max={20} label="Eaves height in metres" onCommit={(eaves) => onChange({ eaves })} />m
       </span>
       <select value={n.roof} onChange={(e) => onChange({ roof: e.target.value as Neighbour["roof"] })} aria-label="Roof">
         <option value="hip">Hipped</option>
@@ -281,7 +271,7 @@ function SimpleSiteForm({ model, site }: { model: HouseModel; site: Site | undef
   const field = (k: keyof PlotDepths, label: string) => (
     <label>
       {label}
-      <input type="number" step={0.5} min={0} max={100} value={depths[k]} onChange={(e) => setDepths({ ...depths, [k]: Math.max(0, num(e.target.value, depths[k])) })} />
+      <NumberField value={depths[k]} step={0.5} min={0} max={100} label={label} onCommit={(v) => setDepths({ ...depths, [k]: v })} />
     </label>
   );
   return (

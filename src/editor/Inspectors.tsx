@@ -467,7 +467,7 @@ function OpeningLook({ opening, floor, onChange }: { opening: Opening; floor: Fl
           <NumberField
             value={opening.openDeg}
             placeholder={k === "front" ? "0" : k === "french" ? "80" : "75"}
-            min={-0.001}
+            min={0}
             max={180}
             step={5}
             label="Open angle"
@@ -571,11 +571,11 @@ export function OpeningInspector({
           <div className="size-row">
             <label>
               {vertical ? "From top end (m)" : "From left end (m)"}
-              <NumberField value={ends.lo} min={-0.001} label={vertical ? "From top end" : "From left end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "lo", m))} />
+              <NumberField value={ends.lo} min={0} label={vertical ? "From top end" : "From left end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "lo", m))} />
             </label>
             <label>
               {vertical ? "From bottom end (m)" : "From right end (m)"}
-              <NumberField value={ends.hi} min={-0.001} label={vertical ? "From bottom end" : "From right end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "hi", m))} />
+              <NumberField value={ends.hi} min={0} label={vertical ? "From bottom end" : "From right end"} onCommit={(m) => onChange(placeFromEnd(floor, opening, "hi", m))} />
             </label>
           </div>
         </div>
@@ -600,7 +600,7 @@ export function OpeningInspector({
               <NumberField
                 value={opening.sill}
                 placeholder={String(sill)}
-                min={-0.001}
+                min={0}
                 max={3}
                 label="Sill height"
                 onCommit={(v) => onChange({ sill: v })}
@@ -669,14 +669,7 @@ export function WallInspector({
       {mode !== "decorate" && (
       <label>
         Height (m, blank = full height)
-        <input
-          type="number"
-          step="0.1"
-          min="0.1"
-          value={wall.height ?? ""}
-          placeholder="full"
-          onChange={(e) => onChange({ height: e.target.value === "" ? undefined : parseFloat(e.target.value) || undefined })}
-        />
+        <NumberField value={wall.height} step={0.1} min={0.1} placeholder="full" label="Wall height" onCommit={(height) => onChange({ height })} onClear={() => onChange({ height: undefined })} />
       </label>
       )}
       {mode === "decorate" && (
@@ -809,8 +802,8 @@ export function FixtureInspector({
             <Info>How far out from each wall the front starts, so the unit can sit square against a chimney breast or an alcove unit. 0 runs the front wall to wall.</Info>
           </span>
           <div className="size-row">
-            <NumberField value={fixture.endBack ?? 0} label="Square end on the back leg" min={-0.001} disabled={locked} onCommit={(v) => onChange({ endBack: v > 0 ? v : undefined })} />
-            <NumberField value={fixture.endSide ?? 0} label="Square end on the side leg" min={-0.001} disabled={locked} onCommit={(v) => onChange({ endSide: v > 0 ? v : undefined })} />
+            <NumberField value={fixture.endBack ?? 0} label="Square end on the back leg" min={0} disabled={locked} onCommit={(v) => onChange({ endBack: v > 0 ? v : undefined })} />
+            <NumberField value={fixture.endSide ?? 0} label="Square end on the side leg" min={0} disabled={locked} onCommit={(v) => onChange({ endSide: v > 0 ? v : undefined })} />
           </div>
         </div>
       )}
@@ -834,7 +827,7 @@ export function FixtureInspector({
       {item.mount !== undefined && !isCeilingItem(item) && !pointKind(item) && (
         <div className="field">
           <span className="field-label">Height above floor (m)</span>
-          <NumberField value={mountOf(fixture, item)} label="Height above floor" min={-0.001} onCommit={(mount) => onChange({ mount: Math.max(0, mount) })} />
+          <NumberField value={mountOf(fixture, item)} label="Height above floor" min={0} onCommit={(mount) => onChange({ mount: Math.max(0, mount) })} />
           {fixture.mount !== undefined && fixture.mount !== item.mount && (
             <button className="link" onClick={() => onChange({ mount: undefined })}>
               Reset to {item.mount.toFixed(2)} m
@@ -1021,7 +1014,7 @@ function PointFields({ fixture, item, ceiling, locked, variant, onChange }: { fi
       {wall && (
         <div className="field">
           <span className="field-label">Centre height (m)</span>
-          <NumberField value={Math.round(centre * 1000) / 1000} label="Centre height" min={-0.001} disabled={locked} onCommit={(c) => onChange({ mount: mountForCentre(c, fixture, item) })} />
+          <NumberField value={Math.round(centre * 1000) / 1000} label="Centre height" min={0} disabled={locked} onCommit={(c) => onChange({ mount: mountForCentre(c, fixture, item) })} />
           {Math.abs(centre - defaultCentre) > 0.0005 && (
             <button className="link" disabled={locked} onClick={() => onChange({ mount: undefined })}>
               Reset to {defaultCentre.toFixed(2)} m
@@ -1076,7 +1069,7 @@ function JoineryFields({
   const baysField = (
     <div className="field">
       <span className="field-label">Bays</span>
-      <NumberField value={j.bays} label="Bays" step={1} min={0.5} max={12} onCommit={(v) => set({ bays: Math.round(Math.min(12, Math.max(1, v))) })} />
+      <NumberField value={j.bays} label="Bays" step={1} min={1} max={12} onCommit={(v) => set({ bays: Math.round(Math.min(12, Math.max(1, v))) })} />
       {fixture.joinery?.bays !== undefined && (
         <button className="link" onClick={() => set({ bays: undefined })}>
           Auto
@@ -1100,7 +1093,7 @@ function JoineryFields({
           {baysField}
           <div className="field">
             <span className="field-label">Base height (m)</span>
-            <NumberField value={j.baseH} label="Base height" min={-0.001} onCommit={(v) => set({ baseH: Math.max(0, v) })} />
+            <NumberField value={j.baseH} label="Base height" min={0} onCommit={(v) => set({ baseH: Math.max(0, v) })} />
             <small className="muted">0 = no base cupboards.</small>
           </div>
           {j.baseH > 0 && frontSelect("Base fronts", j.baseFront, (v) => set({ baseFront: v }))}
@@ -1114,7 +1107,7 @@ function JoineryFields({
           </label>
           <div className="field">
             <span className="field-label">Shelves above</span>
-            <NumberField value={j.shelves} label="Shelves above" step={1} min={-0.001} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
+            <NumberField value={j.shelves} label="Shelves above" step={1} min={0} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
           </div>
           {frontSelect("Above the base", j.upperFront, (v) => set({ upperFront: v }), "Open shelves")}
           <div className="field">
@@ -1128,7 +1121,7 @@ function JoineryFields({
           </div>
           <div className="field">
             <span className="field-label">Top box (m)</span>
-            <NumberField value={j.topBox} label="Top box" min={-0.001} onCommit={(v) => set({ topBox: Math.max(0, v) })} />
+            <NumberField value={j.topBox} label="Top box" min={0} onCommit={(v) => set({ topBox: Math.max(0, v) })} />
             <small className="muted">0 = none.</small>
           </div>
           {item.toCeiling && (
@@ -1175,7 +1168,7 @@ function JoineryFields({
           {baysField}
           <div className="field">
             <span className="field-label">Shelves inside</span>
-            <NumberField value={j.shelves} label="Shelves inside" step={1} min={-0.001} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
+            <NumberField value={j.shelves} label="Shelves inside" step={1} min={0} max={12} onCommit={(v) => set({ shelves: Math.round(Math.min(12, Math.max(0, v))) })} />
           </div>
         </>
       )}
@@ -1186,7 +1179,7 @@ function JoineryFields({
             <>
               <div className="field">
                 <span className="field-label">Shelves</span>
-                <NumberField value={st.n} label="Shelves" step={1} min={0.5} max={12} onCommit={(n) => onChange(shelfStackPatch(fixture, item, { n }))} />
+                <NumberField value={st.n} label="Shelves" step={1} min={1} max={12} onCommit={(n) => onChange(shelfStackPatch(fixture, item, { n }))} />
               </div>
               {st.n > 1 && (
                 <div className="field">
@@ -1323,7 +1316,7 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
       </label>
       <label>
         Level (0 = ground)
-        <input type="number" value={floor.level} onChange={(e) => updateFloor(variant, floor.id, { level: parseInt(e.target.value) || 0 })} />
+        <NumberField value={floor.level} step={1} min={-Infinity} label="Level" onCommit={(level) => updateFloor(variant, floor.id, { level: Math.round(level) })} />
       </label>
       <label>
         Scale (px per metre)
@@ -1351,8 +1344,8 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
       <label>
         Stacking offset (m)
         <span className="row">
-          <input type="number" step="0.1" value={floor.offset.x} onChange={(e) => updateFloor(variant, floor.id, { offset: { ...floor.offset, x: parseFloat(e.target.value) || 0 } })} />
-          <input type="number" step="0.1" value={floor.offset.y} onChange={(e) => updateFloor(variant, floor.id, { offset: { ...floor.offset, y: parseFloat(e.target.value) || 0 } })} />
+          <NumberField value={floor.offset.x} step={0.1} min={-Infinity} label="Stacking offset across" onCommit={(x) => updateFloor(variant, floor.id, { offset: { ...floor.offset, x } })} />
+          <NumberField value={floor.offset.y} step={0.1} min={-Infinity} label="Stacking offset down" onCommit={(y) => updateFloor(variant, floor.id, { offset: { ...floor.offset, y } })} />
         </span>
       </label>
       <div className="row">
@@ -1447,8 +1440,8 @@ export function FloorSettings({ variant, floor }: { variant: VariantKey; floor: 
           <label>
             Length × width (m)
             <span className="row">
-              <input type="number" step="0.1" min="1" value={floor.stairsLen ?? 2.6} onChange={(e) => updateFloor(variant, floor.id, { stairsLen: parseFloat(e.target.value) || 2.6 })} />
-              <input type="number" step="0.1" min="0.6" value={floor.stairsWidth ?? 0.9} onChange={(e) => updateFloor(variant, floor.id, { stairsWidth: parseFloat(e.target.value) || 0.9 })} />
+              <NumberField value={floor.stairsLen ?? 2.6} step={0.1} min={1} label="Stairs length" onCommit={(stairsLen) => updateFloor(variant, floor.id, { stairsLen })} />
+              <NumberField value={floor.stairsWidth ?? 0.9} step={0.1} min={0.6} label="Stairs width" onCommit={(stairsWidth) => updateFloor(variant, floor.id, { stairsWidth })} />
             </span>
           </label>
           <p className="muted small">
@@ -1489,8 +1482,8 @@ function GridFields({ fixture, item, onChange }: { fixture: Fixture; item: Catal
       <div className="field">
         <span className="field-label">Downlights (across × down)</span>
         <div className="size-row">
-          <NumberField value={grid.cols} placeholder={String(auto.cols)} label="Across" step={1} min={0} max={MAX_GRID} onCommit={count("cols")} onClear={() => onChange({ cols: undefined })} />
-          <NumberField value={grid.rows} placeholder={String(auto.rows)} label="Down" step={1} min={0} max={MAX_GRID} onCommit={count("rows")} onClear={() => onChange({ rows: undefined })} />
+          <NumberField value={grid.cols} placeholder={String(auto.cols)} label="Across" step={1} min={1} max={MAX_GRID} onCommit={count("cols")} onClear={() => onChange({ cols: undefined })} />
+          <NumberField value={grid.rows} placeholder={String(auto.rows)} label="Down" step={1} min={1} max={MAX_GRID} onCommit={count("rows")} onClear={() => onChange({ rows: undefined })} />
         </div>
       </div>
       <div className="field">

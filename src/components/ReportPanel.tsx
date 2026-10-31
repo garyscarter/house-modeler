@@ -31,6 +31,7 @@ import { downloadPrefix } from "../lib/brand";
 import { stampMark } from "./stampMark";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
+import { NumberField } from "./inspector";
 import { openRender } from "./renderRequest";
 import { useChassis } from "./useChassis";
 import { exportWiringGuide, reportFontCss } from "./wiringGuideExport";
@@ -211,28 +212,13 @@ export function Changes({ changes }: { changes: Change[] }) {
 function RateInput({ id, placeholder, label }: { id: string; placeholder: string; label: string }) {
   const rates = useStore((s) => s.costRates);
   const setCostRates = useStore((s) => s.setCostRates);
-  const [draft, setDraft] = useState<string | null>(null);
-  const value = rates[id];
-  return (
-    <input
-      type="number"
-      inputMode="decimal"
-      min={0}
-      step="any"
-      aria-label={label}
-      placeholder={placeholder}
-      value={draft ?? (value === undefined ? "" : String(value))}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        const v = parseFloat(e.target.value);
-        const next = { ...useStore.getState().costRates };
-        if (Number.isFinite(v) && v >= 0) next[id] = v;
-        else delete next[id];
-        setCostRates(next);
-      }}
-      onBlur={() => setDraft(null)}
-    />
-  );
+  const setRate = (v: number | undefined) => {
+    const next = { ...useStore.getState().costRates };
+    if (v === undefined) delete next[id];
+    else next[id] = v;
+    setCostRates(next);
+  };
+  return <NumberField value={rates[id]} min={0} step="any" placeholder={placeholder} label={label} onCommit={setRate} onClear={() => setRate(undefined)} />;
 }
 
 export function Costs({ estimate }: { estimate: CostEstimate }) {

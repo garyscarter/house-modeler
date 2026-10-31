@@ -1,11 +1,6 @@
 import { SLOPE_TOWARD_LABEL, type SiteSurface, type SlopeToward, type SurfaceSlope } from "../types";
+import { NumberField } from "./inspector";
 import { slopeGradient } from "../lib/surfaceSlope";
-
-/** A tidy number from a text box, or the fallback. */
-const num = (v: string, fallback: number) => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : fallback;
-};
 
 /**
  * Controls for a surface's ramp: "Slopes up" with the way it climbs and how far
@@ -42,7 +37,8 @@ export function SlopeFields({ surface, onChange }: { surface: SiteSurface; onCha
           </label>
           <label>
             Rise (m)
-            <input type="number" step={0.01} min={-1} max={2} value={slope.rise} onChange={(e) => onChange({ ...slope, rise: num(e.target.value, slope.rise) })} />
+            {/* A rise of 0 means "no ramp": the checkbox does that, so a half-typed "0" must not. */}
+            <NumberField value={slope.rise} step={0.01} min={-1} max={2} label="Rise in metres" onCommit={(rise) => rise !== 0 && onChange({ ...slope, rise })} />
           </label>
           <p className="muted small">
             {gradient > 0 ? `About 1 in ${Math.round(1 / gradient)} (${(gradient * 100).toFixed(1)}%). ` : ""}The rise is on top of the raised height below. The floor of the ground floor is 0.26 m up.
@@ -64,14 +60,14 @@ export function RaisedField({ surface, onChange }: { surface: SiteSurface; onCha
   return (
     <label>
       Raised above the ground (cm)
-      <input
-        type="number"
+      <NumberField
+        value={cm}
         step={1}
         min={0}
         max={200}
-        value={cm}
-        onChange={(e) => {
-          const base = Math.max(0, Math.min(2, num(e.target.value, cm) / 100));
+        label="Raised above the ground in centimetres"
+        onCommit={(v) => {
+          const base = v / 100;
           if (!base && !(slope && slope.rise !== 0)) onChange(undefined);
           else onChange({ toward: slope?.toward ?? "back", rise: slope?.rise ?? 0, ...(base ? { base } : {}) });
         }}

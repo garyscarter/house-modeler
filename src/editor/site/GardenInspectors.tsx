@@ -3,15 +3,11 @@ import { SURFACE_LABEL, type GardenItem, type SiteSurface, type SurfaceKind } fr
 import { RaisedField, SlopeFields } from "../../components/SlopeFields";
 import { edgeCurved, setEdgeCurved } from "../../lib/surfaceCurve";
 import { SurfaceFinishField } from "../../components/SurfaceFinishField";
+import { NumberField } from "../../components/inspector";
 import { KerbFields } from "../../components/KerbFields";
 import { gardenDef, isPlant, itemSize } from "../../lib/gardenCatalogue";
 import { copyItems, itemsOf, runLength } from "../../lib/siteItems";
 import { canRotate, patchItem, removeItems, rotateItems } from "./gardenEdit";
-
-const num = (v: string): number | undefined => {
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : undefined;
-};
 
 /** Colours for frames, foliage and cushions: garden-ish, plain names. */
 const GARDEN_COLOURS: { name: string; hex: string }[] = [
@@ -45,18 +41,7 @@ function Cm({ label, value, min = 5, max = 1500, onChange }: { label: string; va
   return (
     <label>
       {label}
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={5}
-        aria-label={label}
-        value={Math.round(value * 100)}
-        onChange={(e) => {
-          const v = num(e.target.value);
-          if (v !== undefined) onChange(Math.min(max, Math.max(min, v)) / 100);
-        }}
-      />
+      <NumberField value={Math.round(value * 100)} step={5} min={min} max={max} label={label} onCommit={(cm) => onChange(cm / 100)} />
     </label>
   );
 }
@@ -177,10 +162,7 @@ export function ItemInspector({ ids }: { ids: string[] }) {
           {def.seats !== undefined && (
             <label>
               Seats
-              <input type="number" min={1} max={12} step={1} aria-label="Seats" value={item.seats ?? def.seats} onChange={(e) => {
-                const v = num(e.target.value);
-                if (v !== undefined) set({ seats: Math.min(12, Math.max(1, Math.round(v))) });
-              }} />
+              <NumberField value={item.seats ?? def.seats} step={1} min={1} max={12} label="Seats" onCommit={(v) => set({ seats: Math.round(v) })} />
             </label>
           )}
         </div>
@@ -200,10 +182,7 @@ export function ItemInspector({ ids }: { ids: string[] }) {
         <div className="garden-turn">
           <label>
             Turn (°)
-            <input type="number" min={0} max={359} step={15} aria-label="Rotation in degrees" value={Math.round(item.rot)} onChange={(e) => {
-              const v = num(e.target.value);
-              if (v !== undefined) set({ rot: ((Math.round(v) % 360) + 360) % 360 });
-            }} />
+            <NumberField value={Math.round(item.rot)} step={15} min={-Infinity} label="Rotation in degrees" onCommit={(v) => set({ rot: ((Math.round(v) % 360) + 360) % 360 })} />
           </label>
           <div className="row">
             <button onClick={() => updateSite((st) => rotateItems(st, [item.id], -15))} aria-label="Turn 15 degrees anticlockwise">
