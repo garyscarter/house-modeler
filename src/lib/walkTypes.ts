@@ -137,7 +137,6 @@ export function passageOf(kind: OpeningKind): Passage {
 }
 export const doorKey = (floorId: string, openingId: string): string => `${floorId}:${openingId}`;
 export type DoorMotion = "swing" | "slide" | "fold";
-export const motionOf = (kind: OpeningKind): DoorMotion => (kind === "patio" ? "slide" : kind === "bifold" ? "fold" : "swing");
 
 /** Whether the scene draws this door open (the View "Doors open" switch and the opening's openDeg), so a walk starts with what you saw. */
 export function initiallyOpen(op: Pick<Opening, "kind" | "openDeg">, doorsOpen: boolean): boolean {
@@ -155,9 +154,6 @@ export function initiallyOpen(op: Pick<Opening, "kind" | "openDeg">, doorsOpen: 
     default:
       return passageOf(op.kind) === "open";
   }
-}
-export function doorOpen(doors: DoorStates, key: string, op: Pick<Opening, "kind" | "openDeg">, doorsOpen: boolean): boolean {
-  return doors[key] ?? initiallyOpen(op, doorsOpen);
 }
 /** How far a swing leaf opens on a walk, degrees: its own openDeg when set above 0, else the kind's usual angle. */
 export const OPEN_DEG: Partial<Record<OpeningKind, number>> = { door: 75, french: 80, front: 80 };

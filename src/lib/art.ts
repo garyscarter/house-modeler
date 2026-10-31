@@ -25,7 +25,6 @@ export const DEFAULT_PRINT = "blocks";
 export type PictureFrame = "black" | "oak" | "white" | "none";
 export const FRAME_LABEL: Record<PictureFrame, string> = { black: "Thin black frame", oak: "Oak frame", white: "White frame", none: "Canvas (no frame)" };
 export const FRAME_COLOUR: Record<PictureFrame, string> = { black: "#1b1b1b", oak: "#c9a26b", white: "#f4f1ea", none: "#f4f1ea" };
-export const DEFAULT_FRAME: PictureFrame = "black";
 /** Width of the frame moulding, metres (none: the canvas wraps its edge). */
 export const FRAME_W: Record<PictureFrame, number> = { black: 0.02, oak: 0.03, white: 0.025, none: 0 };
 

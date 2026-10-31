@@ -68,11 +68,6 @@ export function pointKind(item: Pick<CatalogueItem, "category" | "symbol">): Poi
   return SYMBOL_KIND[item.symbol] ?? "appliance";
 }
 export const isSwitchItem = (item: Pick<CatalogueItem, "category" | "symbol">): boolean => pointKind(item) === "switch";
-/** Whether a fixture (by its catalogue id) is an electrical point: what Electrics mode selects. */
-export const isElectricalFixture = (fx: Pick<Fixture, "type">): boolean => {
-  const item = byId(fx.type);
-  return !!item && isElectricalItem(item);
-};
 
 /** How many of the point there are for counts and costs: a downlight grid counts every bulb, anything else 1. */
 export function pointQuantity(fx: Pick<Fixture, "w" | "d" | "pitch" | "cols" | "rows">, item: Pick<CatalogueItem, "symbol" | "w" | "d" | "pitch">): number {

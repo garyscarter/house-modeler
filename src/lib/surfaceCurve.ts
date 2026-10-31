@@ -1,6 +1,5 @@
 import type { EdgeLink, SiteSurface, WPt } from "../types";
 import { polygonArea } from "./geometry";
-import { rectPoly } from "./site";
 
 /**
  * Smooth garden surfaces: a surface with `smooth` set is drawn as a closed
@@ -302,9 +301,6 @@ export function circleControls(c: WPt, rx: number, ry: number = rx, n = 8): WPt[
     return { x: c.x + rx * Math.cos(a), y: c.y + ry * Math.sin(a) };
   });
 }
-
-/** The four corners of the rectangle spanning a and b, wound like the rest of the site's polygons (lib/site.ts rectPoly). */
-export const rectControls = (a: WPt, b: WPt): WPt[] => rectPoly(a.x, a.y, b.x, b.y);
 
 /** Area of the drawn outline, m² (smooth surfaces: the spline's, not the control polygon's). */
 export const surfaceArea = (surface: Curvable, surfaces?: Neighbours): number => Math.abs(polygonArea(surfaceOutline(surface, surfaces)));

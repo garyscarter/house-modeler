@@ -6,8 +6,7 @@ import WORDMARK_DATA from "./wordmark.json";
 export const BRAND_NAME = "Storey";
 /** Brand teal (the app's --brand and --accent). */
 export const BRAND_TEAL = "#0f6e66";
-/** Page neutral (the app's --bg) and ink (--text). */
-export const BRAND_BG = "#eef0ec";
+/** Ink (--text). */
 export const BRAND_INK = "#1d2422";
 /** Display font stack, as in styles.css. */
 export const BRAND_DISPLAY_FONT = `"Bricolage Grotesque Variable", "Bricolage Grotesque", system-ui, sans-serif`;

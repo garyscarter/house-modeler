@@ -24,7 +24,6 @@ export const LIGHTS_MASTER_TITLE: Record<LightsMaster, string> = {
   on: "Every switched-on light is lit, whatever the time",
   off: "No lights",
 };
-export const isLightsMaster = (v: unknown): v is LightsMaster => typeof v === "string" && (LIGHTS_MASTERS as string[]).includes(v);
 /** The master from the sun state; older saves have none and read as auto. */
 export const lightsMaster = (sun: { lights?: LightsMaster }): LightsMaster => sun.lights ?? "auto";
 

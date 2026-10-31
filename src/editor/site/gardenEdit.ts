@@ -53,9 +53,6 @@ export const addItem = (site: Site, item: GardenItem): Site => ({ ...site, items
 /** Change fields of one item. */
 export const patchItem = (site: Site, id: string, patch: Partial<GardenItem>): Site => ({ ...site, items: itemsOf(site).map((it) => (it.id === id ? { ...it, ...patch } : it)) });
 
-/** Change fields of several items at once. */
-export const patchItems = (site: Site, ids: readonly string[], patch: Partial<GardenItem>): Site => ({ ...site, items: itemsOf(site).map((it) => (ids.includes(it.id) ? { ...it, ...patch } : it)) });
-
 export const removeItems = (site: Site, ids: readonly string[]): Site => ({ ...site, items: itemsOf(site).filter((it) => !ids.includes(it.id)) });
 
 /** Turn items by `deg` (runs are not turned; they have no rotation). */
