@@ -1,5 +1,5 @@
 // Screenshots the walk-through of the BUILT-IN house on every viewport, checks each shot, and logs the tour's and stops' times.
-// Usage: PORT=5201 OUT=/path/to/shots [QUALITY=balanced|high|low] node scripts/shoot-walk.cjs  (against a running dev server)
+// Usage: PORT=5201 OUT=/path/to/shots [QUALITY=balanced|high|low] [ONLY=1440x900,...] [SKIP_SHOTS=1] node scripts/shoot-walk.cjs  (against a running dev server)
 // Writes <w>x<h>-<stop>-<lens>.png and index.html (a contact sheet) under OUT; never writes into the repo. Exit 1 if a check FAILs.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
@@ -12,6 +12,7 @@ const args = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
 
 const COARSE = [[390, 844], [844, 390], [820, 1180], [1180, 820], [320, 1100]];
 const FINE = [[1440, 900], [1920, 1080], [2560, 1080], [600, 900], [1400, 480]];
+const TIMED = new Set(['390x844', '844x390', '1440x900']); // tour times, as the lens rule differs
 const LENS_ALSO = new Set(['1440x900', '844x390']);
 
 // An exact copy of the lens rule: keep in step with src/lib/walkLens.ts.
@@ -106,7 +107,7 @@ async function stands(page, w, h, lens, R) {
   await page.evaluate(() => window.__walkStore.getState().playTour());
   const want = { kitchen: /^Kitchen$/, living: /^Living Room \(rear\)/ };
   const done = new Set();
-  for (let guard = 0; guard < 40 * 30 && done.size < 2; guard++) {
+  for (let guard = 0; guard < 160 * 30 && done.size < 2; guard++) {
     const hit = await page.evaluate((src) => {
       window.__walk.sim(1 / 30);
       const t = window.__walkStore.getState().tour;
@@ -119,8 +120,9 @@ async function stands(page, w, h, lens, R) {
     if (hit === 'end') break;
     if (hit && !done.has(hit)) {
       done.add(hit);
-      await page.evaluate(() => window.__walk.sim(3));
+      await page.evaluate(() => { window.__walk.sim(3); window.__walkStore.getState().pauseTour(); }); // paused, so the page is idle for the screenshot
       await record(hit);
+      await page.evaluate(() => window.__walkStore.getState().playTour());
     }
   }
   if (done.size < 2) { console.log(`FAIL ${w}x${h} ${lens}: tour reached ${[...done].join(',') || 'neither'} of kitchen and living room`); failed++; }
@@ -137,7 +139,7 @@ async function timings(page, R) {
     window.__walk.sim(0.5);
     wk.playTour();
     const per = new Map(); let total = 0, names = [];
-    for (let i = 0; i < 40 * 30; i++) {
+    for (let i = 0; i < 300 * 30; i++) {
       window.__walk.sim(1 / 30); total += 1 / 30;
       const t = window.__walkStore.getState().tour;
       if (t.status === 'off') break;
@@ -162,35 +164,40 @@ async function fps(page, R) {
 }
 
 (async () => {
-  const sheet = [];
   const fpsRows = [];
-  let timing = null;
+  const timing = [];
   for (const [coarse, list] of [[true, COARSE], [false, FINE]]) {
     for (const [w, h] of list) {
+      if (process.env.ONLY && !process.env.ONLY.split(',').includes(`${w}x${h}`)) continue; // e.g. ONLY=1440x900,844x390
       const { browser, page } = await open(w, h, coarse);
       const R = await roomsOf(page);
       const key = `${w}x${h}`;
       const lenses = LENS_ALSO.has(key) ? ['normal', 'narrow', 'wide'] : ['normal'];
-      for (const lens of lenses) {
+      for (const lens of process.env.SKIP_SHOTS ? [] : lenses) {
         await page.evaluate((l) => window.__houseStore.getState().setSettings({ walkLens: l === 'normal' ? undefined : l }), lens);
         await page.evaluate(() => window.__walk.sim(1 / 30));
-        sheet.push(...(await stands(page, w, h, lens, R)));
+        await stands(page, w, h, lens, R);
       }
-      if (key === '1440x900') timing = await timings(page, R);
+      if (TIMED.has(key)) timing.push([key, await timings(page, R)]);
       if (coarse && (key === '390x844' || key === '1180x820')) fpsRows.push([key, await fps(page, R)]);
       await browser.close();
     }
   }
-  if (timing) {
-    console.log('\nTour at 1440x900 (sim seconds)\nstop\twalk\tlook');
-    for (const s of timing.stops) console.log(`${s.name}\t${s.walk.toFixed(1)}\t${s.look.toFixed(1)}`);
-    console.log(`TOTAL\t${timing.total.toFixed(1)} s`);
+  for (const [key, t] of timing) {
+    console.log(`\nTour at ${key} (sim seconds)\nstop\twalk\tlook`);
+    for (const s of t.stops) console.log(`${s.name}\t${s.walk.toFixed(1)}\t${s.look.toFixed(1)}`);
+    console.log(`TOTAL ${key}\t${t.total.toFixed(1)} s`);
   }
   for (const [k, f] of fpsRows) console.log(`INFO fps ${k} during a look-round: ${f.toFixed(1)}`);
-  // Contact sheet: one row per viewport, the Normal shots side by side.
-  const viewports = [...new Set(sheet.map((r) => `${r.w}x${r.h}`))];
-  const cell = (r) => `<figure><a href="${r.file}"><img src="${r.file}" loading="lazy"></a><figcaption>${r.stop} ${r.lens} ${r.pass ? '' : 'FAIL'}</figcaption></figure>`;
-  const rowsHtml = viewports.map((v) => `<h2>${v}</h2><div class="row">${sheet.filter((r) => `${r.w}x${r.h}` === v && r.lens === 'normal').map(cell).join('')}</div>${['narrow', 'wide'].some((l) => sheet.some((r) => `${r.w}x${r.h}` === v && r.lens === l)) ? `<div class="row">${sheet.filter((r) => `${r.w}x${r.h}` === v && r.lens !== 'normal').map(cell).join('')}</div>` : ''}`).join('');
+  // Contact sheet: one row per viewport, the Normal shots side by side. Built from every shot in OUT, so a partial rerun (ONLY=) keeps the rest.
+  const order = [...COARSE, ...FINE].map(([w, h]) => `${w}x${h}`);
+  const stopOrder = ['hall', 'kitchen', 'living'];
+  const files = fs.readdirSync(OUT).map((f) => /^(\d+x\d+)-(hall|kitchen|living)-(normal|narrow|wide)\.png$/.exec(f)).filter(Boolean)
+    .map((m) => ({ file: m[0], v: m[1], stop: m[2], lens: m[3] }))
+    .sort((a, b) => order.indexOf(a.v) - order.indexOf(b.v) || stopOrder.indexOf(a.stop) - stopOrder.indexOf(b.stop));
+  const viewports = order.filter((v) => files.some((r) => r.v === v));
+  const cell = (r) => `<figure><a href="${r.file}"><img src="${r.file}" loading="lazy"></a><figcaption>${r.stop} ${r.lens}</figcaption></figure>`;
+  const rowsHtml = viewports.map((v) => `<h2>${v}</h2><div class="row">${files.filter((r) => r.v === v && r.lens === 'normal').map(cell).join('')}</div>${files.some((r) => r.v === v && r.lens !== 'normal') ? `<div class="row">${files.filter((r) => r.v === v && r.lens !== 'normal').map(cell).join('')}</div>` : ''}`).join('');
   fs.writeFileSync(`${OUT}/index.html`, `<!doctype html><meta charset="utf-8"><title>Walk shots</title><style>body{font:14px system-ui;margin:16px;background:#222;color:#eee}.row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}figure{margin:0}img{max-height:340px;max-width:32vw}</style><h1>Walk shots (${QUALITY})</h1>${rowsHtml}`);
   console.log(failed ? `\n${failed} FAILED` : '\nALL PASSED');
   process.exit(failed ? 1 : 0);
