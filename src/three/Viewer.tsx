@@ -8,6 +8,8 @@ import { House } from "./House";
 import { lampStats, useLampsReady } from "./lampPool";
 import { modelBounds, type V2 } from "../lib/geometry";
 import { useStore } from "../store";
+import { useQuality } from "./useQuality";
+import { dprFor } from "../lib/quality";
 import { STICKY_MS, wheelClassifier, wheelPixels, wheelZoomFactor } from "../lib/wheelGesture";
 import { depthOf, dollyStep } from "../lib/wheelDolly";
 import { usePanelPrefs } from "../components/panelPrefs";
@@ -38,24 +40,18 @@ import { WalkExposure } from "./walk/WalkExposure";
 import "./Viewer.css";
 
 interface ViewerProps {
-  model: HouseModel;
-  ghost?: HouseModel;
-  showLabels: boolean;
-  showCeilings: boolean;
-  doorsOpen?: boolean;
-  selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room) => void;
   /** Decorate: a click on a wall face, with the hit point and the face's normal in the plan frame (world x, z). */
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays?: { id: string; poly: V2[] }[]) => void;
   title?: string;
-  maxLevel?: number | null;
-  showExterior?: boolean;
   /** Identifier used by exports to find this viewer's renderer. */
   captureId?: string;
-  /** The layout this view shows; its plot, sun and lighting follow it. Defaults to the active one. */
+  /** The layout this view shows (its model, plot, sun and lighting follow it). Defaults to the active one. */
   variant?: VariantKey;
-  /** The layout `ghost` comes from, so the overlay can mark plot boundary changes. */
+  /** The layout drawn as the ghost in the overlay (teal = new, red = removed), which also marks plot boundary changes. */
   ghostVariant?: VariantKey;
+  /** Upper bound for the device pixel ratio (the wipe's two views render at 1 on a phone). */
+  maxDpr?: number;
   /** False while the 3D view is kept mounted but hidden (another tab or mode): nothing renders or updates. */
   active?: boolean;
   /** Show the title, view cube and sun panel (default). Off, the owner of the layout (the wipe) draws them once. */
@@ -75,13 +71,34 @@ const Effects = lazy(() => loadEffects().then((m) => ({ default: m.Effects })));
  */
 export const Viewer = memo(ViewerImpl, (prev, next) => prev.active === false && next.active === false);
 
+type StoreState = ReturnType<typeof useStore.getState>;
+const HIDDEN = Symbol("hidden");
+
+/**
+ * A store value while `active`; while hidden, the last one seen. A subscription would re-render a hidden view on every
+ * plan edit, memo or not, so the selector goes quiet (returns a constant) when `active` is false.
+ */
+function useWhileActive<T>(active: boolean, select: (s: StoreState) => T): T {
+  const live = useStore((s) => (active ? select(s) : HIDDEN)) as T | typeof HIDDEN;
+  const seen = useRef<{ v: T } | null>(null);
+  if (live !== HIDDEN) seen.current = { v: live };
+  else if (!seen.current) seen.current = { v: select(useStore.getState()) };
+  return seen.current.v;
+}
+
 function ViewerImpl(props: ViewerProps) {
-  const { model, ghost, showLabels, showCeilings, doorsOpen, selectedRoomId, onSelectRoom, onPickWall, title, maxLevel, showExterior, captureId, variant, ghostVariant, active = true, chrome = true } = props;
-  // Subscribed only while shown: a store subscription would re-render this hidden view on every plan edit, memo or not.
-  const liveVariants = useStore((s) => (active ? s.variants : null));
-  const seenVariants = useRef(liveVariants ?? useStore.getState().variants);
-  if (liveVariants) seenVariants.current = liveVariants;
-  const variants = seenVariants.current;
+  const { onSelectRoom, onPickWall, title, captureId, variant, ghostVariant, maxDpr, active = true, chrome = true } = props;
+  // The view reads what it draws from the store itself, so the app shell does not re-render (or re-pass props) on every edit.
+  const variants = useWhileActive(active, (s) => s.variants);
+  const activeVariant = useWhileActive(active, (s) => s.activeVariant);
+  const showLabels = useWhileActive(active, (s) => s.showLabels);
+  const showCeilings = useWhileActive(active, (s) => s.showCeilings);
+  const doorsOpen = useWhileActive(active, (s) => s.doorsOpen);
+  const selectedRoomId = useWhileActive(active, (s) => s.selectedRoomId);
+  const maxLevel = useWhileActive(active, (s) => s.maxLevel);
+  const showExterior = useWhileActive(active, (s) => s.showExterior);
+  const model = variants[variant ?? activeVariant]!;
+  const ghost = ghostVariant ? variants[ghostVariant] : undefined;
   // Both layouts and both plots frame the same camera, so As listed and Proposed open on one view.
   const framed = useMemo(() => {
     const list: HouseModel[] = [];
@@ -93,7 +110,7 @@ function ViewerImpl(props: ViewerProps) {
   const bounds = useMemo(() => ({ x0: raw.x0, x1: raw.x1, y0: raw.y0, y1: raw.y1, w: raw.w, h: raw.h }), [raw.x0, raw.x1, raw.y0, raw.y1, raw.w, raw.h]);
   const centre = useMemo(() => new THREE.Vector3((bounds.x0 + bounds.x1) / 2, 1, (bounds.y0 + bounds.y1) / 2), [bounds]);
   const size = Math.max(bounds.w, bounds.h, 6);
-  const quality = useStore((s) => s.settings.quality);
+  const quality = useQuality();
   const cap = maxLevel ?? null;
   const levels = [...new Set([...model.floors, ...(ghost?.floors ?? [])].map((f) => f.level))];
   const visibleLevels = cap === null ? null : levels.filter((l) => l <= cap);
@@ -118,7 +135,6 @@ function ViewerImpl(props: ViewerProps) {
   // Walking (first person) replaces the orbit controls in the main, chrome-drawing view only.
   const walking = useWalk((s) => s.on) && active && chrome;
   const walkOn = useWalk((s) => s.on);
-  const activeVariant = useStore((s) => s.activeVariant);
   const reviewing = useStore((s) => s.mode === "review");
   const doorsSettled = useWalk((s) => s.doorsSettled);
   useEffect(() => {
@@ -187,19 +203,19 @@ function ViewerImpl(props: ViewerProps) {
       {chrome && !walking && <ViewCube />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
-      {chrome && compiled !== null && !lost && <LightsWarming model={model} />}
-      {(compiled === null || lost) && (
+      {chrome && compiled === quality && !lost && <LightsWarming model={model} />}
+      {(compiled !== quality || lost) && (
         <div className="viewer-loading" role="status">
           <Loader kind="blueprint" size={40} />
           {lost ? "Restoring the 3D view" : "Preparing the 3D view"}
         </div>
       )}
       <Canvas
-        key={canvasKey}
+        key={`${canvasKey}:${quality}`}
         shadows="percentage"
-        gl={{ toneMapping: THREE.NeutralToneMapping }}
+        gl={{ toneMapping: THREE.NeutralToneMapping, antialias: quality !== "high" }}
         frameloop={frameloop}
-        dpr={DPR[quality]}
+        dpr={dprFor(quality, maxDpr)}
         camera={{ position: [centre.x + size * 0.9, size * 0.9, centre.z + size * 0.9], fov: 45, near: 0.1, far: 500 }}
         onCreated={({ gl }) => {
           // Checking every program's log stalls on each link; only worth it while developing.
@@ -265,12 +281,16 @@ function ViewerImpl(props: ViewerProps) {
  * "Switching the lights on" while the lights are wanted but their shaders are still being built (useLampWarming): the
  * house holds them off meanwhile, so this is what the owner sees instead of a page that stops.
  */
-export function LightsWarming({ model }: { model: HouseModel }) {
+export function LightsWarming({ model: given, variant }: { model?: HouseModel; variant?: VariantKey }) {
+  // The wipe names a layout instead of passing its model, so it need not subscribe to every edit itself.
+  const live = useStore((s) => (given ? null : s.variants[variant ?? s.activeVariant] ?? null));
+  const model = given ?? live;
   const ready = useLampsReady();
   const sun = useSunInfo();
   const wanted = useStore((s) => lightsOn(lightsMaster(s.sun), sun?.active ? sun.position.altitude : null));
   // A light that would come on: switched on, and not held dark by a wall switch that is off (as House decides).
   const hasLights = useMemo(() => {
+    if (!model) return false;
     const blocked = new Set([...controlIndex(model)].filter(([, sws]) => sws.some((c) => !c.on)).map(([id]) => id));
     return model.floors.some((f) => (f.fixtures ?? []).some((fx) => {
       const item = byId(fx.type);
@@ -286,12 +306,6 @@ export function LightsWarming({ model }: { model: HouseModel }) {
   );
 }
 
-/**
- * Device pixel ratio range per render quality; "low" renders at 1x.
- * "high" runs the post-processing composer, whose passes scale with the
- * pixel count, so it stops at 1.5x like "balanced".
- */
-const DPR: Record<"high" | "balanced" | "low", [number, number]> = { high: [1, 1.5], balanced: [1, 1.5], low: [1, 1] };
 
 export type { ViewSide };
 

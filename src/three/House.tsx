@@ -11,6 +11,8 @@ import { Roof } from "./Roof";
 import { Fixtures, setLampGlow } from "./Fixtures";
 import { LampLights } from "./FixtureLights";
 import { useLampsReady } from "./lampPool";
+import { useQuality } from "./useQuality";
+import { LONG_PRESS_MS, canLongPress } from "../lib/editorCore";
 import { useOffstageCompile } from "./frameLoop";
 import { useSunInfo } from "./useSun";
 import { nightDark } from "./Lighting";
@@ -126,9 +128,10 @@ export function House({
   // The pool of real lights is sized to the house, both layouts together, so its shaders change only when a light
   // fitting is added or removed, never when the view switches between As listed and Proposed. The selector returns a
   // string, so a change to either layout re-renders this only when the sizes move.
+  const quality = useQuality();
   const sizeKey = useStore((s) => {
     const models = [s.variants.current, s.variants.proposed].filter((m): m is HouseModel => !!m);
-    const p = poolFor(models.length ? models : model, POOL[s.settings.quality]);
+    const p = poolFor(models.length ? models : model, POOL[quality]);
     return `${p.point}|${p.spot}|${p.casters}`;
   });
   const sizes = useMemo<PoolSizes>(() => {
@@ -521,12 +524,10 @@ if (typeof window !== "undefined")
     true,
   );
 
-const LONG_PRESS_MS = 550;
-const LONG_PRESS_SLOP = 8;
 
 /**
- * Touch long-press for the 3D room menu (a touch has no right-click): hold still 550 ms and `onContext` is called
- * with the touch's screen position. A move over 8 px, a lift or a second finger cancels it, and the click that
+ * Touch long-press for the 3D room menu (a touch has no right-click): hold still (LONG_PRESS_MS) and `onContext` is called
+ * with the touch's screen position. A move past LONG_PRESS_SLOP_PX, a lift or a second finger cancels it, and the click that
  * follows a long-press is swallowed (swallowClick) so it does not also select the room.
  */
 function useLongPress(onContext?: (x: number, y: number) => void) {
@@ -550,7 +551,7 @@ function useLongPress(onContext?: (x: number, y: number) => void) {
           cb.current?.(x0, y0);
         }, LONG_PRESS_MS);
         const move = (m: PointerEvent) => {
-          if (m.pointerId === id && Math.hypot(m.clientX - x0, m.clientY - y0) > LONG_PRESS_SLOP) st.stop();
+          if (m.pointerId === id && !canLongPress(n.pointerType, 1, { x: x0, y: y0 }, { x: m.clientX, y: m.clientY })) st.stop();
         };
         const end = (m: PointerEvent) => {
           if (m.pointerId === id) st.stop();
