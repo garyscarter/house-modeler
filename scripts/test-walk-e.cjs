@@ -76,12 +76,18 @@ async function suite(quality) {
   ok(!!R.hall && !!R.sunny, `found the hall (${R.hall && R.hall.name}) and the sunny room (${R.sunny && R.sunny.name})`);
   await page.evaluate(() => window.__houseStore.getState().setSettings({ walkAdapt: 'natural', walkLens: undefined }));
 
+  // 0. Outdoors (the walk starts outside the front door) meters brighter than the hall, so coming in darkens the view.
+  await sim(page, 3);
+  const evOut = (await exp(page)).ev;
+  console.log(`INFO outdoors ev ${evOut.toFixed(2)}`);
+
   // 1. Hall at midsummer noon.
   await standHall(page, R);
   await sim(page, 3);
   let s = await exp(page);
   const hallEV = s.ev;
   console.log(`INFO hall: ev ${s.ev.toFixed(2)} target ${s.target.toFixed(2)} L ${s.L.toFixed(3)} glazing ${s.glazing.toFixed(3)} mode ${s.mode}`);
+  ok(evOut < hallEV - 0.3, `outdoors at noon (EV ${evOut.toFixed(2)}) is metered brighter than the hall (EV ${hallEV.toFixed(2)})`);
   ok(s.ev >= 0 && s.ev <= 1.0, `hall at noon meters dim: EV ${s.ev.toFixed(2)} in [0, 1]`);
   await settle(page, quality);
   await page.screenshot({ path: `${SHOTS}/e-${quality}-hall.png` });
@@ -145,11 +151,15 @@ async function suite(quality) {
   await page.waitForTimeout(300);
 
   // 5. Off.
+  // In real time and with no hand-run frame: the DOM eye menu must wake the demand loop itself.
   await page.evaluate(() => window.__houseStore.getState().setSettings({ walkAdapt: 'off' }));
-  await sim(page, 1 / 30);
+  await page.waitForFunction(() => window.__walkExposure.state().mode === 'off', null, { timeout: 20000 }).catch(() => {});
   s = await exp(page);
   ok(s.ev === 0 && s.factor === 1 && s.gl === 1, `Off: ev 0 and factor 1 (ev ${s.ev}, factor ${s.factor}, gl ${s.gl})`);
   await page.evaluate(() => window.__houseStore.getState().setSettings({ walkAdapt: 'natural' }));
+  await page.waitForFunction(() => window.__walkExposure.state().mode === 'natural', null, { timeout: 20000 }).catch(() => {});
+  s = await exp(page);
+  ok(s.mode === 'natural' && Math.abs(s.ev - s.target) < 1e-9 && s.ev !== 0, `back to Natural in real time: mode ${s.mode}, ev ${s.ev.toFixed(2)}`);
 
   // 9. The eye menu row.
   await page.click('.walk-eye .popover-btn');

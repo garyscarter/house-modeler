@@ -49,7 +49,9 @@ export async function captureImage(id: string | undefined, scale: number): Promi
 function renderToCanvas({ gl, scene, camera }: CaptureTarget, out: HTMLCanvasElement) {
   // With post-processing on, the composer switches the renderer's tone mapping off and applies it itself; a direct render needs it back.
   const toneMapping = gl.toneMapping;
+  const exposure = gl.toneMappingExposure;
   try {
+    gl.toneMappingExposure = 1; // stills stay at exposure 1, even mid-walk
     if (toneMapping === THREE.NoToneMapping) gl.toneMapping = THREE.NeutralToneMapping;
     gl.render(scene, camera);
     out.width = gl.domElement.width;
@@ -57,6 +59,7 @@ function renderToCanvas({ gl, scene, camera }: CaptureTarget, out: HTMLCanvasEle
     out.getContext("2d")!.drawImage(gl.domElement, 0, 0);
   } finally {
     gl.toneMapping = toneMapping;
+    gl.toneMappingExposure = exposure;
   }
 }
 
