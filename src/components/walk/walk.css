@@ -69,7 +69,7 @@
 .app[data-chassis="phone"] .walk-map { width: 120px; height: 120px; bottom: auto; top: var(--float-gap); }
 .app[data-chassis="phone"] .walk-hint { left: var(--float-gap); transform: none; max-width: calc(100% - 120px - 3 * var(--float-gap)); text-align: left; border-radius: var(--radius-l); animation: none; }
 .app[data-chassis="phone"][data-walking] .layout-pill { display: none; }
-.app[data-chassis="phone"] .walk-eye .popover { left: auto; right: -8px; }
+.app[data-chassis="phone"] .walk-eye .popover { left: auto; right: -8px; transform: none; }
 .app[data-chassis="phone"] .walk-eye-pop { max-height: calc(100dvh - 96px); overflow-y: auto; }
 .app[data-chassis="phone"] .walk-bar .walk-reset { width: auto; height: 28px; padding: 0 10px; }
 /* Touch tablet: 40 px targets, as the dock. */
