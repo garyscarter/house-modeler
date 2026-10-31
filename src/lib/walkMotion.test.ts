@@ -75,11 +75,15 @@ describe("keys", () => {
 
 describe("walkFov and springs", () => {
   it("lens: about 51 at 16:10, 47 at 16:9, 60 at 4:3, 78 on a portrait phone", () => {
-    expect(walkFov(1.6)).toBeCloseTo(51.2, 0);
-    expect(walkFov(16 / 9)).toBeCloseTo(46.7, 0);
-    expect(walkFov(4 / 3)).toBeCloseTo(59.8, 0);
+    // Wide (90° across) by default.
+    expect(walkFov(1.6)).toBeCloseTo(64.0, 0);
+    expect(walkFov(16 / 9)).toBeCloseTo(58.7, 0);
+    expect(walkFov(4 / 3)).toBeCloseTo(73.7, 0);
     expect(walkFov(0.46)).toBe(78);
     expect(walkFov(4)).toBe(45);
+    // Natural and extra wide.
+    expect(walkFov(1.6, 75)).toBeCloseTo(51.2, 0);
+    expect(walkFov(1.6, 100)).toBeCloseTo(73.4, 0);
   });
   it("REST_PITCH is -8 degrees", () => {
     expect(REST_PITCH).toBeCloseTo((-8 * Math.PI) / 180);

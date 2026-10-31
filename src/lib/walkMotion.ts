@@ -27,12 +27,15 @@ export const wrapAngle = (a: number): number => {
 
 /** Resting gaze: a little below level (people look at the ground two steps ahead about half the time). */
 export const REST_PITCH = (-8 * Math.PI) / 180;
-/** Horizontal field of view the walk lens aims for, degrees. */
-export const WALK_HFOV = 75;
-/** Vertical FOV in degrees for a horizontal FOV of 75°, clamped to [45, 78]: about 51° at 16:10, 47° at 16:9, 60° at 4:3. */
-export function walkFov(aspect: number): number {
+/** Horizontal field of view the walk lens aims for by default, degrees: a property photographer's wide view. */
+export const WALK_HFOV = 90;
+/**
+ * Vertical FOV in degrees for a horizontal FOV of `hfov` (90° by default), clamped to [45, 78]: at 90°, about 64° at
+ * 16:10, 59° at 16:9 and 74° at 4:3; a phone held upright gets the 78° cap.
+ */
+export function walkFov(aspect: number, hfov: number = WALK_HFOV): number {
   const a = Math.max(0.05, aspect);
-  const v = (2 * Math.atan(Math.tan((WALK_HFOV * Math.PI) / 360) / a) * 180) / Math.PI;
+  const v = (2 * Math.atan(Math.tan((hfov * Math.PI) / 360) / a) * 180) / Math.PI;
   return Math.max(45, Math.min(78, v));
 }
 

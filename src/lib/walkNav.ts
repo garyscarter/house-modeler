@@ -12,7 +12,7 @@ import { headSideSteps, stairwells, type Rect } from "./stairwell";
 import { surfaceOutline } from "./surfaceCurve";
 import { effectiveSlope } from "./surfaceSlope";
 import { outwardSign, wallThickness } from "./walls";
-import { doorKey, initiallyOpen, passageOf, patioSlider, yawOf, type DoorStates, type NavDoor, type NavFlight, type NavLevel, type NavWorld } from "./walkTypes";
+import { doorKey, initiallyOpen, leafSweeps, passageOf, patioSlider, yawOf, type DoorStates, type NavDoor, type NavFlight, type NavLevel, type NavWorld } from "./walkTypes";
 
 /**
  * Walk-through: the walkable world (docs/walkthrough-plan.md, Chunk B). Per storey, the things that stop
@@ -669,7 +669,7 @@ function floorBits(model: HouseModel, floor: Floor, li: number, doors: DoorNav[]
       const out = outwardSign(pl, rooms);
       const nd = (span: [number, number]): NavDoor => ({
         key: doorKey(floor.id, op.id), floorId: floor.id, openingId: op.id, level: floor.level, kind: op.kind, passage: pass,
-        initial: initiallyOpen(op, doorsOpen), centre: pl.centre, dir: pl.dir, width: pl.width, span,
+        initial: initiallyOpen(op, doorsOpen), centre: pl.centre, dir: pl.dir, width: pl.width, span, sweeps: pass === "door" ? leafSweeps(op, pl.centre, pl.dir, pl.width, out) : [],
       });
       if (pass === "open") {
         doors.push({ nd: nd([-hw, hw]), li, a: along(pl, -hw), b: along(pl, hw), out });

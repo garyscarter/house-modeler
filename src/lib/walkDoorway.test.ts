@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { builtInHouse, builtInProposed, listingSite } from "../houses/default";
 import { pointInPolygon, type V2 } from "./geometry";
-import { buildNav, doorwayStop, goalPoint, planTour, routeTo, startPose } from "./walk";
+import { buildNav, doorwayStop, goalPoint, planTour, routeTo, shutStop, startPose, WALKER_R } from "./walk";
 import { wrapAngle } from "./walkMotion";
-import { forwardOf, type DoorStates, type NavWorld, type WalkPose, type WalkRoute } from "./walkTypes";
+import { clearOfSweeps, forwardOf, type DoorStates, type NavWorld, type WalkPose, type WalkRoute } from "./walkTypes";
 
 const deg = Math.PI / 180;
 const house = builtInHouse("");
@@ -99,5 +99,35 @@ describe("doorwayStop, proposed", () => {
     expect(pointInPolygon(s, nr.poly)).toBe(true);
     expect(nearestDoor(pn, s, 1)).toBeLessThan(1.2);
     expect(Math.hypot(s.x - r.entry!.x, s.y - r.entry!.y)).toBeLessThan(0.7);
+  });
+});
+
+describe("shutStop: the door shut behind you before the look round", () => {
+  const routeOf = (n: NavWorld, from: WalkPose, to: WalkPose): WalkRoute => {
+    const res = routeTo(n, from, { x: to.x, y: to.y, level: to.level, stair: null }, open(n));
+    return res.ok ? res.route : (res as { route: WalkRoute }).route;
+  };
+
+  it("stands in a bedroom clear of its door's swing, and names that door to shut", () => {
+    const from = stand(nav, 1, "Landing");
+    for (const name of ["Bedroom 1", "Bedroom 2", "Bedroom 3"]) {
+      const r = room(nav, 1, name);
+      const st = shutStop(nav, routeOf(nav, from, stand(nav, 1, name)), from, { level: 1, roomId: r.id })!;
+      expect(st.shut, name).not.toBeNull();
+      const door = nav.doors.find((d) => d.key === st.shut)!;
+      expect(door.level).toBe(1);
+      const s = last(st)!;
+      expect(pointInPolygon(s, r.poly)).toBe(true);
+      expect(clearOfSweeps(door.sweeps, s, WALKER_R)).toBe(true);
+      // Still near the doorway, so the look round takes in the room.
+      expect(Math.hypot(s.x - door.centre.x, s.y - door.centre.y)).toBeLessThan(1.8);
+    }
+  });
+
+  it("names no door for a way in without one, or out into the garden", () => {
+    const from = stand(nav, 0, "Kitchen");
+    const garden = planTour(nav, from, open(nav)).find((t) => t.roomId === null)!;
+    const to = { x: garden.at.x, y: garden.at.y, level: 0, stair: null, feetY: 0, yaw: 0, pitch: 0 };
+    expect(shutStop(nav, routeOf(nav, from, to), from, { level: 0, roomId: null })!.shut).toBeNull();
   });
 });

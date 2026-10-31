@@ -1,7 +1,7 @@
 import { useStore } from "../../store";
 import { useWalk } from "../../walkStore";
 import { VARIANT_LABEL } from "../../types";
-import { EYE_HEIGHT, eyeHeightOf } from "../../lib/walkTypes";
+import { DEFAULT_LENS, EYE_HEIGHT, eyeHeightOf, WALK_LENSES, walkLensOf } from "../../lib/walkTypes";
 import { floorDisplayName, floorsByLevel } from "../../lib/studio";
 import { useChassis } from "../useChassis";
 import { Popover } from "../ViewMenu";
@@ -9,7 +9,7 @@ import { Icon } from "../icons";
 import { Loader } from "../Loader";
 import "./walk.css";
 
-/** The dock while walking: stop, where you are, tour, flip layouts, eye height and the map toggle. */
+/** The dock while walking: stop, where you are, tour, flip layouts, eye height and lens, and the map toggle. */
 export function WalkBar() {
   const phone = useChassis((s) => s.chassis) === "phone";
   const where = useWalk((s) => s.where);
@@ -20,6 +20,7 @@ export function WalkBar() {
   const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
   const floors = useStore((s) => s.variants[s.activeVariant]?.floors);
   const eye = useStore((s) => eyeHeightOf(s.settings));
+  const lens = useStore((s) => walkLensOf(s.settings));
   const setSettings = useStore((s) => s.setSettings);
   const walk = useWalk.getState;
 
@@ -28,7 +29,7 @@ export function WalkBar() {
   const place = where ? (where.outside ? "Outside" : where.roomName) : null;
   const readout = [place, where?.outside ? null : floorName].filter(Boolean).join(" · ");
   const other = activeVariant === "current" ? "proposed" : "current";
-  const eyeText = `Eye ${eye.toFixed(2)} m`;
+  const eyeText = `Eye ${eye.toFixed(2)} m · ${lens}°`;
 
   return (
     // Every button gives up focus after a click so Space can't press it again.
@@ -83,7 +84,7 @@ export function WalkBar() {
         </button>
       )}
 
-      <Popover className="walk-eye" label={phone ? <Icon name="eye" /> : eyeText} chevron={!phone} ariaLabel={eyeText} title="Eye height">
+      <Popover className="walk-eye" label={phone ? <Icon name="eye" /> : eyeText} chevron={!phone} ariaLabel={eyeText} title="Eye height and lens">
         <div className="walk-eye-pop">
           <label className="walk-eye-row">
             <span>Eye height</span>
@@ -102,6 +103,23 @@ export function WalkBar() {
           <button className="walk-reset" disabled={eye === EYE_HEIGHT.default} onClick={() => setSettings({ eyeHeight: EYE_HEIGHT.default })}>
             Reset to {EYE_HEIGHT.default.toFixed(1)} m
           </button>
+          <div className="walk-eye-row">
+            <span>Lens</span>
+            <output>{lens}° across</output>
+          </div>
+          <div className="seg walk-lens" role="group" aria-label="Lens">
+            {WALK_LENSES.map((l) => (
+              <button
+                key={l.deg}
+                className={l.deg === lens ? "active" : undefined}
+                aria-pressed={l.deg === lens}
+                title={`${l.deg}° across${l.deg === DEFAULT_LENS ? " (default)" : ""}`}
+                onClick={() => setSettings({ walkLens: l.deg })}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
         </div>
       </Popover>
 

@@ -1,6 +1,6 @@
 import type { Opening, OpeningKind } from "../types";
 import type { V2 } from "./geometry";
-import { effectiveOpenDeg } from "./openings";
+import { effectiveOpenDeg, frontUnit } from "./openings";
 
 /** Walk-through: shared types and the few rules every walk chunk relies on (docs/walkthrough-plan.md). */
 
@@ -10,6 +10,19 @@ export const EYE_HEIGHT = { min: 1.0, max: 2.0, step: 0.05, default: 1.7 } as co
 export function eyeHeightOf(settings: { eyeHeight?: number }): number {
   const v = settings.eyeHeight;
   return typeof v === "number" && Number.isFinite(v) ? Math.min(EYE_HEIGHT.max, Math.max(EYE_HEIGHT.min, v)) : EYE_HEIGHT.default;
+}
+
+// ---- lens (persisted as settings.walkLens) ----
+/** The walk's lenses, as the field of view across the screen in degrees: natural, wide (a property photo), extra wide. */
+export const WALK_LENSES = [
+  { deg: 75, label: "Natural" },
+  { deg: 90, label: "Wide" },
+  { deg: 100, label: "Extra wide" },
+] as const;
+export type WalkLens = (typeof WALK_LENSES)[number]["deg"];
+export const DEFAULT_LENS: WalkLens = 90;
+export function walkLensOf(settings: { walkLens?: number }): WalkLens {
+  return WALK_LENSES.find((l) => l.deg === settings.walkLens)?.deg ?? DEFAULT_LENS;
 }
 
 // ---- facing ----
@@ -177,7 +190,56 @@ export interface NavDoor {
   width: number;
   /** Part of the opening passable when open, metres along dir from centre (a patio's slider, a front door without its side lights). */
   span: [number, number];
+  /** Its swing leaves (none for a slider, folding doors or an opening without a door). */
+  sweeps: LeafSweep[];
 }
+// ---- door swings ----
+/** Where a swing leaf sweeps as it opens and shuts, on the plan: its hinge, its length and the side it swings to (a unit normal to the wall). */
+export interface LeafSweep {
+  hinge: V2;
+  len: number;
+  side: V2;
+}
+
+/**
+ * The swing leaves of a door on the plan (none for sliders, folding doors, gaps and archways), from its opening, the
+ * centre and direction of its place in the wall, its width and the wall's outward side `out`, as the 3D rig reads them
+ * (lib/openings openingParts: the hinge jamb, inwards on an outside wall, French doors outwards, flipSwing reverses).
+ */
+export function leafSweeps(op: Pick<Opening, "kind" | "flipHinge" | "flipSwing" | "sidelight">, centre: V2, dir: V2, width: number, out: number): LeafSweep[] {
+  // The rig's +z on the plan (DoorLeaves turns it by atan2(-dir.y, dir.x)).
+  const side = (s: number): V2 => ({ x: -dir.y * s, y: dir.x * s });
+  const at = (x: number): V2 => ({ x: centre.x + dir.x * x, y: centre.y + dir.y * x });
+  const hinge = op.flipHinge ? 1 : -1;
+  const flip = op.flipSwing ? -1 : 1;
+  const inwards = (out ? -out : 1) * flip;
+  const pair = (s: number): LeafSweep[] => [
+    { hinge: at(-width / 2), len: width / 2, side: side(s) },
+    { hinge: at(width / 2), len: width / 2, side: side(s) },
+  ];
+  switch (op.kind) {
+    case "door":
+      return width > 1.25 ? pair(inwards) : [{ hinge: at((hinge * width) / 2), len: width, side: side(inwards) }];
+    case "front": {
+      const [a, b] = frontUnit(op, width).door;
+      return [{ hinge: at((a + b) / 2 + (hinge * (b - a)) / 2), len: b - a, side: side(inwards) }];
+    }
+    case "french":
+      return pair((out ? out : 1) * flip);
+    default:
+      return [];
+  }
+}
+
+/** Whether a walker (radius r) at p is clear of every leaf's sweep: beyond its reach, or behind the wall it swings away from. */
+export function clearOfSweeps(sweeps: LeafSweep[], p: V2, r: number): boolean {
+  return sweeps.every((w) => {
+    const dx = p.x - w.hinge.x;
+    const dy = p.y - w.hinge.y;
+    return Math.hypot(dx, dy) >= w.len + r || dx * w.side.x + dy * w.side.y <= -r;
+  });
+}
+
 export interface NavWorld {
   levels: NavLevel[];
   flights: NavFlight[];
