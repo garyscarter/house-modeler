@@ -172,6 +172,8 @@ export async function renderStill(
   const size = gl.getSize(new THREE.Vector2());
   const ratio = gl.getPixelRatio();
   const toneMapping = gl.toneMapping;
+  const toneExposure = gl.toneMappingExposure;
+  gl.toneMappingExposure = 1; // stills stay at exposure 1, even mid-walk
   const environment = scene.environment;
   const background = scene.background;
   const environmentIntensity = scene.environmentIntensity;
@@ -291,6 +293,7 @@ export async function renderStill(
     tracer?.dispose();
     textures.forEach((x) => x.dispose());
     gl.toneMapping = toneMapping;
+    gl.toneMappingExposure = toneExposure;
     gl.setPixelRatio(ratio);
     gl.setSize(size.x, size.y, false);
     gl.shadowMap.needsUpdate = true;
