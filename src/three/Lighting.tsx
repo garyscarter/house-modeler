@@ -6,6 +6,7 @@ import { Sky } from "three-stdlib";
 import { useStore } from "../store";
 import { useViewedSite } from "./viewedVariant";
 import { daylight, worldToBearing } from "../lib/sun";
+import { skyLevel as skyLevelOf } from "../lib/walkExposure";
 import { useSunInfo } from "./useSun";
 import { GROUND_Y } from "./Site";
 import { setGlassMode } from "./textures";
@@ -16,9 +17,8 @@ const DEFAULT_DIR = new THREE.Vector3(0.5, 0.78, 0.38).normalize();
 /** Key light intensities: the default front-right light, and the real sun at full height. */
 const KEY_DEFAULT = 4.2;
 const KEY_SUN = 5;
-/** Extra key light (warm) while the sun sits on the horizon, and how much the sky dims then. */
+/** Extra key light (warm) while the sun sits on the horizon. */
 const DUSK_KEY = 0.7;
-const DUSK_DIM = 0.35;
 const SHADOW_MAP = { high: 4096, balanced: 2048, low: 1024 } as const;
 /**
  * The sun's shadows are percentage-closer filtered (three's 5-tap Vogel disc, dithered per pixel), blurred over
@@ -42,8 +42,6 @@ export const NIGHT_ALTITUDE = -4;
 export function nightDark(altitude: number | null): number {
   return altitude === null ? 0 : 1 - THREE.MathUtils.smoothstep(altitude, NIGHT_ALTITUDE - 2, NIGHT_ALTITUDE + 2);
 }
-/** Sky level (environment and hemisphere light) in the dead of night: a trace, so dark rooms read dark, not black. */
-const NIGHT_SKY = 0.03;
 /** Faint cool hemisphere fill at night, so the outside still reads under the moon. */
 const NIGHT_HEMI = 0.04;
 const NIGHT_FILL = new THREE.Color("#5d6f9c");
@@ -73,9 +71,8 @@ export function Lighting({ centre, size }: { centre: THREE.Vector3; size: number
   const altitude = active ? sun!.position.altitude : 50;
   const day = daylight(altitude);
   const night = active && altitude < NIGHT_ALTITUDE;
-  const low = active ? 1 - THREE.MathUtils.smoothstep(altitude, 0, 6) : 0;
   const dark = nightDark(active ? altitude : null);
-  const skyLevel = active ? THREE.MathUtils.lerp(day.sky * (1 - DUSK_DIM * low), NIGHT_SKY, dark) : 1;
+  const skyLevel = active ? skyLevelOf(altitude) : 1;
   useSkyEnvironment(active && !night ? sun!.vector : null, altitude, skyLevel);
   const dir = useMemo(() => (active ? new THREE.Vector3(...sun!.vector) : DEFAULT_DIR.clone()), [active, sun]);
 

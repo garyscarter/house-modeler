@@ -34,6 +34,7 @@ import { byId } from "../lib/catalogue";
 import { Measure, MeasureButton } from "./Measure";
 import { useWalk } from "../walkStore";
 import { WalkControls } from "./walk/WalkControls";
+import { WalkExposure } from "./walk/WalkExposure";
 import "./Viewer.css";
 
 interface ViewerProps {
@@ -245,6 +246,7 @@ function ViewerImpl(props: ViewerProps) {
         <SectionCut />
         <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, doorsSettled]} />
         <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
+        {walking && <WalkExposure model={model} />}
         {walking ? (
           <WalkControls model={model} variant={variant ?? activeVariant} />
         ) : (
