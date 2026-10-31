@@ -49,6 +49,7 @@ const variant = (page) => page.evaluate(() => window.__houseStore.getState().act
     console.log(`--- ${name}`);
     const { browser, page } = await open(1, ctx);
     const chassis = await page.$eval('.app', (e) => e.getAttribute('data-chassis'));
+    ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches) === !!ctx.hasTouch, `${name} context has a ${ctx.hasTouch ? 'coarse' : 'fine'} pointer`);
     const phone = chassis === 'phone';
     const upright = phone && Math.min(ctx.viewport.width, ctx.viewport.height) < 500 && ctx.viewport.width < ctx.viewport.height; // lens class small, held upright
     console.log(`    chassis ${chassis}`);

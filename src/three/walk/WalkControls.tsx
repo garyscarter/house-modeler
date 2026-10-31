@@ -786,7 +786,7 @@ export function WalkControls({ model, variant }: { model: HouseModel; variant: V
         get invalidates() { return walkCounters.invalidates; },
         look: () => {
           const tr = tourRef.current;
-          return { yaw: tr.lookYaw, left: tr.left, right: tr.right, ...(tr.plan ? { plan: { total: tr.plan.total, keys: tr.plan.keys.length, pitch: tr.plan.pitch, budget: tr.budget, kinds: tr.plan.targets.map((t) => t.kind), holds: tr.plan.keys.map((k) => +k.holdS.toFixed(2)), moves: tr.plan.keys.map((k) => +k.moveS.toFixed(2)) } } : {}) };
+          return { yaw: tr.lookYaw, left: tr.left, right: tr.right, ...(tr.plan ? { plan: { total: tr.plan.total, keys: tr.plan.keys.length, pitch: tr.plan.pitch, budget: tr.budget, kinds: tr.plan.targets.map((t) => t.kind), keyKinds: tr.plan.keys.map((k) => (k.target >= 0 ? tr.plan!.targets[k.target].kind : "split")), holds: tr.plan.keys.map((k) => +k.holdS.toFixed(2)), moves: tr.plan.keys.map((k) => +k.moveS.toFixed(2)) } } : {}) };
         },
       },
     });

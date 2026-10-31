@@ -77,36 +77,42 @@ const runTour = (page, opts = {}) => page.evaluate((opts) => {
   w.stopTour(); w.setRoute(null);
   w.setPose({ x: c.x, y: c.y, level: 0, stair: null, feetY: l.baseY, yaw: 0, pitch: 0 });
   w.playTour();
-  const rows = []; let stops = 0, ended = false;
+  const rows = [], plans = {}; let stops = 0, ended = false;
   for (let i = 0; i < (opts.maxFrames || 36 * 150) && !ended; i++) {
     window.__walk.sim(1 / 30);
     const st = window.__walk.state(), t = window.__walkStore.getState().tour;
     if (t.stops.length) stops = t.stops.length;
+    if (st.look && !plans[st.tour.index]) { const lk = window.__walk.look(); if (lk.plan) plans[st.tour.index] = lk.plan; }
     rows.push({ yaw: st.yaw, pitch: st.pitch, ph: st.tour.phase, i: st.tour.index, busy: st.busy, lt: st.look ? st.look.t : null, lp: st.look ? st.look.total : null, cap: st.look ? st.look.yawCap : null });
     ended = t.status === 'off' && stops > 0;
     if (opts.stopAfterLooks && rows.filter((q) => q.lt !== null).length && !st.look && rows.filter((q) => q.lt !== null).length > 30 && rows[rows.length - 2].lt !== null) break;
   }
-  return { rows, stops, ended, frames: rows.length };
+  return { rows, plans, stops, ended, frames: rows.length };
 }, opts);
 const degWrap = (a) => (wrap(a) * 180) / Math.PI;
-// A hold is a stretch still (under 3 deg/s) for at least 0.5 s: the exit hold is fixed at 0.5 s (plus the tail of the move into it), and a room with one target
-// besides an exit behind you has no time for more (three 60 deg moves of the turn round eat the stop's length).
-const HOLD_FRAMES = 15;
+// A hold is a stretch still (under 3 deg/s) for at least 0.6 s, counted only inside the hold of a non-exit key, so the fixed exit hold and the tail of a move never count.
+const HOLD_FRAMES = 18;
 // Per-stop look-round facts from runTour rows: peak turn rate (deg/s), holds (still >= 0.6 s), the pitch at the end, and whether "look" was busy throughout.
-function lookFacts(rows) {
+function lookFacts(rows, plans = {}) {
   const byStop = new Map();
   rows.forEach((q, k) => { if (q.ph === 'looking' && q.lt !== null) { if (!byStop.has(q.i)) byStop.set(q.i, []); byStop.get(q.i).push(k); } });
   return [...byStop.entries()].map(([i, ks]) => {
     let peak = 0, holds = 0, run = 0, lookBusy = true;
+    const pl = plans[i];
+    const wins = []; // [start, end] of each non-exit key's hold, in look time
+    if (pl) { let t0 = 0; pl.keys && pl.holds.forEach((h, n) => { t0 += pl.moves[n]; if (pl.keyKinds[n] !== 'exit' && pl.keyKinds[n] !== 'split') wins.push([t0, t0 + h]); t0 += h; }); }
+    const inWin = (lt) => wins.findIndex((w) => lt >= w[0] && lt <= w[1]);
+    let runWin = -2;
     for (let a = 1; a < ks.length; a++) {
       const rate = Math.abs(degWrap(rows[ks[a]].yaw - rows[ks[a - 1]].yaw)) * 30;
       if (rows[ks[a]].lt >= 0) peak = Math.max(peak, rate);
-      if (rows[ks[a]].lt >= 0 && rate < 3) { run++; if (run === HOLD_FRAMES) holds++; } else run = 0;
+      const wi = inWin(rows[ks[a]].lt);
+      if (rows[ks[a]].lt >= 0 && rate < 3 && wi >= 0 && (wi === runWin || run === 0)) { runWin = wi; run++; if (run === HOLD_FRAMES) holds++; } else { run = 0; runWin = -2; }
       if (rows[ks[a]].lt > 0.1 && rows[ks[a]].lt < rows[ks[a]].lp - 0.2 && !rows[ks[a]].busy.includes('look')) lookBusy = false;
     }
     const first = ks[0], last = ks[ks.length - 1];
     const jump = first > 0 ? Math.abs(degWrap(rows[first].yaw - rows[first - 1].yaw)) : 0;
-    return { i, peak, holds, jump, endPitch: rows[last].pitch, frames: ks.length, lookBusy };
+    return { i, plan: pl, peak, holds, jump, endPitch: rows[last].pitch, frames: ks.length, lookBusy };
   });
 }
 const centroid = (p) => ({ x: p.reduce((a, q) => a + q.x, 0) / p.length, y: p.reduce((a, q) => a + q.y, 0) / p.length });
@@ -407,11 +413,14 @@ async function standLooking(page, room, d = 1.4) {
 
     const V = walkLensJs((await canvasSize(page)).w, (await canvasSize(page)).h).v;
     const run = await runTour(page);
-    const facts = lookFacts(run.rows);
+    const facts = lookFacts(run.rows, run.plans);
     ok(facts.length === run.stops, `every stop has a look-round (${facts.length} of ${run.stops})`);
     for (const f of facts) {
       ok(f.peak <= 75 + 3, `stop ${f.i}: look-round turns at most ${f.peak.toFixed(1)} deg/s (cap 75 + 3)`);
-      ok(f.holds >= 2, `stop ${f.i}: ${f.holds} holds of 0.5 s or more`);
+      const nonExit = f.plan ? f.plan.kinds.filter((k) => k !== 'exit').length : 0;
+      ok(f.plan && Math.abs(f.plan.total - f.plan.budget) <= 1.0001, `stop ${f.i}: look-round ${f.plan && f.plan.total.toFixed(2)} s against its ${f.plan && f.plan.budget.toFixed(2)} s budget (within 1 s)`);
+      ok(f.holds >= Math.min(2, nonExit), `stop ${f.i}: ${f.holds} holds of 0.6 s or more on its ${nonExit} glanced targets`);
+      ok(f.plan && f.plan.keys <= 2 * nonExit + 3, `stop ${f.i}: ${f.plan && f.plan.keys} moves, not a stuttering turn-round`);
       ok(f.jump < 1, `stop ${f.i}: the look starts where the walk ended (${f.jump.toFixed(2)} deg)`);
       ok(Math.abs(((f.endPitch - (restPitchJs(V) + (4 * Math.PI) / 180)) * 180) / Math.PI) < 0.5, `stop ${f.i}: pitch settles at the rest pitch + 4 deg (${((f.endPitch * 180) / Math.PI).toFixed(2)} deg)`);
       ok(f.lookBusy, `stop ${f.i}: busy includes "look" for the whole look-round`);
@@ -614,6 +623,29 @@ async function standLooking(page, room, d = 1.4) {
   ok(!s.w.on, 'switching to the Plan tab stops the walk');
   await browser.close();
 
+  // ================= phones: the whole tour, held upright and on its side =================
+  for (const [pname, ctx] of [['phone upright', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }], ['phone on its side', { viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }]]) {
+    ({ browser, page } = await open(0, ctx));
+    ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches === true), `${pname} context has a coarse pointer`);
+    await page.evaluate(() => window.__walkStore.getState().requestWalk({ kind: 'front' }));
+    await page.waitForFunction(() => window.__walkStore.getState().pose && window.__walk);
+    const capWant = ctx.viewport.width < ctx.viewport.height ? 55 : 90;
+    const runP = await runTour(page);
+    const factsP = lookFacts(runP.rows, runP.plans);
+    const capP = factsP.length ? Math.max(...factsP.map((f) => f.peak)) : 0;
+    ok(factsP.length === runP.stops && runP.ended, `${pname}: every stop has a look-round (${factsP.length} of ${runP.stops})`);
+    ok(capP <= capWant + 3, `${pname}: look-round turns at most ${capP.toFixed(1)} deg/s (cap ${capWant} + 3)`);
+    for (const f of factsP) {
+      const nonExit = f.plan ? f.plan.kinds.filter((k) => k !== 'exit').length : 0;
+      ok(f.plan && Math.abs(f.plan.total - f.plan.budget) <= 1.0001, `${pname} stop ${f.i}: ${f.plan && f.plan.total.toFixed(2)} s against a ${f.plan && f.plan.budget.toFixed(2)} s budget (within 1 s)`);
+      ok(f.holds >= Math.min(2, nonExit), `${pname} stop ${f.i}: ${f.holds} holds of 0.6 s or more on its ${nonExit} glanced targets`);
+    }
+    const lenP = runP.frames / 30;
+    console.log(`INFO ${pname} tour length: old ${TOUR_BASE_S.toFixed(2)} s, new ${lenP.toFixed(2)} s (${((lenP / TOUR_BASE_S - 1) * 100).toFixed(1)}%)`);
+    ok(Math.abs(lenP - TOUR_BASE_S) <= 0.1 * TOUR_BASE_S, `${pname}: tour length within 10% of the old (${lenP.toFixed(1)} s)`);
+    await browser.close();
+  }
+
   // ================= iPad: touch taps =================
   ({ browser, page } = await open(0, { viewport: { width: 1180, height: 820 }, hasTouch: true, isMobile: true }));
   await page.evaluate(() => window.__walkStore.getState().requestWalk({ kind: 'front' }));
@@ -626,7 +658,7 @@ async function standLooking(page, room, d = 1.4) {
     const fovI = await camFov(page);
     ok(Math.abs(fovI - walkLensJs(cv2.w, cv2.h).v) < 0.05, `iPad lens ${fovI.toFixed(2)} V for ${cv2.w.toFixed(0)}x${cv2.h.toFixed(0)} (rule ${walkLensJs(cv2.w, cv2.h).v.toFixed(2)}, ${walkLensJs(cv2.w, cv2.h).h.toFixed(1)} across)`);
     const runI = await runTour(page, { maxFrames: 1500 });
-    const factsI = lookFacts(runI.rows);
+    const factsI = lookFacts(runI.rows, runI.plans);
     ok(factsI.length > 0 && factsI.every((f) => f.peak <= 85 + 3), `iPad look-round turns at most ${Math.max(...factsI.map((f) => f.peak)).toFixed(1)} deg/s (cap 85 + 3)`);
     await page.evaluate(() => { const w = window.__walkStore.getState(); w.stopTour(); w.setRoute(null); });
   }

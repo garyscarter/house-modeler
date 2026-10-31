@@ -56,6 +56,8 @@ export const LOOK_HOLD_MAX = 2.5; // s, holds never longer after fitting
 export const LOOK_DRIFT = 1.5 * DEG; // drift toward the next target during a 1 s hold (scaled by hold / 1 s, at most this)
 export const LOOK_BEHIND = 135 * DEG; // non-exit targets further than this from startYaw are dropped
 const FIRST_NEAR = 6 * DEG; // a first target this close to the arrival yaw is already being looked at
+export const LOOK_EXIT_BEHIND = 100 * DEG; // an exit further round than this is not turned to: the walk's own turn faces it once you move on
+const LOOK_TAIL_MAX = 6.5; // s, the longest a hold may be stretched to use up spare time
 const SLACK_S = 1; // a plan may run this far over its budget before targets are dropped
 
 export function lookViewOf(cls: LensClass, aspect: number): LookView {
@@ -254,8 +256,10 @@ function build(kept: LookTarget[], view: LookView, startYaw: number, budgetS: nu
  */
 export function lookPlan(targets: LookTarget[], view: LookView, startYaw: number, budgetS: number, pitch: number, count: number): LookPlan {
   const merge = view.portrait ? LOOK_MERGE_PORTRAIT : LOOK_MERGE;
-  const exit = targets.find((t) => t.kind === "exit");
+  const exitAll = targets.find((t) => t.kind === "exit");
+  // An exit well behind you is not turned to: that turn would eat the stop's time, and walking on faces it anyway.
   const cands = targets.filter((t) => t.kind !== "exit" && Math.abs(wrapAngle(t.yaw - startYaw)) <= LOOK_BEHIND).sort((x, y) => y.priority - x.priority);
+  const exit = exitAll && (!cands.length || Math.abs(wrapAngle(exitAll.yaw - startYaw)) <= LOOK_EXIT_BEHIND) ? exitAll : undefined;
   const accepted: LookTarget[] = exit ? [exit] : [];
   const maxRest = Math.max(1, count - (exit ? 1 : 0));
   let nonExit = 0;
@@ -270,12 +274,34 @@ export function lookPlan(targets: LookTarget[], view: LookView, startYaw: number
 
   let kept = accepted;
   let built = build(kept, view, startYaw, budgetS);
+  // The last leg to the exit is not worth a long turn either: from the final glance, walking on faces it anyway.
+  if (exit && built.order.length > 1) {
+    const last = built.order[built.order.length - 2];
+    if (Math.abs(wrapAngle(exit.yaw - last.yaw)) > LOOK_EXIT_BEHIND) {
+      kept = kept.filter((t) => t !== exit);
+      built = build(kept, view, startYaw, budgetS);
+    }
+  }
   while (built.total > budgetS + SLACK_S) {
     const rest = kept.filter((t) => t.kind !== "exit");
-    if (rest.length <= 1) break;
-    const drop = rest.reduce((lo, t) => (t.priority < lo.priority ? t : lo));
-    kept = kept.filter((t) => t !== drop);
+    if (rest.length > 1) {
+      const drop = rest.reduce((lo, t) => (t.priority < lo.priority ? t : lo));
+      kept = kept.filter((t) => t !== drop);
+    } else if (kept.some((t) => t.kind === "exit") && rest.length) {
+      kept = rest; // one glance and the turn to leave will not fit: keep the glance
+    } else break;
     built = build(kept, view, startYaw, budgetS);
+  }
+  // Spare time (the holds hit their ceiling): linger on the best view rather than finish early.
+  const spare = budgetS - SLACK_S * 0.5 - built.total;
+  if (spare > 0 && built.keys.length) {
+    const heroIdx = built.order.findIndex((t) => t.hero);
+    let ki = built.keys.findIndex((kk) => kk.target === (heroIdx >= 0 ? heroIdx : -2));
+    if (ki < 0) ki = built.keys.length - 1;
+    const kk = built.keys[ki];
+    const add = Math.min(spare, Math.max(0, LOOK_TAIL_MAX - kk.holdS));
+    kk.holdS += add;
+    built = { ...built, total: built.total + add };
   }
   return { startYaw, pitch, targets: built.order, keys: built.keys, total: built.total };
 }

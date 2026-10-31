@@ -38,7 +38,7 @@ describe("minJerk", () => {
 });
 
 describe("lookPlan (synthetic)", () => {
-  const targets = [tg(60, "window", 100, true), tg(-50, "far", 80), tg(110, "wall", 40), tg(160, "exit", Infinity)];
+  const targets = [tg(60, "window", 100, true), tg(-50, "far", 80), tg(110, "wall", 40), tg(95, "exit", Infinity)];
   for (const [name, view] of Object.entries(VIEWS)) {
     it(`${name}: no move is faster than the cap, and yaw is continuous`, () => {
       const plan = lookPlan(targets, view, 0, 7, PITCH, 4);
@@ -62,7 +62,7 @@ describe("lookPlan (synthetic)", () => {
     const plan = lookPlan(targets, VIEWS.large, 0.3, 7, PITCH, 4);
     expect(lookPose(plan, 0).yaw).toBe(0.3);
     expect(lookPose(plan, -0.5).yaw).toBe(0.3);
-    expect(Math.abs(wrapAngle(lookPose(plan, plan.total + 1).yaw - 160 * D))).toBeLessThan(5 * D);
+    expect(Math.abs(wrapAngle(lookPose(plan, plan.total + 1).yaw - 95 * D))).toBeLessThan(5 * D);
     expect(lookPose(plan, plan.total + 1).done).toBe(true);
     expect(lookPose(plan, 0.1).done).toBe(false);
     expect(lookPose(plan, 0.1).pitch).toBe(PITCH);
@@ -131,11 +131,27 @@ describe("lookPlan (synthetic)", () => {
     const next = lookResume(plan, t, y, VIEWS.large);
     expect(next.startYaw).toBe(y);
     expect(lookPose(next, 0).yaw).toBe(y);
-    expect(next.targets.at(-1)!.kind).toBe("exit");
     const visited = plan.targets.slice(0, 1);
     for (const v of visited) expect(next.targets.includes(v)).toBe(false);
-    expect(Math.abs(wrapAngle(lookPose(next, next.total + 1).yaw - 160 * D))).toBeLessThan(5 * D);
+    expect(Math.abs(wrapAngle(lookPose(next, next.total + 1).yaw - next.targets.at(-1)!.yaw))).toBeLessThan(5 * D);
     expect(peak(sample(next))).toBeLessThanOrEqual(VIEWS.large.yawCap + 1e-6);
+  });
+  it("an exit well behind you is not turned to when there is something to look at; alone it still is", () => {
+    const behind = lookPlan([tg(40, "window", 100, true), tg(-30, "far", 80), tg(170, "exit", Infinity)], VIEWS.portrait, 0, 6.5, PITCH, 4);
+    expect(behind.targets.some((t) => t.kind === "exit")).toBe(false);
+    expect(Math.abs(behind.total - 6.5)).toBeLessThanOrEqual(1);
+  });
+  it("portrait fits every budget of a built-in-like set of rooms within 1 s", () => {
+    for (const budget of [6.4, 7.2, 8, 9.5]) {
+      for (const exitDeg of [-170, -120, 150, 60]) {
+        const plan = lookPlan([tg(70, "window", 100, true), tg(-60, "far", 80), tg(20, "wall", 40), tg(exitDeg, "exit", Infinity)], VIEWS.portrait, 0, budget, PITCH, 4);
+        expect(Math.abs(plan.total - budget)).toBeLessThanOrEqual(1.0 + 1e-9);
+      }
+    }
+  });
+  it("spare time goes to the hero's hold, so a short plan still fills its stop", () => {
+    const plan = lookPlan([tg(30, "window", 100, true), tg(80, "exit", Infinity)], VIEWS.large, 0, 7.5, PITCH, 2);
+    expect(Math.abs(plan.total - 7.5)).toBeLessThanOrEqual(1);
   });
   it("fallback targets with no exit come back to the start yaw", () => {
     const plan = lookPlan(fallbackTargets(1, 0.6, 0.6, null), VIEWS.large, 1, 6, PITCH, 3);
@@ -203,6 +219,21 @@ describe("look-round in the built-in house", () => {
     const targets = lookTargets(nav, s.stand, s.region, s.ds.entry, exit);
     const plan = lookPlan(targets, { yawCap: 75 * D, portrait: false }, s.ds.yaw, s.budget, PITCH, lookCount(l.area));
     expect(plan.targets.filter((t) => t.kind !== "exit").length).toBeLessThanOrEqual(1);
+    expect(Math.abs(plan.total - s.budget)).toBeLessThanOrEqual(1);
+    const exitYaw = yawOf({ x: exit!.x - s.stand.x, y: exit!.y - s.stand.y });
+    if (plan.targets.some((t) => t.kind === "exit")) expect(Math.abs(wrapAngle(lookPose(plan, plan.total + 1).yaw - exitYaw))).toBeLessThan(5 * D);
+  });
+  it("a phone held upright fits the same stops to their budgets", () => {
+    for (const [from, to, nextName, level] of [["Hallway (front)", "Kitchen", "Kitchen (galley)", 0], ["Bedroom 1", "Landing", "Bathroom", 1]] as const) {
+      const s = stop(from, to, level);
+      const next = standPose(nav, level, nextName);
+      const exit = exitPoint(nav, route(nav, { ...next, ...s.stand }, next), s.stand, s.region);
+      const targets = lookTargets(nav, s.stand, s.region, s.ds.entry, exit);
+      for (const cls of [lookViewOf("small", 390 / 844), lookViewOf("small", 390 / 732), lookViewOf("large", 1.6)]) {
+        const plan = lookPlan(targets, cls, s.ds.yaw, s.budget, PITCH, lookCount(room(nav, level, to).area));
+        expect(Math.abs(plan.total - s.budget)).toBeLessThanOrEqual(1 + 1e-9);
+      }
+    }
   });
   it("Bedroom 1: nothing behind you, and about today's stop length", () => {
     const s = stop("Landing", "Bedroom 1", 1);
