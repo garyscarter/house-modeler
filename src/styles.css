@@ -12,22 +12,15 @@
   --shadow-card: 0 1px 2px rgba(29,36,34,.06), 0 8px 24px rgba(29,36,34,.10);
   --shadow-pop: 0 2px 4px rgba(29,36,34,.08), 0 16px 40px rgba(29,36,34,.18);
   --shadow-sheet: 0 -4px 20px rgba(29,36,34,.14);
-  /* Floating cards (Glass overrides these) */
-  --card-bg: var(--panel); --card-border: 1px solid var(--line); --card-blur: none; --card-radius: var(--radius-l);
-  --topbar-h: 48px; --tabbar-h: 56px; --sheet-peek: 64px; --float-gap: 12px; --float-top: var(--float-gap); --card-clear: 96px;
+  --topbar-h: 52px; --island-h: 44px; --tabbar-h: 56px; --sheet-peek: 64px; --float-gap: 12px; --float-top: calc(var(--topbar-h) + var(--float-gap)); --inset-l: max(var(--float-gap), env(safe-area-inset-left)); --inset-r: max(var(--float-gap), env(safe-area-inset-right)); --card-clear: 96px;
   --z-float: 20; --z-pop: 30; --z-menu: 40; --z-review: 45; --z-top: 50; --z-modal: 80;
   font-family: var(--font-ui); font-size: 14px; color: var(--text);
 }
-.app[data-look="glass"] {
-  --card-bg: rgba(255,255,255,.62); --card-border: 1px solid rgba(255,255,255,.7); --card-blur: blur(16px) saturate(1.2);
-  --float-top: calc(var(--topbar-h) + 2 * var(--float-gap));
-}
-/* On the plan the cards sit over drawn lines, so they are nearly solid and barely blurred. */
-.app[data-look="glass"][data-tab="plan"] { --card-bg: rgba(255,255,255,.92); --card-blur: blur(4px); }
 * { box-sizing: border-box; }
 /* The app fills the screen and never scrolls or bounces as a page; panels scroll inside it. */
 html, body, #root { margin: 0; height: 100%; background: var(--bg); overflow: hidden; overscroll-behavior: none; }
 body { -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; }
+.app > main { position: absolute; inset: 0; }
 .app { position: relative; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 .loading { height: 100vh; height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); }
 
@@ -65,62 +58,80 @@ button.primary .loader { color: currentColor; }
   @keyframes ld-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 }
 
-/* ---- Top bar ---- */
+/* ---- Top bar: not a bar but floating islands over a full-bleed canvas ---- */
 header.topbar {
-  position: relative; z-index: var(--z-top); flex: none; height: var(--topbar-h);
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 0 12px;
-  background: var(--panel); border-bottom: 1px solid var(--line);
+  position: absolute; z-index: var(--z-top); top: var(--float-gap); left: var(--inset-l); right: var(--inset-r); height: var(--topbar-h);
+  display: grid; grid-template-columns: minmax(auto, 1fr) auto minmax(auto, 1fr); align-items: start; gap: 12px;
+  background: transparent; border: 0; pointer-events: none;
 }
-/* Not overflow: hidden, which would clip the house menu's dropdown; the house name truncates instead. */
-.topbar-left { display: flex; align-items: center; min-width: 0; }
+.island {
+  pointer-events: auto; display: flex; align-items: center; height: var(--island-h); padding: 0 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--pill); box-shadow: var(--shadow-card);
+}
+/* Not overflow: hidden, which would clip the house menu's dropdown. */
+.topbar-left { grid-column: 1; justify-self: start; max-width: 100%; padding: 0 4px 0 12px; }
 .topbar-left > .house-menu { min-width: 0; }
+.topbar-mid { grid-column: 2; justify-self: center; padding: 0 3px; }
+.topbar-right { grid-column: 3; justify-self: end; gap: 4px; padding: 0 6px 0 4px; }
 .brand { display: flex; align-items: center; gap: 7px; flex: none; padding: 0 12px 0 2px; margin-right: 6px; border-right: 1px solid var(--line); color: var(--brand); }
 .brand-name { color: var(--text); margin-top: 3px; } /* the wordmark box runs from the t to the y's tail; nudge its x-height level with the mark */
-.topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; overflow: hidden; }
-.lay-short { display: none; }
-.topbar-right > .seg { margin-right: 4px; }
+.lay-short, .cmp-icon { display: none; }
 .topbar-sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; flex: none; }
 header.topbar button { white-space: nowrap; }
+.topbar .seg { background: rgba(29, 36, 34, 0.07); }
 .topbar .icon-btn { color: var(--muted); }
-.topbar .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.topbar .icon-btn:hover:not(:disabled) { background: rgba(29, 36, 34, 0.08); color: var(--text); }
 .topbar .icon-btn:disabled { opacity: 0.35; }
 .topbar .icon-btn.palette-btn { width: auto; padding: 0 8px 0 9px; gap: 8px; }
-.topbar .palette-btn kbd.keycap { background: var(--surface-2); }
+.topbar .palette-btn kbd.keycap { background: rgba(255, 255, 255, 0.6); }
 
-/* The five modes: a pill in the middle */
+/* The modes: a pill in the middle */
 nav.mode-bar { gap: 2px; padding: 3px; }
 nav.mode-bar button { padding: 5px 16px; font-weight: 500; flex: none; }
 nav.mode-bar button.active { font-weight: 600; }
-nav.mode-bar button:not(.active):hover { background: var(--surface-3); }
+nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
+.topbar .mode-bar.seg { background: transparent; }
 
-/* Glass: the canvas runs full-bleed under a floating pill */
-.app[data-look="glass"] > main { position: absolute; inset: 0; }
-.app[data-look="glass"] header.topbar {
-  position: absolute; top: var(--float-gap); left: var(--float-gap); right: var(--float-gap); height: var(--topbar-h);
-  background: var(--card-bg); border: var(--card-border); border-radius: var(--pill); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
-  box-shadow: var(--shadow-card); padding: 0 8px 0 10px;
-}
-.app[data-look="glass"] .seg { background: rgba(29, 36, 34, 0.07); }
-.app[data-look="glass"] nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
-.app[data-look="glass"] .topbar .icon-btn:hover:not(:disabled), .app[data-look="glass"] .house-menu-btn:hover:not(:disabled), .app[data-look="glass"] .house-menu-btn.active { background: rgba(29, 36, 34, 0.08); }
-.app[data-look="glass"] .topbar .palette-btn kbd.keycap { background: rgba(255, 255, 255, 0.6); }
+/* The layout switch: As listed | Proposed | Compare. */
+.layout-switch button:disabled { opacity: 0.45; }
+.layout-switch button.cmp svg { display: block; }
 
 /* The top bar gives way in steps, so the sides can never run into the modes. */
-@media (max-width: 1359px) {
+@media (max-width: 1559px) {
   .brand-name, .topbar .palette-btn kbd.keycap { display: none; }
   .brand { padding-right: 8px; margin-right: 4px; }
   .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
 }
+@media (max-width: 1359px) {
+  header.topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .topbar-sep { margin: 0 2px; }
+  .topbar-right { gap: 2px; }
+}
 @media (max-width: 1239px) {
   nav.mode-bar button { padding: 5px 10px; }
-  .lay-full { display: none; }
-  .lay-short { display: inline; }
+  .lay-full, .cmp-full { display: none; }
+  .lay-short, .cmp-icon { display: inline-flex; }
   .seg button { padding: 6px 10px; }
 }
+
+/* The compare style, a small segment under the islands while comparing. */
+.compare-style { position: absolute; top: var(--topbar-h); left: 50%; transform: translateX(-50%); z-index: var(--z-float); padding: 3px; pointer-events: auto; border-radius: var(--pill); }
+.compare-style button { padding: 5px 12px; font-size: 13px; }
 
 /* ---- Canvas ---- */
 main { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
 main[data-tab="3d"] { --card-clear: 196px; }
+/*
+ * The 3D view runs behind the islands, but a drawing must not: its fit-to-view and its top edge chips would sit
+ * under them. Until the editor camera takes a top inset (src/editor/core/useCanvasCamera.ts has right, bottom and left),
+ * the drawing starts below the islands, on the drawing's own white so the strip reads as part of it.
+ */
+main[data-tab="plan"] { background: #fff; }
+main[data-tab="plan"]:has(> .site-canvas) { background: #fbfbf9; }
+main[data-tab="plan"] { padding-top: var(--float-top); }
+/* The drawing's own chrome is measured from the drawing's top edge, which is already below the islands. */
+main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north, main[data-tab="plan"] .inspector-card { top: var(--float-gap); }
+main[data-tab="plan"] .inspector-card { max-height: calc(100% - var(--float-gap) - var(--card-clear)); }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }
@@ -128,7 +139,7 @@ main[data-tab="3d"] { --card-clear: 196px; }
 .viewer-busy {
   position: absolute; left: 50%; bottom: calc(var(--float-gap) + 64px); transform: translateX(-50%); z-index: 2;
   display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: var(--pill); color: var(--text); font-size: 13px;
-  background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
+  background: var(--panel); border: 1px solid var(--line);
   box-shadow: var(--shadow-card); pointer-events: none;
 }
 .split { display: flex; flex: 1; min-width: 0; }
@@ -137,8 +148,8 @@ main[data-tab="3d"] { --card-clear: 196px; }
 /* !important: OrbitControls writes touch-action: auto inline when it is disposed. */
 .viewer canvas { display: block; touch-action: none !important; }
 .viewer-title {
-  position: absolute; top: var(--float-top); left: var(--float-gap); z-index: 2; padding: 5px 12px; border-radius: var(--pill);
-  background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur);
+  position: absolute; top: var(--float-top); left: var(--inset-l); z-index: 2; padding: 5px 12px; border-radius: var(--pill);
+  background: var(--panel); border: 1px solid var(--line);
   box-shadow: var(--shadow-card); font-weight: 600; font-size: 13px; pointer-events: none;
 }
 .empty { margin: auto; max-width: 420px; padding: 0 16px; text-align: center; color: var(--muted); }
@@ -210,13 +221,13 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .mode-summary .summary-line { margin: 4px 0 10px; font-weight: 600; }
 
 /* Shared floating classes (used by every Studio chunk) */
-.float-card { background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur); border-radius: var(--card-radius); box-shadow: var(--shadow-card); }
-.inspector-card { position: absolute; top: var(--float-top); right: var(--float-gap); width: 320px; max-height: calc(100% - var(--float-top) - var(--card-clear)); display: flex; flex-direction: column; z-index: var(--z-float); }
+.float-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card); }
+.inspector-card { position: absolute; top: var(--float-top); right: var(--inset-r); width: 320px; max-height: calc(100% - var(--float-top) - var(--card-clear)); display: flex; flex-direction: column; z-index: var(--z-float); }
 .inspector-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 14px; flex: none; }
 .inspector-card-head h2 { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
 .inspector-card-toggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; background: transparent; color: var(--muted); }
 .inspector-card-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 12px; min-height: 0; }
-.popover { position: absolute; z-index: var(--z-pop); padding: 8px; background: var(--card-bg); border: var(--card-border); backdrop-filter: var(--card-blur); -webkit-backdrop-filter: var(--card-blur); border-radius: var(--card-radius); box-shadow: var(--shadow-pop); }
+.popover { position: absolute; z-index: var(--z-pop); padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-pop); }
 .ctx-menu { position: fixed; z-index: var(--z-menu); min-width: 200px; padding: 4px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
 .ctx-menu button[role="menuitem"] { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; text-align: left; background: transparent; border-radius: var(--radius-s); padding: 6px 10px; }
 .ctx-menu button[role="menuitem"]:hover:not(:disabled), .ctx-menu button[role="menuitem"]:focus-visible { background: var(--accent-soft); outline: none; }
@@ -243,28 +254,30 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
 /* ---- Tablet and phone chassis (lib/chassis.ts). Everything below is scoped, so the desktop is untouched. ---- */
 .app[data-chassis="tablet"] .brand-name, .app[data-chassis="tablet"] .topbar .palette-btn kbd.keycap { display: none; }
 .app[data-chassis="tablet"] .brand { padding-right: 8px; margin-right: 4px; }
-.app[data-chassis="tablet"] .lay-full { display: none; }
-.app[data-chassis="tablet"] .lay-short { display: inline; }
+.app[data-chassis="tablet"] .lay-full, .app[data-chassis="tablet"] .cmp-full { display: none; }
+.app[data-chassis="tablet"] .lay-short, .app[data-chassis="tablet"] .cmp-icon { display: inline-flex; }
 .app[data-chassis="tablet"] header.topbar { gap: 8px; }
 .app[data-chassis="tablet"] nav.mode-bar button { padding: 5px 12px; }
 .app[data-chassis="tablet"] .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
-.app[data-chassis="tablet"] .house-menu-btn span, .app[data-chassis="phone"] .house-menu-btn span { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.app[data-chassis="tablet"] .house-menu-btn span { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .app[data-chassis="tablet"] .inspector-card { width: 300px; }
-/* The shortcuts button is in the house menu on tablets; the top bar has no room for it at the narrowest. */
-@media (max-width: 999px) { .app[data-chassis="tablet"] .topbar-right > .icon-btn[aria-label="Keyboard shortcuts"] { display: none; } }
 
-.app[data-chassis="phone"] header.topbar { grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 0 6px 0 8px; }
-.app[data-chassis="phone"] .brand { padding: 0 6px 0 0; margin-right: 0; border-right: 0; }
-.app[data-chassis="phone"] .house-menu-btn { min-width: 0; max-width: 100%; padding: 0 8px 0 10px; }
-.app[data-chassis="phone"] .house-menu-btn span { max-width: none; }
-.app[data-chassis="phone"] .topbar-right { gap: 0; overflow: visible; }
-.app[data-chassis="phone"] .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
-.app[data-chassis="phone"] .topbar .palette-btn kbd.keycap { display: none; }
+/* Phone: three islands. The mark is the house menu, the layout switch sits in the middle, undo and redo on the right. */
+.app[data-chassis="phone"] header.topbar { gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; }
+.app[data-chassis="phone"] .topbar-left { padding: 0; }
+.app[data-chassis="phone"] .house-menu-btn { width: var(--island-h); height: calc(var(--island-h) - 2px); padding: 0; justify-content: center; color: var(--brand); }
+.app[data-chassis="phone"] .topbar-right { padding: 0 2px; gap: 0; }
+.app[data-chassis="phone"] .topbar-mid { padding: 0 3px; }
+.app[data-chassis="phone"] .lay-full, .app[data-chassis="phone"] .cmp-full { display: none; }
+.app[data-chassis="phone"] .lay-short, .app[data-chassis="phone"] .cmp-icon { display: inline-flex; }
+.app[data-chassis="phone"] .topbar-mid .seg button { padding: 0 12px; height: 36px; }
+.app[data-chassis="phone"] .topbar-mid .seg button.cmp { padding: 0 10px; }
 .app[data-chassis="phone"] .inspector-card-toggle { display: none; }
 .app[data-chassis="phone"] main[data-tab="3d"] { --card-clear: 0px; }
 
 /* ---- Touch: finger-sized targets ---- */
 .app[data-touch] .icon-btn { width: 40px; height: 40px; }
+.app[data-chassis="phone"] .topbar .icon-btn { width: 44px; height: 42px; }
 .app[data-touch] .seg button { padding: 9px 14px; }
 .app[data-touch] label input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .app[data-touch] label select,
 .app[data-touch] .inspector input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .app[data-touch] .inspector select,

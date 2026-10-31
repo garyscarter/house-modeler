@@ -8,7 +8,6 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { useStore } from "../store";
 import { BRAND_TEAL } from "../lib/brand";
 import { CLICK_SLOP_PX, isClick, isSloped, legCorner, measure, measureLabel, snapToVertex, type P3 } from "../lib/measure3d";
-import { Icon } from "../components/icons";
 import "./Measure.css";
 
 const shown = (o: THREE.Object3D | null) => {
@@ -233,23 +232,5 @@ function Tape({ a, b, colour, resolution, final }: { a: P3; b: P3; colour: strin
         </Html>
       )}
     </group>
-  );
-}
-
-/** The chrome button that arms the tape (M). */
-export function MeasureButton() {
-  const armed = useStore((s) => s.measureTool);
-  const setUi = useStore((s) => s.setUi);
-  return (
-    <button
-      type="button"
-      className={`measure-btn float-card${armed ? " on" : ""}`}
-      aria-pressed={armed}
-      aria-label="Measure"
-      title={armed ? "Measuring: click two points (Esc to clear, M to stop)" : "Measure (M)"}
-      onClick={() => setUi({ measureTool: !armed })}
-    >
-      <Icon name="measure" size={16} />
-    </button>
   );
 }

@@ -13,8 +13,6 @@ const ctx = (over: Partial<CommandContext> = {}): CommandContext => ({
   viewMode: "single",
   mode: "build",
   setMode: vi.fn(),
-  look: "studio",
-  setLook: vi.fn(),
   selectedRoomId: null,
   showLabels: true,
   showCeilings: false,
@@ -131,19 +129,16 @@ describe("rankCommands", () => {
 });
 
 describe("studio commands", () => {
-  it("offers every mode, Wipe, the Plot site plan and the other look", () => {
+  it("offers every mode, Wipe, the Plot site plan and the shortcut sheet", () => {
     const c = ctx({ variants: { current: model, proposed: model } });
     const cmds = buildCommands(c);
     cmds.find((x) => x.title === "Mode: Review")!.run();
     expect(c.setMode).toHaveBeenCalledWith("review");
-    expect(["Mode: Build", "Mode: Decorate", "Mode: Furnish", "Mode: Plot", "Compare: Wipe", "3D", "Plan", "Look: Glass"].every((t) => cmds.some((x) => x.title === t))).toBe(true);
-    expect(cmds.some((x) => x.title === "Look: Studio")).toBe(false);
-    cmds.find((x) => x.title === "Look: Glass")!.run();
-    expect(c.setLook).toHaveBeenCalledWith("glass");
+    expect(["Mode: Build", "Mode: Decorate", "Mode: Furnish", "Mode: Plot", "Compare: Wipe", "3D", "Plan", "Keyboard shortcuts…"].every((t) => cmds.some((x) => x.title === t))).toBe(true);
+    expect(cmds.some((x) => x.id.startsWith("look:"))).toBe(false);
     cmds.find((x) => x.title === "Site plan (Plot)")!.run();
     expect(c.setMode).toHaveBeenCalledWith("plot");
     expect(c.setUi).toHaveBeenCalledWith({ tab: "plan" });
-    expect(buildCommands(ctx({ look: "glass" })).some((x) => x.title === "Look: Studio")).toBe(true);
   });
 
   it("offers the Electrics mode, found by wiring words", () => {

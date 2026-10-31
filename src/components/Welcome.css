@@ -1,5 +1,5 @@
 /* First run: the empty state, and the coach strip that follows it. */
-.welcome { margin: auto; width: 100%; max-width: 720px; padding: 24px 16px; }
+.welcome { margin: auto; width: 100%; max-width: 720px; padding: calc(var(--float-top) + 12px) 16px 24px; }
 .welcome-card {
   display: flex; flex-direction: column; align-items: center; text-align: center;
   padding: 36px 32px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card);
@@ -30,20 +30,17 @@
 .welcome-import:hover:not(:disabled) { background: none; color: var(--text); }
 @media (max-width: 600px) { .welcome-tiles { grid-template-columns: 1fr; } }
 
-/* The coach strip: three first steps, above the dock. */
+/* The coach strip: one line of hints, centred just under the top islands. */
 .coach-strip {
-  position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float);
-  display: flex; align-items: center; gap: 14px; max-width: min(780px, calc(100% - 320px)); padding: 8px 8px 8px 14px; font-size: 13px;
+  position: absolute; left: 50%; top: var(--float-top); transform: translateX(-50%); z-index: var(--z-float);
+  display: flex; align-items: center; gap: 10px; max-width: min(780px, calc(100% - 2 * var(--float-gap) - 340px)); padding: 6px 6px 6px 16px; font-size: 13px; border-radius: var(--pill);
 }
-.coach-steps { display: flex; align-items: center; gap: 16px; margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
-.coach-steps li { display: inline-flex; white-space: nowrap; align-items: center; gap: 7px; }
-.coach-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; flex: none; }
+.coach-strip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coach-strip .icon-btn { width: 24px; height: 24px; flex: none; color: var(--muted); }
-
 
 /* The card is taller than a phone: the canvas scrolls instead of clipping the second tile. */
 .app[data-chassis="phone"] main:has(> .welcome) { display: block; overflow-y: auto; overscroll-behavior: contain; }
-.app[data-chassis="phone"] .welcome { margin: 0 auto; padding: 16px 12px 32px; }
+.app[data-chassis="phone"] .welcome { margin: 0 auto; padding: calc(var(--float-top) + 4px) 12px 32px; }
 .app[data-chassis="phone"] .welcome-card { padding: 24px 16px 18px; }
 .app[data-chassis="phone"] .welcome h1 { font-size: 24px; }
 .app[data-touch] .welcome-tile { padding: 12px 12px 16px; min-height: 44px; }

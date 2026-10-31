@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { isLook, type Look } from "../lib/studio";
+import type { ViewMode } from "../store";
 import { isWheelMode, type WheelMode } from "../lib/wheelGesture";
+
+const COMPARE_MODES: ViewMode[] = ["wipe", "side-by-side", "overlay"];
 
 /**
  * Per-browser panel layout: which sections are open, the furniture category,
- * the sun panel, the collapsed inspector and the look. Kept out of the main
+ * the sun panel, the collapsed inspector and the last compare style. Kept out of the main
  * store so it adds no undo steps and never travels with exported or synced projects.
  */
 interface PanelPrefs {
@@ -18,15 +20,15 @@ interface PanelPrefs {
   sunOpen: boolean;
   /** The floating inspector card shows only its header. */
   inspectorCollapsed: boolean;
-  /** Studio (solid) or Glass (translucent floating cards). Per browser, not synced. */
-  look: Look;
+  /** The compare style the layout switch's Compare segment returns to. */
+  compareMode: Exclude<ViewMode, "single">;
   /** Quiet canvas: matte grey neighbours, a ground that fades into the page, neutral room fills and handles only on the selected room. */
   quiet: boolean;
   /** The one-time three-step coach strip after the first load has been dismissed. */
   coachDone: boolean;
   /** What a plain scroll wheel does on the plan and in 3D: "auto" tells a mouse from a trackpad by the event, else always zoom or always pan. */
   wheel: WheelMode;
-  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "look" | "quiet" | "coachDone" | "wheel">>) => void;
+  setPrefs: (p: Partial<Pick<PanelPrefs, "addCategory" | "sunOpen" | "inspectorCollapsed" | "compareMode" | "quiet" | "coachDone" | "wheel">>) => void;
 }
 
 export const usePanelPrefs = create<PanelPrefs>()(
@@ -37,7 +39,7 @@ export const usePanelPrefs = create<PanelPrefs>()(
       addCategory: "All",
       sunOpen: false,
       inspectorCollapsed: false,
-      look: "studio",
+      compareMode: "wipe",
       quiet: true,
       coachDone: false,
       wheel: "auto",
@@ -46,10 +48,10 @@ export const usePanelPrefs = create<PanelPrefs>()(
     {
       name: "house-modeler-panels",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, look: s.look, quiet: s.quiet, coachDone: s.coachDone, wheel: s.wheel }),
+      partialize: (s) => ({ open: s.open, addCategory: s.addCategory, sunOpen: s.sunOpen, inspectorCollapsed: s.inspectorCollapsed, compareMode: s.compareMode, quiet: s.quiet, coachDone: s.coachDone, wheel: s.wheel }),
       merge: (persisted, current) => {
         const merged = { ...current, ...((persisted ?? {}) as Partial<PanelPrefs>) };
-        if (!isLook(merged.look)) merged.look = "studio";
+        if (!COMPARE_MODES.includes(merged.compareMode)) merged.compareMode = "wipe";
         if (!isWheelMode(merged.wheel)) merged.wheel = "auto";
         return merged;
       },

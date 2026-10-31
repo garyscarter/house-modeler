@@ -6,10 +6,6 @@ import { belongsToHouse, useHouse } from "./house";
 export const OPEN_PALETTE = "house:open-palette";
 export const OPEN_SHORTCUTS = "house:open-shortcuts";
 
-/** Studio is the light solid look; Glass floats translucent cards over a full-bleed view. */
-export type Look = "studio" | "glass";
-export const isLook = (v: unknown): v is Look => v === "studio" || v === "glass";
-
 /**
  * Display name for a floor: "Ground Floor" reads "Ground floor". Names that are not one of the
  * stock floor names are left as typed. Display only: the model keeps the raw name (photos match on it).

@@ -1,5 +1,5 @@
 .review-page {
-  position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; z-index: var(--z-review); overflow-y: auto; background: var(--bg); color: var(--text);
+  position: fixed; top: var(--float-top); left: 0; right: 0; bottom: 0; border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: var(--shadow-pop); z-index: var(--z-review); overflow-y: auto; background: var(--bg); color: var(--text);
   outline: none; font-size: 15px; line-height: 1.5;
 }
 .review-page.review-loading { display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
@@ -101,7 +101,6 @@
 
 .review-page .rp-table td { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 .review-page .rp-table td:first-child, .review-page .rp-table th { font-family: var(--font-ui); }
-.app[data-look="glass"] .review-page { top: calc(var(--topbar-h) + 2 * var(--float-gap)); border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: var(--shadow-pop); }
 
 
 /* Phones: stop above the tab bar so modes can still be switched; one column everywhere. */

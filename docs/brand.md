@@ -15,8 +15,18 @@ Three stacked shapes: the roof (a triangle), the first floor and the ground floo
 
 ## Colour and type
 
-- Brand teal `#0f6e66` (`--brand` in `styles.css`; `--accent` is the same teal except in the glass look). Neutrals: page `#eef0ec`, panel `#fff`, ink `#1d2422`, muted `#6a736f`, lines `#dde1dc`. Use the CSS tokens in the app, never new hex values.
+- Brand teal `#0f6e66` (`--brand` in `styles.css`; `--accent` is the same teal). Neutrals: page `#eef0ec`, panel `#fff`, ink `#1d2422`, muted `#5f6864`, lines `#dde1dc`. Use the CSS tokens in the app, never new hex values.
 - Display: Bricolage Grotesque (`--font-display`) for headings and the wordmark, used sparingly. UI: IBM Plex Sans. Numbers and codes: IBM Plex Mono.
+
+## Floating chrome
+
+The canvas is full-bleed on every device, and all chrome floats over it.
+
+- The top bar is not a bar: transparent, with pointer events off, and a few **islands** on it (the mark and house menu on the left, the modes in the middle, the layout switch, undo, redo and the palette on the right). An island is `var(--panel)` with a 1px `var(--line)` border, `var(--shadow-card)` and a `var(--pill)` radius, `--island-h` (44 px) tall.
+- Everything else that floats (inspector card, tool rail, view cube, plan zoom, coach strip, compare style segment, badges) starts at `var(--float-top)`, which is the islands' height plus the gap, so nothing sits under them. The dock floats at the bottom.
+- Horizontal insets use `--inset-l` and `--inset-r` (the 12 px gap, or the device's `env(safe-area-inset-*)` if larger), never a bare `--float-gap`, so nothing hides behind a notch.
+- On a phone, chrome fades to 15% while a finger drags or pinches the canvas, and comes back 400 ms after it lifts.
+- Cards are solid: `var(--panel)`, `1px solid var(--line)`. There is no translucent or blurred look.
 
 ## Loading and busy states
 

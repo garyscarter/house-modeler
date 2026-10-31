@@ -4,7 +4,7 @@ import { MODES, MODE_LABEL, type Mode } from "./modes";
 import { usePanelPrefs } from "../components/panelPrefs";
 import { useChassis } from "../components/useChassis";
 import { FEATURES } from "./chassis";
-import { floorDisplayName, type Look } from "./studio";
+import { OPEN_SHORTCUTS, floorDisplayName } from "./studio";
 import { sectionStops } from "./sectionCut";
 
 export interface Command {
@@ -77,8 +77,6 @@ export interface CommandContext {
   viewMode: "single" | "side-by-side" | "overlay" | "wipe";
   mode: Mode;
   setMode: (m: Mode) => void;
-  look: Look;
-  setLook: (l: Look) => void;
   selectedRoomId: string | null;
   showLabels: boolean;
   showCeilings: boolean;
@@ -171,8 +169,8 @@ export function buildCommands(c: CommandContext): Command[] {
 
   const modeWords: Partial<Record<Mode, string[]>> = { electrics: ["wiring", "sockets", "switches", "lights", "circuits", "electrician"] };
   for (const m of MODES) add(`mode:${m}`, `Mode: ${MODE_LABEL[m]}`, "Mode", () => c.setMode(m), { keywords: ["mode", ...(modeWords[m] ?? [])] });
-  const other: Look = c.look === "glass" ? "studio" : "glass";
-  add(`look:${other}`, `Look: ${other === "glass" ? "Glass" : "Studio"}`, "Settings", () => c.setLook(other), { keywords: ["look", "theme", "appearance"] });
+
+  add("help:shortcuts", "Keyboard shortcuts…", "Help", () => c.dispatch(OPEN_SHORTCUTS, {}), { hint: "?", keywords: ["keys", "keyboard", "help", "hotkeys"] });
 
   add("my-furniture-add", "Add a piece of furniture I own", "Furnish", () => {
     c.setMode("furnish");

@@ -1,8 +1,9 @@
-/* The phone chassis: the mode tab bar, the inspector sheet, the layout pill and the action sheet. All scoped to phone-only markup. */
+/* The phone chassis: the mode tab bar, the inspector sheet, the full-bleed canvas above the tab bar, the gesture fade and the action sheet. All scoped to phone-only markup. */
 
 /* ---- Tab bar ---- */
+.app[data-chassis="phone"]:has(> .tab-bar) > main { bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
 .tab-bar {
-  position: relative; z-index: var(--z-top); flex: none; display: flex;
+  margin-top: auto; position: relative; z-index: var(--z-top); flex: none; display: flex;
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--panel); border-top: 1px solid var(--line);
 }
@@ -14,15 +15,6 @@
 .tab-bar button:hover:not(:disabled) { background: transparent; }
 .tab-bar button.active { color: var(--accent); font-weight: 600; }
 .tab-bar button:focus-visible { outline-offset: -3px; }
-
-/* ---- Layout pill: Listed | Proposed, top-centre over the canvas ---- */
-.layout-pill {
-  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: var(--z-float);
-  border-radius: var(--pill); padding: 3px; gap: 2px;
-}
-.layout-pill .lay-full { display: none; }
-.layout-pill .lay-short { display: inline; }
-.layout-pill button { padding: 6px 12px; white-space: nowrap; }
 
 /* ---- Bottom sheet ---- */
 .sheet {
@@ -56,5 +48,17 @@
 .ctx-sheet button[role="menuitem"] { min-height: 48px; font-size: 16px; padding: 8px 14px; }
 .ctx-sheet .ctx-cancel { justify-content: center; margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-s) var(--radius-s); font-weight: 600; color: var(--accent); }
 .ctx-menu.ctx-sheet button.ctx-cancel[role="menuitem"] { justify-content: center; }
-.app[data-sheet="full"] .layout-pill { opacity: 0; pointer-events: none; }
-.layout-pill { transition: opacity .2s; }
+
+/* ---- Gesture fade: while a finger drags or pinches the canvas, the floating chrome steps back (useGestureFade sets data-gesture). ---- */
+.app[data-gesture] .float-card:not(.sheet), .app[data-gesture] header.topbar .island, .app[data-gesture] .view-compass {
+  opacity: .15; pointer-events: none; transition: opacity .15s;
+}
+.app[data-chassis="phone"] .float-card, .app[data-chassis="phone"] header.topbar .island { transition: opacity .25s; }
+@media (prefers-reduced-motion: reduce) {
+  .app[data-gesture] .float-card:not(.sheet), .app[data-gesture] header.topbar .island, .app[data-gesture] .view-compass { transition: none; }
+}
+
+/* ---- Phone: chrome that used to sit under the old top bar or layout pill now clears the floating islands. ---- */
+.app[data-chassis="phone"] main .save-notice { top: var(--float-top); }
+.app[data-chassis="phone"] main .viewer-title { top: calc(var(--float-top) + 40px); }
+.app[data-chassis="phone"] main .sun-panel { bottom: calc(var(--sheet-peek) + 12px + 52px + 8px); }
