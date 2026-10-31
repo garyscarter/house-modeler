@@ -2,9 +2,11 @@ import type { WalkLensChoice } from "./walkTypes";
 
 /**
  * Walk-through lens: one rule for every screen. The picture spans a fixed 99 degrees corner to corner, so a wide
- * screen sees wide and a phone held upright sees tall, with a floor on the vertical field and a ceiling on the horizontal.
+ * screen sees wide and a phone held upright sees tall, with a floor on each field and a ceiling on the horizontal.
+ * The floor across keeps a phone held upright from looking zoomed in (owner: about 58 degrees, not 52).
  */
 export const LENS_DIAG = 99; // degrees, every device
+export const LENS_H_MIN = 58; // degrees: floor on the horizontal field (a phone held upright)
 export const LENS_V_MIN = 46; // degrees: floor on the vertical field
 export const LENS_H_MAX = 100; // degrees: ceiling on the horizontal field before the zoom
 export const LENS_CAP = 104; // degrees: hard cap on either axis after the zoom
@@ -26,6 +28,10 @@ export function walkLens(w: number, h: number, choice: WalkLensChoice = "normal"
   const s = Math.sqrt(1 + a * a);
   let tanH = (t * a) / s;
   let tanV = t / s;
+  if (2 * Math.atan(tanH) * DEG < LENS_H_MIN) {
+    tanH = Math.tan((LENS_H_MIN * RAD) / 2);
+    tanV = tanH / a;
+  }
   if (2 * Math.atan(tanV) * DEG < LENS_V_MIN) {
     tanV = Math.tan((LENS_V_MIN * RAD) / 2);
     tanH = tanV * a;

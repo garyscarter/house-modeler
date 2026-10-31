@@ -15,6 +15,7 @@ const walkLensJs = (w, h, choice = 'normal') => {
   const R = Math.PI / 180, Dg = 180 / Math.PI;
   const a = Math.max(0.05, w / Math.max(1, h)), t = Math.tan((99 * R) / 2), sq = Math.sqrt(1 + a * a);
   let tanH = (t * a) / sq, tanV = t / sq;
+  if (2 * Math.atan(tanH) * Dg < 58) { tanH = Math.tan((58 * R) / 2); tanV = tanH / a; }
   if (2 * Math.atan(tanV) * Dg < 46) { tanV = Math.tan((46 * R) / 2); tanH = tanV * a; }
   if (2 * Math.atan(tanH) * Dg > 100) { tanH = Math.tan((100 * R) / 2); tanV = tanH / a; }
   tanH *= LENS_ZOOM[choice]; tanV *= LENS_ZOOM[choice];
