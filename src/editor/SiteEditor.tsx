@@ -523,7 +523,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
 
       <InspectorCard className="side site-side" title={garden ? "Garden" : "Plot"}>
         <ReadOnlyBody>
-          <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+          <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} />
         </ReadOnlyBody>
       </InspectorCard>
     </div>
@@ -537,14 +537,12 @@ function Inspector({
   garden,
   onDeleteVertex,
   onDeleteItem,
-  clearances,
 }: {
   site: Site;
   sel: Sel;
   garden: boolean;
   onDeleteVertex: (s: Item, i: number) => void;
   onDeleteItem: (s: Item) => void;
-  clearances: ReturnType<typeof sideClearances>;
 }) {
   if (selection?.type === "item") return <ItemInspector ids={selection.ids} />;
   const sel: Item | null = selection;
@@ -629,7 +627,6 @@ function Inspector({
           </>
         )}
         <div className="row">{vertexButton}</div>
-        <Clearances clearances={clearances} />
       </div>
     );
   }
@@ -786,28 +783,6 @@ function EmptyInspector() {
       </h4>
       <PlotPanel />
     </div>
-  );
-}
-
-function Clearances({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
-  if (!clearances.length) return null;
-  return (
-    <>
-      <h4>
-        House to boundary
-        <Info>Shortest distance from each side of the house (any floor) to the boundary.</Info>
-      </h4>
-      <table className="site-clear">
-        <tbody>
-          {clearances.map((c) => (
-            <tr key={c.side}>
-              <td>{c.side[0].toUpperCase() + c.side.slice(1)}</td>
-              <td>{c.distance < 0.05 ? "on the boundary" : `${c.distance.toFixed(2)} m`}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
   );
 }
 
