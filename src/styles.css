@@ -61,7 +61,7 @@ button.primary .loader { color: currentColor; }
 /* ---- Top bar: not a bar but floating islands over a full-bleed canvas ---- */
 header.topbar {
   position: absolute; z-index: var(--z-top); top: var(--float-gap); left: var(--inset-l); right: var(--inset-r); height: var(--topbar-h);
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 12px;
+  display: grid; grid-template-columns: minmax(auto, 1fr) auto minmax(auto, 1fr); align-items: start; gap: 12px;
   background: transparent; border: 0; pointer-events: none;
 }
 .island {
@@ -97,10 +97,14 @@ nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
 .layout-switch button.cmp svg { display: block; }
 
 /* The top bar gives way in steps, so the sides can never run into the modes. */
-@media (max-width: 1359px) {
+@media (max-width: 1559px) {
   .brand-name, .topbar .palette-btn kbd.keycap { display: none; }
   .brand { padding-right: 8px; margin-right: 4px; }
   .topbar .icon-btn.palette-btn { width: 32px; padding: 0; }
+}
+@media (max-width: 1359px) {
+  .topbar-sep { margin: 0 2px; }
+  .topbar-right { gap: 2px; }
 }
 @media (max-width: 1239px) {
   nav.mode-bar button { padding: 5px 10px; }
@@ -247,7 +251,7 @@ kbd.keycap { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; b
 .app[data-chassis="tablet"] .inspector-card { width: 300px; }
 
 /* Phone: three islands. The mark is the house menu, the layout switch sits in the middle, undo and redo on the right. */
-.app[data-chassis="phone"] header.topbar { gap: 8px; }
+.app[data-chassis="phone"] header.topbar { gap: 8px; grid-template-columns: auto minmax(0, 1fr) auto; }
 .app[data-chassis="phone"] .topbar-left { padding: 0; }
 .app[data-chassis="phone"] .house-menu-btn { width: var(--island-h); height: calc(var(--island-h) - 2px); padding: 0; justify-content: center; color: var(--brand); }
 .app[data-chassis="phone"] .topbar-right { padding: 0 2px; gap: 0; }
