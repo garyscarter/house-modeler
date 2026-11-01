@@ -21,7 +21,7 @@ const read = (): ChassisState => {
   const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
   const width = window.innerWidth;
   const height = window.innerHeight;
-  return { chassis: chassisFor({ width, height, coarse }), touch: coarse, width, height, compact: isCompact({ width, height }) };
+  return { chassis: chassisFor({ width, height, coarse }), touch: coarse, width, height, compact: isCompact({ width, height, coarse }) };
 };
 
 export const useChassis = create<ChassisState>()(() => read());
