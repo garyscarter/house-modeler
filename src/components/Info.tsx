@@ -1,3 +1,4 @@
+import { NavButton } from "./ReadOnly";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /** A small "i" button that explains something: shows on hover (after 150 ms) or focus, and stays on click. Esc or an outside click closes it. */
@@ -47,9 +48,9 @@ export function Info({ children, label = "More about this" }: { children: ReactN
         setHover(false);
       }}
     >
-      <button type="button" className="info-btn" aria-label={label} aria-expanded={open} onClick={() => setPinned((p) => !p)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}>
+      <NavButton className="info-btn" aria-label={label} aria-expanded={open} onClick={() => setPinned((p) => !p)} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}>
         i
-      </button>
+      </NavButton>
       {open && (
         <span className="info-pop popover" role="tooltip">
           {children}

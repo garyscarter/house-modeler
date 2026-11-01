@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { useCanEdit } from "./useChassis";
 
 /** True inside a read-only panel body (see ReadOnlyBody); Section reads it so its headers still open and close. */
@@ -19,5 +19,30 @@ export function ReadOnlyBody({ skip, children }: { skip?: boolean; children: Rea
         {children}
       </fieldset>
     </ReadOnlyContext.Provider>
+  );
+}
+
+/**
+ * A button that selects or navigates rather than edits (a garden item row, an Info toggle). Inside a read-only body a real
+ * button would be disabled with the rest of the fieldset, so it is drawn as a focusable div with the same behaviour.
+ */
+export function NavButton({ children, onClick, onKeyDown: _k, type: _t, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  const readOnly = useReadOnly();
+  if (!readOnly) return <button type="button" onClick={onClick} {...rest}>{children}</button>;
+  const { disabled: _d, ...aria } = rest;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      {...(aria as object)}
+      onClick={onClick as unknown as React.MouseEventHandler<HTMLDivElement>}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.currentTarget.click();
+      }}
+    >
+      {children}
+    </div>
   );
 }
