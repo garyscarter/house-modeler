@@ -16,6 +16,9 @@ export const SHEET_PEEK_PX = 64;
 /** The view-only modes (a phone in Build, Electrics, Garden, Plot, Review): nothing there can be changed, so the sheet rests hidden. */
 export const viewOnlyNow = (): boolean => !canEdit(useStore.getState().mode, useChassis.getState().compact);
 
+/** Whether the store holds a selection the sheet should keep on screen (a room, or garden items). Selections local to the plan editor die with it. */
+export const selectionHeld = (s: { selectedRoomId: string | null; gardenSel?: string[] }): boolean => !!s.selectedRoomId || !!s.gardenSel?.length;
+
 /** Where the sheet rests: hidden in a view-only mode with nothing selected, else at peek. */
 export const restingDetent = (viewOnly: boolean, held: boolean): SheetDetent => (viewOnly && !held ? "hidden" : "peek");
 
@@ -48,7 +51,8 @@ export const useSheet = create<SheetState>()((set, get) => ({
   lower: () => set({ held: false, detent: restingDetent(viewOnlyNow(), false) }),
   rest: () => {
     const viewOnly = viewOnlyNow();
-    set((s) => ({ held: false, detent: viewOnly ? "hidden" : s.detent === "hidden" ? "peek" : s.detent === "full" ? "half" : s.detent }));
+    const held = selectionHeld(useStore.getState());
+    set((s) => ({ held, detent: viewOnly ? (held ? "peek" : "hidden") : s.detent === "hidden" ? "peek" : s.detent === "full" ? "half" : s.detent }));
   },
   toggle: () => {
     const s = get();
