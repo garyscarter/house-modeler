@@ -63,8 +63,8 @@
 .app[data-touch] .site-status select { font-size: 16px; padding: 6px 8px; }
 /* Tablet: the card is 300 px wide, so the compass keeps clear of it. */
 .app[data-chassis="tablet"] .site-north { right: calc(var(--inset-r) + 312px); }
-.app[data-chassis="phone"] .site-zoom { top: var(--float-gap); right: var(--inset-r); left: auto; bottom: auto; }
-.app[data-chassis="phone"] .site-north { top: calc(var(--float-gap) + 48px); right: var(--inset-r); }
+.app[data-chassis="phone"] .site-zoom { top: var(--float-top); right: var(--inset-r); left: auto; bottom: auto; }
+.app[data-chassis="phone"] .site-north { top: calc(var(--float-top) + 48px); right: var(--inset-r); }
 .app[data-chassis="phone"] .site-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
 /* The scale bar sits one pill higher than the status so the two never overlap. */
 .app[data-chassis="phone"] .site-scale { left: var(--float-gap); bottom: calc(var(--sheet-peek) + 12px + 44px + 8px + 44px); }

@@ -44,10 +44,14 @@
 
 /* Keep the dock inside the canvas at 360 px: the floor button clips rather than pushing Walk off the edge. */
 .app[data-chassis="phone"] .dock > * { flex: none; }
-.app[data-chassis="phone"] .dock .seg button { padding: 0 10px; }
-.app[data-chassis="phone"] .dock-floors .popover-btn { padding: 0 8px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.app[data-chassis="phone"] .dock .seg button { padding: 0 9px; }
+.app[data-chassis="phone"] .dock-floors .popover-btn { padding: 0 6px; gap: 2px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.app[data-chassis="phone"] .dock-floors .popover-btn svg { width: 10px; height: 10px; }
 @media (max-width: 374px) {
   .app[data-chassis="phone"] .dock .icon-btn, .app[data-chassis="phone"] .dock-view .popover-btn { width: 40px; }
-  .app[data-chassis="phone"] .dock .seg button { padding: 0 8px; }
+  .app[data-chassis="phone"] .dock .seg button { padding: 0 6px; }
+  .app[data-chassis="phone"] .dock-floors .popover-btn { padding: 0 4px; }
+  .app[data-chassis="phone"] .dock-floors .popover-btn svg { display: none; }
+  .app[data-chassis="phone"] .dock-view .popover-btn { min-width: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .app[data-chassis="phone"] .dock { transition: none; } }
