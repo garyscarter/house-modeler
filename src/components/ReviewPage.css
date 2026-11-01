@@ -9,6 +9,9 @@
 .review-page .rv-bar-inner { box-sizing: border-box; width: 100%; max-width: 1180px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .review-page .rv-bar h1 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 600; }
 .review-page .rv-subtitle { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.review-page .rv-bar-actions { display: flex; align-items: center; gap: 8px; }
+.review-page .rv-export-link { height: 32px; padding: 0 14px; border-radius: var(--pill); font-weight: 500; }
+.app[data-touch] .review-page .rv-export-link { height: 44px; }
 .review-page .rv-close { font-size: 26px; line-height: 1; width: 40px; height: 40px; padding: 0; border-radius: 50%; }
 
 /* Body */

@@ -22,17 +22,12 @@ import { changesCsv, downloadBlob, fileDate, planExtent, planScale, planSvg, pri
 import { useCaptureIds } from "../three/captureRegistry";
 import { renderSavedViews } from "./SavedViews";
 
-// Snapshots and model export use three.js, which loads with the 3D view; fetch them when used.
-const captureImage = async (...a: Parameters<typeof import("../three/capture").captureImage>) => (await import("../three/capture")).captureImage(...a);
-const exportGlb = async (...a: Parameters<typeof import("../three/capture").exportGlb>) => (await import("../three/capture")).exportGlb(...a);
 import { siteOf } from "../lib/sites";
 import { floorDisplayName, houseName } from "../lib/studio";
-import { downloadPrefix } from "../lib/brand";
-import { stampMark } from "./stampMark";
+import { captureImage, captureLabel, exportGlb, filePrefix, renderStill, saveSnapshots } from "./captureActions";
 import "./ReportPanel.css";
 import { Loader } from "./Loader";
 import { NumberField } from "./inspector";
-import { openRender } from "./renderRequest";
 import { useChassis } from "./useChassis";
 import { exportWiringGuide, reportFontCss } from "./wiringGuideExport";
 import { numberPoints } from "../lib/electrics";
@@ -311,7 +306,6 @@ const blobToDataUrl = (b: Blob) =>
   });
 
 /** Caption for a capture id: the variant it shows. */
-const captureLabel = (id: string, active: VariantKey) => (id === "current" || id === "proposed" ? VARIANT_LABEL[id] : VARIANT_LABEL[active]);
 
 export function Exports({ areas, changes }: { areas: AreaReport; changes?: Change[] }) {
   const variants = useStore((s) => s.variants);
@@ -327,7 +321,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   const extent = useMemo(() => planExtent(KEYS.flatMap((k) => (variants[k] ? [variants[k]!] : []))), [variants]);
   const scale = planScale(extent);
   const date = fileDate();
-  const prefix = downloadPrefix(slug(houseName(variants[active] ?? present.map((k) => variants[k]).find(Boolean))));
+  const prefix = filePrefix(variants, active);
 
   const run = async (key: string, job: () => Promise<string | void>) => {
     setBusy(key);
@@ -343,14 +337,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
   };
 
   const snapshot = (scaleBy: number) =>
-    run(`png${scaleBy}`, async () => {
-      for (const id of ids) {
-        const shot = await captureImage(id, scaleBy);
-        const blob = stamp ? await stampMark(shot) : shot;
-        downloadBlob(blob, `${prefix}-3d-${slug(captureLabel(id, active))}-${date}${scaleBy > 1 ? `@${scaleBy}x` : ""}.png`);
-      }
-      return ids.length > 1 ? "Saved a snapshot of each view." : undefined;
-    });
+    run(`png${scaleBy}`, () => saveSnapshots({ ids, active, scaleBy, stamp, prefix }));
 
   const plan = (k: VariantKey, m: HouseModel, floorId: string) => {
     const f = m.floors.find((x) => x.id === floorId)!;
@@ -476,7 +463,7 @@ export function Exports({ areas, changes }: { areas: AreaReport; changes?: Chang
         </div>
         <div className="row">
           {(no3d ? ["main"] : ids).map((id) => (
-            <button key={id} onClick={() => openRender({ id, pose: null, label: captureLabel(id, active), stamp })} disabled={no3d || busy !== null} title="A path-traced still of the view as it is now: true bounced light, sky light and glass">
+            <button key={id} onClick={() => renderStill(id, active, stamp)} disabled={no3d || busy !== null} title="A path-traced still of the view as it is now: true bounced light, sky light and glass">
               {ids.length > 1 ? `Render ${captureLabel(id, active)}` : "Render"}
             </button>
           ))}

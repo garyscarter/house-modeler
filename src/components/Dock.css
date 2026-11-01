@@ -34,6 +34,14 @@
 .app[data-chassis="phone"][data-sheet="half"] .dock, .app[data-chassis="phone"][data-sheet="full"] .dock { opacity: 0; pointer-events: none; }
 .app[data-touch]:not([data-chassis="phone"]) .dock .popover-btn { height: 40px; }
 .app[data-touch]:not([data-chassis="phone"]) .dock .icon-btn { width: 40px; height: 40px; }
+/* Capture popover (desktop and tablet): a short list of save buttons. */
+.dock-capture .popover-btn { gap: 6px; }
+.capture-menu { display: flex; flex-direction: column; gap: 2px; min-width: 190px; }
+.capture-menu button { justify-content: flex-start; text-align: left; border: 0; background: transparent; }
+.capture-menu button:hover:not(:disabled) { background: var(--surface-2); }
+.capture-menu .capture-more { color: var(--muted); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-s) var(--radius-s); margin-top: 4px; }
+.capture-menu .capture-error { margin: 4px 8px; color: var(--danger); }
+
 /* Keep the dock inside the canvas at 360 px: the floor button clips rather than pushing Walk off the edge. */
 .app[data-chassis="phone"] .dock > * { flex: none; }
 .app[data-chassis="phone"] .dock .seg button { padding: 0 10px; }

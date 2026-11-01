@@ -5,6 +5,7 @@ import { dockFloorActive, dockFloorPick, floorDisplayName, floorShortName, floor
 import { usePanelPrefs } from "./panelPrefs";
 import { Popover, ViewToggles } from "./ViewMenu";
 import { Icon } from "./icons";
+import { CaptureMenu } from "./CaptureMenu";
 import { SavedViewsMenu } from "./SavedViewsMenu";
 import { useChassis } from "./useChassis";
 import { useWalk } from "../walkStore";
@@ -123,6 +124,7 @@ export function Dock() {
           <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "Show"} chevron={!phone} ariaLabel="Show options" title={phone ? "Show options" : undefined}>
             <ViewToggles />
           </Popover>
+          {!phone && <CaptureMenu compact={chassis === "tablet"} />}
           <button
             className={measuring ? "icon-btn active" : "icon-btn"}
             aria-label="Measure"
