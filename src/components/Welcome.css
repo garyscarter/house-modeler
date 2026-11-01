@@ -33,7 +33,7 @@
 /* The coach strip: one line of hints, centred just under the top islands. */
 .coach-strip {
   position: absolute; left: 50%; top: var(--float-top); transform: translateX(-50%); z-index: var(--z-float);
-  display: flex; align-items: center; gap: 10px; max-width: min(780px, calc(100% - 2 * var(--float-gap) - 340px)); padding: 6px 6px 6px 16px; font-size: 13px; border-radius: var(--pill);
+  display: flex; align-items: center; gap: 10px; max-width: min(780px, max(240px, calc(100% - 2 * (320px + 2 * var(--float-gap))))); padding: 6px 6px 6px 16px; font-size: 13px; border-radius: var(--pill);
 }
 .coach-strip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .coach-strip .icon-btn { width: 24px; height: 24px; flex: none; color: var(--muted); }
