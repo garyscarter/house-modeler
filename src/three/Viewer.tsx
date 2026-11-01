@@ -125,6 +125,9 @@ function ViewerImpl(props: ViewerProps) {
   const [canvasKey, setCanvasKey] = useState(0);
   const [lost, setLost] = useState(false);
   const restoreTimer = useRef(0);
+  // The canvas element that is on screen now. A replaced canvas is context-lost by R3F half a second after it unmounts,
+  // and that event still reaches its listeners; only the live element's events may count.
+  const liveCanvas = useRef<HTMLCanvasElement | null>(null);
   const restore = useCallback(() => {
     window.clearTimeout(restoreTimer.current);
     setLost(false);
@@ -142,7 +145,10 @@ function ViewerImpl(props: ViewerProps) {
   }, [walkOn, chrome, active, reviewing]);
   // A path-traced still draws into this canvas itself; the on-demand loop must not draw over it.
   const tracing = useStore((s) => s.rendering?.id === (captureId ?? "main"));
-  const frameloop = active && compiled === quality && !tracing ? "demand" : "never";
+  // The canvas instance this render belongs to; `compiled` holds the key a precompile finished for, so a stale one never opens the gate.
+  const liveKey = `${canvasKey}:${quality}`;
+  const ready = compiled === liveKey;
+  const frameloop = active && ready && !tracing ? "demand" : "never";
   const before = useCallback(() => (quality === "high" ? loadEffects() : Promise.resolve()), [quality]);
 
   // Right-click menu on a room. The handler is kept stable (it reads the latest props through a ref) so floors stay memoised.
@@ -203,15 +209,15 @@ function ViewerImpl(props: ViewerProps) {
       {chrome && !walking && <ViewCube />}
       {/* One sun drives both views, so side by side (captureId "proposed" is its right-hand view) shows a single panel. */}
       {chrome && captureId !== "proposed" && <SunControls />}
-      {chrome && compiled === quality && !lost && <LightsWarming model={model} />}
-      {(compiled !== quality || lost) && (
+      {chrome && ready && !lost && <LightsWarming model={model} />}
+      {(!ready || lost) && (
         <div className="viewer-loading" role="status">
           <Loader kind="blueprint" size={40} />
           {lost ? "Restoring the 3D view" : "Preparing the 3D view"}
         </div>
       )}
       <Canvas
-        key={`${canvasKey}:${quality}`}
+        key={liveKey}
         shadows="percentage"
         gl={{ toneMapping: THREE.NeutralToneMapping, antialias: quality !== "high" }}
         frameloop={frameloop}
@@ -222,14 +228,17 @@ function ViewerImpl(props: ViewerProps) {
           gl.debug.checkShaderErrors = import.meta.env.DEV;
           gl.shadowMap.autoUpdate = false;
           const el = gl.domElement;
+          liveCanvas.current = el;
           el.addEventListener("webglcontextlost", (e) => {
+            if (el !== liveCanvas.current) return;
             e.preventDefault();
             setLost(true);
             window.clearTimeout(restoreTimer.current);
             restoreTimer.current = window.setTimeout(restore, 2000);
           });
-          // The canvas is replaced on restore, so these listeners go with the old element.
-          el.addEventListener("webglcontextrestored", restore);
+          el.addEventListener("webglcontextrestored", () => {
+            if (el === liveCanvas.current) restore();
+          });
         }}
         onPointerMissed={() => {}}
       >
@@ -260,7 +269,7 @@ function ViewerImpl(props: ViewerProps) {
         )}
         <SectionCut />
         <ShadowUpdates deps={[model, ghost, showCeilings, doorsOpen, visibleLevels?.join(), showExterior, quality, doorsSettled]} />
-        <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={setCompiled} />
+        <Precompile token={quality} offscreen={quality === "high"} before={before} onDone={() => setCompiled(liveKey)} />
         {walking && <WalkExposure model={model} />}
         {walking ? (
           <WalkControls model={model} variant={variant ?? activeVariant} />

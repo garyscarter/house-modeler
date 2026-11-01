@@ -24,7 +24,14 @@ describe("blurValue", () => {
   it("clamps an out-of-range number", () => {
     expect(blurValue("90", { min: 5, max: 60 })).toBe(60);
     expect(blurValue("1", { min: 5, max: 60 })).toBe(5);
-    expect(blurValue("0")).toBe(0.001);
+    expect(blurValue("0.0001", { min: 0.5 })).toBe(0.5);
+    expect(blurValue("-3", { min: 0 })).toBe(0);
+    expect(blurValue("90", {})).toBeUndefined();
+  });
+  it("reverts, not commits, a non-positive value when no min is given", () => {
+    expect(blurValue("0")).toBeUndefined();
+    expect(blurValue("-2", { max: 10 })).toBeUndefined();
+    expect(blurValue("0", { min: 0 })).toBeUndefined();
   });
   it("leaves valid, empty and unreadable text alone", () => {
     expect(blurValue("45", { min: 5, max: 60 })).toBeUndefined();

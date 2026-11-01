@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { blurValue, typedValue } from "../../lib/numberInput";
 
 const fmt2 = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
@@ -39,6 +39,8 @@ export function NumberField({
 }) {
   const [text, setText] = useState(fmt2(value));
   const [focused, setFocused] = useState(false);
+  // Whether the user typed since focus: an unedited field never commits on blur, and Escape abandons what was typed.
+  const dirty = useRef(false);
   useEffect(() => {
     if (!focused) setText(fmt2(value));
   }, [value, focused]);
@@ -54,14 +56,20 @@ export function NumberField({
       disabled={disabled}
       onFocus={(e) => {
         setFocused(true);
+        dirty.current = false;
         e.target.select();
       }}
       onBlur={(e) => {
         setFocused(false);
+        const typed = dirty.current;
+        dirty.current = false;
+        if (!typed) return setText(fmt2(value));
         const v = blurValue(e.target.value, { min, max });
         if (v !== undefined) onCommit(v);
+        else setText(fmt2(value));
       }}
       onChange={(e) => {
+        dirty.current = true;
         setText(e.target.value);
         if (e.target.value === "" && onClear) return onClear();
         const v = typedValue(e.target.value, { min, max });
@@ -69,6 +77,7 @@ export function NumberField({
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === "Escape") {
+          if (e.key === "Escape") dirty.current = false;
           e.currentTarget.blur();
           onDone?.();
         }

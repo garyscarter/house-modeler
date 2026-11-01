@@ -24,10 +24,15 @@ export function typedValue(text: string, range: NumberRange = {}): number | unde
   return v !== undefined && clamp(v, range) === v ? v : undefined;
 }
 
-/** On blur: the clamped value to commit when the text is a number outside the range, else undefined (nothing to do). */
+/**
+ * On blur: the value to commit when the text is a number outside the range, else undefined (nothing to do).
+ * An overshoot of an explicit min or max is clamped; with no explicit min, a non-positive value is invalid and reverts
+ * (undefined) rather than becoming DEFAULT_MIN.
+ */
 export function blurValue(text: string, range: NumberRange = {}): number | undefined {
   const v = read(text);
   if (v === undefined) return undefined;
+  if (range.min === undefined && v < DEFAULT_MIN) return undefined;
   const c = clamp(v, range);
   return c === v ? undefined : c;
 }

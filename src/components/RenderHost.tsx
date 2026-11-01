@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { captureIds } from "../three/captureRegistry";
 import { closeRender, openRender, useRenderRequest } from "./renderRequest";
 import { Loader } from "./Loader";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Modal } from "./Modal";
 
 // The dialog (and what it imports) loads the first time a still is asked for, not with the app shell.
@@ -21,6 +22,22 @@ export function RenderHost() {
   }, []);
   if (!request) return null;
   return (
+    <ErrorBoundary
+      resetKeys={[seq]}
+      fallback={() => (
+        <Modal title="Render" onClose={closeRender} width={380}>
+          <p role="alert">The renderer could not load. A new version may have been published since this page opened.</p>
+          <div className="row">
+            <button type="button" className="primary" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+            <button type="button" onClick={closeRender}>
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+    >
     <Suspense
       fallback={
         <Modal title={`Render: ${request.label}`} onClose={closeRender} width={380}>
@@ -33,5 +50,6 @@ export function RenderHost() {
       {/* A fresh key per request, so a second render starts clean. */}
       <RenderDialog key={seq} request={request} />
     </Suspense>
+    </ErrorBoundary>
   );
 }
