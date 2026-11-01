@@ -11,7 +11,7 @@ import { editsFixtures, type Mode } from "../../../lib/modes";
 import { ElectricsPanelLazy as ElectricsPanel } from "../../../components/lazyPanels";
 import { useStore } from "../../../store";
 import { DecoratePanel } from "../../DecoratePanel";
-import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../Inspectors";
+import { BuildRoomPanel, CanopyInspector, FixtureInspector, MultiFixtureInspector, OpeningInspector, WallInspector } from "../../inspectors";
 import { BuildSummary, DecorateSummary, FurnishSummary } from "../../ModeSummaries";
 import type { PlanSelection } from "../useSelection";
 

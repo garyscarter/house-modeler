@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { edgeLengthsM, type Size } from "../../../lib/planMath";
 import type { Pt, Room } from "../../../types";
-import { NumberField } from "../../Inspectors";
+import { NumberField } from "../../inspectors";
 import { edgeLabelAt } from "../layers/shared";
 
 /** A small field over the plan for typing an edge's new length. */

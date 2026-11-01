@@ -5,7 +5,7 @@ import { floorDisplayName } from "../lib/studio";
 import { Info } from "../components/Info";
 import { byId } from "../lib/catalogue";
 import { fixtureSolids, overlappingIds } from "../lib/planMath";
-import { FloorSettings, NumberField } from "./Inspectors";
+import { FloorSettings, NumberField } from "./inspectors";
 import { Section } from "../components/Section";
 import { useStore } from "../store";
 import { MyFurnitureList } from "./MyFurniture";

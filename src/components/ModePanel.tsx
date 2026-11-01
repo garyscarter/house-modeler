@@ -3,7 +3,7 @@ import type { Floor, Room } from "../types";
 import { MODE_LABEL, type Mode } from "../lib/modes";
 import { BuildSummary, DecorateSummary, FurnishSummary, useClashCount } from "../editor/ModeSummaries";
 import { DecoratePanel } from "../editor/DecoratePanel";
-import { BuildRoomPanel } from "../editor/Inspectors";
+import { BuildRoomPanel } from "../editor/inspectors";
 import { ElectricsPanelLazy as ElectricsPanel, GardenPanelLazy as GardenPanel, PlotPanelLazy as PlotPanel } from "./lazyPanels";
 import { ReadOnlyBody } from "./ReadOnly";
 import { requestAddPicker } from "../editor/addPicker";

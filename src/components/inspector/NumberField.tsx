@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { blurValue, typedValue } from "../../lib/numberInput";
 
 const fmt2 = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 100) / 100));
 
@@ -11,7 +12,7 @@ export function NumberField({
   value,
   onCommit,
   step = 0.01,
-  min = 0,
+  min,
   max,
   placeholder,
   label,
@@ -22,9 +23,10 @@ export function NumberField({
 }: {
   value: number | undefined;
   onCommit: (v: number) => void;
-  step?: number;
-  /** Values must be greater than this. */
+  step?: number | "any";
+  /** Smallest value (inclusive, default 0.001 so a size is positive); pass 0 or -Infinity to allow those. */
   min?: number;
+  /** Largest value (inclusive). Out-of-range text is not committed while typing and is clamped on blur. */
   max?: number;
   placeholder?: string;
   label?: string;
@@ -54,12 +56,16 @@ export function NumberField({
         setFocused(true);
         e.target.select();
       }}
-      onBlur={() => setFocused(false)}
+      onBlur={(e) => {
+        setFocused(false);
+        const v = blurValue(e.target.value, { min, max });
+        if (v !== undefined) onCommit(v);
+      }}
       onChange={(e) => {
         setText(e.target.value);
         if (e.target.value === "" && onClear) return onClear();
-        const v = parseFloat(e.target.value);
-        if (Number.isFinite(v) && v > min && (max === undefined || v <= max)) onCommit(v);
+        const v = typedValue(e.target.value, { min, max });
+        if (v !== undefined) onCommit(v);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === "Escape") {

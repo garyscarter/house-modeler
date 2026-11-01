@@ -1,4 +1,5 @@
 import { KERBS, kerbOf } from "../lib/gardenCatalogue";
+import { NumberField } from "./inspector";
 import type { KerbStyle, SiteSurface } from "../types";
 
 const STYLES = Object.keys(KERBS) as KerbStyle[];
@@ -26,18 +27,7 @@ export function KerbFields({ surface, onChange }: { surface: SiteSurface; onChan
       {k.style !== "none" && (
         <label>
           Kerb height (cm)
-          <input
-            type="number"
-            min={0}
-            max={60}
-            step={1}
-            aria-label="Kerb height in centimetres"
-            value={Math.round(k.height * 100)}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              if (Number.isFinite(v)) onChange({ kerb: k.style, kerbHeight: Math.min(0.6, Math.max(0, v / 100)) });
-            }}
-          />
+          <NumberField value={Math.round(k.height * 100)} step={1} min={0} max={60} label="Kerb height in centimetres" onCommit={(cm) => onChange({ kerb: k.style, kerbHeight: cm / 100 })} />
         </label>
       )}
     </>

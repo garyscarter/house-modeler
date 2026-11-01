@@ -22,6 +22,7 @@ import { ToolRail, type RailItem } from "./ToolRail";
 import { AddPopover, GardenPicker } from "./AddItem";
 import { InspectorCard } from "../components/InspectorCard";
 import { Info } from "../components/Info";
+import { NumberField } from "../components/inspector";
 import { Icon } from "../components/icons";
 import { BrandMark } from "../components/BrandMark";
 import { lowerSheet, raiseSheet, useCameraInsets, useCanvasCamera, useEditorKeys } from "./core";
@@ -522,7 +523,7 @@ function SitePlan({ site, model, mode }: { site: Site; model?: HouseModel; mode:
 
       <InspectorCard className="side site-side" title={garden ? "Garden" : "Plot"}>
         <ReadOnlyBody>
-          <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} clearances={clearances} />
+          <Inspector site={site} sel={sel} garden={garden} onDeleteVertex={deleteVertex} onDeleteItem={deleteItem} />
         </ReadOnlyBody>
       </InspectorCard>
     </div>
@@ -536,19 +537,16 @@ function Inspector({
   garden,
   onDeleteVertex,
   onDeleteItem,
-  clearances,
 }: {
   site: Site;
   sel: Sel;
   garden: boolean;
   onDeleteVertex: (s: Item, i: number) => void;
   onDeleteItem: (s: Item) => void;
-  clearances: ReturnType<typeof sideClearances>;
 }) {
   if (selection?.type === "item") return <ItemInspector ids={selection.ids} />;
   const sel: Item | null = selection;
   const updateSite = useStore((s) => s.updateSite);
-  const num = (v: string, f: number) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : f);
   const corners =
     sel?.type === "boundary"
       ? site.boundary.length
@@ -596,7 +594,7 @@ function Inspector({
             {edges[i].kind !== "open" && (
               <label>
                 Height (m)
-                <input type="number" step={0.1} min={0.3} max={4} value={edges[i].height} onChange={(e) => setEdge({ height: Math.max(0.1, num(e.target.value, edges[i].height)) })} />
+                <NumberField value={edges[i].height} step={0.1} min={0.1} max={4} label="Edge height" onCommit={(height) => setEdge({ height })} />
               </label>
             )}
             <OpeningWidth site={site} edge={i} />
@@ -629,7 +627,6 @@ function Inspector({
           </>
         )}
         <div className="row">{vertexButton}</div>
-        <Clearances clearances={clearances} />
       </div>
     );
   }
@@ -688,7 +685,7 @@ function Inspector({
         </label>
         <label>
           Eaves height above the ground (m)
-          <input type="number" step={0.1} min={0.5} max={20} value={n.eaves} onChange={(e) => set({ eaves: Math.max(0.5, num(e.target.value, n.eaves)) })} />
+          <NumberField value={n.eaves} step={0.1} min={0.5} max={20} label="Eaves height" onCommit={(eaves) => set({ eaves })} />
         </label>
         <p className="muted small">About 2.5 m for a single storey, 5.3 m for two.</p>
         <label>
@@ -703,7 +700,7 @@ function Inspector({
           <>
             <label>
               Pitch (degrees)
-              <input type="number" min={10} max={60} value={n.pitchDeg ?? 35} onChange={(e) => set({ pitchDeg: Math.min(60, Math.max(5, num(e.target.value, 35))) })} />
+              <NumberField value={n.pitchDeg ?? 35} step={1} min={5} max={60} label="Roof pitch" onCommit={(pitchDeg) => set({ pitchDeg })} />
             </label>
             <label>
               Ridge runs
@@ -740,7 +737,6 @@ function Inspector({
 function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
   const updateSite = useStore((s) => s.updateSite);
   const [pick, setPick] = useState<{ edge: number; end: OpeningEnd } | null>(null);
-  const [draft, setDraft] = useState<string | null>(null);
   const n = site.boundary.length;
   const end = pick && pick.edge === edge ? pick.end : defaultOpeningEnd(site, edge);
   const width = edgeLength(site, edge);
@@ -750,25 +746,11 @@ function OpeningWidth({ site, edge }: { site: Site; edge: number }) {
   const b = site.boundary[(edge + 1) % n];
   const startIsLeft = a.x <= b.x;
   const endLabel = (e: OpeningEnd) => ((e === "start") === startIsLeft ? "left end" : "right end");
-  const apply = (v: string, e: OpeningEnd) => {
-    const w = parseFloat(v);
-    if (Number.isFinite(w)) updateSite((st) => setOpeningWidth(st, edge, w, e));
-  };
   return (
     <>
       <label>
         Width (m)
-        <input
-          type="number"
-          step={0.05}
-          min={MIN_OPENING}
-          value={draft ?? width.toFixed(2)}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            apply(e.target.value, end);
-          }}
-          onBlur={() => setDraft(null)}
-        />
+        <NumberField value={width} step={0.05} min={MIN_OPENING} label="Edge width" onCommit={(w) => updateSite((st) => setOpeningWidth(st, edge, w, end))} />
       </label>
       <label>
         Move
@@ -804,28 +786,6 @@ function EmptyInspector() {
   );
 }
 
-function Clearances({ clearances }: { clearances: ReturnType<typeof sideClearances> }) {
-  if (!clearances.length) return null;
-  return (
-    <>
-      <h4>
-        House to boundary
-        <Info>Shortest distance from each side of the house (any floor) to the boundary.</Info>
-      </h4>
-      <table className="site-clear">
-        <tbody>
-          {clearances.map((c) => (
-            <tr key={c.side}>
-              <td>{c.side[0].toUpperCase() + c.side.slice(1)}</td>
-              <td>{c.distance < 0.05 ? "on the boundary" : `${c.distance.toFixed(2)} m`}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
 /**
  * Pierced screen blocks let into the top of a wall, under its top course: none,
  * one row or two, along the whole edge or a stretch of it.
@@ -837,7 +797,6 @@ function ScreenBlocks({ site, edge, setEdge }: { site: Site; edge: number; setEd
   const b = site.boundary[(edge + 1) % n];
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const s = e.screen;
-  const num = (v: string) => (Number.isFinite(parseFloat(v)) ? Math.max(0, parseFloat(v)) : undefined);
   const set = (p: Partial<ScreenPanel>) => setEdge({ screen: s ? { ...s, ...p } : undefined });
   const whole = !s || (s.from === undefined && s.length === undefined);
   return (
@@ -869,11 +828,11 @@ function ScreenBlocks({ site, edge, setEdge }: { site: Site; edge: number; setEd
             <div className="row">
               <label>
                 From (m)
-                <input type="number" step={0.05} min={0} max={len} value={s.from ?? 0} onChange={(ev) => set({ from: num(ev.target.value) ?? 0 })} />
+                <NumberField value={s.from ?? 0} step={0.05} min={0} max={len} label="Screen starts" onCommit={(from) => set({ from })} />
               </label>
               <label>
                 Length (m)
-                <input type="number" step={0.29} min={0.29} max={len} value={s.length ?? len} onChange={(ev) => set({ length: num(ev.target.value) })} />
+                <NumberField value={s.length ?? len} step={0.29} min={0.29} max={len} label="Screen length" onCommit={(length) => set({ length })} onClear={() => set({ length: undefined })} />
               </label>
             </div>
           )}
@@ -897,7 +856,6 @@ const FOLLOW_LABEL: Record<WallFollow, string> = { level: "Level top", step: "St
  */
 function FollowGround({ site, edge, setEdge }: { site: Site; edge: number; setEdge: (p: Partial<BoundaryEdge>) => void }) {
   const e = edgesOf(site)[edge];
-  const [draft, setDraft] = useState<string | null>(null);
   const n = site.boundary.length;
   const ground = useMemo(
     () => groundAlong(site.boundary[edge], site.boundary[(edge + 1) % n], site.surfaces, polygonArea(site.boundary)),
@@ -924,19 +882,7 @@ function FollowGround({ site, edge, setEdge }: { site: Site; edge: number; setEd
       {follow === "step" && (
         <label>
           Steps every (m)
-          <input
-            type="number"
-            step={0.05}
-            min={0.9}
-            placeholder="auto"
-            value={draft ?? (e.stepEvery !== undefined ? String(e.stepEvery) : "")}
-            onChange={(ev) => {
-              setDraft(ev.target.value);
-              const v = parseFloat(ev.target.value);
-              setEdge({ stepEvery: Number.isFinite(v) && v > 0 ? v : undefined });
-            }}
-            onBlur={() => setDraft(null)}
-          />
+          <NumberField value={e.stepEvery} step={0.05} min={0.9} placeholder="auto" label="Steps every" onCommit={(stepEvery) => setEdge({ stepEvery })} onClear={() => setEdge({ stepEvery: undefined })} />
         </label>
       )}
       <p className="muted small">

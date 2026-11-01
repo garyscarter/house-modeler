@@ -12,8 +12,6 @@ export type SheetDetent = "hidden" | "peek" | "half" | "full";
 
 /** Height of the sheet at peek: the handle and the title row. Matches --sheet-peek in styles.css. */
 export const SHEET_PEEK_PX = 64;
-/** Height of the mode tab bar, before the safe-area inset. Matches --tabbar-h in styles.css. */
-export const TAB_BAR_PX = 56;
 
 /** The view-only modes (a phone in Build, Electrics, Garden, Plot, Review): nothing there can be changed, so the sheet rests hidden. */
 export const viewOnlyNow = (): boolean => !canEdit(useStore.getState().mode, useChassis.getState().compact);

@@ -1,11 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useStore } from "../store";
 import { TILE_STYLE_LABEL, WALL_FINISH_LABEL, uid, type Chimney, type Exterior, type HouseModel, type FlatRoofSkirt, type PlanSide, type TileStyle, type VariantKey, type WallFinish } from "../types";
 import { chimneyOnRidge, defaultChimney, exteriorOf, planRoofs } from "../lib/roof";
 import { modelBounds } from "../lib/geometry";
 import { DEFAULT_BACK_DOOR, DEFAULT_FRONT_DOOR } from "../lib/openings";
 import { Info } from "./Info";
-import { SwatchField } from "./inspector";
+import { NumberField, SwatchField } from "./inspector";
 import "./ExteriorPanel.css";
 
 /** A typical colour for each covering, applied when the covering changes (the user can adjust it after). */
@@ -21,45 +21,6 @@ const PARTY_LABEL: Record<Exterior["partyWall"], string> = {
   right: "On the right",
   both: "Both sides (terraced)",
 };
-
-/**
- * A number input that lets the field be cleared or part-typed without the
- * value snapping back; valid numbers are committed (clamped) as you type.
- */
-function NumberField({
-  value,
-  onChange,
-  step,
-  min,
-  max,
-  disabled,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  step: number;
-  min?: number;
-  max?: number;
-  disabled?: boolean;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <input
-      type="number"
-      inputMode="decimal"
-      step={step}
-      min={min}
-      max={max}
-      disabled={disabled}
-      value={draft ?? String(+value.toFixed(2))}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        const v = parseFloat(e.target.value);
-        if (Number.isFinite(v)) onChange(Math.min(max ?? Infinity, Math.max(min ?? -Infinity, v)));
-      }}
-      onBlur={() => setDraft(null)}
-    />
-  );
-}
 
 function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
@@ -113,7 +74,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
             </select>
           </Field>
           <Field label="Pitch (degrees)">
-            <NumberField value={ext.pitchDeg} step={1} min={15} max={60} onChange={(pitchDeg) => set({ pitchDeg })} />
+            <NumberField value={ext.pitchDeg} step={1} min={15} max={60} onCommit={(pitchDeg) => set({ pitchDeg })} />
           </Field>
           <Field label="Joined to a neighbour" wide>
             <select value={ext.partyWall} onChange={(e) => set({ partyWall: e.target.value as Exterior["partyWall"] })}>
@@ -141,7 +102,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
             </select>
           </Field>
           <Field label="Eaves overhang (m)">
-            <NumberField value={ext.overhang} step={0.05} min={0} max={1} onChange={(overhang) => set({ overhang })} />
+            <NumberField value={ext.overhang} step={0.05} min={0} max={1} onCommit={(overhang) => set({ overhang })} />
           </Field>
           <SwatchField label="Roof colour" value={ext.roofColor} isSet onChange={(roofColor) => set({ roofColor })} />
         </div>
@@ -164,7 +125,7 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
                 min={0}
                 max={2}
                 disabled={ext.extensionRoof !== "separate"}
-                onChange={(extensionDrop) => set({ extensionDrop })}
+                onCommit={(extensionDrop) => set({ extensionDrop })}
               />
             </Field>
           </div>
@@ -219,30 +180,16 @@ export function ExteriorPanel({ variant }: { variant: VariantKey }) {
             {skirt.sides.length > 0 && (
               <div className="ext-grid">
                 <Field label="Depth (m)">
-                  <input type="number" min={0.3} max={3} step={0.1} value={skirt.depth} onChange={(e) => setSkirt({ depth: parseFloat(e.target.value) || skirt.depth })} />
+                  <NumberField value={skirt.depth} step={0.1} min={0.3} max={3} onCommit={(depth) => setSkirt({ depth })} />
                 </Field>
                 <Field label="Pitch (°)">
-                  <input type="number" min={10} max={45} step={1} value={skirt.pitchDeg} onChange={(e) => setSkirt({ pitchDeg: parseFloat(e.target.value) || skirt.pitchDeg })} />
+                  <NumberField value={skirt.pitchDeg} step={1} min={10} max={45} onCommit={(pitchDeg) => setSkirt({ pitchDeg })} />
                 </Field>
                 <Field label="Return round corners (m)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={skirt.returns ?? 0}
-                    onChange={(e) => setSkirt({ returns: Math.max(0, parseFloat(e.target.value) || 0) })}
-                  />
+                  <NumberField value={skirt.returns ?? 0} step={0.1} min={0} max={10} onCommit={(returns) => setSkirt({ returns })} />
                 </Field>
                 <Field label="Eaves below the deck (m)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={0.5}
-                    step={0.02}
-                    value={skirt.drop ?? 0}
-                    onChange={(e) => setSkirt({ drop: Math.max(0, parseFloat(e.target.value) || 0) })}
-                  />
+                  <NumberField value={skirt.drop ?? 0} step={0.02} min={0} max={0.5} onCommit={(drop) => setSkirt({ drop })} />
                 </Field>
               </div>
             )}
@@ -309,22 +256,22 @@ function Chimneys({ model, chimneys, onChange }: { model: HouseModel; chimneys: 
           </div>
           <div className="ext-grid">
             <Field label="From left (m)">
-              <NumberField value={c.x - b.x0} step={0.1} onChange={(v) => patch(c.id, { x: b.x0 + v })} />
+              <NumberField value={c.x - b.x0} step={0.1} min={-Infinity} onCommit={(v) => patch(c.id, { x: b.x0 + v })} />
             </Field>
             <Field label="From front (m)">
-              <NumberField value={b.y1 - c.y} step={0.1} onChange={(v) => patch(c.id, { y: b.y1 - v })} />
+              <NumberField value={b.y1 - c.y} step={0.1} min={-Infinity} onCommit={(v) => patch(c.id, { y: b.y1 - v })} />
             </Field>
             <Field label="Width (m)">
-              <NumberField value={c.w} step={0.05} min={0.3} max={3} onChange={(w) => patch(c.id, { w })} />
+              <NumberField value={c.w} step={0.05} min={0.3} max={3} onCommit={(w) => patch(c.id, { w })} />
             </Field>
             <Field label="Depth (m)">
-              <NumberField value={c.d} step={0.05} min={0.3} max={3} onChange={(d) => patch(c.id, { d })} />
+              <NumberField value={c.d} step={0.05} min={0.3} max={3} onCommit={(d) => patch(c.id, { d })} />
             </Field>
             <Field label="Above the ridge (m)">
-              <NumberField value={c.height} step={0.1} min={0} max={4} onChange={(height) => patch(c.id, { height })} />
+              <NumberField value={c.height} step={0.1} min={0} max={4} onCommit={(height) => patch(c.id, { height })} />
             </Field>
             <Field label="Pots">
-              <NumberField value={c.pots} step={1} min={0} max={6} onChange={(pots) => patch(c.id, { pots: Math.round(pots) })} />
+              <NumberField value={c.pots} step={1} min={0} max={6} onCommit={(pots) => patch(c.id, { pots: Math.round(pots) })} />
             </Field>
           </div>
           <button onClick={() => onChange(chimneys.map((o) => (o.id === c.id ? chimneyOnRidge(model, o) : o)))}>Put on the ridge</button>
