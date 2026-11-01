@@ -173,11 +173,19 @@
 
 /* Read-only bodies (components/ReadOnly.tsx): disabled fields read as plain text, actions fade. */
 .ro-body { border: 0; margin: 0; padding: 0; min-width: 0; }
-.ro-body input, .ro-body select, .ro-body textarea {
+.ro-body input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]), .ro-body select, .ro-body textarea {
   appearance: none; -webkit-appearance: none; background: transparent; border-color: transparent; box-shadow: none;
   padding-left: 0; padding-right: 0; color: inherit; opacity: 1; -webkit-text-fill-color: currentColor; pointer-events: none;
 }
-.ro-body input[type="range"] { display: none; }
+/* Checkboxes, radios, swatches and sliders keep their drawn state (disabled look) so a value can still be read. */
+.ro-body input[type="checkbox"], .ro-body input[type="radio"], .ro-body input[type="color"], .ro-body input[type="range"] { pointer-events: none; opacity: 0.75; }
+/* Selection and navigation controls (NavButton in ReadOnly.tsx) stay live as focusable divs; give them the button look. */
+:where(.ro-body div[role="button"]:not(.sect-head)) { font: inherit; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-s); background: var(--surface-2); cursor: pointer; color: var(--text); }
+:where(.ro-body div[role="button"]:not(.sect-head)):hover { background: var(--surface-3); }
+.ro-body div.link[role="button"] { display: inline; border: 0; background: none; color: var(--muted); padding: 2px 0; text-decoration: underline; }
+.ro-body div.garden-row[role="button"]:hover { background: var(--surface-2); }
+.ro-body div.garden-row.active[role="button"] { background: var(--accent-soft); }
+.ro-body div.info-btn[role="button"] { padding: 0; }
 .ro-body button:disabled { opacity: 0.4; }
 .ro-body .sect-head { cursor: pointer; }
 .stat-caption { margin: var(--sp-2) 0 0; }

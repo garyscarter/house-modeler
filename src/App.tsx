@@ -20,7 +20,7 @@ import { runStartupPrompt } from "./components/startupDialog";
 import { currentHouse } from "./lib/house";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
-import { editsSite, siteEditPatch, SITE_EDIT_ID } from "./lib/modes";
+import { editsSite, roomTapSelects, siteEditPatch, SITE_EDIT_ID } from "./lib/modes";
 import { editFloorFor, houseName } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
@@ -113,7 +113,7 @@ export default function App() {
   const onSelectRoom = useCallback(
     (floor: Floor, room: Room) => {
       if (editsSite(mode)) return;
-      if (chassis === "phone") useSheet.getState().raise();
+      if (chassis === "phone" && roomTapSelects(mode)) useSheet.getState().raise();
       if (mode === "build") setUi({ selectedRoomId: room.id, editFloorId: floor.id });
       else if (mode === "decorate") {
         setUi({ selectedRoomId: room.id, selectedEdge: null, editFloorId: floor.id });

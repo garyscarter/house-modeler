@@ -47,10 +47,17 @@ describe("effectiveCompare", () => {
 
 describe("isCompact and canEdit", () => {
   it("an iPhone is compact either way round, iPad portrait and desktop are not", () => {
-    expect(isCompact({ width: 390, height: 844 })).toBe(true);
-    expect(isCompact({ width: 844, height: 390 })).toBe(true);
-    expect(isCompact({ width: 820, height: 1180 })).toBe(false);
-    expect(isCompact({ width: 1440, height: 900 })).toBe(false);
+    expect(isCompact({ width: 390, height: 844, coarse: true })).toBe(true);
+    expect(isCompact({ width: 844, height: 390, coarse: true })).toBe(true);
+    expect(isCompact({ width: 820, height: 1180, coarse: true })).toBe(false);
+    expect(isCompact({ width: 1440, height: 900, coarse: false })).toBe(false);
+  });
+  it("a short fine-pointer desktop window is not compact and keeps editing", () => {
+    const s = { width: 1440, height: 590, coarse: false };
+    expect(chassisFor(s)).toBe("desktop");
+    expect(isCompact(s)).toBe(false);
+    expect(canEdit("build", isCompact(s))).toBe(true);
+    expect(isCompact({ width: 1180, height: 540, coarse: true })).toBe(false); // tablet
   });
   it("on compact screens only decorate and furnish edit; elsewhere every mode does", () => {
     for (const m of ["build", "electrics", "garden", "plot", "review"]) {

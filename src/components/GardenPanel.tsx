@@ -1,3 +1,4 @@
+import { NavButton } from "./ReadOnly";
 import { useState } from "react";
 import { useSite, useStore } from "../store";
 import { SURFACE_LABEL, type GardenItem, type SiteSurface } from "../types";
@@ -87,10 +88,10 @@ function ItemRow({ item, selected, onPick }: { item: GardenItem; selected: boole
   const def = gardenDef(item.type);
   if (!def) return null;
   return (
-    <button className={selected ? "garden-row active" : "garden-row"} aria-pressed={selected} data-item-row={item.id} onClick={onPick}>
+    <NavButton className={selected ? "garden-row active" : "garden-row"} aria-pressed={selected} data-item-row={item.id} onClick={onPick}>
       <GardenThumb def={def} size={28} />
       <span className="garden-row-name">{def.name}</span>
-    </button>
+    </NavButton>
   );
 }
 

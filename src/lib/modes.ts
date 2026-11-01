@@ -100,6 +100,8 @@ export interface ModeUi {
   linkGang?: number;
   /** The 3D view's highest level shown; null = every floor, roof included. */
   maxLevel?: number | null;
+  /** The level Decorate/Furnish cut the view to on entry, so leaving them can undo it; null/undefined when the cut is the person's own. */
+  autoCutLevel?: number | null;
   /** The active layout's floors, so entering Decorate or Furnish can cut the 3D view to the floor being edited. */
   floors?: readonly { id: string; level: number }[];
 }
@@ -122,10 +124,18 @@ export function siteEditPatch(ui: Pick<ModeUi, "editFloorId">): Partial<ModeUi> 
 export function modeSwitchPatch(ui: ModeUi, next: Mode): Partial<ModeUi> {
   const patch: Partial<ModeUi> = { mode: next, gardenSel: [], linkSwitchId: null, linkGang: 0 };
   // Decorate and Furnish pick rooms in 3D: with every floor showing the roof hides them, so cut the view to the edited floor.
-  if ((next === "decorate" || next === "furnish") && ui.maxLevel === null && ui.floors?.length) {
-    const editing = ui.editFloorId === SITE_EDIT_ID ? ui.floorBeforeSite : ui.editFloorId;
-    const ground = ui.floors.reduce((lo, f) => (f.level < lo.level ? f : lo));
-    patch.maxLevel = (ui.floors.find((f) => f.id === editing) ?? ground).level;
+  // Moving between the two keeps whatever the view is; leaving them undoes a cut they made if the person has not changed the level since.
+  const cuts = (m: Mode) => m === "decorate" || m === "furnish";
+  if (cuts(next)) {
+    if (!cuts(ui.mode) && ui.maxLevel === null && ui.floors?.length) {
+      const editing = ui.editFloorId === SITE_EDIT_ID ? ui.floorBeforeSite : ui.editFloorId;
+      const ground = ui.floors.reduce((lo, f) => (f.level < lo.level ? f : lo));
+      patch.maxLevel = (ui.floors.find((f) => f.id === editing) ?? ground).level;
+      patch.autoCutLevel = patch.maxLevel;
+    }
+  } else {
+    if (ui.autoCutLevel != null && ui.maxLevel === ui.autoCutLevel) patch.maxLevel = null;
+    patch.autoCutLevel = null;
   }
   if (!roomTapSelects(next)) patch.selectedRoomId = null;
   if (next !== "decorate") patch.selectedEdge = null;

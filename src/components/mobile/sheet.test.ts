@@ -50,4 +50,14 @@ describe("sheet", () => {
     useSheet.getState().lower();
     expect(useSheet.getState().detent).toBe("peek");
   });
+
+  it("rest() keeps a stored selection held, so a remount does not hide its sheet", () => {
+    phone("build");
+    useStore.setState({ selectedRoomId: "r1", gardenSel: [] });
+    useSheet.getState().rest();
+    expect(useSheet.getState()).toMatchObject({ held: true, detent: "peek" });
+    useStore.setState({ selectedRoomId: null });
+    useSheet.getState().rest();
+    expect(useSheet.getState()).toMatchObject({ held: false, detent: "hidden" });
+  });
 });

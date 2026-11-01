@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { NumberField, SwatchField } from "../../components/inspector";
+import { NavButton } from "../../components/ReadOnly";
 import type { Fixture, LightWarmth, VariantKey } from "../../types";
 import { FRAME_LABEL, PICTURE_SIZES, PRINTS, isPicture, pictureSize, pictureSizeOf, type Orientation, type PictureFrame } from "../../lib/art";
 import { RUG_PATTERNS, rugPattern } from "../../lib/rugs";
@@ -132,9 +133,9 @@ export function FixtureInspector({
       {groupSize !== undefined && groupSize > 1 && onSelectGroup && (
         <p className="muted small">
           Part of a group of {groupSize} ·{" "}
-          <button className="link" onClick={onSelectGroup}>
+          <NavButton className="link" onClick={onSelectGroup}>
             Select group
-          </button>
+          </NavButton>
         </p>
       )}
       <label>

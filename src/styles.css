@@ -148,6 +148,7 @@ main[data-tab="plan"]:has(> .site-canvas) { background: var(--site-ground); }
   background: var(--panel); border: 1px solid var(--line);
   box-shadow: var(--shadow-card); font-weight: 600; font-size: 13px; pointer-events: none;
 }
+.split .viewer-title { top: calc(var(--float-top) + 44px); } /* below the centred compare-style segment, which would cover the right view's title */
 .empty { margin: auto; max-width: 420px; padding: 0 16px; text-align: center; color: var(--muted); }
 .empty h2 { margin: 0 0 6px; font-size: 24px; font-weight: 600; color: var(--text); }
 .empty p { margin: 0 0 18px; line-height: 1.5; }
