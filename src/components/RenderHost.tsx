@@ -27,7 +27,7 @@ export function RenderHost() {
       fallback={() => (
         <Modal title="Render" onClose={closeRender} width={380}>
           <p role="alert">The renderer could not load. A new version may have been published since this page opened.</p>
-          <div className="modal-actions">
+          <div className="row">
             <button type="button" className="primary" onClick={() => window.location.reload()}>
               Reload
             </button>
