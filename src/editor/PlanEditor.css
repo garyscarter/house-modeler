@@ -30,7 +30,7 @@
 .plan-edge-label { cursor: text; }
 
 /* Tool rail (left): 36 px icon buttons in groups divided by hairlines. */
-.tool-rail { position: absolute; top: var(--float-top); left: var(--float-gap); z-index: var(--z-float); width: 46px; padding: 5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tool-rail { position: absolute; top: var(--float-top); left: var(--inset-l); z-index: var(--z-float); width: 46px; padding: 5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .tool-rail .icon-btn, .plan-zoom .icon-btn { color: var(--muted); transition: background 0.12s, color 0.12s; }
 .tool-rail .icon-btn { width: 36px; height: 36px; }
 .tool-rail .icon-btn:hover:not(:disabled), .plan-zoom .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
@@ -59,7 +59,7 @@
 .tool-rail .info-pop { top: auto; bottom: -6px; left: calc(100% + 18px); width: 280px; }
 
 /* Zoom cluster (bottom left) */
-.plan-zoom { position: absolute; left: var(--float-gap); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
+.plan-zoom { position: absolute; left: var(--inset-l); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
 
 /* Status line: what the tool in hand wants next, centred above the dock. */
 .plan-status { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float); display: flex; align-items: center; gap: 12px; max-width: min(620px, calc(100% - 140px)); padding: 8px 8px 8px 14px; border-radius: var(--pill); font-size: 12px; line-height: 1.35; color: var(--text); }
@@ -116,7 +116,7 @@
 /* The edge-length box must stay tappable above a raised sheet. */
 .app[data-chassis="phone"] .edge-input { z-index: calc(var(--z-float) + 3); }
 /* Zoom cluster: top right (fit and fit-image only; pinch zooms). */
-.app[data-chassis="phone"] .plan-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
+.app[data-chassis="phone"] .plan-zoom { top: var(--float-gap); right: var(--inset-r); left: auto; bottom: auto; }
 /* Status pill: above the dock, which sits above the sheet at peek; it gives way when the sheet is raised. */
 .app[data-chassis="phone"] .plan-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
 .app[data-chassis="phone"][data-sheet="half"] .plan-status, .app[data-chassis="phone"][data-sheet="full"] .plan-status { opacity: 0; pointer-events: none; }

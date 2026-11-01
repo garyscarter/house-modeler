@@ -121,17 +121,9 @@ nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
 /* ---- Canvas ---- */
 main { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
 main[data-tab="3d"] { --card-clear: 196px; }
-/*
- * The 3D view runs behind the islands, but a drawing must not: its fit-to-view and its top edge chips would sit
- * under them. Until the editor camera takes a top inset (src/editor/core/useCanvasCamera.ts has right, bottom and left),
- * the drawing starts below the islands, on the drawing's own white so the strip reads as part of it.
- */
+/* The drawing runs full-bleed behind the islands on the page colour; its camera fits below them (insetTop). */
 main[data-tab="plan"] { background: #fff; }
 main[data-tab="plan"]:has(> .site-canvas) { background: #fbfbf9; }
-main[data-tab="plan"] { padding-top: var(--float-top); }
-/* The drawing's own chrome is measured from the drawing's top edge, which is already below the islands. */
-main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north, main[data-tab="plan"] .inspector-card { top: var(--float-gap); }
-main[data-tab="plan"] .inspector-card { max-height: calc(100% - var(--float-gap) - var(--card-clear)); }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }

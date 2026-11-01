@@ -152,12 +152,14 @@ export const HoverBox = memo(function HoverBox({ box, px }: { box: Box; px: numb
 });
 
 /** The names typed onto pieces. */
-export const FixtureLabels = memo(function FixtureLabels({ fixtures, px }: { fixtures: Fixture[]; px: number }) {
+export const FixtureLabels = memo(function FixtureLabels({ fixtures, selectedIds, px }: { fixtures: Fixture[]; selectedIds: string[]; px: number }) {
+  // A typed name shows when zoomed in past 1x (a screen pixel smaller than an image pixel) or when its piece is selected.
+  const zoomedIn = px < 1;
   return (
     <>
       {fixtures.map(
         (fx) =>
-          fx.label && (
+          fx.label && (zoomedIn || selectedIds.includes(fx.id)) && (
             <text key={"t" + fx.id} x={fx.x} y={fx.y} dy="0.35em" fontSize={px * 13 * 0.85} textAnchor="middle" fill="#111" className="plan-text" {...halo(px)}>
               {fx.label}
             </text>

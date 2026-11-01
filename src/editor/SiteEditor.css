@@ -4,7 +4,7 @@
 .site-canvas { position: absolute; inset: 0; }
 .site-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; background: #fbfbf9; user-select: none; touch-action: none; display: block; }
 .site-canvas > svg.peeking { pointer-events: none; }
-.site-zoom { position: absolute; left: var(--float-gap); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
+.site-zoom { position: absolute; left: var(--inset-l); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
 .site-zoom .icon-btn { color: var(--muted); }
 .site-zoom .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .site-status { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float); display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; border-radius: var(--pill); font-size: 12px; }
@@ -42,7 +42,7 @@
 .garden-symbol { color: var(--text); }
 
 .site-north {
-  position: absolute; top: var(--float-top); right: calc(var(--float-gap) + 332px); width: 40px; height: 52px; pointer-events: none;
+  position: absolute; top: var(--float-top); right: calc(var(--inset-r) + 332px); width: 40px; height: 52px; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; font-weight: 700; color: var(--danger); font-size: 12px;
   background: rgba(255, 255, 255, 0.85); border: 1px solid var(--line); border-radius: 20px; padding-top: 2px;
 }
@@ -65,9 +65,9 @@
 .app[data-touch] .site-zoom .icon-btn { width: 44px; height: 44px; }
 .app[data-touch] .site-status select { font-size: 16px; padding: 6px 8px; }
 /* Tablet: the card is 300 px wide, so the compass keeps clear of it. */
-.app[data-chassis="tablet"] .site-north { right: calc(var(--float-gap) + 312px); }
-.app[data-chassis="phone"] .site-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
-.app[data-chassis="phone"] .site-north { top: calc(var(--float-gap) + 48px); right: var(--float-gap); }
+.app[data-chassis="tablet"] .site-north { right: calc(var(--inset-r) + 312px); }
+.app[data-chassis="phone"] .site-zoom { top: var(--float-gap); right: var(--inset-r); left: auto; bottom: auto; }
+.app[data-chassis="phone"] .site-north { top: calc(var(--float-gap) + 48px); right: var(--inset-r); }
 .app[data-chassis="phone"] .site-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
 /* The scale bar sits one pill higher than the status so the two never overlap. */
 .app[data-chassis="phone"] .site-scale { left: var(--float-gap); bottom: calc(var(--sheet-peek) + 12px + 44px + 8px + 44px); }
