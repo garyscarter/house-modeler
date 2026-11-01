@@ -129,6 +129,26 @@ const WARM_SLICE_MS = 8;
 /** Quiet time after the renderer's programs last grew before the other lamp state is built for the newcomers, ms. */
 const REWARM_MS = 600;
 
+/** Resolves when every program in the list reports it has linked, or has been deleted (a deleted program never does). */
+const linkedWait = (gl: THREE.WebGLRenderer, programs: () => THREE.WebGLProgram[]) =>
+  new Promise<void>((resolve) => {
+    const end = performance.now() + COMPILE_TIMEOUT;
+    const poll = () => {
+      try {
+        const alive = new Set(gl.info.programs ?? []);
+        const ready = programs().every((p) => {
+          const r = (p as unknown as { isReady?: () => boolean }).isReady;
+          return !alive.has(p) || typeof r !== "function" || r.call(p);
+        });
+        if (ready || performance.now() > end) return resolve();
+      } catch {
+        return resolve();
+      }
+      setTimeout(poll, 10);
+    };
+    poll();
+  });
+
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 /**
@@ -169,7 +189,11 @@ export function Precompile({ token, offscreen = false, before, onDone }: { token
       let linked: Promise<unknown>;
       gl.setRenderTarget(target);
       try {
-        linked = Promise.all([gl.compileAsync(scene, camera), ...[...(offstage.get(gl) ?? [])].map((o) => gl.compileAsync(o, camera, scene))]);
+        // Not gl.compileAsync: its internal poll runs in a timer and throws (an uncaught "reading 'isReady'") when a
+        // material is disposed meanwhile, as when the canvas unmounts. The wait is ours, and skips programs that went.
+        gl.compile(scene, camera);
+        for (const o of offstage.get(gl) ?? []) gl.compile(o, camera, scene);
+        linked = linkedWait(gl, () => (gl.info.programs ?? []).filter((p) => !had.has(p)));
       } finally {
         gl.setRenderTarget(previous);
         target?.dispose();

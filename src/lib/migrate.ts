@@ -142,7 +142,7 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
     for (const k of Object.keys(variants)) variants[k] = migrateModel(variants[k]);
   }
   if (version < 8) {
-    // Quality became "auto" (the screen decides); "high" was the old default and never a choice, so it becomes auto once.
+    // Quality became "auto" (the screen decides); "high" was both the old default and a button in Settings, and a stored "high" cannot tell the two apart, so every "high" becomes auto once (an iPad or phone then gets balanced; High can be picked again in Settings).
     if (st.settings && (!st.settings.quality || st.settings.quality === "high")) st.settings = { ...st.settings, quality: "auto" };
     // The listing image used to default to shown at 30%; it now starts off, and the rail's button turns it on to faint.
     const img = st.planImage;
