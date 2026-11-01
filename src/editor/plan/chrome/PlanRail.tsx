@@ -75,7 +75,8 @@ export const PlanRail = memo(function PlanRail({
       toolItems([["rect", "rect"], ["room", "polygon"], ["wall", "wall"], ["canopy", "canopy"]]),
       toolItems([["door", "door"], ["window", "window"], ["gap", "gap"]]),
       toolItems([["measure", "measure"]]),
-      editable ? [
+      // Showing the listing's floorplan image only changes the view, so it stays in the view-only modes too.
+      [
         {
           id: "image",
           icon: "image",
@@ -95,7 +96,7 @@ export const PlanRail = memo(function PlanRail({
             />
           ),
         },
-      ] : [],
+      ],
     ];
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps

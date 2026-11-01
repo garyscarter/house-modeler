@@ -38,9 +38,9 @@ export function phoneLeftInset(): number {
   if (!rail || !canvas) return 0;
   const r = rail.getBoundingClientRect();
   const c = canvas.getBoundingClientRect();
-  // Not laid out yet: the rail's size follows from the mode, a short one for the view-only modes.
+  // Not laid out yet: the rail's size follows from the mode, a short one (select, measure, image) for the view-only modes.
   if (!(r.width > 0 && r.height > 0)) return viewOnlyNow() ? 0 : PHONE_LEFT_INSET;
-  return r.height < c.height * 0.2 ? 0 : Math.round(r.right - c.left) + 8;
+  return r.height < c.height * 0.25 ? 0 : Math.round(r.right - c.left) + 8;
 }
 
 /**

@@ -27,7 +27,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   // Rail: no drawing tools.
   const tools = await page.$$eval('.tool-rail [data-tool]', (els) => els.map((e) => e.getAttribute('data-tool')));
   ok(!['rect', 'room', 'wall', 'canopy', 'gap', 'calibrate'].some((t) => tools.includes(t)), `rail has no drawing tools (${tools.join(',')})`);
-  ok(tools.join() === 'select,measure', `Build on the phone is view only: the rail is select and measure (${tools.join(',')})`);
+  ok(tools.join() === 'select,measure,image', `Build on the phone is view only: the rail is select, measure and the floorplan image (${tools.join(',')})`);
 
   // A point inside a room clear of the tool rail (the first room whose centre is right of it), in client px.
   const roomPoint = async () => page.evaluate(() => {
