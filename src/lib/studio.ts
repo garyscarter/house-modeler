@@ -1,6 +1,7 @@
 import type { Floor, HouseModel, VariantKey } from "../types";
 import type { Tab, ViewMode } from "../store";
 import { belongsToHouse, useHouse } from "./house";
+import { SITE_EDIT_ID } from "./modes";
 
 /** Window events the top bar (and anything else) dispatches to open the palette and the shortcut sheet. */
 export const OPEN_PALETTE = "house:open-palette";
@@ -39,7 +40,30 @@ export function floorAtLevel(floors: Floor[], level: number): Floor | undefined 
   return best;
 }
 
-type Targetish = { tagName?: string; closest?: (s: string) => unknown } | null;
+export interface EditFloorState {
+  variants: Partial<Record<VariantKey, HouseModel>>;
+  activeVariant: VariantKey;
+  /** The floor the plan edits, or SITE_EDIT_ID (the site editor), or null for the first floor. */
+  editFloorId: string | null;
+  peek: boolean;
+  peekReturn: VariantKey | null;
+}
+
+/**
+ * The floor the plan editor shows, and the key that keeps its camera. While peeking, the layout shown has other floor ids,
+ * so it follows the level of the floor you were on (in the layout you left) and keeps that floor's id as the key.
+ */
+export function editFloorFor(s: EditFloorState): { floor: Floor; key: string } | undefined {
+  const model = s.variants[s.activeVariant];
+  if (!model) return undefined;
+  const find = (m: HouseModel | undefined) => (s.editFloorId && s.editFloorId !== SITE_EDIT_ID ? m?.floors.find((f) => f.id === s.editFloorId) : undefined) ?? m?.floors[0];
+  const home = s.peek && s.peekReturn ? s.variants[s.peekReturn] : model;
+  const homeFloor = find(home);
+  const floor = s.peek && homeFloor ? floorAtLevel(model.floors, homeFloor.level) ?? model.floors[0] : find(model);
+  return floor ? { floor, key: homeFloor?.id ?? floor.id } : undefined;
+}
+
+type Targetish ={ tagName?: string; closest?: (s: string) => unknown } | null;
 const tag = (t: Targetish) => t?.tagName?.toLowerCase();
 
 /** Tab flips Plan/3D only from the page itself (body, a canvas, the plan, an svg), never from a control, card, menu or dialog. */

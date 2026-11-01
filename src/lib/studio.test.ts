@@ -1,6 +1,6 @@
 import { BUILT_IN_NAME, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "../houses/default";
 import { describe, expect, it } from "vitest";
-import { dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
+import { editFloorFor, dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
 import type { Floor, HouseModel } from "../types";
 
 const fl = (id: string, level: number) => ({ id, name: id, level }) as unknown as Floor;
@@ -91,6 +91,26 @@ describe("floorAtLevel", () => {
     expect(floorAtLevel(other, 0)?.id).toBe("g2");
     expect(floorAtLevel([fl("g2", 0)], 1)?.id).toBe("g2");
     expect(floorAtLevel([], 0)).toBeUndefined();
+  });
+});
+
+describe("editFloorFor", () => {
+  const model = (...fs: Floor[]) => ({ floors: fs }) as unknown as HouseModel;
+  const current = model(fl("gr", 0), fl("up", 1));
+  const proposed = model(fl("g2", 0), fl("u2", 1));
+  const base = { variants: { current, proposed }, activeVariant: "current" as const, editFloorId: null, peek: false, peekReturn: null };
+  it("is the chosen floor, else the first floor, with its own id as the key", () => {
+    expect(editFloorFor({ ...base, editFloorId: "up" })).toMatchObject({ floor: { id: "up" }, key: "up" });
+    expect(editFloorFor(base)?.floor.id).toBe("gr");
+    expect(editFloorFor({ ...base, editFloorId: "gone" })?.floor.id).toBe("gr");
+  });
+  it("shows the first floor for the site editor's id, and nothing without a model", () => {
+    expect(editFloorFor({ ...base, editFloorId: "site" })?.floor.id).toBe("gr");
+    expect(editFloorFor({ ...base, variants: {} })).toBeUndefined();
+  });
+  it("follows the level you were on while peeking, and keeps that floor's id as the key", () => {
+    const peeking = { ...base, activeVariant: "proposed" as const, editFloorId: "up", peek: true, peekReturn: "current" as const };
+    expect(editFloorFor(peeking)).toMatchObject({ floor: { id: "u2" }, key: "up" });
   });
 });
 

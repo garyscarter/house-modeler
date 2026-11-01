@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { progressLabel, samplesFor, stillSize } from "../lib/stills";
+import { currentQuality } from "../three/useQuality";
 import { downloadBlob, fileDate, slug } from "../lib/export";
 import { downloadPrefix } from "../lib/brand";
 import { houseName } from "../lib/studio";
-import { captureIds, getCapture } from "../three/captureRegistry";
+import { getCapture } from "../three/captureRegistry";
 import { frames } from "./savedViewActions";
 import { Loader } from "./Loader";
 import { Modal } from "./Modal";
 import { stampMark } from "./stampMark";
-import { closeRender, openRender, useRenderRequest, type RenderRequest } from "./renderRequest";
+import { closeRender, type RenderRequest } from "./renderRequest";
 import "./RenderDialog.css";
 
 // The tracer is its own lazy chunk: nothing loads until a still is asked for.
@@ -17,23 +18,9 @@ const loadTracer = () => import("../three/pathtrace");
 
 type Phase = { kind: "running"; done: number; total: number; label: string } | { kind: "done"; blob: Blob; url: string } | { kind: "error"; text: string };
 
-/** Mounted once in the app: the Render dialog, and the palette's "house:render" event. */
-export function RenderDialogHost() {
-  const request = useRenderRequest((s) => s.request);
-  const seq = useRenderRequest((s) => s.seq);
-  useEffect(() => {
-    const onEvent = () => {
-      const id = captureIds()[0];
-      if (id) openRender({ id, pose: null, label: "3D view", stamp: false });
-    };
-    window.addEventListener("house:render", onEvent);
-    return () => window.removeEventListener("house:render", onEvent);
-  }, []);
-  // A fresh key per request, so a second render starts clean.
-  return request ? <RenderDialog key={seq} request={request} /> : null;
-}
 
-function RenderDialog({ request }: { request: RenderRequest }) {
+/** The Render dialog for one request (loaded on demand by RenderHost). */
+export function RenderDialog({ request }: { request: RenderRequest }) {
   const [phase, setPhase] = useState<Phase>({ kind: "running", done: 0, total: 0, label: "Building the scene…" });
 
   useEffect(() => {
@@ -42,7 +29,7 @@ function RenderDialog({ request }: { request: RenderRequest }) {
     const t = getCapture(request.id);
     const canvas = t?.gl.domElement;
     const { width, height } = stillSize(canvas?.clientWidth || 1200, canvas?.clientHeight || 800);
-    const total = samplesFor(st.settings.quality);
+    const total = samplesFor(currentQuality());
     const level = st.maxLevel;
     const changeLevel = request.maxLevel !== undefined && request.maxLevel !== level;
     let started = 0;

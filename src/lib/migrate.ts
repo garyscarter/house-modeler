@@ -3,9 +3,10 @@ import { DEFAULT_HOUSE_ID } from "../houses";
 import { useHouse } from "./house";
 import { dropAiSettings } from "./persist";
 import { sitesFromShared, type Sites } from "./sites";
+import { IMAGE_FAINT } from "./planImage";
 
 /** Version of the persisted state written by this build. */
-export const PERSIST_VERSION = 7;
+export const PERSIST_VERSION = 8;
 
 /** The persisted fields a migration touches; the rest pass through. */
 export interface PersistedLike {
@@ -16,6 +17,7 @@ export interface PersistedLike {
   /** Before version 7: the project's photos (removed). */
   photos?: unknown;
   settings?: { quality?: string } & Record<string, unknown>;
+  planImage?: { show?: boolean; opacity?: number };
   [k: string]: unknown;
 }
 
@@ -138,6 +140,13 @@ export function migratePersisted(persisted: unknown, version: number): Persisted
     delete st.photos;
     const variants = st.variants ?? {};
     for (const k of Object.keys(variants)) variants[k] = migrateModel(variants[k]);
+  }
+  if (version < 8) {
+    // Quality became "auto" (the screen decides); "high" was the old default and never a choice, so it becomes auto once.
+    if (st.settings && (!st.settings.quality || st.settings.quality === "high")) st.settings = { ...st.settings, quality: "auto" };
+    // The listing image used to default to shown at 30%; it now starts off, and the rail's button turns it on to faint.
+    const img = st.planImage;
+    if (img && img.show === true && img.opacity === 0.3) st.planImage = { show: false, opacity: IMAGE_FAINT };
   }
   return st;
 }

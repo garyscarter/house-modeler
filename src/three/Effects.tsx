@@ -4,7 +4,7 @@ import { EffectComposer, N8AO, ToneMapping } from "@react-three/postprocessing";
 import { Effect, ToneMappingMode } from "postprocessing";
 import { Uniform } from "three";
 import type * as THREE from "three";
-import { useStore } from "../store";
+import { useQuality } from "./useQuality";
 import { exposureByRenderer } from "./walk/WalkExposure";
 
 /**
@@ -40,7 +40,7 @@ class ExposureEffectImpl extends Effect {
  * renderer, see the Canvas) happens here as the last step.
  */
 export function Effects() {
-  const quality = useStore((s) => s.settings.quality);
+  const quality = useQuality();
   const gl = useThree((s) => s.gl);
   const effect = useMemo(() => new ExposureEffectImpl(), []);
   effect.target = gl;

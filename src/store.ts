@@ -7,6 +7,8 @@ import { imageAwareStorage, useHydration } from "./lib/persist";
 import { setLink, syncLinks } from "./lib/roomLinks";
 import { mergeRooms, type MergeResult } from "./lib/mergeRooms";
 import { migratePersisted, PERSIST_VERSION } from "./lib/migrate";
+import { IMAGE_FAINT } from "./lib/planImage";
+import type { QualitySetting } from "./lib/quality";
 import { copySiteOf, setSiteOf, siteOf, updateSiteOf, type Sites } from "./lib/sites";
 import { editsSite, isMode, modeSwitchPatch, SITE_EDIT_ID, type Mode } from "./lib/modes";
 import type { EdgePick } from "./lib/decorPick";
@@ -21,8 +23,8 @@ export type Tab = "3d" | "plan";
 export { SITE_EDIT_ID };
 
 export interface Settings {
-  /** Rendering quality: "high" adds ambient occlusion and soft shadows. */
-  quality: "high" | "balanced" | "low";
+  /** Rendering quality: "auto" lets the screen decide (lib/quality.ts); "high" adds ambient occlusion and soft shadows. */
+  quality: QualitySetting;
   /** Walk-through eye height in metres (1.0–2.0); absent = 1.7. Read it through eyeHeightOf (lib/walkTypes). */
   eyeHeight?: number;
   /** Walk-through lens: "narrow" | "normal" | "wide" (legacy saves hold 75, 90 or 100 degrees); absent = normal. Read it through walkLensOf (lib/walkTypes). */
@@ -254,7 +256,7 @@ export const useStore = create<State>()(
         variants: {},
         sites: {},
         pieces: [],
-        settings: { quality: "high" },
+        settings: { quality: "auto" },
         sun: { enabled: false, dayOfYear: 172, hour: 15 },
         costRates: {},
         savedViews: [],
@@ -317,7 +319,7 @@ export const useStore = create<State>()(
         showLabels: false,
         showCeilings: false,
         doorsOpen: false,
-        planImage: { show: true, opacity: 0.3 },
+        planImage: { show: false, opacity: IMAGE_FAINT },
         planWalls: true,
         maxLevel: null,
         sectionHeight: null,

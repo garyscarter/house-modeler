@@ -1,10 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SITE_EDIT_ID, useStore } from "./store";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useStore } from "./store";
 import { useWalk } from "./walkStore";
 import { Dialogs } from "./components/Dialogs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutSheet } from "./components/ShortcutSheet";
-import { RenderDialogHost } from "./components/RenderDialog";
+import { RenderHost } from "./components/RenderHost";
 import { ReviewPage } from "./components/ReviewPage";
 import { ListingUpdatesDialog } from "./components/ListingUpdatesDialog";
 import { LayoutsDialog } from "./components/LayoutsDialog";
@@ -20,8 +20,8 @@ import { runStartupPrompt } from "./components/startupDialog";
 import { currentHouse } from "./lib/house";
 import { ModePanel } from "./components/ModePanel";
 import { usePanelPrefs } from "./components/panelPrefs";
-import { editsSite, siteEditPatch } from "./lib/modes";
-import { floorAtLevel, houseName } from "./lib/studio";
+import { editsSite, siteEditPatch, SITE_EDIT_ID } from "./lib/modes";
+import { editFloorFor, houseName } from "./lib/studio";
 import { pickWallFace } from "./lib/decorPick";
 import { EXT_WALL_T, roomWorldPolygon } from "./lib/geometry";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "./types";
@@ -46,26 +46,32 @@ const PlanEditor = lazy(() => import("./editor/PlanEditor").then((m) => ({ defau
 const SiteEditor = lazy(() => import("./editor/SiteEditor").then((m) => ({ default: m.SiteEditor })));
 
 export default function App() {
-  const variants = useStore((s) => s.variants);
+  // The shell subscribes to as little as it can: what each part draws it reads from the store itself (Viewer, WipeCompare,
+  // PlanHost), so a drag on the plan does not re-render this component on every frame.
   const activeVariant = useStore((s) => s.activeVariant);
-  const viewMode = useStore((s) => s.viewMode);
-  const showLabels = useStore((s) => s.showLabels);
-  const showCeilings = useStore((s) => s.showCeilings);
-  const doorsOpen = useStore((s) => s.doorsOpen);
-  const maxLevel = useStore((s) => s.maxLevel);
-  const showExterior = useStore((s) => s.showExterior);
-  const selectedRoomId = useStore((s) => s.selectedRoomId);
+  const hasModel = useStore((s) => !!s.variants[s.activeVariant]);
+  const title = useStore((s) => {
+    const m = s.variants[s.activeVariant] ?? s.variants.current ?? s.variants.proposed;
+    return m ? houseName(m) : null;
+  });
   const setUi = useStore((s) => s.setUi);
   const tab = useStore((s) => s.tab);
   const editFloorId = useStore((s) => s.editFloorId);
   const mode = useStore((s) => s.mode);
   const peek = useStore((s) => s.peek);
-  const peekReturn = useStore((s) => s.peekReturn);
   const chassis = useChassis((s) => s.chassis);
   const touch = useChassis((s) => s.touch);
   const walking = useWalk((s) => s.on);
   const hydrationError = useHydration((s) => s.error);
   const [hydrated, setHydrated] = useState(useStore.persist.hasHydrated());
+
+  // Dev only: how often this component renders (the plan-drag check reads window.__appRenders).
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      const w = window as unknown as { __appRenders?: number };
+      w.__appRenders = (w.__appRenders ?? 0) + 1;
+    }
+  });
 
   useStudioKeys();
   useGestureFade();
@@ -93,21 +99,11 @@ export default function App() {
     })();
   }, [hydrated]);
 
-  const model = variants[activeVariant];
-  const titleModel = variants[activeVariant] ?? variants.current ?? variants.proposed;
   useEffect(() => {
-    document.title = titleModel ? `${houseName(titleModel)} · Storey` : "Storey";
-  }, [titleModel]);
-  const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
-  const otherModel = variants[other];
-  const both = !!variants.current && !!variants.proposed;
-  const effectiveViewMode = effectiveCompare(viewMode, chassis, both, "single", "wipe", "side-by-side");
+    document.title = title ? `${title} · Storey` : "Storey";
+  }, [title]);
   // On the plan, Plot always shows the site editor and no other mode does.
   const editingSite = editsSite(mode);
-  // While peeking, the shown layout has other floor ids: follow the level of the floor you were on, and keep the editor's key.
-  const homeModel = peek && peekReturn ? variants[peekReturn] : model;
-  const homeFloor = (editFloorId && editFloorId !== SITE_EDIT_ID ? homeModel?.floors.find((f) => f.id === editFloorId) : undefined) ?? homeModel?.floors[0];
-  const editFloor = peek && homeFloor && model ? floorAtLevel(model.floors, homeFloor.level) ?? model.floors[0] : (editFloorId && editFloorId !== SITE_EDIT_ID ? model?.floors.find((f) => f.id === editFloorId) : undefined) ?? model?.floors[0];
 
   useEffect(() => {
     if (tab === "plan" && editsSite(mode) && editFloorId !== SITE_EDIT_ID) setUi(siteEditPatch({ editFloorId }));
@@ -178,116 +174,31 @@ export default function App() {
       </div>
     );
 
-  const showInspector = tab === "3d" && mode !== "review" && (!!model || editsSite(mode));
+  const showInspector = tab === "3d" && mode !== "review" && (hasModel || editingSite);
 
   return (
     <div className="app" data-mode={mode} data-tab={tab} data-chassis={chassis} data-touch={touch || undefined} data-walking={walking || undefined}>
       <TopBar />
 
       <main data-tab={tab}>
-        {!model && <Welcome />}
-        {model && opened3d && (
-          <div className="view3d" hidden={!show3d}>
-            <ErrorBoundary
-              resetKeys={[model]}
-              fallback={(error, reset) => <PanelProblem title="The 3D view hit a problem" button="Reload 3D view" error={error} reset={reset} />}
-            >
+        {!hasModel && <Welcome />}
+        {hasModel && opened3d && (
+          <View3D show={show3d} onSelectRoom={onSelectRoom} onPickWall={pickWall} pickIn={pickIn} onWipeSelect={onWipeSelect} onWipePickWall={onWipePickWall} />
+        )}
+        {hasModel && tab === "plan" && (
+          <ModelBoundary fallback={(error, reset) => <PanelProblem title="The plan hit a problem" button="Reload plan" error={error} reset={reset} />}>
             <Suspense
               fallback={
                 <div className="viewer-loading" role="status">
                   <Loader kind="blueprint" size={40} />
-                  Loading the 3D view
+                  Opening the plan
                 </div>
               }
             >
-              {effectiveViewMode === "single" && (
-                <Viewer
-                  active={show3d}
-                  model={model}
-                  showLabels={showLabels}
-                  showCeilings={showCeilings}
-                  doorsOpen={doorsOpen}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={onSelectRoom}
-                  onPickWall={pickWall}
-                  maxLevel={maxLevel}
-                  showExterior={showExterior}
-                  variant={activeVariant}
-                />
-              )}
-              {effectiveViewMode === "side-by-side" && (
-                <div className="split">
-                  {(["current", "proposed"] as VariantKey[]).map((k) => (
-                    <Viewer
-                      key={k}
-                      active={show3d}
-                      captureId={k}
-                      variant={k}
-                      model={variants[k]!}
-                      showLabels={showLabels}
-                      showCeilings={showCeilings}
-                      doorsOpen={doorsOpen}
-                      selectedRoomId={selectedRoomId}
-                      onSelectRoom={pickIn[k].select}
-                      onPickWall={pickIn[k].wall}
-                      title={VARIANT_LABEL[k]}
-                      maxLevel={maxLevel}
-                      showExterior={showExterior}
-                    />
-                  ))}
-                </div>
-              )}
-              {effectiveViewMode === "overlay" && otherModel && (
-                <Viewer
-                  active={show3d}
-                  model={model}
-                  ghost={otherModel}
-                  variant={activeVariant}
-                  ghostVariant={other}
-                  showLabels={showLabels}
-                  showCeilings={showCeilings}
-                  doorsOpen={doorsOpen}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={onSelectRoom}
-                  onPickWall={pickWall}
-                  title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (teal = new, red = removed)`}
-                  maxLevel={maxLevel}
-                  showExterior={showExterior}
-                />
-              )}
-              {effectiveViewMode === "wipe" && (
-                <WipeCompare
-                  showLabels={showLabels}
-                  showCeilings={showCeilings}
-                  doorsOpen={doorsOpen}
-                  selectedRoomId={selectedRoomId}
-                  onSelectRoom={onWipeSelect}
-                  onPickWall={onWipePickWall}
-                  maxLevel={maxLevel}
-                  showExterior={showExterior}
-                />
-              )}
+              {editingSite && <SiteEditor key={mode} mode={mode === "garden" ? "garden" : "plot"} />}
+              {!editingSite && <PlanHost />}
             </Suspense>
-            </ErrorBoundary>
-          </div>
-        )}
-        {model && tab === "plan" && (
-          <ErrorBoundary
-            resetKeys={[model]}
-            fallback={(error, reset) => <PanelProblem title="The plan hit a problem" button="Reload plan" error={error} reset={reset} />}
-          >
-          <Suspense
-            fallback={
-              <div className="viewer-loading" role="status">
-                <Loader kind="blueprint" size={40} />
-                Opening the plan
-              </div>
-            }
-          >
-            {editingSite && <SiteEditor key={mode} mode={mode === "garden" ? "garden" : "plot"} />}
-            {!editingSite && editFloor && <PlanEditor key={homeFloor?.id ?? editFloor.id} variant={activeVariant} floor={editFloor} />}
-          </Suspense>
-          </ErrorBoundary>
+          </ModelBoundary>
         )}
 
         {showInspector && (
@@ -295,20 +206,105 @@ export default function App() {
             <ModePanel />
           </InspectorCard>
         )}
-        {model && <CoachStrip />}
+        {hasModel && <CoachStrip />}
         <SaveNotice />
-        {model && <Dock />}
+        {hasModel && <Dock />}
         {peek && <div className="peek-badge">Showing {VARIANT_LABEL[activeVariant]} · release Space</div>}
       </main>
-      {model && chassis === "phone" && <TabBar />}
+      {hasModel && chassis === "phone" && <TabBar />}
 
       <Dialogs />
       <CommandPalette />
       <ShortcutSheet />
-      <RenderDialogHost />
+      <RenderHost />
       <ReviewPage />
       <ListingUpdatesDialog />
       <LayoutsDialog />
+    </div>
+  );
+}
+
+/** An error boundary that tries again when the active layout changes (a fix made after an error), without its parent subscribing to edits. */
+function ModelBoundary({ fallback, children }: { fallback: (error: unknown, reset: () => void) => ReactNode; children: ReactNode }) {
+  const model = useStore((s) => s.variants[s.activeVariant]);
+  return (
+    <ErrorBoundary resetKeys={[model]} fallback={fallback}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+/** The floor plan editor: reads the floor it shows from the store (following the peek, see editFloorFor), so App does not. */
+function PlanHost() {
+  const variant = useStore((s) => s.activeVariant);
+  const floor = useStore((s) => editFloorFor(s)?.floor);
+  const key = useStore((s) => editFloorFor(s)?.key);
+  if (!floor || !key) return null;
+  return <PlanEditor key={key} variant={variant} floor={floor} />;
+}
+
+type Picks = {
+  select: (floor: Floor, room: Room) => void;
+  wall?: (floor: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays?: { id: string; poly: { x: number; y: number }[] }[]) => void;
+};
+
+/**
+ * The 3D tab: one view, side by side, overlay or the wipe. It picks the arrangement; each viewer reads its own layout and
+ * the view settings (labels, ceilings, doors, floor cap, selection) from the store.
+ */
+function View3D({
+  show,
+  onSelectRoom,
+  onPickWall,
+  pickIn,
+  onWipeSelect,
+  onWipePickWall,
+}: {
+  show: boolean;
+  onSelectRoom: Picks["select"];
+  onPickWall: Picks["wall"];
+  pickIn: Record<VariantKey, Picks>;
+  onWipeSelect: (f: Floor, r: Room, k: VariantKey) => void;
+  onWipePickWall: ((f: Floor, hit: { x: number; y: number }, normal: { x: number; y: number }, bays: { id: string; poly: { x: number; y: number }[] }[] | undefined, k: VariantKey) => void) | undefined;
+}) {
+  const viewMode = useStore((s) => s.viewMode);
+  const activeVariant = useStore((s) => s.activeVariant);
+  const both = useStore((s) => !!s.variants.current && !!s.variants.proposed);
+  const chassis = useChassis((s) => s.chassis);
+  const mode = effectiveCompare(viewMode, chassis, both, "single", "wipe", "side-by-side");
+  const other: VariantKey = activeVariant === "current" ? "proposed" : "current";
+  return (
+    <div className="view3d" hidden={!show}>
+      <ModelBoundary fallback={(error, reset) => <PanelProblem title="The 3D view hit a problem" button="Reload 3D view" error={error} reset={reset} />}>
+        <Suspense
+          fallback={
+            <div className="viewer-loading" role="status">
+              <Loader kind="blueprint" size={40} />
+              Loading the 3D view
+            </div>
+          }
+        >
+          {mode === "single" && <Viewer active={show} variant={activeVariant} onSelectRoom={onSelectRoom} onPickWall={onPickWall} />}
+          {mode === "side-by-side" && (
+            <div className="split">
+              {(["current", "proposed"] as VariantKey[]).map((k) => (
+                <Viewer key={k} active={show} captureId={k} variant={k} onSelectRoom={pickIn[k].select} onPickWall={pickIn[k].wall} title={VARIANT_LABEL[k]} />
+              ))}
+            </div>
+          )}
+          {mode === "overlay" && (
+            <Viewer
+              active={show}
+              variant={activeVariant}
+              ghostVariant={other}
+              onSelectRoom={onSelectRoom}
+              onPickWall={onPickWall}
+              title={`${VARIANT_LABEL[activeVariant]} (solid) vs ${VARIANT_LABEL[other]} (teal = new, red = removed)`}
+            />
+          )}
+          {mode === "wipe" && <WipeCompare onSelectRoom={onWipeSelect} onPickWall={onWipePickWall} />}
+        </Suspense>
+      </ModelBoundary>
     </div>
   );
 }

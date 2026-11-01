@@ -78,7 +78,8 @@ export function poseFits(p: unknown, box: FrameBox, maxDistance: number): p is C
 }
 
 const HOME_AZIMUTH_DEG = 35;
-const HOME_ELEVATION_DEG = 35;
+/** How far the opening view looks down on the house: low enough that the house is the hero and the attached neighbour does not block it. */
+export const HOME_ELEVATION_DEG = 25;
 const HOME_MARGIN = 0.15;
 
 const rad = (d: number) => (d * Math.PI) / 180;

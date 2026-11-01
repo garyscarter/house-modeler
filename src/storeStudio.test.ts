@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "./store";
+import { IMAGE_FAINT } from "./lib/planMath";
 import { builtInHouse } from "./houses/default";
 
 const st = () => useStore.getState();
@@ -63,11 +64,11 @@ describe("store: studio", () => {
     expect(st().past.length).toBe(before);
   });
 
-  it("undo clears the hovered room, and the image defaults to 30%", () => {
+  it("undo clears the hovered room, and the listing image starts off, at the faint opacity", () => {
     st().setVariant("current", builtInHouse(""));
     st().setUi({ hoveredRoomId: "x" });
     st().undo();
     expect(st().hoveredRoomId).toBeNull();
-    expect(useStore.getInitialState().planImage).toEqual({ show: true, opacity: 0.3 });
+    expect(useStore.getInitialState().planImage).toEqual({ show: false, opacity: IMAGE_FAINT });
   });
 });

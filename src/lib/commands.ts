@@ -6,6 +6,7 @@ import { useChassis } from "../components/useChassis";
 import { FEATURES } from "./chassis";
 import { OPEN_SHORTCUTS, floorDisplayName } from "./studio";
 import { sectionStops } from "./sectionCut";
+import { QUALITY_SETTINGS, type QualitySetting } from "./quality";
 
 export interface Command {
   id: string;
@@ -83,12 +84,12 @@ export interface CommandContext {
   doorsOpen: boolean;
   showExterior: boolean;
   showSite: boolean;
-  quality: "high" | "balanced" | "low";
+  quality: QualitySetting;
   siteEditId: string;
   isMac: boolean;
   setUi: (p: Record<string, unknown>) => void;
   updateRoom: (k: VariantKey, floorId: string, roomId: string, patch: Partial<Room>) => void;
-  setSettings: (s: { quality: "high" | "balanced" | "low" }) => void;
+  setSettings: (s: { quality: QualitySetting }) => void;
   undo: () => void;
   redo: () => void;
   /** Dispatches a window event (injected so tests need no DOM). */
@@ -192,7 +193,7 @@ export function buildCommands(c: CommandContext): Command[] {
     }
   }
 
-  for (const q of ["high", "balanced", "low"] as const) {
+  for (const q of QUALITY_SETTINGS) {
     add(`quality:${q}`, `Render quality: ${q[0].toUpperCase()}${q.slice(1)}`, "Settings", () => c.setSettings({ quality: q }), { keywords: ["graphics", "settings"] });
   }
 

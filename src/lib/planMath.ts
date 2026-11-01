@@ -502,8 +502,8 @@ export function imageClipRect(rooms: Rect, pxPerM: number, image: Size, marginM 
 }
 
 export type ImageState = "off" | "faint" | "trace";
-export const IMAGE_FAINT = 0.18;
-export const IMAGE_TRACE = 0.65;
+import { IMAGE_FAINT, IMAGE_TRACE } from "./planImage";
+export { IMAGE_FAINT, IMAGE_TRACE };
 
 /** Which of the rail's three image states a persisted value means. */
 export function imageStateOf(img: { show: boolean; opacity: number }): ImageState {

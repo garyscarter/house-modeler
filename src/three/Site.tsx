@@ -755,14 +755,14 @@ function contactShadowMaterial(): THREE.Material {
 const NEIGHBOUR_WALL = "#f7f7f5";
 const NEIGHBOUR_ROOF = "#aca7a2";
 const FLAT_ROOF = "#9a9894";
-/** Quiet "card model" massing, used unless the neighbours are shown in their own colours. */
-const CARD_WALL = "#eef0ee";
-const CARD_ROOF = "#cfd3d1";
-const CARD_FLAT_ROOF = "#c4c8c6";
+/** Quiet "card model" massing, used unless the neighbours are shown in their own colours. Mid greys, so they recede behind the house (which is the lightest thing in the view). */
+const CARD_WALL = "#c8ccc7";
+const CARD_ROOF = "#b3b8b3";
+const CARD_FLAT_ROOF = "#a9aeaa";
 
-/** Quiet canvas neighbours: matte warm greys (walls, roofs). */
-const QUIET_WALL = "#d9dbd6";
-const QUIET_ROOF = "#c3c5c0";
+/** Quiet canvas neighbours: matte greys a step darker again (walls, roofs). */
+const QUIET_WALL = "#bfc3bd";
+const QUIET_ROOF = "#a8aca6";
 /** The page colour (--bg) the quiet ground is toned towards, and by how much. */
 const PAGE_TONE = "#eef0ec";
 const GROUND_TONE = 0.2;
@@ -814,10 +814,10 @@ function neighbourRoofBase(color: string): THREE.MeshStandardMaterial {
   });
 }
 function quietBase(color: string): THREE.MeshStandardMaterial {
-  return neighbourBase(`quiet|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.95 }));
+  return neighbourBase(`quiet|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 1 }));
 }
 function cardBase(color: string): THREE.MeshStandardMaterial {
-  return neighbourBase(`card|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.92 }));
+  return neighbourBase(`card|${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 1 }));
 }
 function neighbourFlatBase(): THREE.MeshStandardMaterial {
   return neighbourBase("flat", () => new THREE.MeshStandardMaterial({ color: FLAT_ROOF, map: membraneTexture(), roughness: 0.95 }));

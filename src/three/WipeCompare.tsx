@@ -2,21 +2,16 @@ import { useMemo, useRef, useState } from "react";
 import { VARIANT_LABEL, type Floor, type Room, type VariantKey } from "../types";
 import type { V2 } from "../lib/geometry";
 import { useStore } from "../store";
+import { useChassis } from "../components/useChassis";
 import { SunControls } from "../components/SunControls";
 import { LightsWarming, Viewer } from "./Viewer";
 import { ViewCube } from "./ViewCube";
 import "./Wipe.css";
 
 export interface WipeCompareProps {
-  showLabels: boolean;
-  showCeilings: boolean;
-  doorsOpen: boolean;
-  selectedRoomId: string | null;
   onSelectRoom: (floor: Floor, room: Room, variant: VariantKey) => void;
   /** Decorate: a click on a wall face in either view (see Viewer's onPickWall), with the layout it was in. */
   onPickWall?: (floor: Floor, hit: V2, normal: V2, bays: { id: string; poly: V2[] }[] | undefined, variant: VariantKey) => void;
-  maxLevel: number | null;
-  showExterior: boolean;
 }
 
 const MIN = 0.05;
@@ -32,7 +27,11 @@ const clamp = (x: number) => Math.min(MAX, Math.max(MIN, x));
  * CSS variable while dragging, so moving it never re-renders the canvases.
  */
 export function WipeCompare(p: WipeCompareProps) {
-  const variants = useStore((s) => s.variants);
+  // Only whether each layout exists: the viewers read their models and the view settings from the store themselves.
+  const hasCurrent = useStore((s) => !!s.variants.current);
+  const hasProposed = useStore((s) => !!s.variants.proposed);
+  // Two views at once: a phone draws both at a pixel ratio of 1.
+  const maxDpr = useChassis((s) => (s.chassis === "phone" ? 1 : undefined));
   const [pos, setPos] = useState(0.5);
   const [dragging, setDragging] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -59,49 +58,26 @@ export function WipeCompare(p: WipeCompareProps) {
     return { current: per("current"), proposed: per("proposed") };
   }, [onSelectRoom, onPickWall]);
 
-  const { current, proposed } = variants;
-  if (!current || !proposed) {
-    const k: VariantKey = proposed ? "proposed" : "current";
-    const model = proposed ?? current;
+  if (!hasCurrent || !hasProposed) {
+    const k: VariantKey = hasProposed ? "proposed" : "current";
+    const any = hasProposed || hasCurrent;
     return (
       <div className="wipe">
-        {model && (
-          <Viewer
-            model={model}
-            variant={k}
-            showLabels={p.showLabels}
-            showCeilings={p.showCeilings}
-            doorsOpen={p.doorsOpen}
-            selectedRoomId={p.selectedRoomId}
-            onSelectRoom={handlers[k].select}
-            onPickWall={handlers[k].wall}
-            maxLevel={p.maxLevel}
-            showExterior={p.showExterior}
-            chrome={false}
-          />
-        )}
+        {any && <Viewer variant={k} onSelectRoom={handlers[k].select} onPickWall={handlers[k].wall} maxDpr={maxDpr} chrome={false} />}
         <ViewCube />
         <SunControls />
-        {model && <LightsWarming model={model} />}
+        {any && <LightsWarming variant={k} />}
       </div>
     );
   }
 
-  const shared = {
-    showLabels: p.showLabels,
-    showCeilings: p.showCeilings,
-    doorsOpen: p.doorsOpen,
-    selectedRoomId: p.selectedRoomId,
-    maxLevel: p.maxLevel,
-    showExterior: p.showExterior,
-    chrome: false,
-  };
+  const shared = { chrome: false, maxDpr };
 
   return (
     <div ref={root} className={`wipe${dragging ? " dragging" : ""}`} style={{ "--wipe": pos } as React.CSSProperties}>
-      <Viewer {...shared} model={current} variant="current" captureId="wipe-current" onSelectRoom={handlers.current.select} onPickWall={handlers.current.wall} />
+      <Viewer {...shared} variant="current" captureId="wipe-current" onSelectRoom={handlers.current.select} onPickWall={handlers.current.wall} />
       <div className="wipe-top">
-        <Viewer {...shared} model={proposed} variant="proposed" captureId="wipe-proposed" onSelectRoom={handlers.proposed.select} onPickWall={handlers.proposed.wall} />
+        <Viewer {...shared} variant="proposed" captureId="wipe-proposed" onSelectRoom={handlers.proposed.select} onPickWall={handlers.proposed.wall} />
       </div>
 
       <span className="wipe-label before" aria-hidden>
@@ -164,7 +140,7 @@ export function WipeCompare(p: WipeCompareProps) {
 
       <ViewCube />
       <SunControls />
-      <LightsWarming model={proposed} />
+      <LightsWarming variant="proposed" />
     </div>
   );
 }
