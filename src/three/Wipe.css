@@ -14,12 +14,12 @@
   display: grid; place-items: center; cursor: ew-resize; touch-action: none; outline: none;
 }
 .wipe-line {
-  position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #fff;
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: var(--panel);
   box-shadow: 0 0 0 1px rgba(29, 36, 34, 0.18), 0 0 14px rgba(29, 36, 34, 0.3);
 }
 .wipe-handle {
   position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  background: #fff; color: var(--accent); box-shadow: var(--shadow-card), 0 0 0 1px rgba(29, 36, 34, 0.12);
+  background: var(--panel); color: var(--accent); box-shadow: var(--shadow-card), 0 0 0 1px rgba(29, 36, 34, 0.12);
   transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 .wipe-divider:hover .wipe-handle, .wipe.dragging .wipe-handle { transform: scale(1.12); }

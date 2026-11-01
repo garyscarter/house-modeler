@@ -16,7 +16,7 @@
 
 .peek-badge {
   position: absolute; top: calc(var(--float-top) + 4px); left: 50%; transform: translateX(-50%); z-index: var(--z-float);
-  padding: 6px 14px; border-radius: var(--pill); background: var(--text); color: #fff; font-size: 13px; font-weight: 500;
+  padding: 6px 14px; border-radius: var(--pill); background: var(--text); color: var(--accent-ink); font-size: 13px; font-weight: 500;
   box-shadow: var(--shadow-card); pointer-events: none;
 }
 

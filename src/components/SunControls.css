@@ -20,7 +20,7 @@
 .sun-value .muted { font-weight: 400; font-size: 11px; }
 .sun-quick { display: flex; gap: 4px; margin: 2px 0 6px; }
 .sun-quick button { flex: 1; padding: 5px 0; font-size: 12px; }
-.sun-quick button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sun-quick button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .sun-quick button.sun-night { flex: 1; }
 .sun-lights { grid-template-columns: auto 1fr; }
 .sun-lights .seg { display: flex; }

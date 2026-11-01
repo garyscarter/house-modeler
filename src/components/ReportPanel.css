@@ -10,7 +10,7 @@
 .rp-areas thead th:not(:first-child) { width: 64px; }
 .rp-areas thead th:nth-child(2):not(:last-child) { width: 50px; }
 .rp-areas thead th:last-child:nth-child(4) { width: 46px; }
-.rp-areas .rp-floor th { text-align: left; padding-top: 8px; font-size: 12px; border-bottom: 1px solid #c4cad2; }
+.rp-areas .rp-floor th { text-align: left; padding-top: 8px; font-size: 12px; border-bottom: 1px solid var(--line); }
 .rp-areas .rp-total td { font-weight: 600; }
 .rp-areas .rp-grand td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 0; padding-top: 5px; }
 .rp-areas .rp-delta { color: var(--ok); }
@@ -23,18 +23,18 @@
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: start;
   padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px;
 }
-.rp-changes li.rp-structural { background: #fffbeb; margin: 0 -4px; padding: 6px 4px; }
+.rp-changes li.rp-structural { background: color-mix(in srgb, var(--warn) 6%, var(--panel)); margin: 0 -4px; padding: 6px 4px; }
 .rp-desc { min-width: 0; }
 .rp-warn { display: block; color: var(--warn); font-size: 11.5px; margin-top: 2px; }
 .rp-qty { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
-.rp-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 4px; padding: 1px 5px; margin-top: 1px; background: #eef2f7; color: #475569; }
-.rp-tag-floor { background: #dcfce7; color: #166534; }
-.rp-tag-room { background: #e0e7ff; color: #3730a3; }
-.rp-tag-wall { background: #fee2e2; color: #991b1b; }
-.rp-tag-door { background: #fef3c7; color: #92400e; }
-.rp-tag-window { background: #e0f2fe; color: #075985; }
-.rp-tag-site { background: #ecfccb; color: #3f6212; }
-.rp-tag-garden { background: #d9f2e1; color: #14532d; }
+.rp-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 4px; padding: 1px 5px; margin-top: 1px; background: var(--surface-3); color: var(--muted); }
+.rp-tag-floor { background: var(--ok-soft); color: var(--ok-ink); }
+.rp-tag-room { background: var(--accent-soft); color: var(--accent); }
+.rp-tag-wall { background: var(--danger-soft); color: var(--danger-ink); }
+.rp-tag-door { background: var(--warn-soft); color: var(--warn-ink); }
+.rp-tag-window { background: var(--info-soft); color: var(--info-ink); }
+.rp-tag-site { background: var(--ok-soft); color: var(--ok-ink); }
+.rp-tag-garden { background: var(--ok-soft); color: var(--ok-ink); }
 .rp-tag-joinery { background: var(--accent-soft); color: var(--brand); }
 
 /* Costs */
@@ -47,7 +47,7 @@
 .rp-money input {
   width: 100px; min-height: 34px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; font: inherit; background: var(--panel); color: var(--text);
 }
-.rp-money input::placeholder { color: #a3aab5; }
+.rp-money input::placeholder { color: var(--disabled); }
 .rp-cost-sum { background: var(--panel); }
 .rp-cost-sum .rp-cost-row { min-height: 30px; }
 .rp-cost-total { border-top: 2px solid var(--text); margin-top: 2px; padding-top: 4px; font-size: 13.5px; font-weight: 700; }
