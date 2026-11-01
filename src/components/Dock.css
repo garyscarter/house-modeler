@@ -34,4 +34,12 @@
 .app[data-chassis="phone"][data-sheet="half"] .dock, .app[data-chassis="phone"][data-sheet="full"] .dock { opacity: 0; pointer-events: none; }
 .app[data-touch]:not([data-chassis="phone"]) .dock .popover-btn { height: 40px; }
 .app[data-touch]:not([data-chassis="phone"]) .dock .icon-btn { width: 40px; height: 40px; }
+/* Keep the dock inside the canvas at 360 px: the floor button clips rather than pushing Walk off the edge. */
+.app[data-chassis="phone"] .dock > * { flex: none; }
+.app[data-chassis="phone"] .dock .seg button { padding: 0 10px; }
+.app[data-chassis="phone"] .dock-floors .popover-btn { padding: 0 8px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 374px) {
+  .app[data-chassis="phone"] .dock .icon-btn, .app[data-chassis="phone"] .dock-view .popover-btn { width: 40px; }
+  .app[data-chassis="phone"] .dock .seg button { padding: 0 8px; }
+}
 @media (prefers-reduced-motion: reduce) { .app[data-chassis="phone"] .dock { transition: none; } }

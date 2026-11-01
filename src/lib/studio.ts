@@ -21,6 +21,12 @@ export function floorDisplayName(name: string): string {
   return name[0].toUpperCase() + name.slice(1).toLowerCase();
 }
 
+/** The floor's name without the word "floor", for the phone dock where room is short: "Ground", "First", "Lower ground". */
+export function floorShortName(name: string): string {
+  const full = floorDisplayName(name);
+  return full.replace(/ floor$/i, "") || full;
+}
+
 /** The name shown for a house: the active house's name when the layout is (or is based on) one of its built-ins, else "House". */
 export function houseName(m: HouseModel | undefined): string {
   const id = m?.preset?.id ?? m?.basedOn?.id;
