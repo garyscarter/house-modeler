@@ -8,6 +8,13 @@ const DOCK_CLEAR = 12 + 44 + 12;
 /** Fallback for the tool rail on the phone: 12 px in from the left, 54 px wide, 12 px clear. */
 export const PHONE_LEFT_INSET = 12 + 54 + 12;
 
+/** The height the floating top islands cover (--topbar-h plus --float-gap): the drawing runs behind them but fits below. */
+export function topIslandsInset(): number {
+  const cs = getComputedStyle(document.documentElement);
+  const px = (name: string) => parseFloat(cs.getPropertyValue(name)) || 0;
+  return px("--topbar-h") + px("--float-gap");
+}
+
 /** Whether the sheet takes no room at the bottom right now: hidden, or resting hidden in a view-only mode with nothing picked. */
 const sheetGone = (): boolean => {
   const s = useSheet.getState();
@@ -42,10 +49,10 @@ export function phoneLeftInset(): number {
  * `fitSuffix` goes in the camera's fitKey so a rotation or resize across chassis refits, and so does moving between
  * the view-only modes (no sheet at rest, a lighter rail) and the editing ones.
  */
-export function useCameraInsets(): { insetRight?: () => number; insetBottom?: () => number; insetLeft?: () => number; fitSuffix: string } {
+export function useCameraInsets(): { insetRight?: () => number; insetBottom?: () => number; insetLeft?: () => number; insetTop: () => number; fitSuffix: string } {
   const chassis = useChassis((s) => s.chassis);
   const compact = useChassis((s) => s.compact);
   const viewOnly = useStore((s) => !canEdit(s.mode, compact));
-  if (chassis !== "phone") return { fitSuffix: chassis };
-  return { insetRight: () => 0, insetBottom: phoneBottomInset, insetLeft: phoneLeftInset, fitSuffix: `${chassis}${viewOnly ? "-view" : ""}` };
+  if (chassis !== "phone") return { insetTop: topIslandsInset, fitSuffix: chassis };
+  return { insetRight: () => 0, insetBottom: phoneBottomInset, insetLeft: phoneLeftInset, insetTop: topIslandsInset, fitSuffix: `${chassis}${viewOnly ? "-view" : ""}` };
 }

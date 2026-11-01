@@ -1,10 +1,18 @@
 import { BUILT_IN_NAME, LISTING_PRESET, LISTING_PROPOSED_PRESET } from "../houses/default";
 import { describe, expect, it } from "vitest";
-import { editFloorFor, dockFloorActive, dockFloorPick, floorDisplayName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
+import { editFloorFor, dockFloorActive, dockFloorPick, floorDisplayName, floorShortName, floorForKey, floorsByLevel, houseName, peekPatch, tabSwitchPatch, floorAtLevel, tabKeyApplies, spaceKeyApplies } from "./studio";
 import type { Floor, HouseModel } from "../types";
 
 const fl = (id: string, level: number) => ({ id, name: id, level }) as unknown as Floor;
 const floors = [fl("up", 1), fl("gr", 0)];
+
+describe("floorShortName", () => {
+  it("drops the word floor for the phone dock", () => {
+    expect(floorShortName("Ground Floor")).toBe("Ground");
+    expect(floorShortName("Floor 1")).toBe("First");
+    expect(floorShortName("Loft")).toBe("Loft");
+  });
+});
 
 describe("floorDisplayName", () => {
   it("maps the preset names and leaves custom ones alone", () => {

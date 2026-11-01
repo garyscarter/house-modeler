@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useStore } from "../store";
 
-export type ReviewSection = "report" | "planning";
+export type ReviewSection = "report" | "planning" | "exports";
 
 interface ReviewState {
   /** Which section to scroll to when opening; `nonce` makes repeated opens of the same section re-scroll. */

@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { areaM2, formatArea } from "../../../lib/planMath";
+import { areaM2 } from "../../../lib/planMath";
 import { bbox, polygonCentroid } from "../../../lib/geometry";
 import { roomColor } from "../../../lib/roomColor";
 import type { Room } from "../../../types";
@@ -101,7 +101,7 @@ const RoomLabel = memo(function RoomLabel({ room, ppm, px, fontSize }: { room: R
       {room.locked && <LockGlyph at={{ x: c.x - (room.name.length * fontSize * 0.3 + px * 8), y: c.y - fontSize * 0.3 }} px={px * 10} />}
       {onScreen > 60 && (
         <text x={c.x} y={c.y + fontSize * 1.2} fontSize={fontSize * 0.82} textAnchor="middle" fill="#374151" {...outline}>
-          {formatArea(area)}
+          {area.toFixed(1)} m²
         </text>
       )}
     </g>

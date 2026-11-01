@@ -43,8 +43,8 @@ export default function ReviewDocument() {
   // Focus the page so Esc works at once, and jump to the requested section.
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
-    if (section === "planning") {
-      const id = "rv-planning";
+    if (section === "planning" || section === "exports") {
+      const id = section === "planning" ? "rv-planning" : "rv-exports";
       requestAnimationFrame(() => {
         const el = rootRef.current?.querySelector<HTMLElement>(`#${id}`);
         el?.scrollIntoView({ block: "start" });
@@ -76,9 +76,14 @@ export default function ReviewDocument() {
             <h1>Review</h1>
             <p className="rv-subtitle">{reviewSubtitle(present)}</p>
           </div>
-          <button className="icon-btn rv-close" onClick={closeReview} aria-label="Close review" title="Close (Esc)">
-            <Icon name="close" />
-          </button>
+          <div className="rv-bar-actions">
+            <button className="rv-export-link" onClick={() => scrollTo("rv-exports")}>
+              Export
+            </button>
+            <button className="icon-btn rv-close" onClick={closeReview} aria-label="Close review" title="Close (Esc)">
+              <Icon name="close" />
+            </button>
+          </div>
         </div>
       </header>
 

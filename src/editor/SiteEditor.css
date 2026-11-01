@@ -2,9 +2,9 @@
 .site-editor { position: relative; flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
 .site-editor-body { position: absolute; inset: 0; }
 .site-canvas { position: absolute; inset: 0; }
-.site-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; background: #fbfbf9; user-select: none; touch-action: none; display: block; }
+.site-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--site-ground); user-select: none; touch-action: none; display: block; }
 .site-canvas > svg.peeking { pointer-events: none; }
-.site-zoom { position: absolute; left: var(--float-gap); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
+.site-zoom { position: absolute; left: var(--inset-l); bottom: 16px; z-index: var(--z-float); display: flex; gap: 2px; padding: 4px; }
 .site-zoom .icon-btn { color: var(--muted); }
 .site-zoom .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .site-status { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: var(--z-float); display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; border-radius: var(--pill); font-size: 12px; }
@@ -12,24 +12,24 @@
 .site-side h4 { margin: 4px 0 6px; font-size: 13px; }
 .site-side h4 + p { margin-top: 0; }
 
-.site-label { fill: #4b5563; font-weight: 600; pointer-events: none; }
+.site-label { fill: var(--muted); font-weight: 600; pointer-events: none; }
 .site-edge { stroke-linecap: round; }
-.site-edge.edge-fence { stroke: #8a5a2b; }
-.site-edge.edge-wall { stroke: #a8553a; }
-.site-edge.edge-hedge { stroke: #3f7a2e; }
-.site-edge.edge-open { stroke: #9ca3af; }
+.site-edge.edge-fence { stroke: var(--warn); }
+.site-edge.edge-wall { stroke: color-mix(in srgb, var(--danger) 70%, var(--warn)); }
+.site-edge.edge-hedge { stroke: var(--ok); }
+.site-edge.edge-open { stroke: var(--disabled); }
 
-.site-dim line { stroke: #2563eb; }
-.site-dim circle { fill: #2563eb; }
-.site-dim rect { fill: rgba(255, 255, 255, 0.92); stroke: #93c5fd; stroke-width: 0.02; }
-.site-dim text { fill: #1d4ed8; font-weight: 600; }
+.site-dim line { stroke: var(--site-dim); }
+.site-dim circle { fill: var(--site-dim); }
+.site-dim rect { fill: rgba(255, 255, 255, 0.92); stroke: color-mix(in srgb, var(--site-dim) 45%, var(--panel)); stroke-width: 0.02; }
+.site-dim text { fill: var(--site-dim); font-weight: 600; }
 
-.site-handle circle + circle { fill: #fff; stroke: #2563eb; }
-.site-handle.active circle + circle { fill: #2563eb; }
-.site-mid circle + circle { fill: #eff6ff; stroke: #2563eb; opacity: 0.85; }
-.site-mid path { stroke: #2563eb; }
+.site-handle circle + circle { fill: var(--panel); stroke: var(--site-dim); }
+.site-handle.active circle + circle { fill: var(--site-dim); }
+.site-mid circle + circle { fill: color-mix(in srgb, var(--site-dim) 8%, var(--panel)); stroke: var(--site-dim); opacity: 0.85; }
+.site-mid path { stroke: var(--site-dim); }
 .site-handle, .site-mid { cursor: pointer; }
-.site-draft { fill: rgba(37, 99, 235, 0.12); stroke: #2563eb; }
+.site-draft { fill: rgba(37, 99, 235, 0.12); stroke: var(--site-dim); }
 
 /* Garden mode: drawing aids, the item handles and the control polygon of a curved surface. Brand tokens only. */
 .site-draft-line { fill: none; stroke: var(--accent); }
@@ -42,7 +42,7 @@
 .garden-symbol { color: var(--text); }
 
 .site-north {
-  position: absolute; top: var(--float-top); right: calc(var(--float-gap) + 332px); width: 40px; height: 52px; pointer-events: none;
+  position: absolute; top: var(--float-top); right: calc(var(--inset-r) + 332px); width: 40px; height: 52px; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; font-weight: 700; color: var(--danger); font-size: 12px;
   background: rgba(255, 255, 255, 0.85); border: 1px solid var(--line); border-radius: 20px; padding-top: 2px;
 }
@@ -52,12 +52,9 @@
 }
 .site-scale div { height: 6px; border: 1.5px solid var(--text); border-top: 0; }
 
-.site-clear { width: 100%; border-collapse: collapse; font-size: 13px; }
-.site-clear td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
-.site-clear td + td { text-align: right; font-weight: 600; }
 .site-edge-hit, .site-edge-sel { cursor: move; }
 .site-surface-edge-sel { stroke: var(--accent); stroke-opacity: 0.85; stroke-linecap: round; fill: none; }
-.site-handle-linked { fill: var(--panel, #fff); stroke: var(--accent); stroke-opacity: 0.5; stroke-dasharray: 2 2; }
+.site-handle-linked { fill: var(--panel, var(--panel)); stroke: var(--accent); stroke-opacity: 0.5; stroke-dasharray: 2 2; }
 
 /* ---- Touch and the phone chassis ---- */
 .app[data-touch] .site-canvas > svg { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
@@ -65,9 +62,9 @@
 .app[data-touch] .site-zoom .icon-btn { width: 44px; height: 44px; }
 .app[data-touch] .site-status select { font-size: 16px; padding: 6px 8px; }
 /* Tablet: the card is 300 px wide, so the compass keeps clear of it. */
-.app[data-chassis="tablet"] .site-north { right: calc(var(--float-gap) + 312px); }
-.app[data-chassis="phone"] .site-zoom { top: var(--float-gap); right: var(--float-gap); left: auto; bottom: auto; }
-.app[data-chassis="phone"] .site-north { top: calc(var(--float-gap) + 48px); right: var(--float-gap); }
+.app[data-chassis="tablet"] .site-north { right: calc(var(--inset-r) + 312px); }
+.app[data-chassis="phone"] .site-zoom { top: var(--float-top); right: var(--inset-r); left: auto; bottom: auto; }
+.app[data-chassis="phone"] .site-north { top: calc(var(--float-top) + 48px); right: var(--inset-r); }
 .app[data-chassis="phone"] .site-status { bottom: calc(var(--sheet-peek) + 12px + 44px + 8px); max-width: calc(100% - 24px); transition: opacity 0.15s; }
 /* The scale bar sits one pill higher than the status so the two never overlap. */
 .app[data-chassis="phone"] .site-scale { left: var(--float-gap); bottom: calc(var(--sheet-peek) + 12px + 44px + 8px + 44px); }

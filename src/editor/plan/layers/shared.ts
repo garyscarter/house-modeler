@@ -64,4 +64,3 @@ export function useStableHandlers(drag: PlanDrag) {
     };
   }, []);
 }
-export type PlanHandlers = ReturnType<typeof useStableHandlers>;

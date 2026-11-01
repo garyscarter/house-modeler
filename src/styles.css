@@ -5,6 +5,10 @@
   --note-bg: #fbf6e6; --note-line: #efe2b8;
   --accent: #0f6e66; --accent-soft: #e2efed; --accent-ink: #fff;
   --danger: #b42318; --warn: #b45309; --ok: #15803d; --hover-room: #0f6e66; --brand: #0f6e66;
+  --ok-soft: #dcfce7; --ok-ink: #166534; --warn-soft: #fef3c7; --warn-ink: #92400e; --danger-soft: #fee2e2; --danger-ink: #991b1b; --info-soft: #e0f2fe; --info-ink: #075985;
+  --site-ground: #fbfbf9; --site-dim: #2563eb;
+  --hue-wheel: conic-gradient(#e5484d, #f5a524, #f5d90a, #30a46c, #0091ff, #8e4ec6, #e5484d);
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --ring: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
   --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Bricolage Grotesque Variable", "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -121,17 +125,9 @@ nav.mode-bar button:not(.active):hover { background: rgba(29, 36, 34, 0.08); }
 /* ---- Canvas ---- */
 main { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
 main[data-tab="3d"] { --card-clear: 196px; }
-/*
- * The 3D view runs behind the islands, but a drawing must not: its fit-to-view and its top edge chips would sit
- * under them. Until the editor camera takes a top inset (src/editor/core/useCanvasCamera.ts has right, bottom and left),
- * the drawing starts below the islands, on the drawing's own white so the strip reads as part of it.
- */
-main[data-tab="plan"] { background: #fff; }
-main[data-tab="plan"]:has(> .site-canvas) { background: #fbfbf9; }
-main[data-tab="plan"] { padding-top: var(--float-top); }
-/* The drawing's own chrome is measured from the drawing's top edge, which is already below the islands. */
-main[data-tab="plan"] .tool-rail, main[data-tab="plan"] .site-north, main[data-tab="plan"] .inspector-card { top: var(--float-gap); }
-main[data-tab="plan"] .inspector-card { max-height: calc(100% - var(--float-gap) - var(--card-clear)); }
+/* The drawing runs full-bleed behind the islands on the page colour; its camera fits below them (insetTop). */
+main[data-tab="plan"] { background: var(--panel); }
+main[data-tab="plan"]:has(> .site-canvas) { background: var(--site-ground); }
 /* The 3D view stays mounted on the Plan tab, hidden. */
 .view3d { display: flex; flex: 1; min-width: 0; }
 .view3d[hidden] { display: none; }
@@ -183,7 +179,7 @@ button.danger { color: var(--danger); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.12); }
 button.big { padding: 10px 14px; font-size: 14px; }
-h1, h2, h3, .summary-line, .display { font-family: var(--font-display); }
+h1, h2, h3, .display { font-family: var(--font-display); }
 button.link { border: 0; background: none; color: var(--muted); padding: 2px 0; text-decoration: underline; }
 label.file { display: inline-block; padding: 6px 10px; border: 1px solid transparent; border-radius: var(--radius-s); background: var(--surface-2); cursor: pointer; }
 label.file:hover { background: var(--surface-3); }
@@ -199,7 +195,7 @@ label .row input { width: auto; flex: 1; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 
 
-.room-label { background: rgba(255,255,255,0.9); border: 1px solid #c8ccd2; border-radius: 4px; padding: 2px 6px; font-size: 12px; font-weight: 600; white-space: nowrap; display: flex; flex-direction: column; align-items: center; }
+.room-label { background: rgba(255,255,255,0.9); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; font-size: 12px; font-weight: 600; white-space: nowrap; display: flex; flex-direction: column; align-items: center; }
 .room-label span { font-weight: 400; color: var(--muted); font-size: 11px; }
 
 
@@ -218,7 +214,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 
 /* The mode panel lives inside the floating inspector card */
 .mode-panel { padding: 0; }
-.mode-summary .summary-line { margin: 4px 0 10px; font-weight: 600; }
 
 /* Shared floating classes (used by every Studio chunk) */
 .float-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow-card); }

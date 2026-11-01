@@ -22,6 +22,8 @@ export interface CameraOptions {
   insetBottom?: () => number;
   /** Width the tool rail covers on the left (the phone, where the plan has no room to spare). Default 0. */
   insetLeft?: () => number;
+  /** Height the floating top islands cover at the top (the canvas runs full-bleed behind them). Default 0. */
+  insetTop?: () => number;
   /** Padding Fit adds around `home`, as a fraction of its larger side. Default 0.06 (the plan); the site passes 0. */
   padFrac?: number;
 }
@@ -89,6 +91,7 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
 
   const coveredBottom = useCallback(() => opts.current.insetBottom?.() ?? 0, []);
   const coveredLeft = useCallback(() => opts.current.insetLeft?.() ?? 0, []);
+  const coveredTop = useCallback(() => opts.current.insetTop?.() ?? 0, []);
 
   const writeTransform = useCallback(() => {
     const g = layerRef.current;
@@ -128,10 +131,10 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   useEffect(() => {
     const s = sizeRef.current;
     if (!s) return;
-    const c = fitCamInset(opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom(), coveredLeft());
+    const c = fitCamInset(opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom(), coveredLeft(), coveredTop());
     liveRef.current = c;
     setCamState(c);
-  }, [o.fitKey, hasSize, coveredRight, coveredBottom, coveredLeft]);
+  }, [o.fitKey, hasSize, coveredRight, coveredBottom, coveredLeft, coveredTop]);
 
   // A committed camera replaces the live transform in the same commit.
   useLayoutEffect(() => {
@@ -181,9 +184,9 @@ export function useCanvasCamera(el: RefObject<HTMLElement | null>, o: CameraOpti
   const fit = useCallback(
     (r?: Rect) => {
       const s = sizeRef.current;
-      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom(), coveredLeft()));
+      if (s) setCam(fitCamInset(r ?? opts.current.home, s, coveredRight(), opts.current.padFrac, coveredBottom(), coveredLeft(), coveredTop()));
     },
-    [coveredRight, coveredBottom, coveredLeft, setCam],
+    [coveredRight, coveredBottom, coveredLeft, coveredTop, setCam],
   );
 
   const zoomBy = useCallback(

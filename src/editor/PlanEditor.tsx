@@ -10,13 +10,13 @@ import { editsFixtures, pruneSelection } from "../lib/modes";
 import { snapKind } from "../lib/planHit";
 import { useStore } from "../store";
 import { bbox } from "../lib/geometry";
-import type { Rect } from "../lib/planMath";
-import { fixtureBox, imageClipRect, imageStateOf, setEdgeLength, viewBoxOf } from "../lib/planMath";
+import type { Cam, Rect, Size } from "../lib/planMath";
+import { fixtureBox, imageClipRect, imageStateOf, INSPECTOR_INSET, setEdgeLength, viewBoxOf } from "../lib/planMath";
 import { refitFixture } from "../lib/recess";
 import { useClipboardFixtures } from "../lib/clipboard";
 import { selectionBounds } from "../lib/fixtureGroups";
 import { wallClearances } from "../lib/planGuides";
-import { useCameraInsets, useCanvasCamera } from "./core";
+import { topIslandsInset, useCameraInsets, useCanvasCamera, phoneBottomInset, phoneLeftInset } from "./core";
 import { useCanEdit, useChassis } from "../components/useChassis";
 import { useSheet } from "../components/mobile/sheet";
 import { usePlanSelection } from "./plan/useSelection";
@@ -42,6 +42,17 @@ import { PlanStatus, statusTextFor } from "./plan/chrome/PlanStatus";
 import { PlanZoom } from "./plan/chrome/PlanZoom";
 import { EdgeLengthInput } from "./plan/chrome/EdgeLengthInput";
 import "./PlanEditor.css";
+
+/** The part of the drawing (image px) clear of the islands, tool rail, inspector card or phone sheet, so edge chips stay readable. */
+function visibleRect(cam: Cam | null, size: Size | null, chassis: string): Rect | null {
+  if (!cam || !size) return null;
+  const phone = chassis === "phone";
+  const l = phone ? phoneLeftInset() : 70;
+  const r = phone ? 0 : INSPECTOR_INSET;
+  const t = topIslandsInset();
+  const b = phone ? phoneBottomInset() : 0;
+  return { x0: cam.x + (l + 4) * cam.s, y0: cam.y + (t + 4) * cam.s, x1: cam.x + (size.w - r - 4) * cam.s, y1: cam.y + (size.h - b - 4) * cam.s };
+}
 
 /**
  * 2D check-and-fix view: the geometry drawn over the source image. Used to
@@ -91,6 +102,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
     insetRight: insets.insetRight,
     insetBottom: insets.insetBottom,
     insetLeft: insets.insetLeft,
+    insetTop: insets.insetTop,
     unitsPerM: ppm,
     limits: (s) => ({ minS: ppm / 2000, maxS: Math.max(floor.imageW / s.w, floor.imageH / s.h) * 3 }),
   });
@@ -310,7 +322,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {fixtureMode && tool === "select" && selBox && <SelectionBox box={selBox} px={px} />}
             {fixtureMode && hoverBox && <HoverBox box={hoverBox} px={px} />}
             {marquee && <Marquee a={marquee.a} b={marquee.b} px={px} />}
-            <FixtureLabels fixtures={fixtures} px={px} />
+            <FixtureLabels fixtures={fixtures} selectedIds={liveIds} px={px} />
             <FixtureLocks fixtures={fixtures} ppm={ppm} px={px} />
             {ghost && placing && (
               <PlacingGhost
@@ -376,7 +388,7 @@ export function PlanEditor({ variant, floor }: { variant: VariantKey; floor: Flo
             {selected && litShown !== null && litShown < selected.polygon.length && <LitEdge room={selected} idx={litShown} px={px} />}
             {guides.length > 0 && <Guides guides={guides} px={px} />}
             {clearances.length > 0 && <Clearances clearances={clearances} ppm={ppm} px={px} />}
-            {selected && editSelect && <EdgeLabels room={selected} ppm={ppm} px={px} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} onChipDown={h.chipDown} />}
+            {selected && editSelect && <EdgeLabels room={selected} ppm={ppm} px={px} editing={edgeEdit?.roomId === selected.id ? edgeEdit.idx : null} visible={visibleRect(cam, size, chassis)} onChipDown={h.chipDown} />}
 
             {measure.length > 0 && <MeasureOverlay a={measure[0]} b={measureEnd ?? undefined} ppm={ppm} px={px} />}
             <CalibDots points={calib} px={px} />

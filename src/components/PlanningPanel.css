@@ -1,9 +1,9 @@
 
 /* Verdict */
 .pl-verdict { border: 1px solid var(--line); border-left-width: 5px; border-radius: 6px; padding: 8px 10px; margin: 0 0 10px; background: var(--bg); }
-.pl-verdict-permission { border-color: #fecaca; border-left-color: var(--danger); background: #fef2f2; }
-.pl-verdict-prior { border-color: #fde68a; border-left-color: #d97706; background: #fffbeb; }
-.pl-verdict-pd { border-color: #bbf7d0; border-left-color: #16a34a; background: #f0fdf4; }
+.pl-verdict-permission { border-color: color-mix(in srgb, var(--danger) 25%, var(--panel)); border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--panel)); }
+.pl-verdict-prior { border-color: color-mix(in srgb, var(--warn) 30%, var(--panel)); border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 6%, var(--panel)); }
+.pl-verdict-pd { border-color: color-mix(in srgb, var(--ok) 30%, var(--panel)); border-left-color: var(--ok); background: color-mix(in srgb, var(--ok) 6%, var(--panel)); }
 .pl-headline { font-weight: 700; font-size: 14.5px; line-height: 1.3; }
 .pl-because { margin-top: 6px; font-weight: 600; }
 .pl-verdict ul { list-style: disc; padding-left: 18px; }
@@ -22,15 +22,15 @@
 .pl-rule:last-child { border-bottom: 0; }
 .pl-rule-title { font-weight: 600; }
 .pl-ref { font-weight: 400; font-size: 11px; white-space: nowrap; }
-.pl-rule-fail { background: #fef2f2; margin: 0 -4px; padding: 6px 4px; }
+.pl-rule-fail { background: color-mix(in srgb, var(--danger) 6%, var(--panel)); margin: 0 -4px; padding: 6px 4px; }
 .pl-pill {
   display: inline-block; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
-  border-radius: 4px; padding: 2px 5px; margin-top: 1px; background: #eef2f7; color: #475569; white-space: nowrap; justify-self: start;
+  border-radius: 4px; padding: 2px 5px; margin-top: 1px; background: var(--surface-3); color: var(--muted); white-space: nowrap; justify-self: start;
 }
-.pl-pass { background: #dcfce7; color: #166534; }
-.pl-fail { background: #fee2e2; color: #991b1b; }
-.pl-prior { background: #fef3c7; color: #92400e; white-space: normal; }
-.pl-check { background: #e0f2fe; color: #075985; }
+.pl-pass { background: var(--ok-soft); color: var(--ok-ink); }
+.pl-fail { background: var(--danger-soft); color: var(--danger-ink); }
+.pl-prior { background: var(--warn-soft); color: var(--warn-ink); white-space: normal; }
+.pl-check { background: var(--info-soft); color: var(--info-ink); }
 .pl-skipped { margin-top: 6px; }
 .pl-skipped summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; color: var(--muted); }
 .pl-skipped .pl-rule { color: var(--muted); }
@@ -39,8 +39,8 @@
 .pl-consents li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .pl-consents li:last-child { border-bottom: 0; }
 .pl-row-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.pl-needed { background: #fee2e2; color: #991b1b; }
-.pl-likely { background: #fef3c7; color: #92400e; }
+.pl-needed { background: var(--danger-soft); color: var(--danger-ink); }
+.pl-likely { background: var(--warn-soft); color: var(--warn-ink); }
 
 .pl-caveats { list-style: disc !important; padding-left: 18px !important; }
 .pl-caveats li { margin: 3px 0; }

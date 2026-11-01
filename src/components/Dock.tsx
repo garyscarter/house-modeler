@@ -1,10 +1,11 @@
 import { useStore } from "../store";
 import { siteOf } from "../lib/sites";
 import { editsSite } from "../lib/modes";
-import { dockFloorActive, dockFloorPick, floorDisplayName, floorsByLevel, tabSwitchPatch } from "../lib/studio";
+import { dockFloorActive, dockFloorPick, floorDisplayName, floorShortName, floorsByLevel, tabSwitchPatch } from "../lib/studio";
 import { usePanelPrefs } from "./panelPrefs";
 import { Popover, ViewToggles } from "./ViewMenu";
 import { Icon } from "./icons";
+import { CaptureMenu } from "./CaptureMenu";
 import { SavedViewsMenu } from "./SavedViewsMenu";
 import { useChassis } from "./useChassis";
 import { useWalk } from "../walkStore";
@@ -39,7 +40,8 @@ export function Dock() {
   const active = dockFloorActive(ui, floors);
   const showFloors = tab === "3d" ? sorted.length > 0 : !editsSite(mode) && sorted.length > 1;
   const keyOf = (i: number) => (i < 9 ? ` (${i + 1})` : "");
-  const activeName = active === "all" ? "All" : floorDisplayName(sorted.find((f) => f.id === active)?.name ?? "");
+  const activeFloor = sorted.find((f) => f.id === active)?.name ?? "";
+  const activeName = active === "all" ? "All" : floorDisplayName(activeFloor);
 
   if (walking) {
     return (
@@ -70,7 +72,7 @@ export function Dock() {
       </div>
 
       {showFloors && phone && (
-        <Popover className="dock-floors" align="start" label={activeName || "Floor"} title="Floor" ariaLabel={`Floor: ${activeName}`}>
+        <Popover className="dock-floors" align="start" label={(active === "all" ? "All" : floorShortName(activeFloor)) || "Floor"} title="Floor" ariaLabel={`Floor: ${activeName}`}>
           <div className="compare-rows" role="radiogroup" aria-label="Floor">
             {tab === "3d" && (
               <button data-pick role="radio" aria-checked={active === "all"} className="compare-row" onClick={() => setUi(dockFloorPick(ui, floors, "all"))}>
@@ -122,6 +124,7 @@ export function Dock() {
           <Popover className="dock-view" align={phone ? "end" : undefined} label={phone ? <Icon name="eye" /> : "Show"} chevron={!phone} ariaLabel="Show options" title={phone ? "Show options" : undefined}>
             <ViewToggles />
           </Popover>
+          {!phone && <CaptureMenu compact={chassis === "tablet"} />}
           <button
             className={measuring ? "icon-btn active" : "icon-btn"}
             aria-label="Measure"

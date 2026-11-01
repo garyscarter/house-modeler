@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { dist, edgeLengthsM, formatLength, inwardNormals } from "../../../lib/planMath";
+import { dist, edgeLengthsM, formatLength, inwardNormals, type Rect } from "../../../lib/planMath";
+import { chipSize } from "../../../lib/editorCore";
 import type { Guide } from "../../../lib/planGuides";
 import type { wallClearances } from "../../../lib/planGuides";
 import type { Pt, Room } from "../../../types";
@@ -91,12 +92,15 @@ export const EdgeLabels = memo(function EdgeLabels({
   ppm,
   px,
   editing,
+  visible,
   onChipDown,
 }: {
   room: Room;
   ppm: number;
   px: number;
   editing: number | null;
+  /** The part of the drawing not under the islands, rail or card, in image px: chips are kept inside it. */
+  visible?: Rect | null;
   onChipDown: (e: React.PointerEvent, roomId: string, i: number, locked: boolean) => void;
 }) {
   const fontSize = px * 13;
@@ -105,10 +109,16 @@ export const EdgeLabels = memo(function EdgeLabels({
     <g>
       {lens.map((len, i) => {
         if (i === editing || len * ppm < px * 30) return null;
+        let at = edgeLabelAt(room, i, px, fontSize, ppm);
+        if (visible) {
+          const { w, h } = chipSize(formatLength(len), px, fontSize);
+          const clamp = (v: number, lo: number, hi: number) => (hi < lo ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi));
+          at = { x: clamp(at.x, visible.x0 + w / 2, visible.x1 - w / 2), y: clamp(at.y, visible.y0 + h / 2, visible.y1 - h / 2) };
+        }
         return (
           <DimensionChip
             key={i}
-            at={edgeLabelAt(room, i, px, fontSize, ppm)}
+            at={at}
             text={formatLength(len)}
             px={px}
             fontSize={fontSize}
