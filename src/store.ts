@@ -116,6 +116,8 @@ interface State {
   planWalls: boolean;
   /** Hide floors above this level in the 3D view (null = show all). */
   maxLevel: number | null;
+  /** The level Decorate/Furnish cut the view to on entry (so leaving can undo it); null once the person picks a floor. Not persisted. */
+  autoCutLevel: number | null;
   /** Section cut in the 3D view: hide everything above this many metres over the ground floor (null = off). Not persisted. */
   sectionHeight: number | null;
   /** Draw roofs and canopies. */
@@ -322,6 +324,7 @@ export const useStore = create<State>()(
         planImage: { show: false, opacity: IMAGE_FAINT },
         planWalls: true,
         maxLevel: null,
+        autoCutLevel: null,
         sectionHeight: null,
         showExterior: true,
         showSite: true,
@@ -429,7 +432,9 @@ export const useStore = create<State>()(
           }),
         setUi: (p) =>
           rawSet((st) => {
-            const q = p.tab && p.tab !== "3d" ? { ...p, measureTool: false } : p;
+            let q: typeof p & { autoCutLevel?: number | null } = p.tab && p.tab !== "3d" ? { ...p, measureTool: false } : p;
+            // A floor picked by hand ends the automatic Decorate/Furnish cutaway (see modeSwitchPatch).
+            if ("maxLevel" in q && q.maxLevel !== st.maxLevel && st.autoCutLevel != null) q = { ...q, autoCutLevel: null };
             return "selectedRoomId" in q && !("selectedEdge" in q) && q.selectedRoomId !== st.selectedRoomId ? { ...q, selectedEdge: null } : q;
           }),
         reset: () => setState({ variants: {}, sites: {}, savedViews: [], hoveredRoomId: null, selectedRoomId: null, selectedEdge: null, gardenSel: [], linkSwitchId: null, linkGang: 0 }),

@@ -129,4 +129,21 @@ describe("electrics mode", () => {
     expect("maxLevel" in modeSwitchPatch(ui({ maxLevel: 0, floors, editFloorId: "f1" }), "decorate")).toBe(false);
     expect("maxLevel" in modeSwitchPatch(ui({ maxLevel: null }), "decorate")).toBe(false);
   });
+
+  it("leaving Decorate or Furnish undoes the automatic cut, but not one the person made", () => {
+    const floors = [{ id: "f0", level: 0 }, { id: "f1", level: 1 }];
+    const cut = apply(ui({ maxLevel: null, floors, editFloorId: "f1" }), "decorate");
+    expect(cut.autoCutLevel).toBe(1);
+    const swapped = apply(cut, "furnish");
+    expect(swapped.maxLevel).toBe(1);
+    expect(swapped.autoCutLevel).toBe(1);
+    const back = apply(swapped, "build");
+    expect(back.maxLevel).toBeNull();
+    expect(back.autoCutLevel).toBeNull();
+    // the person picked another level in the meantime
+    expect(apply({ ...cut, maxLevel: 0 }, "build").maxLevel).toBe(0);
+    // All in Decorate, then Furnish: no re-cut
+    const all = { ...cut, maxLevel: null, autoCutLevel: null };
+    expect(apply(all, "furnish").maxLevel).toBeNull();
+  });
 });
